@@ -3,6 +3,7 @@ import PropTypes from "prop-types";
 import { motion, AnimatePresence } from "framer-motion";
 import { IconBtn, useTheme } from "./constants";
 import API from "../../../Services/API";
+import { prepareP2PFile } from "../../../Services/p2p";
 
 const ChatInput = React.memo(({ onSend, replyTo, onCancelReply, selectedUser, socket = null, disabled = false }) => {
     const theme = useTheme();
@@ -185,7 +186,18 @@ const ChatInput = React.memo(({ onSend, replyTo, onCancelReply, selectedUser, so
         if (!file || !selectedUser || disabled) return;
         setUploadError("");
         setUploading(true);
+
         try {
+            const isVideo = file.type.startsWith("video/");
+
+            // 1. Heavy Photos & Documents: Use Pure P2P Zero-Server Transfer (IndexedDB)
+            if (!isVideo) {
+                const p2pPayload = await prepareP2PFile(file, selectedUser.id, socket);
+                onSend(p2pPayload);
+                return;
+            }
+
+            // 2. Videos: Use FastAPI FFmpeg transcoding & WebP thumbnail generation pipeline
             const body = new FormData();
             body.append("file", file);
 
@@ -195,22 +207,14 @@ const ChatInput = React.memo(({ onSend, replyTo, onCancelReply, selectedUser, so
             );
 
             const data = response.data;
-            const previewPath = (data.preview_url || data.url).replace(/^\//, "");
-            const previewUrl = `${baseUrl}/${previewPath}`;
-
             const originalPath = (data.original_url || data.url).replace(/^\//, "");
             const originalUrl = `${baseUrl}/${originalPath}`;
 
-            const urlToSend =
-                data.content_type?.startsWith("video/") || data.content_type?.startsWith("audio/")
-                    ? originalUrl
-                    : previewUrl;
-
-            onSend(`📎 ${data.name}\n${urlToSend}`);
+            onSend(`📎 ${data.name}\n${originalUrl}`);
 
         } catch (error) {
-            console.error("Upload failed", error);
-            setUploadError(error.response?.data?.detail || "Upload failed. Check that the FastAPI server was restarted.");
+            console.error("Attachment failed", error);
+            setUploadError(error.response?.data?.detail || "Attachment failed. Please try again.");
         } finally {
             setUploading(false);
         }

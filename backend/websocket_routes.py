@@ -290,20 +290,39 @@ async def websocket_endpoint(websocket: WebSocket):
                 continue
 
             # ==========================
-            # WebRTC Call Signaling
+            # P2P Direct File Transfer Signals
             # ==========================
-            if data.get("type") == "signal":
+            if data.get("type") in {"p2p_offer", "p2p_request", "p2p_chunk", "p2p_complete", "p2p_wipe"}:
                 receiver_id = data.get("receiver_id")
-                signal_data = data.get("signal")
-                if receiver_id is not None and signal_data:
-                    await manager.send_personal_message(
-                        int(receiver_id),
-                        {
-                            "type": "signal",
-                            "sender_id": user_id,
-                            "signal": signal_data
-                        }
-                    )
+                if receiver_id is not None:
+                    payload = dict(data)
+                    payload["sender_id"] = user_id
+                    await manager.send_personal_message(int(receiver_id), payload)
+                continue
+
+            # ==========================
+            # Message Deletion Broadcast
+            # ==========================
+            if data.get("type") == "delete_message":
+                receiver_id = data.get("receiver_id")
+                message_id = data.get("message_id")
+                delete_mode = data.get("mode", "both")  # "me", "both", "receiver"
+
+                if message_id:
+                    # Notify receiver if applicable
+                    if receiver_id and delete_mode in ("both", "receiver"):
+                        await manager.send_personal_message(int(receiver_id), {
+                            "type": "message_deleted",
+                            "message_id": message_id,
+                            "sender_id": user_id
+                        })
+                    # Notify sender
+                    if delete_mode in ("both", "me"):
+                        await manager.send_personal_message(user_id, {
+                            "type": "message_deleted",
+                            "message_id": message_id,
+                            "sender_id": user_id
+                        })
                 continue
 
             # ==========================

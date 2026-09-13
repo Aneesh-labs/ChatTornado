@@ -20,8 +20,9 @@ const ChatMessages = React.memo(({
     scrollContainerRef,
     messagesEndRef,
     onSelectMessage,
-    onDelete,              // ✅ NEW PROP
+    onDelete,
     isMobile = false,
+    socket = null,
 }) => {
     const [mobileActionMsg, setMobileActionMsg] = useState(null);
 
@@ -70,11 +71,12 @@ const ChatMessages = React.memo(({
                                 isMe={isMe}
                                 showAvatar={item.showAvatar}
                                 user={enrichedSelected}
+                                socket={socket}
                                 onReaction={addReaction}
                                 onReply={setReplyingTo}
                                 onSelect={selectionMode ? handleSelectMessage : undefined}
                                 onLongPress={handleMobileLongPress}
-                                onDelete={onDelete}  // ✅ PASS TO MESSAGE BUBBLE
+                                onDelete={onDelete}
                                 selected={isSelected}
                                 isMobile={isMobile}
                             />

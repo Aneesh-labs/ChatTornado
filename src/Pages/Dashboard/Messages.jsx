@@ -9,6 +9,8 @@ import GhostChatOverlay from "./messages/GhostChatOverlay";
 
 import API from "../../Services/API";
 import { createWebSocket } from "../../Services/WebSocket";
+import { handleP2PSignal } from "../../Services/p2p";
+import { requestNotificationPermission, showMessageNotification } from "../../Services/notifications";
 
 import {
     AnimatePresence,
@@ -361,6 +363,10 @@ const Messages = () => {
     }, [isMobile, mobileView, rightPanelOpen, selectionMode]);
 
     /* ── Scroll Management ────────────────────────────────────────────────── */
+    useEffect(() => {
+        requestNotificationPermission();
+    }, []);
+
     const scrollToBottom = useCallback((behavior = "smooth") => {
         messagesEndRef.current?.scrollIntoView({ behavior });
     }, []);
@@ -581,7 +587,11 @@ const Messages = () => {
                         });
                         return;
                     }
-                    if (packet.type === "delete_message") {
+                    if (packet.type?.startsWith("p2p_")) {
+                        handleP2PSignal(packet, ws);
+                        return;
+                    }
+                    if (packet.type === "message_deleted" || packet.type === "delete_message") {
                         setMessages((prev) => prev.filter((m) => m.id !== packet.message_id));
                         setSelectedMsgIds((prev) => {
                             const next = new Set(prev);
@@ -657,9 +667,14 @@ const Messages = () => {
 
 
 
-                        // Handle unread counts
+                        // Handle unread counts and notifications
                         const isFromCurrentUser = packet.sender_id === myUserId.current;
                         const isFromSelected = packet.sender_id === activeUserRef.current?.id;
+                        if (!isFromCurrentUser) {
+                            const senderObj = usersRef.current.find((u) => Number(u.id) === Number(packet.sender_id));
+                            const senderName = senderObj?.username || "Friend";
+                            showMessageNotification(senderName, packet.message || "New message");
+                        }
                         if (!isFromCurrentUser && !isFromSelected) {
                             setUnreadCounts((prev) => ({
                                 ...prev,

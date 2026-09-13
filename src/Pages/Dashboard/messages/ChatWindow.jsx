@@ -80,8 +80,9 @@ const ChatWindow = React.memo(({
                 scrollContainerRef={scrollContainerRef}
                 messagesEndRef={messagesEndRef}
                 onSelectMessage={onSelectMessage}
-                onDelete={onDelete}  // ✅ PASS TO MESSAGES
+                onDelete={onDelete}
                 isMobile={isMobile}
+                socket={socket}
             />
             <ScrollBar show={showScrollBtn} currentTheme={currentTheme} scrollToBottom={scrollToBottom} isMobile={isMobile} />
             {!selectionMode && (

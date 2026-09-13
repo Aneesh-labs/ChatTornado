@@ -1,4 +1,5 @@
-from fastapi import APIRouter, Depends, HTTPException, Form  # ✅ Added Form
+import os
+from fastapi import APIRouter, Depends, HTTPException, Form
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
 import re
@@ -18,11 +19,20 @@ router = APIRouter()
 
 @router.post("/signup")
 def signup(
-    username: str = Form(...),  # ✅ Changed to Form
-    email: str = Form(...),     # ✅ Changed to Form
-    password: str = Form(...),  # ✅ Changed to Form
+    username: str = Form(...),
+    email: str = Form(...),
+    password: str = Form(...),
+    invite_code: str = Form(None),
     db: Session = Depends(get_db)
 ):
+    # Check private invite code if configured in environment
+    required_invite_code = os.getenv("INVITE_CODE")
+    if required_invite_code and required_invite_code.strip():
+        if not invite_code or invite_code.strip() != required_invite_code.strip():
+            raise HTTPException(
+                status_code=403,
+                detail="Access Denied: Valid private circle invite code required."
+            )
     # Validate email format
     if not re.match(r"^[^@]+@[^@]+\.[^@]+$", email):
         raise HTTPException(

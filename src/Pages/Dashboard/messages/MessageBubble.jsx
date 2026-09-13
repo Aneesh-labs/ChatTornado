@@ -1,7 +1,9 @@
-import React, { useState, useRef, useCallback } from "react";
+import React, { useState, useRef, useCallback, useEffect } from "react";
 import PropTypes from "prop-types";
 import { motion, AnimatePresence } from "framer-motion";
 import { Avatar, useTheme, fmtTime } from "./constants";
+import { getLocalMediaUrl } from "../../../Services/db";
+import { requestP2PDownload } from "../../../Services/p2p";
 
 const QUICK_REACTIONS = ["👍", "❤️", "😂", "😮", "😢", "🔥", "🥸", "👮🏿‍♀️"];
 
@@ -332,6 +334,110 @@ const FileLink = ({ url }) => {
 };
 
 /* ═══════════════════════════════════════════════════════════════
+   P2P ZERO-SERVER MEDIA PREVIEW COMPONENT
+   ═══════════════════════════════════════════════════════════════ */
+const P2PMediaPreview = ({ rawMessage, senderId, socket, onOpenLightbox }) => {
+    const [meta, setMeta] = useState(null);
+    const [localUrl, setLocalUrl] = useState(null);
+    const [downloading, setDownloading] = useState(false);
+    const [progress, setProgress] = useState(0);
+
+    useEffect(() => {
+        try {
+            const jsonPart = rawMessage.replace(/^⚡ P2P_MEDIA\n/, "").trim();
+            const parsed = JSON.parse(jsonPart);
+            setMeta(parsed);
+
+            // Check if file is already saved in local IndexedDB
+            getLocalMediaUrl(parsed.fileId).then((url) => {
+                if (url) setLocalUrl(url);
+            });
+        } catch (e) {
+            console.error("Failed to parse P2P media metadata:", e);
+        }
+    }, [rawMessage]);
+
+    if (!meta) return null;
+
+    const isImage = meta.type?.startsWith("image/") || IMAGE_EXTENSIONS.test(meta.name);
+
+    const handleDownload = () => {
+        setDownloading(true);
+        requestP2PDownload(
+            meta.fileId,
+            senderId,
+            socket,
+            (percent) => setProgress(percent),
+            (blob) => {
+                setDownloading(false);
+                const url = URL.createObjectURL(blob);
+                setLocalUrl(url);
+            }
+        );
+    };
+
+    if (localUrl && isImage) {
+        return <ImagePreview imageUrl={localUrl} onOpenLightbox={onOpenLightbox} />;
+    }
+
+    const formatBytes = (bytes) => {
+        if (!bytes) return "0 B";
+        const k = 1024;
+        const sizes = ["B", "KB", "MB", "GB"];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + " " + sizes[i];
+    };
+
+    return (
+        <div className="mt-1.5 rounded-2xl border border-white/[0.08] bg-black/40 p-3 flex flex-col gap-2 min-w-[220px]">
+            <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center flex-shrink-0">
+                    <span className="text-amber-400 text-sm">⚡</span>
+                </div>
+                <div className="min-w-0 flex-1">
+                    <p className="text-xs font-semibold text-white/90 truncate">{meta.name}</p>
+                    <p className="text-[10px] text-amber-300/60 font-mono">{formatBytes(meta.size)} • P2P Vault</p>
+                </div>
+            </div>
+
+            {localUrl ? (
+                <button
+                    type="button"
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        downloadFile(localUrl, meta.name);
+                    }}
+                    className="w-full py-1.5 px-3 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 text-xs font-medium border border-emerald-500/30 flex items-center justify-center gap-1.5 transition-colors"
+                >
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                    <span>Saved Locally</span>
+                </button>
+            ) : (
+                <button
+                    type="button"
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        if (!downloading) handleDownload();
+                    }}
+                    disabled={downloading}
+                    className="w-full py-1.5 px-3 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 text-xs font-medium border border-amber-500/30 flex items-center justify-center gap-1.5 transition-colors disabled:opacity-50"
+                >
+                    {downloading ? (
+                        <span>Downloading P2P... {progress}%</span>
+                    ) : (
+                        <>
+                            <span>⚡ Download from Peer</span>
+                        </>
+                    )}
+                </button>
+            )}
+        </div>
+    );
+};
+
+/* ═══════════════════════════════════════════════════════════════
    DELETE DIALOG COMPONENT
    ═══════════════════════════════════════════════════════════════ */
 const DeleteDialog = ({ isOpen, isMe, onClose, onDelete }) => {
@@ -428,6 +534,7 @@ const MessageBubble = React.memo(({
     isMe,
     showAvatar,
     user,
+    socket,
     onReaction,
     onReply,
     onSelect,
@@ -481,16 +588,17 @@ const MessageBubble = React.memo(({
     }, []);
 
     // Detect content types
-    const imageUrls = extractImageUrls(msg.message);
-    const videoUrls = extractVideoUrls(msg.message);
-    const audioUrls = extractAudioUrls(msg.message);
-    const nonImageUrls = extractNonImageUrls(msg.message);
-    const caption = extractCaption(msg.message);
+    const isP2P = msg.message?.startsWith('⚡ P2P_MEDIA');
+    const imageUrls = !isP2P ? extractImageUrls(msg.message) : [];
+    const videoUrls = !isP2P ? extractVideoUrls(msg.message) : [];
+    const audioUrls = !isP2P ? extractAudioUrls(msg.message) : [];
+    const nonImageUrls = !isP2P ? extractNonImageUrls(msg.message) : [];
+    const caption = !isP2P ? extractCaption(msg.message) : "";
     const hasImages = imageUrls.length > 0;
     const hasVideos = videoUrls.length > 0;
     const hasAudio = audioUrls.length > 0;
     const hasFiles = nonImageUrls.length > 0;
-    const isVoiceNote = msg.message.includes('🎤 Voice Message');
+    const isVoiceNote = !isP2P && msg.message.includes('🎤 Voice Message');
 
     return (
         <>
@@ -631,13 +739,23 @@ const MessageBubble = React.memo(({
                             />
                         ))}
 
+                        {/* ✅ P2P ZERO-SERVER MEDIA */}
+                        {isP2P && (
+                            <P2PMediaPreview
+                                rawMessage={msg.message}
+                                senderId={msg.sender_id}
+                                socket={socket}
+                                onOpenLightbox={setLightboxImage}
+                            />
+                        )}
+
                         {/* ✅ FILE LINKS */}
                         {hasFiles && nonImageUrls.map((url, idx) => (
                             <FileLink key={`${msg.id}-file-${idx}`} url={url} />
                         ))}
 
                         {/* Plain text fallback */}
-                        {!hasImages && !hasVideos && !hasAudio && !hasFiles && msg.message && (
+                        {!hasImages && !hasVideos && !hasAudio && !hasFiles && !isP2P && msg.message && (
                             <p className="text-[13px] sm:text-sm text-white/90 leading-relaxed whitespace-pre-wrap break-words selection:bg-white/20">
                                 {decodeHtmlEntities(msg.message)}
                             </p>
