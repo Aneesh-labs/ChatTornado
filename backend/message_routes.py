@@ -1,13 +1,31 @@
+from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import or_, and_
 
 from auth import decode_token
 from database import get_db
-from models import Message, MessageVisibility
+from models import Message, MessageVisibility, MessageReaction
+from schemas import MessageReactionData
 from websocket_manager import manager
 
 router = APIRouter()
+
+
+def format_reactions(rxn_list):
+    """Format SQLAlchemy MessageReaction list into UI-ready glyph list."""
+    glyph_map = {}
+    for r in rxn_list or []:
+        g = getattr(r, "reaction", None)
+        u = getattr(r, "user_id", None)
+        if not g or u is None:
+            continue
+        if g not in glyph_map:
+            glyph_map[g] = []
+        if u not in glyph_map[g]:
+            glyph_map[g].append(u)
+    return [{"glyph": g, "users": u} for g, u in glyph_map.items()]
+
 
 
 @router.get("/messages/{other_user_id}")
@@ -77,7 +95,8 @@ async def get_messages(
             "receiver_id": msg.receiver_id,
             "message": msg.message,
             "created_at": msg.created_at.isoformat() if msg.created_at else None,
-            "read_state": current_read_state
+            "read_state": current_read_state,
+            "reactions": format_reactions(getattr(msg, "reactions", []))
         })
 
     return result
@@ -285,3 +304,71 @@ def delete_all_chats(
         "success": True,
         "count": len(message_ids)
     }
+
+
+# ============================================================================
+# MESSAGE REACTION ENDPOINT (REST fallback)
+# ============================================================================
+
+@router.post("/messages/{message_id}/reaction")
+async def toggle_message_reaction(
+    message_id: int,
+    data: MessageReactionData,
+    token: str,
+    db: Session = Depends(get_db)
+):
+    payload = decode_token(token)
+    if payload is None:
+        raise HTTPException(status_code=401, detail="Invalid token.")
+
+    user_id = payload["user_id"]
+    emoji = data.reaction.strip() if data.reaction else ""
+    if not emoji:
+        raise HTTPException(status_code=400, detail="Reaction emoji cannot be empty.")
+
+    msg = db.query(Message).filter(Message.id == message_id).first()
+    if not msg:
+        raise HTTPException(status_code=404, detail="Message not found.")
+
+    if user_id not in (msg.sender_id, msg.receiver_id):
+        raise HTTPException(status_code=403, detail="Not a participant in this conversation.")
+
+    existing_rxn = db.query(MessageReaction).filter(
+        MessageReaction.message_id == message_id,
+        MessageReaction.user_id == user_id
+    ).first()
+
+    if existing_rxn:
+        if existing_rxn.reaction == emoji:
+            db.delete(existing_rxn)
+        else:
+            existing_rxn.reaction = emoji
+            existing_rxn.updated_at = datetime.utcnow()
+    else:
+        new_rxn = MessageReaction(
+            message_id=message_id,
+            user_id=user_id,
+            reaction=emoji,
+            created_at=datetime.utcnow(),
+            updated_at=datetime.utcnow()
+        )
+        db.add(new_rxn)
+
+    db.commit()
+
+    all_rxns = db.query(MessageReaction).filter(MessageReaction.message_id == message_id).all()
+    formatted = format_reactions(all_rxns)
+
+    packet = {
+        "type": "reaction",
+        "message_id": message_id,
+        "sender_id": user_id,
+        "emoji": emoji,
+        "reactions": formatted
+    }
+
+    other_user_id = msg.receiver_id if user_id == msg.sender_id else msg.sender_id
+    await manager.send_personal_message(other_user_id, packet)
+    await manager.send_personal_message(user_id, packet)
+
+    return {"success": True, "reactions": formatted}

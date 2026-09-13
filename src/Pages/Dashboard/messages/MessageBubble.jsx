@@ -1,7 +1,7 @@
 import React, { useState, useRef, useCallback, useEffect } from "react";
 import PropTypes from "prop-types";
 import { motion, AnimatePresence } from "framer-motion";
-import { Avatar, useTheme, fmtTime } from "./constants";
+import { Avatar, useTheme, fmtTime, getMyUserId } from "./constants";
 import { getLocalMediaUrl } from "../../../Services/db";
 import { requestP2PDownload } from "../../../Services/p2p";
 
@@ -560,6 +560,7 @@ const MessageBubble = React.memo(({
     isMobile = false,
 }) => {
     const theme = useTheme();
+    const myId = getMyUserId();
     const [hover, setHover] = useState(false);
     const [lightboxImage, setLightboxImage] = useState(null);
     const [showDeleteDialog, setShowDeleteDialog] = useState(false);
@@ -797,17 +798,19 @@ const MessageBubble = React.memo(({
                             {msg.reactions.map((r) => {
                                 if (!r.glyph) return null;
                                 const reactorCount = r.users?.length || 0;
+                                const hasMyReaction = Boolean(myId && r.users?.includes(myId));
                                 return (
                                     <motion.button
                                         key={r.glyph}
                                         type="button"
                                         whileTap={{ scale: 0.92 }}
                                         onClick={() => onReaction?.(msg.id, r.glyph)}
-                                        className={`${theme.glass} border ${theme.border} hover:border-white/20 transition-all flex items-center gap-1 px-2 py-0.5 sm:px-2.5 rounded-full text-xs sm:text-sm font-medium touch-manipulation`}
-                                        aria-label={`${reactorCount} users reacted with ${r.glyph}`}
+                                        className={`${hasMyReaction ? "bg-sky-500/20 border-sky-400/50 text-sky-200 shadow-sm" : `${theme.glass} border ${theme.border} hover:border-white/20`} transition-all flex items-center gap-1 px-2 py-0.5 sm:px-2.5 rounded-full text-xs sm:text-sm font-medium touch-manipulation`}
+                                        aria-label={`${reactorCount} users reacted with ${r.glyph}${hasMyReaction ? " (including you, click to remove)" : ""}`}
+                                        title={hasMyReaction ? "Click to remove your reaction" : "Click to react"}
                                     >
                                         <span className="text-xs sm:text-sm leading-none">{r.glyph}</span>
-                                        <span className="text-[9px] sm:text-[10px] text-white/50 font-bold tabular-nums">
+                                        <span className={`text-[9px] sm:text-[10px] font-bold tabular-nums ${hasMyReaction ? "text-sky-300" : "text-white/50"}`}>
                                             {reactorCount}
                                         </span>
                                     </motion.button>

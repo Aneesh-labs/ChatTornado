@@ -30,7 +30,7 @@ SECRET_KEY: str = os.getenv("SECRET_KEY") or secrets.token_urlsafe(32)
 SECRET_KEY: str = os.getenv("SECRET_KEY") or "chat_tornado_jwt_production_secret_key_2026_secure_key"
 
 if os.getenv("SECRET_KEY") is None:
-    print("⚠️  WARNING: SECRET_KEY not set in environment. Using generated key.")
+    print("[WARNING] SECRET_KEY not set in environment. Using generated key.")
 
 assert SECRET_KEY is not None
 

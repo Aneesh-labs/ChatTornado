@@ -1,3 +1,4 @@
+from datetime import datetime
 import logging
 
 from fastapi import APIRouter, WebSocket
@@ -6,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from auth import decode_token
 from database import SessionLocal
-from models import Message, MessageVisibility
+from models import Message, MessageVisibility, MessageReaction
 from websocket_manager import manager, ghost_manager
 
 router = APIRouter()
@@ -271,22 +272,69 @@ async def websocket_endpoint(websocket: WebSocket):
                 continue
 
             # ==========================
-            # Emoji Reaction
+            # Emoji Reaction (Database Persisted)
             # ==========================
             if data.get("type") == "reaction":
-                receiver_id = data.get("receiver_id")
                 message_id = data.get("message_id")
-                emoji = data.get("emoji")
-                if receiver_id is not None and message_id is not None and emoji:
-                    await manager.send_personal_message(
-                        int(receiver_id),
-                        {
-                            "type": "reaction",
-                            "message_id": message_id,
-                            "sender_id": user_id,
-                            "emoji": emoji
-                        }
-                    )
+                emoji = data.get("emoji") or data.get("reaction")
+                receiver_id = data.get("receiver_id")
+
+                if message_id is not None and emoji:
+                    try:
+                        msg = db.query(Message).filter(Message.id == int(message_id)).first()
+                        if msg and (user_id in (msg.sender_id, msg.receiver_id)):
+                            other_user_id = msg.receiver_id if user_id == msg.sender_id else msg.sender_id
+
+                            # Check for existing reaction by this user on this message
+                            existing_rxn = db.query(MessageReaction).filter(
+                                MessageReaction.message_id == msg.id,
+                                MessageReaction.user_id == user_id
+                            ).first()
+
+                            if existing_rxn:
+                                if existing_rxn.reaction == str(emoji).strip():
+                                    # Clicking same emoji toggles it off
+                                    db.delete(existing_rxn)
+                                else:
+                                    # Clicking different emoji changes the reaction
+                                    existing_rxn.reaction = str(emoji).strip()
+                                    existing_rxn.updated_at = datetime.utcnow()
+                            else:
+                                new_rxn = MessageReaction(
+                                    message_id=msg.id,
+                                    user_id=user_id,
+                                    reaction=str(emoji).strip(),
+                                    created_at=datetime.utcnow(),
+                                    updated_at=datetime.utcnow()
+                                )
+                                db.add(new_rxn)
+
+                            db.commit()
+
+                            # Group all current reactions on this message by glyph
+                            all_rxns = db.query(MessageReaction).filter(MessageReaction.message_id == msg.id).all()
+                            glyph_map = {}
+                            for r in all_rxns:
+                                g = r.reaction
+                                if g not in glyph_map:
+                                    glyph_map[g] = []
+                                glyph_map[g].append(r.user_id)
+                            formatted_reactions = [{"glyph": g, "users": u} for g, u in glyph_map.items()]
+
+                            reaction_packet = {
+                                "type": "reaction",
+                                "message_id": msg.id,
+                                "sender_id": user_id,
+                                "emoji": str(emoji).strip(),
+                                "reactions": formatted_reactions
+                            }
+
+                            logger.info("Reaction saved: msg=%s, user=%s, emoji=%s", msg.id, user_id, emoji)
+                            await manager.send_personal_message(other_user_id, reaction_packet)
+                            await manager.send_personal_message(user_id, reaction_packet)
+                    except Exception as rxn_err:
+                        logger.exception("Error processing reaction: %s", rxn_err)
+                        db.rollback()
                 continue
 
             # ==========================

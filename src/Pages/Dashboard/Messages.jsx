@@ -613,6 +613,9 @@ const Messages = () => {
                     if (packet.type === "reaction") {
                         setMessages((prev) => prev.map((m) => {
                             if (m.id !== packet.message_id) return m;
+                            if (Array.isArray(packet.reactions)) {
+                                return { ...m, reactions: packet.reactions };
+                            }
                             const reactionsList = m.reactions || [];
                             const existing = reactionsList.find((r) => r.glyph === packet.emoji);
                             if (existing) {
@@ -781,21 +784,32 @@ const Messages = () => {
     const addReaction = useCallback((messageId, emoji) => {
         const safeEmoji = sanitizeInput(emoji).slice(0, 10);
         if (!safeEmoji) return;
+        const myId = myUserId.current;
+
+        // Optimistic update supporting toggling off if already reacted
         setMessages((prev) => prev.map((m) => {
             if (m.id !== messageId) return m;
             const reactionsList = m.reactions || [];
             const existing = reactionsList.find((r) => r.glyph === safeEmoji);
-            if (existing) {
-                return {
-                    ...m,
-                    reactions: reactionsList.map((r) =>
-                        r.glyph === safeEmoji
-                            ? { ...r, users: [...new Set([...r.users, myUserId.current])] }
-                            : r
-                    ),
-                };
+
+            let updated;
+            if (existing && existing.users?.includes(myId)) {
+                // User already reacted with this emoji -> toggle off
+                updated = reactionsList
+                    .map((r) => r.glyph === safeEmoji ? { ...r, users: r.users.filter((id) => id !== myId) } : r)
+                    .filter((r) => r.users && r.users.length > 0);
+            } else if (existing) {
+                // Add user to existing emoji
+                updated = reactionsList.map((r) =>
+                    r.glyph === safeEmoji
+                        ? { ...r, users: [...new Set([...r.users, myId])] }
+                        : r
+                );
+            } else {
+                // Add new emoji reaction
+                updated = [...reactionsList, { glyph: safeEmoji, users: [myId] }];
             }
-            return { ...m, reactions: [...reactionsList, { glyph: safeEmoji, users: [myUserId.current] }] };
+            return { ...m, reactions: updated };
         }));
 
         if (socketRef.current?.readyState === WebSocket.OPEN && selectedUser?.id) {
@@ -809,8 +823,11 @@ const Messages = () => {
             } catch (err) {
                 console.warn("Failed to transmit reaction over WebSocket:", err);
             }
+        } else if (selectedUser?.id && token) {
+            API.post(`/messages/${messageId}/reaction`, { reaction: safeEmoji }, { params: { token } })
+                .catch((err) => console.warn("Failed to post reaction via REST fallback:", err));
         }
-    }, [selectedUser]);
+    }, [selectedUser, token]);
 
     const togglePin = useCallback((userId) => {
         setPinnedChats((prev) => {

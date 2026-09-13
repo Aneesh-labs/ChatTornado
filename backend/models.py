@@ -69,6 +69,35 @@ class Message(Base):
         back_populates="message",
         cascade="all, delete-orphan"
     )
+    reactions: Mapped[List["MessageReaction"]] = relationship(
+        "MessageReaction",
+        back_populates="message",
+        cascade="all, delete-orphan",
+        lazy="selectin"
+    )
+
+
+# ============================================================================
+# MESSAGE REACTION MODEL
+# ============================================================================
+
+class MessageReaction(Base):
+    __tablename__ = "message_reactions"
+    
+    id: Mapped[int] = mapped_column(primary_key=True, index=True, autoincrement=True)
+    message_id: Mapped[int] = mapped_column(ForeignKey("messages.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    reaction: Mapped[str] = mapped_column(String(20), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    
+    # Relationships
+    message: Mapped["Message"] = relationship("Message", back_populates="reactions")
+    user: Mapped["User"] = relationship("User")
+    
+    __table_args__ = (
+        UniqueConstraint('message_id', 'user_id', name='uq_message_user_reaction'),
+    )
 
 
 # ============================================================================
