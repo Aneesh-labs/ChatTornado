@@ -9,6 +9,9 @@ const DB_VERSION = 1;
 const STORE_MEDIA = "p2p_media";
 const STORE_MESSAGES = "local_messages";
 
+// Memory cache for object URLs to enable instant rendering without waiting for DB disk reads
+const blobUrlCache = new Map();
+
 function openDB() {
     return new Promise((resolve, reject) => {
         const request = indexedDB.open(DB_NAME, DB_VERSION);
@@ -45,6 +48,16 @@ function openDB() {
  * @param {Object} metadata - File metadata (name, type, size, senderId, receiverId)
  */
 export async function saveLocalMedia(id, blob, metadata = {}) {
+    // Immediately cache the object URL for instant UI access
+    if (blob) {
+        try {
+            const url = URL.createObjectURL(blob);
+            blobUrlCache.set(id, url);
+        } catch (e) {
+            console.warn("Could not create object URL for cache:", e);
+        }
+    }
+
     const db = await openDB();
     return new Promise((resolve, reject) => {
         const tx = db.transaction(STORE_MEDIA, "readwrite");
@@ -90,6 +103,13 @@ export async function getLocalMedia(id) {
  * @param {string} id - Unique file identifier
  */
 export async function deleteLocalMedia(id) {
+    if (blobUrlCache.has(id)) {
+        try {
+            URL.revokeObjectURL(blobUrlCache.get(id));
+        } catch (e) { }
+        blobUrlCache.delete(id);
+    }
+
     const db = await openDB();
     return new Promise((resolve, reject) => {
         const tx = db.transaction(STORE_MEDIA, "readwrite");
@@ -107,9 +127,19 @@ export async function deleteLocalMedia(id) {
  * @returns {Promise<string|null>} Object URL (blob:http://...)
  */
 export async function getLocalMediaUrl(id) {
+    if (blobUrlCache.has(id)) {
+        return blobUrlCache.get(id);
+    }
     const record = await getLocalMedia(id);
     if (!record || !record.blob) return null;
-    return URL.createObjectURL(record.blob);
+    try {
+        const url = URL.createObjectURL(record.blob);
+        blobUrlCache.set(id, url);
+        return url;
+    } catch (e) {
+        console.warn("Could not create object URL:", e);
+        return null;
+    }
 }
 
 /**

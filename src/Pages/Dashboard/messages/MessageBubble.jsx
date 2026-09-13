@@ -344,24 +344,48 @@ const P2PMediaPreview = ({ rawMessage, senderId, socket, onOpenLightbox }) => {
 
     useEffect(() => {
         try {
-            const jsonPart = rawMessage.replace(/^⚡ P2P_MEDIA\n/, "").trim();
+            // Decode any escaped HTML entities like &quot; or &#x27;
+            const decoded = decodeHtmlEntities(rawMessage) || "";
+            const jsonPart = decoded.replace(/^⚡ P2P_MEDIA\s*/, "").trim();
             const parsed = JSON.parse(jsonPart);
             setMeta(parsed);
 
-            // Check if file is already saved in local IndexedDB
+            // Check if file is already saved in local IndexedDB or cache
             getLocalMediaUrl(parsed.fileId).then((url) => {
-                if (url) setLocalUrl(url);
+                if (url) {
+                    setLocalUrl(url);
+                } else if (socket && socket.readyState === WebSocket.OPEN) {
+                    // Auto-start download if recipient doesn't have it yet
+                    setDownloading(true);
+                    requestP2PDownload(
+                        parsed.fileId,
+                        senderId,
+                        socket,
+                        (p) => setProgress(p),
+                        (blob) => {
+                            setDownloading(false);
+                            const objectUrl = URL.createObjectURL(blob);
+                            setLocalUrl(objectUrl);
+                        }
+                    );
+                }
             });
         } catch (e) {
-            console.error("Failed to parse P2P media metadata:", e);
+            console.error("Failed to parse P2P media metadata:", e, rawMessage);
+            // Fallback object so bubble is never blank
+            setMeta({
+                name: "Photo Attachment",
+                type: "image/jpeg",
+                size: 0,
+                fileId: "unknown"
+            });
         }
-    }, [rawMessage]);
+    }, [rawMessage, senderId, socket]);
 
-    if (!meta) return null;
-
-    const isImage = meta.type?.startsWith("image/") || IMAGE_EXTENSIONS.test(meta.name);
+    const isImage = !meta || meta.type?.startsWith("image/") || IMAGE_EXTENSIONS.test(meta?.name || "");
 
     const handleDownload = () => {
+        if (!meta?.fileId) return;
         setDownloading(true);
         requestP2PDownload(
             meta.fileId,
@@ -377,7 +401,17 @@ const P2PMediaPreview = ({ rawMessage, senderId, socket, onOpenLightbox }) => {
     };
 
     if (localUrl && isImage) {
-        return <ImagePreview imageUrl={localUrl} onOpenLightbox={onOpenLightbox} />;
+        return (
+            <div className="mt-1 flex flex-col gap-1">
+                <ImagePreview imageUrl={localUrl} onOpenLightbox={onOpenLightbox} />
+                {meta?.name && (
+                    <div className="flex items-center justify-between text-[10px] text-white/40 px-1">
+                        <span className="truncate max-w-[160px]">{meta.name}</span>
+                        <span className="font-mono text-amber-400/80">⚡ P2P Vault</span>
+                    </div>
+                )}
+            </div>
+        );
     }
 
     const formatBytes = (bytes) => {
@@ -395,8 +429,8 @@ const P2PMediaPreview = ({ rawMessage, senderId, socket, onOpenLightbox }) => {
                     <span className="text-amber-400 text-sm">⚡</span>
                 </div>
                 <div className="min-w-0 flex-1">
-                    <p className="text-xs font-semibold text-white/90 truncate">{meta.name}</p>
-                    <p className="text-[10px] text-amber-300/60 font-mono">{formatBytes(meta.size)} • P2P Vault</p>
+                    <p className="text-xs font-semibold text-white/90 truncate">{meta?.name || "Photo"}</p>
+                    <p className="text-[10px] text-amber-300/60 font-mono">{formatBytes(meta?.size)} • P2P Vault</p>
                 </div>
             </div>
 
@@ -405,7 +439,7 @@ const P2PMediaPreview = ({ rawMessage, senderId, socket, onOpenLightbox }) => {
                     type="button"
                     onClick={(e) => {
                         e.stopPropagation();
-                        downloadFile(localUrl, meta.name);
+                        downloadFile(localUrl, meta?.name || "photo");
                     }}
                     className="w-full py-1.5 px-3 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 text-xs font-medium border border-emerald-500/30 flex items-center justify-center gap-1.5 transition-colors"
                 >
@@ -425,7 +459,7 @@ const P2PMediaPreview = ({ rawMessage, senderId, socket, onOpenLightbox }) => {
                     className="w-full py-1.5 px-3 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 text-xs font-medium border border-amber-500/30 flex items-center justify-center gap-1.5 transition-colors disabled:opacity-50"
                 >
                     {downloading ? (
-                        <span>Downloading P2P... {progress}%</span>
+                        <span>Downloading photo... {progress}%</span>
                     ) : (
                         <>
                             <span>⚡ Download from Peer</span>

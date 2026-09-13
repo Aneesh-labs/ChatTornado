@@ -57,6 +57,16 @@ const sanitizeInput = (input) => {
 const validateMessage = (text) => {
     const MAX_LENGTH = 4000;
     const MIN_LENGTH = 1;
+
+    // Structured payloads (P2P zero-server media, voice notes, attachments) must preserve JSON & URLs
+    if (typeof text === "string" && (
+        text.startsWith("⚡ P2P_MEDIA") ||
+        text.startsWith("🎤 Voice Message") ||
+        text.startsWith("📎")
+    )) {
+        return { valid: true, text: text.trim() };
+    }
+
     const sanitized = sanitizeInput(text);
     if (sanitized.length < MIN_LENGTH) return { valid: false, error: "Message cannot be empty" };
     if (sanitized.length > MAX_LENGTH) return { valid: false, error: `Message exceeds ${MAX_LENGTH} character limit` };

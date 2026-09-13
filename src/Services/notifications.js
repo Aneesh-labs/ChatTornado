@@ -1,5 +1,4 @@
 /**
- * Browser Web Notification Helper for ChatTornado
  * Browser Web Notification & Audio Chime Helper for ChatTornado
  * Provides WhatsApp-style heads up notifications on phones & desktops without an app store app.
  */
@@ -63,7 +62,6 @@ export async function requestNotificationPermission() {
         return true;
     }
 
-    if (Notification.permission !== "denied") {
     try {
         const permission = await Notification.requestPermission();
         return permission === "granted";
@@ -71,8 +69,6 @@ export async function requestNotificationPermission() {
         console.warn("Permission request error:", e);
         return false;
     }
-
-    return false;
 }
 
 export function registerServiceWorker() {
@@ -96,14 +92,10 @@ export function registerServiceWorker() {
  * @param {string} message - Message snippet or description
  * @param {boolean} force - Whether to show even if window is focused (useful for demos)
  */
-export function showMessageNotification(senderName, message) {
-    if (!("Notification" in window) || Notification.permission !== "granted") return;
 export function showMessageNotification(senderName, message, force = false) {
     // 1. Always play the sound chime
     playNotificationChime();
 
-    // Only notify if document is hidden (user is in another tab or phone is locked)
-    if (document.visibilityState === "visible") return;
     if (!("Notification" in window)) return;
 
     // Check if permission is granted
@@ -131,7 +123,6 @@ export function showMessageNotification(senderName, message, force = false) {
             body,
             icon: "/favicon.ico",
             badge: "/favicon.ico",
-            tag: `chat_${senderName}`,
             tag: `chat_${senderName}_${Date.now()}`,
             renotify: true,
         });
@@ -141,7 +132,6 @@ export function showMessageNotification(senderName, message, force = false) {
             notification.close();
         };
     } catch (e) {
-        console.warn("Could not show notification:", e);
         console.warn("Could not show desktop notification:", e);
     }
 }
@@ -167,4 +157,3 @@ export default {
     playNotificationChime,
     triggerDemoNotification,
 };
-
