@@ -1,0 +1,666 @@
+import React, { useState, useRef, useCallback } from "react";
+import PropTypes from "prop-types";
+import { motion, AnimatePresence } from "framer-motion";
+import { Avatar, useTheme, fmtTime } from "./constants";
+
+const QUICK_REACTIONS = ["👍", "❤️", "😂", "😮", "😢", "🔥", "🥸", "👮🏿‍♀️"];
+
+/* ═══════════════════════════════════════════════════════════════
+   IMAGE & VIDEO DETECTION HELPERS
+   ═══════════════════════════════════════════════════════════════ */
+
+const IMAGE_EXTENSIONS = /\.(jpg|jpeg|png|gif|webp|svg|bmp|ico|heic|heif)(\?.*)?$/i;
+const VIDEO_EXTENSIONS = /\.(mp4|webm|mov|mkv|avi|wmv|flv|m4v)(\?.*)?$/i;
+
+const extractUrls = (text) => {
+    if (!text) return [];
+    return text.match(/https?:\/\/[^\s<>"']+/g) || [];
+};
+
+const isImageUrl = (url) => IMAGE_EXTENSIONS.test(url);
+const isVideoUrl = (url) => VIDEO_EXTENSIONS.test(url);
+
+const extractImageUrls = (text) => extractUrls(text).filter(isImageUrl);
+const extractVideoUrls = (text) => extractUrls(text).filter(isVideoUrl);
+const extractNonImageUrls = (text) =>
+    extractUrls(text).filter((url) => !isImageUrl(url) && !isVideoUrl(url));
+const extractCaption = (text) => {
+    return text.replace(/https?:\/\/[^\s<>"']+/g, "").trim();
+};
+
+const getFilenameFromUrl = (url) => {
+    try {
+        const pathname = new URL(url).pathname;
+        return pathname.split("/").pop() || "download";
+    } catch {
+        return url.split("/").pop() || "download";
+    }
+};
+
+/* ═══════════════════════════════════════════════════════════════
+   DOWNLOAD HELPER
+   ═══════════════════════════════════════════════════════════════ */
+const downloadFile = async (fileUrl, filename) => {
+    try {
+        const response = await fetch(fileUrl, { mode: "cors" });
+        if (!response.ok) throw new Error("Network response was not ok");
+        const blob = await response.blob();
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = filename || getFilenameFromUrl(fileUrl);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+    } catch (error) {
+        window.open(fileUrl, "_blank");
+    }
+};
+
+const downloadImage = downloadFile;
+
+const decodeHtmlEntities = (text) => {
+    if (!text) return text;
+    const textarea = document.createElement('textarea');
+    textarea.innerHTML = text;
+    return textarea.value;
+};
+
+/* ═══════════════════════════════════════════════════════════════
+   LIGHTBOX COMPONENT (for images)
+   ═══════════════════════════════════════════════════════════════ */
+const ImageLightbox = ({ imageUrl, onClose }) => {
+    const [loaded, setLoaded] = useState(false);
+    const [error, setError] = useState(false);
+
+    const handleDownload = useCallback(() => {
+        downloadImage(imageUrl, getFilenameFromUrl(imageUrl));
+    }, [imageUrl]);
+
+    return (
+        <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="fixed inset-0 z-[100] flex items-center justify-center bg-black/92 backdrop-blur-sm"
+            onClick={onClose}
+        >
+            {/* Close button */}
+            <motion.button
+                initial={{ opacity: 0, scale: 0.8 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ delay: 0.1 }}
+                onClick={onClose}
+                className="absolute top-4 right-4 z-10 flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white/70 backdrop-blur-xl transition hover:bg-white/20 hover:text-white"
+            >
+                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+            </motion.button>
+
+            {/* Download button */}
+            <motion.button
+                initial={{ opacity: 0, scale: 0.8 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ delay: 0.15 }}
+                onClick={(e) => { e.stopPropagation(); handleDownload(); }}
+                className="absolute top-4 right-16 z-10 flex h-10 items-center gap-2 rounded-full bg-white/10 px-4 text-xs font-bold text-white/70 backdrop-blur-xl transition hover:bg-white/20 hover:text-white"
+            >
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                </svg>
+                Download
+            </motion.button>
+
+            {/* Image container */}
+            <div className="relative max-h-[90vh] max-w-[95vw]" onClick={(e) => e.stopPropagation()}>
+                {!loaded && !error && (
+                    <div className="flex h-64 w-96 items-center justify-center">
+                        <motion.div
+                            animate={{ rotate: 360 }}
+                            transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                            className="h-8 w-8 rounded-full border-2 border-white/20 border-t-white/60"
+                        />
+                    </div>
+                )}
+                {error && (
+                    <div className="flex h-64 w-96 flex-col items-center justify-center gap-3 rounded-2xl border border-white/10 bg-white/5">
+                        <svg className="h-10 w-10 text-white/30" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+                        </svg>
+                        <p className="text-sm text-white/50">Failed to load image</p>
+                    </div>
+                )}
+                <img
+                    src={imageUrl}
+                    alt="Full size"
+                    className={`max-h-[90vh] max-w-[95vw] rounded-xl object-contain shadow-2xl transition-opacity duration-300 ${loaded ? "opacity-100" : "opacity-0 absolute"}`}
+                    onLoad={() => setLoaded(true)}
+                    onError={() => { setError(true); setLoaded(true); }}
+                />
+            </div>
+
+            {/* Filename at bottom */}
+            <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.2 }}
+                className="absolute bottom-6 left-1/2 -translate-x-1/2 rounded-full bg-black/60 px-4 py-2 text-xs text-white/50 backdrop-blur-xl"
+            >
+                {getFilenameFromUrl(imageUrl)}
+            </motion.div>
+        </motion.div>
+    );
+};
+
+/* ═══════════════════════════════════════════════════════════════
+   IMAGE PREVIEW COMPONENT
+   ═══════════════════════════════════════════════════════════════ */
+const ImagePreview = ({ imageUrl, onOpenLightbox }) => {
+    const [loaded, setLoaded] = useState(false);
+    const [error, setError] = useState(false);
+    const [hover, setHover] = useState(false);
+
+    if (error) {
+        return (
+            <div className="mt-1.5 flex items-center gap-2 rounded-xl border border-red-500/20 bg-red-500/5 px-3 py-2">
+                <svg className="h-4 w-4 text-red-400/60" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+                </svg>
+                <span className="text-xs text-red-300/70">Failed to load image</span>
+            </div>
+        );
+    }
+
+    return (
+        <motion.div
+            className="relative mt-1.5 cursor-pointer overflow-hidden rounded-xl"
+            onMouseEnter={() => setHover(true)}
+            onMouseLeave={() => setHover(false)}
+            onClick={(e) => { e.stopPropagation(); onOpenLightbox(imageUrl); }}
+            whileHover={{ scale: 1.01 }}
+            whileTap={{ scale: 0.99 }}
+        >
+            {!loaded && (
+                <div className="flex h-40 w-full items-center justify-center rounded-xl bg-white/[0.03]">
+                    <motion.div
+                        animate={{ rotate: 360 }}
+                        transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                        className="h-5 w-5 rounded-full border-2 border-white/20 border-t-white/50"
+                    />
+                </div>
+            )}
+            <img
+                src={imageUrl}
+                alt="Message attachment"
+                className={`max-h-[400px] w-full rounded-xl object-cover transition-all duration-300 ${loaded ? "opacity-100" : "opacity-0 absolute inset-0"} ${hover ? "brightness-90" : ""}`}
+                loading="lazy"
+                onLoad={() => setLoaded(true)}
+                onError={() => setError(true)}
+            />
+
+            {/* Hover overlay with download */}
+            <AnimatePresence>
+                {hover && loaded && (
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="absolute inset-0 flex items-end justify-end rounded-xl bg-gradient-to-t from-black/60 via-transparent to-transparent p-3"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <motion.button
+                            initial={{ scale: 0.8, opacity: 0 }}
+                            animate={{ scale: 1, opacity: 1 }}
+                            exit={{ scale: 0.8, opacity: 0 }}
+                            onClick={(e) => { e.stopPropagation(); downloadImage(imageUrl, getFilenameFromUrl(imageUrl)); }}
+                            className="flex h-8 w-8 items-center justify-center rounded-full bg-white/15 text-white/80 backdrop-blur-xl transition hover:bg-white/25 hover:text-white"
+                            title="Download"
+                        >
+                            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                            </svg>
+                        </motion.button>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+        </motion.div>
+    );
+};
+
+/* ═══════════════════════════════════════════════════════════════
+   VIDEO PREVIEW COMPONENT
+   ═══════════════════════════════════════════════════════════════ */
+const VideoPreview = ({ videoUrl }) => {
+    const [error, setError] = useState(false);
+
+    if (error) {
+        return (
+            <div className="mt-1.5 flex items-center gap-2 rounded-xl border border-red-500/20 bg-red-500/5 px-3 py-2">
+                <svg className="h-4 w-4 text-red-400/60" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+                </svg>
+                <span className="text-xs text-red-300/70">Failed to load video</span>
+            </div>
+        );
+    }
+
+    const filename = getFilenameFromUrl(videoUrl);
+
+    return (
+        <div className="mt-1.5 rounded-xl overflow-hidden border border-white/[0.08] bg-black/30">
+            <video
+                controls
+                preload="metadata"
+                className="w-full max-h-[400px] object-contain"
+                playsInline
+            >
+                <source src={videoUrl} />
+                Your browser doesn't support video playback.
+            </video>
+            <div className="flex items-center justify-between px-3 py-1.5 bg-white/[0.03]">
+                <span className="text-[10px] text-white/30 font-medium truncate">
+                    {filename}
+                </span>
+                <button
+                    onClick={(e) => { e.stopPropagation(); downloadFile(videoUrl, filename); }}
+                    className="text-[10px] text-white/30 hover:text-white/70 transition-colors flex items-center gap-1"
+                >
+                    <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                    </svg>
+                    Download
+                </button>
+            </div>
+        </div>
+    );
+};
+
+/* ═══════════════════════════════════════════════════════════════
+   FILE LINK COMPONENT (for non-image, non-video attachments)
+   ═══════════════════════════════════════════════════════════════ */
+const FileLink = ({ url }) => {
+    const filename = getFilenameFromUrl(url);
+    const ext = filename.split(".").pop()?.toUpperCase() || "FILE";
+
+    return (
+        <a
+            href={url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mt-1.5 flex items-center gap-3 rounded-xl border border-white/[0.08] bg-white/[0.03] px-3.5 py-3 transition-all hover:border-white/[0.15] hover:bg-white/[0.06]"
+            onClick={(e) => e.stopPropagation()}
+        >
+            <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-white/[0.06]">
+                <svg className="h-4 w-4 text-white/40" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25" />
+                </svg>
+            </div>
+            <div className="min-w-0 flex-1">
+                <p className="truncate text-xs font-medium text-white/80">{filename}</p>
+                <p className="text-[10px] text-white/30 uppercase tracking-wider">{ext}</p>
+            </div>
+        </a>
+    );
+};
+
+/* ═══════════════════════════════════════════════════════════════
+   DELETE DIALOG COMPONENT
+   ═══════════════════════════════════════════════════════════════ */
+const DeleteDialog = ({ isOpen, onClose, onDelete }) => {
+    if (!isOpen) return null;
+
+    return (
+        <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.95 }}
+            transition={{ duration: 0.15 }}
+            className="fixed inset-0 z-[120] flex items-center justify-center bg-black/60 backdrop-blur-sm"
+            onClick={onClose}
+        >
+            <div
+                className="relative w-[min(400px,90vw)] rounded-2xl border border-white/[0.08] bg-[#0a0a12] p-6 shadow-2xl"
+                onClick={(e) => e.stopPropagation()}
+            >
+                <h3 className="text-lg font-bold text-white">Delete Message?</h3>
+                <p className="mt-2 text-sm text-white/50">Choose how you want to delete this message.</p>
+
+                <div className="mt-4 flex flex-col gap-2">
+                    <motion.button
+                        whileHover={{ scale: 1.01 }}
+                        whileTap={{ scale: 0.99 }}
+                        onClick={() => { onDelete("me"); onClose(); }}
+                        className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-4 py-3 text-left text-sm text-white/80 transition hover:bg-white/[0.06]"
+                    >
+                        <span className="font-medium text-white">Delete for me</span>
+                        <p className="text-[10px] text-white/30">Message will be hidden from your view</p>
+                    </motion.button>
+
+                    <motion.button
+                        whileHover={{ scale: 1.01 }}
+                        whileTap={{ scale: 0.99 }}
+                        onClick={() => { onDelete("both"); onClose(); }}
+                        className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-4 py-3 text-left text-sm text-white/80 transition hover:bg-white/[0.06]"
+                    >
+                        <span className="font-medium text-red-400">Delete for everyone</span>
+                        <p className="text-[10px] text-white/30">Message will be hidden from both sides</p>
+                    </motion.button>
+
+                    <motion.button
+                        whileHover={{ scale: 1.01 }}
+                        whileTap={{ scale: 0.99 }}
+                        onClick={() => { onDelete("receiver"); onClose(); }}
+                        className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-4 py-3 text-left text-sm text-white/80 transition hover:bg-white/[0.06]"
+                    >
+                        <span className="font-medium text-amber-400">Delete for receiver</span>
+                        <p className="text-[10px] text-white/30">Message will be hidden from the recipient</p>
+                    </motion.button>
+                </div>
+
+                <motion.button
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={onClose}
+                    className="mt-4 w-full rounded-xl border border-white/[0.06] py-2.5 text-sm font-medium text-white/40 transition hover:bg-white/[0.04]"
+                >
+                    Cancel
+                </motion.button>
+            </div>
+        </motion.div>
+    );
+};
+
+/* ═══════════════════════════════════════════════════════════════
+   MAIN MESSAGE BUBBLE COMPONENT
+   ═══════════════════════════════════════════════════════════════ */
+const MessageBubble = React.memo(({
+    msg,
+    isMe,
+    showAvatar,
+    user,
+    onReaction,
+    onReply,
+    onSelect,
+    onLongPress,
+    onDelete,
+    selected,
+    isMobile = false,
+}) => {
+    const theme = useTheme();
+    const [hover, setHover] = useState(false);
+    const [lightboxImage, setLightboxImage] = useState(null);
+    const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+    const longPressTimer = useRef(null);
+
+    const bubbleClass = isMe ? theme.bubble.me : theme.bubble.them;
+
+    const readStateConfig = (() => {
+        const state = msg.readState || "sent";
+        if (state === "read") {
+            return { label: "Read", marks: "✓✓", className: theme.accentText };
+        }
+        if (state === "delivered") {
+            return { label: "Delivered", marks: "✓✓", className: "text-white/30" };
+        }
+        return { label: "Sent", marks: "✓", className: "text-white/20" };
+    })();
+
+    const handleTouchStart = useCallback(() => {
+        if (!isMobile || onSelect) return;
+        longPressTimer.current = setTimeout(() => {
+            onLongPress?.(msg);
+        }, 450);
+    }, [isMobile, onSelect, onLongPress, msg]);
+
+    const handleTouchEnd = useCallback(() => {
+        if (longPressTimer.current) {
+            clearTimeout(longPressTimer.current);
+            longPressTimer.current = null;
+        }
+    }, []);
+
+    const handleContextMenu = useCallback((e) => {
+        if (isMobile) {
+            e.preventDefault();
+            onLongPress?.(msg);
+        }
+    }, [isMobile, onLongPress, msg]);
+
+    const handleDeleteClick = useCallback(() => {
+        setShowDeleteDialog(true);
+    }, []);
+
+    // Detect content types
+    const imageUrls = extractImageUrls(msg.message);
+    const videoUrls = extractVideoUrls(msg.message);
+    const nonImageUrls = extractNonImageUrls(msg.message);
+    const caption = extractCaption(msg.message);
+    const hasImages = imageUrls.length > 0;
+    const hasVideos = videoUrls.length > 0;
+    const hasFiles = nonImageUrls.length > 0;
+
+    return (
+        <>
+            <motion.div
+                layout
+                initial={{ opacity: 0, y: 6, scale: 0.98 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.96 }}
+                transition={{ type: "spring", stiffness: 400, damping: 28 }}
+                className={`flex ${isMe ? "justify-end" : "justify-start"} group relative px-1 sm:px-4 my-0.5 sm:my-1.5`}
+                onMouseEnter={() => setHover(true)}
+                onMouseLeave={() => setHover(false)}
+                onTouchStart={handleTouchStart}
+                onTouchEnd={handleTouchEnd}
+                onTouchMove={handleTouchEnd}
+                onContextMenu={handleContextMenu}
+            >
+                {!isMe && (
+                    <div className="w-7 sm:w-8 flex-shrink-0 mr-1 sm:mr-2 self-end mb-0.5 sm:mb-1 select-none">
+                        {showAvatar && user ? (
+                            <Avatar user={user} size="xs" showStatus={false} />
+                        ) : (
+                            <div className="w-6 h-6" aria-hidden="true" />
+                        )}
+                    </div>
+                )}
+
+                <div className={`min-w-0 w-full max-w-[90%] sm:max-w-[85%] lg:max-w-[420px] flex flex-col ${isMe ? "items-end" : "items-start"} relative`}>
+                    {/* Reply preview */}
+                    {msg.reply_to && (
+                        <div
+                            className={`mb-1 px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-lg sm:rounded-xl text-[10px] sm:text-[11px] text-white/40 border ${theme.border} ${theme.glass} backdrop-blur-sm max-w-[200px] sm:max-w-[260px] truncate select-none`}
+                            title={msg.reply_to.message}
+                        >
+                            <span className="font-semibold text-white/20 mr-1">↳</span> {decodeHtmlEntities(msg.reply_to.message)}
+                        </div>
+                    )}
+
+                    {/* Desktop hover actions */}
+                    <AnimatePresence>
+                        {hover && !isMobile && (
+                            <motion.div
+                                initial={{ opacity: 0, y: 4, scale: 0.9 }}
+                                animate={{ opacity: 1, y: 0, scale: 1 }}
+                                exit={{ opacity: 0, y: 4, scale: 0.9 }}
+                                transition={{ duration: 0.12 }}
+                                className={`absolute ${isMe ? "right-1" : "left-1"} -top-10 sm:-top-11 z-20 hidden sm:flex items-center gap-0.5 px-1.5 py-0.5 sm:px-2 sm:py-1 rounded-lg sm:rounded-xl ${theme.glass} border ${theme.border} backdrop-blur-xl shadow-2xl select-none`}
+                                role="toolbar"
+                                aria-label="Message action options"
+                            >
+                                {QUICK_REACTIONS.map((emoji) => (
+                                    <motion.button
+                                        key={emoji}
+                                        type="button"
+                                        whileHover={{ scale: 1.25 }}
+                                        whileTap={{ scale: 0.85 }}
+                                        onClick={() => onReaction?.(msg.id, emoji)}
+                                        className="text-sm sm:text-base p-1 leading-none transition-transform"
+                                        aria-label={`React with ${emoji}`}
+                                    >
+                                        {emoji}
+                                    </motion.button>
+                                ))}
+                                <div className="w-[1px] h-3.5 bg-white/10 mx-1" role="separator" />
+                                <motion.button
+                                    type="button"
+                                    whileHover={{ scale: 1.1 }}
+                                    whileTap={{ scale: 0.9 }}
+                                    onClick={() => onReply?.(msg)}
+                                    className="text-[11px] text-white/50 hover:text-white/90 px-1.5 py-0.5 rounded-md hover:bg-white/[0.08] transition-colors font-medium"
+                                    aria-label="Reply to message"
+                                >
+                                    Reply
+                                </motion.button>
+                                <div className="w-[1px] h-3.5 bg-white/10 mx-1" role="separator" />
+                                <motion.button
+                                    type="button"
+                                    whileHover={{ scale: 1.1 }}
+                                    whileTap={{ scale: 0.9 }}
+                                    onClick={handleDeleteClick}
+                                    className="text-[11px] text-red-400/60 hover:text-red-400 px-1.5 py-0.5 rounded-md hover:bg-red-500/10 transition-colors font-medium"
+                                    aria-label="Delete message"
+                                >
+                                    Delete
+                                </motion.button>
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
+
+                    {/* Message bubble */}
+                    <motion.div
+                        whileHover={!isMobile ? { scale: 1.002 } : {}}
+                        onClick={() => onSelect?.(msg.id)}
+                        className={`
+                            px-3 py-2 sm:px-4 sm:py-2.5 rounded-2xl border backdrop-blur-xl transition-all duration-100 touch-manipulation
+                            ${isMe ? "rounded-br-md" : "rounded-bl-md"}
+                            ${bubbleClass}
+                            ${selected ? "ring-2 ring-violet-400/80 border-transparent shadow-lg" : "shadow-sm"}
+                        `}
+                    >
+                        {/* Caption text */}
+                        {(hasImages || hasVideos || hasFiles) && caption && (
+                            <p className="text-[13px] sm:text-sm text-white/90 leading-relaxed whitespace-pre-wrap break-words selection:bg-white/20 mb-1">
+                                {decodeHtmlEntities(caption)}
+                            </p>
+                        )}
+
+                        {/* ✅ IMAGE PREVIEWS */}
+                        {hasImages && imageUrls.map((url, idx) => (
+                            <ImagePreview
+                                key={`${msg.id}-img-${idx}`}
+                                imageUrl={url}
+                                onOpenLightbox={setLightboxImage}
+                            />
+                        ))}
+
+                        {/* ✅ VIDEO PREVIEWS - Render BEFORE files */}
+                        {hasVideos && videoUrls.map((url, idx) => (
+                            <VideoPreview
+                                key={`${msg.id}-video-${idx}`}
+                                videoUrl={url}
+                            />
+                        ))}
+
+                        {/* ✅ FILE LINKS - ONLY for non-image, non-video files */}
+                        {hasFiles && nonImageUrls.map((url, idx) => (
+                            <FileLink key={`${msg.id}-file-${idx}`} url={url} />
+                        ))}
+
+                        {/* Plain text fallback */}
+                        {!hasImages && !hasVideos && !hasFiles && msg.message && (
+                            <p className="text-[13px] sm:text-sm text-white/90 leading-relaxed whitespace-pre-wrap break-words selection:bg-white/20">
+                                {decodeHtmlEntities(msg.message)}
+                            </p>
+                        )}
+
+                        {/* Timestamp */}
+                        <div className={`flex items-center gap-1 mt-0.5 sm:mt-1 ${isMe ? "justify-end" : "justify-start"} select-none`}>
+                            <span className="text-[9px] sm:text-[10px] text-white/30 font-medium tabular-nums">
+                                {fmtTime(msg.created_at)}
+                            </span>
+                            {isMe && (
+                                <span className={`text-[9px] sm:text-[10px] font-bold ${readStateConfig.className}`} title={readStateConfig.label}>
+                                    <span className="sr-only">{readStateConfig.label}</span>
+                                    {readStateConfig.marks}
+                                </span>
+                            )}
+                        </div>
+                    </motion.div>
+
+                    {/* Reactions */}
+                    {msg.reactions && msg.reactions.length > 0 && (
+                        <div className={`flex flex-wrap gap-1 mt-1 select-none ${isMe ? "justify-end" : "justify-start"}`} role="group" aria-label="Message reactions">
+                            {msg.reactions.map((r) => {
+                                if (!r.glyph) return null;
+                                const reactorCount = r.users?.length || 0;
+                                return (
+                                    <motion.button
+                                        key={r.glyph}
+                                        type="button"
+                                        whileTap={{ scale: 0.92 }}
+                                        onClick={() => onReaction?.(msg.id, r.glyph)}
+                                        className={`${theme.glass} border ${theme.border} hover:border-white/20 transition-all flex items-center gap-1 px-2 py-0.5 sm:px-2.5 rounded-full text-xs sm:text-sm font-medium touch-manipulation`}
+                                        aria-label={`${reactorCount} users reacted with ${r.glyph}`}
+                                    >
+                                        <span className="text-xs sm:text-sm leading-none">{r.glyph}</span>
+                                        <span className="text-[9px] sm:text-[10px] text-white/50 font-bold tabular-nums">
+                                            {reactorCount}
+                                        </span>
+                                    </motion.button>
+                                );
+                            })}
+                        </div>
+                    )}
+                </div>
+            </motion.div>
+
+            {/* Lightbox */}
+            <AnimatePresence>
+                {lightboxImage && (
+                    <ImageLightbox
+                        imageUrl={lightboxImage}
+                        onClose={() => setLightboxImage(null)}
+                    />
+                )}
+            </AnimatePresence>
+
+            {/* Delete Dialog */}
+            <DeleteDialog
+                isOpen={showDeleteDialog}
+                onClose={() => setShowDeleteDialog(false)}
+                onDelete={(mode) => onDelete?.(msg.id, mode)}
+            />
+        </>
+    );
+});
+
+MessageBubble.propTypes = {
+    msg: PropTypes.shape({
+        id: PropTypes.oneOfType([PropTypes.string, PropTypes.number]).isRequired,
+        message: PropTypes.string.isRequired,
+        created_at: PropTypes.oneOfType([PropTypes.string, PropTypes.instanceOf(Date)]),
+        readState: PropTypes.oneOf(["sent", "delivered", "read"]),
+        reply_to: PropTypes.shape({ message: PropTypes.string }),
+        reactions: PropTypes.arrayOf(
+            PropTypes.shape({ glyph: PropTypes.string, users: PropTypes.array })
+        ),
+    }).isRequired,
+    isMe: PropTypes.bool.isRequired,
+    showAvatar: PropTypes.bool.isRequired,
+    user: PropTypes.object,
+    onReaction: PropTypes.func,
+    onReply: PropTypes.func,
+    onSelect: PropTypes.func,
+    onLongPress: PropTypes.func,
+    onDelete: PropTypes.func,
+    selected: PropTypes.bool,
+    isMobile: PropTypes.bool,
+};
+
+MessageBubble.displayName = "MessageBubble";
+
+export default MessageBubble;

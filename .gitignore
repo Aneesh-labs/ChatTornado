@@ -1,0 +1,58 @@
+# ==========================================
+# Frontend (Node / Vite / React)
+# ==========================================
+node_modules/
+dist/
+dist-ssr/
+*.local
+.vite/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# ==========================================
+# Backend (Python / FastAPI / SQLAlchemy)
+# ==========================================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+backend/venv/
+backend/.venv/
+backend/__pycache__/
+backend/uploads/*
+!backend/uploads/.gitkeep
+backend/ffmpeg/
+*.db
+*.sqlite
+*.sqlite3
+backend/*.db
+
+# ==========================================
+# Environment Variables & Secrets
+# ==========================================
+.env
+.env.local
+.env.*.local
+backend/.env
+
+# ==========================================
+# IDE & System Files
+# ==========================================
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
