@@ -330,7 +330,7 @@ const ChatInput = React.memo(({ onSend, replyTo, onCancelReply, selectedUser, so
                                         ? '!text-violet-400 bg-violet-500/20 border border-violet-500/50 shadow-[0_0_12px_rgba(139,92,246,0.5)]'
                                         : '!text-cyan-400 bg-cyan-500/20 border border-cyan-500/50 shadow-[0_0_12px_rgba(6,182,212,0.5)]')
                                     : 'text-cyan-400/70 hover:!text-cyan-300 hover:bg-cyan-500/10'
-                                }`}
+                                    }`}
                             >
                                 <Shield className="w-4 h-4" />
                             </IconBtn>

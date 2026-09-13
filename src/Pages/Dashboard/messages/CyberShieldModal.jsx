@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { Shield, Clock, Eye, X } from 'lucide-react';
 import { playShieldActivateSound } from '../../../Services/audioFx';
 
@@ -53,9 +54,12 @@ const CyberShieldModal = ({ isOpen, onClose, onApply }) => {
         onClose();
     };
 
-    return (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-            <div className="bg-gray-900 border border-cyan-500/30 rounded-2xl w-full max-w-md overflow-hidden shadow-[0_0_40px_rgba(6,182,212,0.15)] animate-in fade-in zoom-in duration-200">
+    const modalContent = (
+        <div 
+            className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/75 backdrop-blur-md p-4 overflow-y-auto"
+            onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+        >
+            <div className="bg-gray-900 border border-cyan-500/30 rounded-2xl w-full max-w-md my-auto max-h-[90vh] flex flex-col overflow-hidden shadow-[0_0_50px_rgba(6,182,212,0.25)] animate-in fade-in zoom-in duration-200">
                 {/* Header */}
                 <div className="flex items-center justify-between p-4 border-b border-gray-800 bg-gray-900/50">
                     <div className="flex items-center gap-2 text-cyan-400">
@@ -169,6 +173,8 @@ const CyberShieldModal = ({ isOpen, onClose, onApply }) => {
             </div>
         </div>
     );
+
+    return typeof document !== 'undefined' ? createPortal(modalContent, document.body) : modalContent;
 };
 
 export default CyberShieldModal;
