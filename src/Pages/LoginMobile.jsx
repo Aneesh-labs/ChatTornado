@@ -1046,6 +1046,8 @@ export default function LoginMobile() {
     const capabilities = useDeviceCapabilities();
 
     // Primary State Elements
+    const [mode, setMode] = useState('login'); // 'login' or 'signup'
+    const [displayName, setDisplayName] = useState('');
     const [usernameCredential, setUsernameCredential] = useState('');
     const [passwordCredential, setPasswordCredential] = useState('');
     const [systemStateStep, setSystemStateStep] = useState('idle'); // idle | verifying | gathering | imploding
@@ -1181,7 +1183,7 @@ export default function LoginMobile() {
             renderErrorTelemetry("Network offline. Gateway unreachable.");
             return;
         }
-        if (!usernameCredential || !passwordCredential) {
+        if (!usernameCredential || !passwordCredential || (mode === 'signup' && !displayName)) {
             renderErrorTelemetry("Credentials payload incomplete.");
             return;
         }
@@ -1197,19 +1199,29 @@ export default function LoginMobile() {
         triggerTactileFeedback(18);
 
         try {
-            // Reuses backend contracts cleanly without metadata variations
-
-            const response = await API.post("/login", {
-                email: usernameCredential,
-                password: passwordCredential,
-            });
-
-            const payloadToken = response.data.access_token || response.data.token;
-            if (payloadToken) {
-                sessionStorage.setItem('token', payloadToken);
-                triggerCinematicSuccessSequence();
+            if (mode === 'signup') {
+                const formData = new URLSearchParams();
+                formData.append("username", displayName);
+                formData.append("email", usernameCredential);
+                formData.append("password", passwordCredential);
+                await API.post("/signup", formData, {
+                    headers: { "Content-Type": "application/x-www-form-urlencoded" }
+                });
+                setAmbientGreetingText("Identity established. Logging in...");
+                setMode('login');
+                setTimeout(() => executeAuthenticationRequest(), 1500);
             } else {
-                throw new Error('Contract failure: Missing verification parameter token.');
+                const response = await API.post("/login", {
+                    email: usernameCredential,
+                    password: passwordCredential,
+                });
+                const payloadToken = response.data.access_token || response.data.token;
+                if (payloadToken) {
+                    sessionStorage.setItem('token', payloadToken);
+                    triggerCinematicSuccessSequence();
+                } else {
+                    throw new Error('Contract failure: Missing verification parameter token.');
+                }
             }
         } catch (networkCallException) {
             setSystemStateStep('idle');
@@ -1475,6 +1487,26 @@ export default function LoginMobile() {
                         className="w-full flex flex-col relative"
                         animate={frameworkMotionControls}
                     >
+                        <AnimatePresence>
+                            {mode === 'signup' && (
+                                <motion.div
+                                    initial={{ opacity: 0, height: 0 }}
+                                    animate={{ opacity: 1, height: 'auto' }}
+                                    exit={{ opacity: 0, height: 0 }}
+                                >
+                                    <HighEndFormInput
+                                        inputCategoryType="text"
+                                        customPlaceholder="Username"
+                                        controlledValue={displayName}
+                                        stateChangeCallback={(e) => setDisplayName(e.target.value)}
+                                        isActiveError={!!errorTelemetryText}
+                                        systemLocked={systemStateStep !== 'idle'}
+                                        visualLeadingIcon={User}
+                                    />
+                                </motion.div>
+                            )}
+                        </AnimatePresence>
+
                         <HighEndFormInput
                             inputCategoryType="text"
                             customPlaceholder="Email"
@@ -1502,7 +1534,15 @@ export default function LoginMobile() {
                             interactionCallback={handleButtonTapTracking}
                             pointerDownCallback={handleButtonPressHoldStart}
                             pointerUpCallback={handleLogoHoldRelease}
-                        />                    </motion.form>
+                        />
+                        <button
+                            type="button"
+                            onClick={() => setMode(mode === 'signup' ? 'login' : 'signup')}
+                            className="mt-4 text-xs font-mono tracking-widest uppercase text-white/50 hover:text-white transition-colors pb-4"
+                        >
+                            {mode === 'signup' ? "Already have an account? Sign in" : "Don't have an account? Sign up"}
+                        </button>
+                    </motion.form>
 
                     {/* Interactive Component Badging Extensions */}
                     {flagHiddenMessageVisible && (

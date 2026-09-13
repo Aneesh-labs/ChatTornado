@@ -261,40 +261,48 @@ export default function X() {
         const cY = r.height / 2;
         sCt({ x: ((y - cY) / cY) * -4, y: ((x - cX) / cX) * 4 });
     };
+    const [m, sM] = uS('login'); // 'login' or 'signup'
+    const [u, sU] = uS('');
+
     const hS = async (ev) => {
         ev.preventDefault();
         if (!e || !p || il || is) return;
+        if (m === 'signup' && !u) return;
 
         sIl(true);
         sIe(false);
-        sSt(_0xb); // "Verifying Identity..."
+        sSt(m === 'signup' ? "Creating Identity..." : _0xb); 
 
         try {
-            // ✅ REAL API CALL TO BACKEND
-            const response = await fetch('http://192.168.31.72:8000/login', {
+            const endpoint = m === 'signup' ? '/signup' : '/login';
+            const payload = m === 'signup' ? { username: u, email: e, password: p } : { email: e, password: p };
+            
+            // Use API from services if possible, or standard fetch
+            const response = await fetch(`${import.meta.env.VITE_API_URL}${endpoint}`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ email: e, password: p })
+                headers: { 'Content-Type': m === 'signup' ? 'application/x-www-form-urlencoded' : 'application/json' },
+                body: m === 'signup' ? new URLSearchParams(payload) : JSON.stringify(payload)
             });
 
             const data = await response.json();
 
             if (response.ok) {
-                // ✅ Login successful
-                sessionStorage.setItem('token', data.access_token);
-                sSt(_0xd); // "Access Granted"
-                sIs(true);
-
-                // Navigate to dashboard
-                window.location.href = '/messages';
+                if (m === 'signup') {
+                    sSt("Identity Created. Logging in...");
+                    sM('login');
+                    setTimeout(() => hS(ev), 1000); // auto login
+                } else {
+                    sessionStorage.setItem('token', data.access_token || data.token);
+                    sSt(_0xd); 
+                    sIs(true);
+                    window.location.href = '/home';
+                }
             } else {
-                // ❌ Login failed
                 sSt(data.detail || _0xe);
                 sIe(true);
                 setTimeout(() => sIe(false), 3000);
             }
         } catch (error) {
-            // Network error
             sSt(_0xf);
             sIe(true);
             setTimeout(() => sIe(false), 3000);
@@ -527,6 +535,23 @@ export default function X() {
                                 </div>
                             </div>
                             <form onSubmit={hS} className="space-y-6">
+                                {m === 'signup' && (
+                                    <div className="relative group">
+                                        <div className={`absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none transition-colors duration-300 ${fi === 'u' ? t.ta : 'text-slate-500'}`}>
+                                            <_U className="h-5 w-5" />
+                                        </div>
+                                        <input
+                                            type="text"
+                                            required
+                                            value={u}
+                                            onChange={(ev) => sU(ev.target.value)}
+                                            onFocus={() => sFi('u')}
+                                            onBlur={() => sFi(null)}
+                                            className={`block w-full pl-12 pr-4 py-3.5 bg-slate-950 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none transition-all duration-300 ${t.tb} ${fi === 'u' ? 'bg-black' : ''}`}
+                                            placeholder="Username"
+                                        />
+                                    </div>
+                                )}
                                 <div className="relative group">
                                     <div className={`absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none transition-colors duration-300 ${fi === 'e' ? t.ta : 'text-slate-500'}`}>
                                         <_M className="h-5 w-5" />
@@ -605,12 +630,21 @@ export default function X() {
                                             </>
                                         ) : (
                                             <>
-                                                <span>{e === _0x16 ? _0x11 : "Establish Link"}</span>
+                                                <span>{e === _0x16 ? _0x11 : m === 'signup' ? "Establish Identity" : "Establish Link"}</span>
                                                 <_Ar className="w-5 h-5 group-hover:translate-x-1 transition-transform duration-300" />
                                             </>
                                         )}
                                     </div>
                                 </button>
+                                <div className="text-center mt-4">
+                                    <button
+                                        type="button"
+                                        onClick={() => sM(m === 'signup' ? 'login' : 'signup')}
+                                        className="text-sm text-slate-400 hover:text-white transition-colors"
+                                    >
+                                        {m === 'signup' ? "Already have an account? Sign in" : "Don't have an account? Sign up"}
+                                    </button>
+                                </div>
                             </form>
                             <div className="mt-10 pt-6 border-t border-slate-800 flex items-center justify-between">
                                 <span className="text-xs font-medium text-slate-500 uppercase tracking-widest">Interface Theme</span>
