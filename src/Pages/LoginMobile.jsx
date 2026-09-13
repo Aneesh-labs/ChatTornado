@@ -1215,6 +1215,7 @@ export default function LoginMobile() {
                     email: usernameCredential,
                     password: passwordCredential,
                 });
+
                 const payloadToken = response.data.access_token || response.data.token;
                 if (payloadToken) {
                     sessionStorage.setItem('token', payloadToken);
@@ -1230,360 +1231,361 @@ export default function LoginMobile() {
         }
     };
 
-    const renderErrorTelemetry = (msg) => {
-        triggerTactileFeedback([30, 60, 30]);
-        setErrorTelemetryText(msg);
-        frameworkMotionControls.start({
-            x: [-12, 12, -10, 10, -5, 5, 0],
-            transition: { duration: 0.5, ease: "easeInOut" }
-        });
-    };
+            const renderErrorTelemetry = (msg) => {
+                triggerTactileFeedback([30, 60, 30]);
+                setErrorTelemetryText(msg);
+                frameworkMotionControls.start({
+                    x: [-12, 12, -10, 10, -5, 5, 0],
+                    transition: { duration: 0.5, ease: "easeInOut" }
+                });
+            };
 
-    const triggerCinematicSuccessSequence = () => {
-        setSystemStateStep('gathering');
-        triggerTactileFeedback([40, 40, 80, 40]);
+            const triggerCinematicSuccessSequence = () => {
+                setSystemStateStep('gathering');
+                triggerTactileFeedback([40, 40, 80, 40]);
 
-        setTimeout(() => {
-            setSystemStateStep('imploding');
-            triggerTactileFeedback([100, 10]);
+                setTimeout(() => {
+                    setSystemStateStep('imploding');
+                    triggerTactileFeedback([100, 10]);
 
-            setTimeout(() => {
-                navigate('/home');
-            }, 700);
-        }, 1200);
-    };
+                    setTimeout(() => {
+                        navigate('/home');
+                    }, 700);
+                }, 1200);
+            };
 
-    // --- Easter Egg Trigger Vectors ---
+            // --- Easter Egg Trigger Vectors ---
 
-    const handleLogoTapOperation = () => {
-        const updatedCount = countLogoTaps + 1;
-        setCountLogoTaps(updatedCount);
-        triggerTactileFeedback(8);
+            const handleLogoTapOperation = () => {
+                const updatedCount = countLogoTaps + 1;
+                setCountLogoTaps(updatedCount);
+                triggerTactileFeedback(8);
 
-        if (updatedCount === 7) setFlagDeveloperConsole(true);
-        if (updatedCount === 20) setFlagRenderStatsOverlay(true);
-    };
+                if (updatedCount === 7) setFlagDeveloperConsole(true);
+                if (updatedCount === 20) setFlagRenderStatsOverlay(true);
+            };
 
-    const handleLogoHoldDown = () => {
-        timingLogoHoldRef.current = setTimeout(() => {
-            setFlagParticleSurgeActive(true);
-            triggerTactileFeedback(150);
-            setTimeout(() => setFlagParticleSurgeActive(false), 10000);
-        }, 800);
-    };
+            const handleLogoHoldDown = () => {
+                timingLogoHoldRef.current = setTimeout(() => {
+                    setFlagParticleSurgeActive(true);
+                    triggerTactileFeedback(150);
+                    setTimeout(() => setFlagParticleSurgeActive(false), 10000);
+                }, 800);
+            };
 
-    const handleLogoHoldRelease = () => clearTimeout(timingLogoHoldRef.current);
+            const handleLogoHoldRelease = () => clearTimeout(timingLogoHoldRef.current);
 
-    const handleButtonTapTracking = () => {
-        const nextCount = countButtonTaps + 1;
-        setCountButtonTaps(nextCount);
-        if (nextCount === 3) setFlagHiddenMessageVisible(true);
-    };
+            const handleButtonTapTracking = () => {
+                const nextCount = countButtonTaps + 1;
+                setCountButtonTaps(nextCount);
+                if (nextCount === 3) setFlagHiddenMessageVisible(true);
+            };
 
-    const handleButtonPressHoldStart = () => {
-        timingLogoHoldRef.current = setTimeout(() => {
-            setFlagExclusiveBadgeVisible(true);
-            triggerTactileFeedback(60);
-        }, 5000);
-    };
+            const handleButtonPressHoldStart = () => {
+                timingLogoHoldRef.current = setTimeout(() => {
+                    setFlagExclusiveBadgeVisible(true);
+                    triggerTactileFeedback(60);
+                }, 5000);
+            };
 
-    const handlePasswordToggleTelemetry = () => {
-        const aggregatedToggles = countEyeToggles + 1;
-        setCountEyeToggles(aggregatedToggles);
-        if (aggregatedToggles === 10) {
-            setFlagWinkingActive(true);
-            setTimeout(() => setFlagWinkingActive(false), 1200);
-            setCountEyeToggles(0);
-        }
-    };
+            const handlePasswordToggleTelemetry = () => {
+                const aggregatedToggles = countEyeToggles + 1;
+                setCountEyeToggles(aggregatedToggles);
+                if (aggregatedToggles === 10) {
+                    setFlagWinkingActive(true);
+                    setTimeout(() => setFlagWinkingActive(false), 1200);
+                    setCountEyeToggles(0);
+                }
+            };
 
-    const handleDeveloperBioTelemetry = () => {
-        const currentToggles = countBioExpansions + 1;
-        setCountBioExpansions(currentToggles);
-        if (currentToggles === 5) setFlagHiddenQuoteUnlocked(true);
-    };
+            const handleDeveloperBioTelemetry = () => {
+                const currentToggles = countBioExpansions + 1;
+                setCountBioExpansions(currentToggles);
+                if (currentToggles === 5) setFlagHiddenQuoteUnlocked(true);
+            };
 
-    const handleTelemetryTapTracking = () => {
-        const nextCount = countTelemetryTaps + 1;
-        setCountTelemetryTaps(nextCount);
-        if (nextCount === 10) setFlagRenderStatsOverlay(true);
-    };
+            const handleTelemetryTapTracking = () => {
+                const nextCount = countTelemetryTaps + 1;
+                setCountTelemetryTaps(nextCount);
+                if (nextCount === 10) setFlagRenderStatsOverlay(true);
+            };
 
-    // Rare Easter Egg 20 Dimensional Gateway Mechanics
-    const handleGreetingInteraction = () => {
-        if (flagRarestSequenceTrigger === 0) setFlagRarestSequenceTrigger(1);
-    };
+            // Rare Easter Egg 20 Dimensional Gateway Mechanics
+            const handleGreetingInteraction = () => {
+                if (flagRarestSequenceTrigger === 0) setFlagRarestSequenceTrigger(1);
+            };
 
-    const handleSecondaryHotspotInteraction = () => {
-        if (flagRarestSequenceTrigger === 1) {
-            setFlagRarestSequenceTrigger(2);
-            triggerTactileFeedback([60, 120, 60, 120, 60]);
-            setSystemStateStep('imploding');
-            setFlagCustomStateMessage("Alternate Interface Unlocked");
+            const handleSecondaryHotspotInteraction = () => {
+                if (flagRarestSequenceTrigger === 1) {
+                    setFlagRarestSequenceTrigger(2);
+                    triggerTactileFeedback([60, 120, 60, 120, 60]);
+                    setSystemStateStep('imploding');
+                    setFlagCustomStateMessage("Alternate Interface Unlocked");
 
-            setTimeout(() => {
-                navigate('/mobile-two');
-            }, 2200);
-        } else {
-            triggerTactileFeedback(12);
-            setFlagCustomStateMessage("Spatial ripple captured.");
-            setTimeout(() => setFlagCustomStateMessage(''), 2500);
-        }
-    };
+                    setTimeout(() => {
+                        navigate('/mobile-two');
+                    }, 2200);
+                } else {
+                    triggerTactileFeedback(12);
+                    setFlagCustomStateMessage("Spatial ripple captured.");
+                    setTimeout(() => setFlagCustomStateMessage(''), 2500);
+                }
+            };
 
-    return (
-        <InteractionContext.Provider value={{ systemStateStep, vortexVelocityIntensity }}>
-            <div className="relative min-h-[100dvh] w-full text-white overflow-hidden flex flex-col items-center justify-start font-sans p-6 select-none touch-manipulation selection:bg-purple-500/30">
+            return (
+                <InteractionContext.Provider value={{ systemStateStep, vortexVelocityIntensity }}>
+                    <div className="relative min-h-[100dvh] w-full text-white overflow-hidden flex flex-col items-center justify-start font-sans p-6 select-none touch-manipulation selection:bg-purple-500/30">
 
-                {/* Living Ambient Computational Grids */}
-                <PremiumAmbientAtmosphere
-                    colorPalette={flagStormAtmosphereActive ? 'inverted-storm' : flagColorPaletteInversion}
-                    isOffline={networkSystemOffline}
-                />
+                        {/* Living Ambient Computational Grids */}
+                        <PremiumAmbientAtmosphere
+                            colorPalette={flagStormAtmosphereActive ? 'inverted-storm' : flagColorPaletteInversion}
+                            isOffline={networkSystemOffline}
+                        />
 
-                {/* Core Mathematical Particle Grid Viewport */}
-                <QuantumStormCanvas
-                    state={systemStateStep}
-                    coreIntensity={vortexVelocityIntensity}
-                    particleMultiplier={particleMultiplierValue}
-                    isOffline={networkSystemOffline}
-                />
+                        {/* Core Mathematical Particle Grid Viewport */}
+                        <QuantumStormCanvas
+                            state={systemStateStep}
+                            coreIntensity={vortexVelocityIntensity}
+                            particleMultiplier={particleMultiplierValue}
+                            isOffline={networkSystemOffline}
+                        />
 
-                {/* Diagnostic Status Indicator Bar */}
-                <NetworkTelemetryHub counterCallback={handleTelemetryTapTracking} />
+                        {/* Diagnostic Status Indicator Bar */}
+                        <NetworkTelemetryHub counterCallback={handleTelemetryTapTracking} />
 
-                {/* Rare Easter Egg Hidden Interactive Node Bounds */}
-                <div
-                    onClick={handleSecondaryHotspotInteraction}
-                    className="absolute bottom-5 right-5 w-14 h-14 z-50 rounded-full cursor-default active:scale-95 transition-transform"
-                    style={{ WebkitTapHighlightColor: 'transparent' }}
-                />
+                        {/* Rare Easter Egg Hidden Interactive Node Bounds */}
+                        <div
+                            onClick={handleSecondaryHotspotInteraction}
+                            className="absolute bottom-5 right-5 w-14 h-14 z-50 rounded-full cursor-default active:scale-95 transition-transform"
+                            style={{ WebkitTapHighlightColor: 'transparent' }}
+                        />
 
-                {/* Real-time Hardware Spec Grid Overlay (EE 2 / 15) */}
-                <AnimatePresence>
-                    {flagRenderStatsOverlay && (
+                        {/* Real-time Hardware Spec Grid Overlay (EE 2 / 15) */}
+                        <AnimatePresence>
+                            {flagRenderStatsOverlay && (
+                                <motion.div
+                                    initial={{ opacity: 0, scale: 0.95, y: -10 }}
+                                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                                    exit={{ opacity: 0, scale: 0.95 }}
+                                    className="absolute top-20 left-6 right-6 bg-black/80 backdrop-blur-2xl border border-white/10 rounded-2xl p-4 z-50 font-mono text-[10px] text-purple-400 space-y-1 shadow-2xl pointer-events-auto"
+                                >
+                                    <div className="flex justify-between border-b border-white/5 pb-1 mb-1 text-white/40 uppercase tracking-widest font-bold">
+                                        <span>Telemetry Node</span>
+                                        <span className="text-emerald-400 animate-pulse">Live</span>
+                                    </div>
+                                    <p><span className="text-white/50">Core Cluster FPS :</span> 60.0 FPS // GPU Bound</p>
+                                    <p><span className="text-white/50">Memory Enclave  :</span> Isolated / Leak Free</p>
+                                    <p><span className="text-white/50">Build Target    :</span> {SYSTEM_CONFIG.BUILD_VERSION}</p>
+                                    <p><span className="text-white/50">Active Threads  :</span> Web Workers [Adaptive]</p>
+                                    <p><span className="text-white/50">Vector Nodes    :</span> {Math.round(
+                                        particleMultiplierValue *
+                                        SYSTEM_CONFIG.MAX_PARTICLES_DEFAULT
+                                    )} Array Slots</p>
+                                    <motion.button
+                                        onClick={() => setFlagRenderStatsOverlay(false)}
+                                        className="mt-2 w-full py-1 bg-white/10 text-white rounded text-center font-bold uppercase text-[9px] tracking-wider"
+                                    >
+                                        Close Stream
+                                    </motion.button>
+                                </motion.div>
+                            )}
+                        </AnimatePresence>
+
+                        {/* Principal Central Structural Interface Frame Container */}
                         <motion.div
-                            initial={{ opacity: 0, scale: 0.95, y: -10 }}
-                            animate={{ opacity: 1, scale: 1, y: 0 }}
-                            exit={{ opacity: 0, scale: 0.95 }}
-                            className="absolute top-20 left-6 right-6 bg-black/80 backdrop-blur-2xl border border-white/10 rounded-2xl p-4 z-50 font-mono text-[10px] text-purple-400 space-y-1 shadow-2xl pointer-events-auto"
+                            className="w-full max-w-sm my-auto flex flex-col justify-center items-center relative z-20 pt-12"
+                            initial={{ opacity: 0, y: 30 }}
+                            animate={{
+                                opacity: (systemStateStep === 'imploding') ? 0 : 1,
+                                y: (systemStateStep === 'imploding') ? -60 : 0
+                            }}
+                            transition={{ duration: 1.2, ease: [0.16, 1, 0.3, 1] }}
                         >
-                            <div className="flex justify-between border-b border-white/5 pb-1 mb-1 text-white/40 uppercase tracking-widest font-bold">
-                                <span>Telemetry Node</span>
-                                <span className="text-emerald-400 animate-pulse">Live</span>
-                            </div>
-                            <p><span className="text-white/50">Core Cluster FPS :</span> 60.0 FPS // GPU Bound</p>
-                            <p><span className="text-white/50">Memory Enclave  :</span> Isolated / Leak Free</p>
-                            <p><span className="text-white/50">Build Target    :</span> {SYSTEM_CONFIG.BUILD_VERSION}</p>
-                            <p><span className="text-white/50">Active Threads  :</span> Web Workers [Adaptive]</p>
-                            <p><span className="text-white/50">Vector Nodes    :</span> {Math.round(
-                                particleMultiplierValue *
-                                SYSTEM_CONFIG.MAX_PARTICLES_DEFAULT
-                            )} Array Slots</p>
-                            <motion.button
-                                onClick={() => setFlagRenderStatsOverlay(false)}
-                                className="mt-2 w-full py-1 bg-white/10 text-white rounded text-center font-bold uppercase text-[9px] tracking-wider"
+                            <CinematicTornadoComponent
+                                currentStep={systemStateStep}
+                                variantTheme={flagTornadoThemeBlue ? 'blue' : 'normal'}
+                                forceSurge={flagParticleSurgeActive || flagLocalizedCycloneActive}
+                                winkingState={flagWinkingActive}
+                                executeTap={handleLogoTapOperation}
+                                executePanStart={handleLogoHoldDown}
+                                executePanEnd={handleLogoHoldRelease}
+                                executeSwipeVertical={() => {
+                                    setFlagLocalizedCycloneActive(true);
+                                    triggerTactileFeedback([20, 40, 20]);
+                                    setTimeout(() => setFlagLocalizedCycloneActive(false), 2000);
+                                }}
+                            />
+
+                            {/* Core Dynamic Greeting Hub Layout */}
+                            <div
+                                onClick={handleGreetingInteraction}
+                                className="h-20 w-full flex flex-col items-center justify-center text-center mb-6 px-4"
                             >
-                                Close Stream
-                            </motion.button>
-                        </motion.div>
-                    )}
-                </AnimatePresence>
+                                <AnimatePresence mode="wait">
+                                    {flagCustomStateMessage ? (
+                                        <motion.p
+                                            key="custom-msg"
+                                            initial={{ opacity: 0, y: 6, filter: 'blur(4px)' }}
+                                            animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
+                                            exit={{ opacity: 0, y: -6, filter: 'blur(4px)' }}
+                                            className="text-sm font-medium tracking-wide text-purple-300"
+                                        >
+                                            {flagCustomStateMessage}
+                                        </motion.p>
+                                    ) : networkSystemOffline ? (
+                                        <motion.div
+                                            key="offline-msg"
+                                            initial={{ opacity: 0 }}
+                                            animate={{ opacity: 1 }}
+                                            className="flex items-center space-x-2 text-red-400"
+                                        >
+                                            <Radio className="w-4 h-4 animate-pulse" />
+                                            <span className="text-sm font-semibold tracking-wide">Infrastructure Offline</span>
+                                        </motion.div>
+                                    ) : systemStateStep === 'verifying' ? (
+                                        <motion.p
+                                            key={statusMessageIndex}
+                                            initial={{ opacity: 0, scale: 0.97, filter: 'blur(2px)' }}
+                                            animate={{ opacity: 1, scale: 1, filter: 'blur(0px)' }}
+                                            exit={{ opacity: 0, scale: 1.03, filter: 'blur(2px)' }}
+                                            transition={{ duration: 0.28 }}
+                                            className="text-xs font-mono tracking-widest text-white/60 uppercase"
+                                        >
+                                            {SHUFFLED_STATUS_POOL[statusMessageIndex]}
+                                        </motion.p>
+                                    ) : (
+                                        <motion.h1
+                                            key="standard-greeting"
+                                            initial={{ opacity: 0, y: 8 }}
+                                            animate={{ opacity: 1, y: 0 }}
+                                            className="text-2xl font-extralight tracking-wider text-white/90 filter drop-shadow-sm"
+                                        >
+                                            {ambientGreetingText}
+                                        </motion.h1>
+                                    )}
+                                </AnimatePresence>
 
-                {/* Principal Central Structural Interface Frame Container */}
-                <motion.div
-                    className="w-full max-w-sm my-auto flex flex-col justify-center items-center relative z-20 pt-12"
-                    initial={{ opacity: 0, y: 30 }}
-                    animate={{
-                        opacity: (systemStateStep === 'imploding') ? 0 : 1,
-                        y: (systemStateStep === 'imploding') ? -60 : 0
-                    }}
-                    transition={{ duration: 1.2, ease: [0.16, 1, 0.3, 1] }}
-                >
-                    <CinematicTornadoComponent
-                        currentStep={systemStateStep}
-                        variantTheme={flagTornadoThemeBlue ? 'blue' : 'normal'}
-                        forceSurge={flagParticleSurgeActive || flagLocalizedCycloneActive}
-                        winkingState={flagWinkingActive}
-                        executeTap={handleLogoTapOperation}
-                        executePanStart={handleLogoHoldDown}
-                        executePanEnd={handleLogoHoldRelease}
-                        executeSwipeVertical={() => {
-                            setFlagLocalizedCycloneActive(true);
-                            triggerTactileFeedback([20, 40, 20]);
-                            setTimeout(() => setFlagLocalizedCycloneActive(false), 2000);
-                        }}
-                    />
+                                {/* Error messaging architecture layer */}
+                                <AnimatePresence>
+                                    {errorTelemetryText && systemStateStep === 'idle' && (
+                                        <motion.div
+                                            initial={{ opacity: 0, height: 0 }}
+                                            animate={{ opacity: 1, height: 'auto' }}
+                                            exit={{ opacity: 0, height: 0 }}
+                                            className="mt-3 flex items-center space-x-1.5 text-red-400/90 text-xs font-medium"
+                                        >
+                                            <Shield className="w-3.5 h-3.5 flex-shrink-0" />
+                                            <span className="tracking-wide leading-tight">{errorTelemetryText}</span>
+                                        </motion.div>
+                                    )}
+                                </AnimatePresence>
+                            </div>
 
-                    {/* Core Dynamic Greeting Hub Layout */}
-                    <div
-                        onClick={handleGreetingInteraction}
-                        className="h-20 w-full flex flex-col items-center justify-center text-center mb-6 px-4"
-                    >
-                        <AnimatePresence mode="wait">
-                            {flagCustomStateMessage ? (
-                                <motion.p
-                                    key="custom-msg"
-                                    initial={{ opacity: 0, y: 6, filter: 'blur(4px)' }}
-                                    animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
-                                    exit={{ opacity: 0, y: -6, filter: 'blur(4px)' }}
-                                    className="text-sm font-medium tracking-wide text-purple-300"
-                                >
-                                    {flagCustomStateMessage}
-                                </motion.p>
-                            ) : networkSystemOffline ? (
-                                <motion.div
-                                    key="offline-msg"
-                                    initial={{ opacity: 0 }}
-                                    animate={{ opacity: 1 }}
-                                    className="flex items-center space-x-2 text-red-400"
-                                >
-                                    <Radio className="w-4 h-4 animate-pulse" />
-                                    <span className="text-sm font-semibold tracking-wide">Infrastructure Offline</span>
-                                </motion.div>
-                            ) : systemStateStep === 'verifying' ? (
-                                <motion.p
-                                    key={statusMessageIndex}
-                                    initial={{ opacity: 0, scale: 0.97, filter: 'blur(2px)' }}
-                                    animate={{ opacity: 1, scale: 1, filter: 'blur(0px)' }}
-                                    exit={{ opacity: 0, scale: 1.03, filter: 'blur(2px)' }}
-                                    transition={{ duration: 0.28 }}
-                                    className="text-xs font-mono tracking-widest text-white/60 uppercase"
-                                >
-                                    {SHUFFLED_STATUS_POOL[statusMessageIndex]}
-                                </motion.p>
-                            ) : (
-                                <motion.h1
-                                    key="standard-greeting"
-                                    initial={{ opacity: 0, y: 8 }}
-                                    animate={{ opacity: 1, y: 0 }}
-                                    className="text-2xl font-extralight tracking-wider text-white/90 filter drop-shadow-sm"
-                                >
-                                    {ambientGreetingText}
-                                </motion.h1>
-                            )}
-                        </AnimatePresence>
+                            {/* Main Credentials Execution Form */}
+                            <motion.form
+                                ref={interfaceFormRef}
+                                onSubmit={executeAuthenticationRequest}
+                                className="w-full flex flex-col relative"
+                                animate={frameworkMotionControls}
+                            >
+                                <AnimatePresence>
+                                    {mode === 'signup' && (
+                                        <motion.div
+                                            initial={{ opacity: 0, height: 0 }}
+                                            animate={{ opacity: 1, height: 'auto' }}
+                                            exit={{ opacity: 0, height: 0 }}
+                                        >
+                                            <HighEndFormInput
+                                                inputCategoryType="text"
+                                                customPlaceholder="Username"
+                                                controlledValue={displayName}
+                                                stateChangeCallback={(e) => setDisplayName(e.target.value)}
+                                                isActiveError={!!errorTelemetryText}
+                                                systemLocked={systemStateStep !== 'idle'}
+                                                visualLeadingIcon={User}
+                                            />
+                                        </motion.div>
+                                    )}
+                                </AnimatePresence>
 
-                        {/* Error messaging architecture layer */}
-                        <AnimatePresence>
-                            {errorTelemetryText && systemStateStep === 'idle' && (
-                                <motion.div
-                                    initial={{ opacity: 0, height: 0 }}
-                                    animate={{ opacity: 1, height: 'auto' }}
-                                    exit={{ opacity: 0, height: 0 }}
-                                    className="mt-3 flex items-center space-x-1.5 text-red-400/90 text-xs font-medium"
-                                >
-                                    <Shield className="w-3.5 h-3.5 flex-shrink-0" />
-                                    <span className="tracking-wide leading-tight">{errorTelemetryText}</span>
-                                </motion.div>
-                            )}
-                        </AnimatePresence>
-                    </div>
+                                <HighEndFormInput
+                                    inputCategoryType="text"
+                                    customPlaceholder="Email"
+                                    controlledValue={usernameCredential}
+                                    stateChangeCallback={(e) => setUsernameCredential(e.target.value)}
+                                    isActiveError={!!errorTelemetryText}
+                                    systemLocked={systemStateStep !== 'idle'}
+                                    visualLeadingIcon={User}
+                                />
 
-                    {/* Main Credentials Execution Form */}
-                    <motion.form
-                        ref={interfaceFormRef}
-                        onSubmit={executeAuthenticationRequest}
-                        className="w-full flex flex-col relative"
-                        animate={frameworkMotionControls}
-                    >
-                        <AnimatePresence>
-                            {mode === 'signup' && (
-                                <motion.div
-                                    initial={{ opacity: 0, height: 0 }}
-                                    animate={{ opacity: 1, height: 'auto' }}
-                                    exit={{ opacity: 0, height: 0 }}
-                                >
-                                    <HighEndFormInput
-                                        inputCategoryType="text"
-                                        customPlaceholder="Username"
-                                        controlledValue={displayName}
-                                        stateChangeCallback={(e) => setDisplayName(e.target.value)}
-                                        isActiveError={!!errorTelemetryText}
-                                        systemLocked={systemStateStep !== 'idle'}
-                                        visualLeadingIcon={User}
-                                    />
-                                </motion.div>
-                            )}
-                        </AnimatePresence>
+                                <HighEndFormInput
+                                    inputCategoryType="password"
+                                    customPlaceholder="Cryptographic Cipher"
+                                    controlledValue={passwordCredential}
+                                    stateChangeCallback={(e) => setPasswordCredential(e.target.value)}
+                                    isActiveError={!!errorTelemetryText}
+                                    systemLocked={systemStateStep !== 'idle'}
+                                    visualLeadingIcon={Lock}
+                                    passwordMaskToggleCallback={handlePasswordToggleTelemetry}
+                                />
 
-                        <HighEndFormInput
-                            inputCategoryType="text"
-                            customPlaceholder="Email"
-                            controlledValue={usernameCredential}
-                            stateChangeCallback={(e) => setUsernameCredential(e.target.value)}
-                            isActiveError={!!errorTelemetryText}
-                            systemLocked={systemStateStep !== 'idle'}
-                            visualLeadingIcon={User}
+                                <TactileActionButton
+                                    isSystemProcessing={systemStateStep !== "idle"}
+                                    networkConstrained={networkSystemOffline}
+                                    interactionCallback={handleButtonTapTracking}
+                                    pointerDownCallback={handleButtonPressHoldStart}
+                                    pointerUpCallback={handleLogoHoldRelease}
+                                />                    </motion.form>
                         />
+                            <button
+                                type="button"
+                                onClick={() => setMode(mode === 'signup' ? 'login' : 'signup')}
+                                className="mt-4 text-xs font-mono tracking-widest uppercase text-white/50 hover:text-white transition-colors pb-4"
+                            >
+                                {mode === 'signup' ? "Already have an account? Sign in" : "Don't have an account? Sign up"}
+                            </button>
+                        </motion.form>
 
-                        <HighEndFormInput
-                            inputCategoryType="password"
-                            customPlaceholder="Cryptographic Cipher"
-                            controlledValue={passwordCredential}
-                            stateChangeCallback={(e) => setPasswordCredential(e.target.value)}
-                            isActiveError={!!errorTelemetryText}
-                            systemLocked={systemStateStep !== 'idle'}
-                            visualLeadingIcon={Lock}
-                            passwordMaskToggleCallback={handlePasswordToggleTelemetry}
-                        />
+                        {/* Interactive Component Badging Extensions */}
+                        {flagHiddenMessageVisible && (
+                            <motion.p
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 0.3 }}
+                                className="mt-4 text-[8px] tracking-[0.3em] font-mono uppercase text-white"
+                            >
+                                System core resonance confirmed.
+                            </motion.p>
+                        )}
 
-                        <TactileActionButton
-                            isSystemProcessing={systemStateStep !== "idle"}
-                            networkConstrained={networkSystemOffline}
-                            interactionCallback={handleButtonTapTracking}
-                            pointerDownCallback={handleButtonPressHoldStart}
-                            pointerUpCallback={handleLogoHoldRelease}
-                        />
-                        <button
-                            type="button"
-                            onClick={() => setMode(mode === 'signup' ? 'login' : 'signup')}
-                            className="mt-4 text-xs font-mono tracking-widest uppercase text-white/50 hover:text-white transition-colors pb-4"
-                        >
-                            {mode === 'signup' ? "Already have an account? Sign in" : "Don't have an account? Sign up"}
-                        </button>
-                    </motion.form>
+                        {flagExclusiveBadgeVisible && (
+                            <motion.div
+                                initial={{ scale: 0.8, opacity: 0 }}
+                                animate={{ scale: 1, opacity: 1 }}
+                                className="mt-5 flex items-center space-x-1.5 bg-purple-500/10 border border-purple-500/20 px-3 py-1.5 rounded-xl text-[10px] text-purple-300 font-mono tracking-widest uppercase shadow-lg"
+                            >
+                                <Cpu className="w-3.5 h-3.5 text-purple-400 animate-spin" />
+                                <span>Developer Integrity Confirmed</span>
+                            </motion.div>
+                        )}
 
-                    {/* Interactive Component Badging Extensions */}
-                    {flagHiddenMessageVisible && (
-                        <motion.p
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 0.3 }}
-                            className="mt-4 text-[8px] tracking-[0.3em] font-mono uppercase text-white"
-                        >
-                            System core resonance confirmed.
-                        </motion.p>
-                    )}
+                        {/* Expandable Engineering Subsystem Diagnostics Footer */}
+                        <DeveloperBioConsole expansionCounterHook={handleDeveloperBioTelemetry} />
 
-                    {flagExclusiveBadgeVisible && (
-                        <motion.div
-                            initial={{ scale: 0.8, opacity: 0 }}
-                            animate={{ scale: 1, opacity: 1 }}
-                            className="mt-5 flex items-center space-x-1.5 bg-purple-500/10 border border-purple-500/20 px-3 py-1.5 rounded-xl text-[10px] text-purple-300 font-mono tracking-widest uppercase shadow-lg"
-                        >
-                            <Cpu className="w-3.5 h-3.5 text-purple-400 animate-spin" />
-                            <span>Developer Integrity Confirmed</span>
-                        </motion.div>
-                    )}
-
-                    {/* Expandable Engineering Subsystem Diagnostics Footer */}
-                    <DeveloperBioConsole expansionCounterHook={handleDeveloperBioTelemetry} />
-
-                </motion.div>
-
-                {/* Global Easter Egg Quote Backdrop Indicator Layer */}
-                {flagHiddenQuoteUnlocked && (
-                    <motion.div
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 0.12 }}
-                        className="absolute bottom-3 text-[9px] font-mono tracking-widest text-white text-center w-full pointer-events-none px-4"
-                    >
-                        "The perfect storm is structured line by line."
                     </motion.div>
-                )}
 
-            </div>
-        </InteractionContext.Provider>
+                    {/* Global Easter Egg Quote Backdrop Indicator Layer */}
+                    {flagHiddenQuoteUnlocked && (
+                        <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 0.12 }}
+                            className="absolute bottom-3 text-[9px] font-mono tracking-widest text-white text-center w-full pointer-events-none px-4"
+                        >
+                            "The perfect storm is structured line by line."
+                        </motion.div>
+                    )}
+
+                </div>
+        </InteractionContext.Provider >
     );
 }
 
