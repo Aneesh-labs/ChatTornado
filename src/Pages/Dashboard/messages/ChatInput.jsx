@@ -5,6 +5,8 @@ import { IconBtn, useTheme } from "./constants";
 import API from "../../../Services/API";
 import { prepareP2PFile } from "../../../Services/p2p";
 
+const VIDEO_EXTENSIONS = /\.(mp4|mov|mkv|avi|webm|m4v|3gp|flv|mpeg|mpg|ts|mts|m2ts|wmv|asf|ogv|vob)$/i;
+
 const ChatInput = React.memo(({ onSend, replyTo, onCancelReply, selectedUser, socket = null, disabled = false }) => {
     const theme = useTheme();
     const baseUrl = API.defaults.baseURL.replace(/\/+$/, "");
@@ -189,6 +191,7 @@ const ChatInput = React.memo(({ onSend, replyTo, onCancelReply, selectedUser, so
 
         try {
             const isVideo = file.type.startsWith("video/");
+            const isVideo = Boolean(file.type?.startsWith("video/") || VIDEO_EXTENSIONS.test(file.name || ""));
 
             // 1. Heavy Photos & Documents: Use Pure P2P Zero-Server Transfer (IndexedDB)
             if (!isVideo) {
@@ -284,6 +287,7 @@ const ChatInput = React.memo(({ onSend, replyTo, onCancelReply, selectedUser, so
                 ) : (
                     <>
                         <input ref={fileInputRef} type="file" className="hidden" accept="image/*,video/*,audio/*,.pdf,.zip,.txt" onChange={handleAttachment} />
+                        <input ref={fileInputRef} type="file" className="hidden" accept="image/*,video/*,audio/*,.mkv,.avi,.mov,.mp4,.webm,.m4v,.flv,.3gp,.pdf,.zip,.txt" onChange={handleAttachment} />
                         <IconBtn title="Attach image, video, or file" onClick={() => fileInputRef.current?.click()} small className="flex-shrink-0">
                             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />

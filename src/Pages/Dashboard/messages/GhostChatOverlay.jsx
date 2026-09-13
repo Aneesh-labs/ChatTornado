@@ -46,6 +46,8 @@ const ICONS = {
   quantum: "M12 3v18M3 12h18M6.5 6.5l11 11M17.5 6.5l-11 11",
   ai: "M12 2a10 10 0 100 20 10 10 0 000-20zm0 4a2 2 0 110 4 2 2 0 010-4zm0 6a4 4 0 100 8 4 4 0 000-8z",
   hologram: "M3 12h18M3 6h18M3 18h18M12 3v18M6 6l12 12M18 6L6 18",
+  back: "M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18",
+  plus: "M12 4.5v15m7.5-7.5h-15",
 };
 
 /* ==========================================================================
@@ -174,7 +176,7 @@ const HolographicGhost = ({ username, isTyping }) => {
     const interval = setInterval(() => {
       if (ref.current) {
         angle += 0.5;
-        ref.current.style.transform = `rotateY(${angle}deg) rotateX(${Math.sin(angle*0.3)*5}deg)`;
+        ref.current.style.transform = `rotateY(${angle}deg) rotateX(${Math.sin(angle * 0.3) * 5}deg)`;
       }
     }, 50);
     return () => clearInterval(interval);
@@ -317,9 +319,13 @@ const DrawingPad = ({ onSave, onClose }) => {
         onTouchMove={draw}
         onTouchEnd={stopDrawing}
       />
-      <div className="flex gap-2">
-        <button onClick={save} className="px-3 py-1 bg-violet-500/30 text-white rounded text-sm">Send drawing</button>
-        <button onClick={onClose} className="px-3 py-1 bg-white/5 text-white rounded text-sm">Close</button>
+      <div className="flex gap-2.5 mt-1">
+        <button type="button" onClick={save} className="px-4 py-2 bg-violet-600 hover:bg-violet-500 text-white rounded-xl text-xs font-semibold shadow-md active:scale-95 transition-all">
+          Attach Drawing
+        </button>
+        <button type="button" onClick={onClose} className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white/80 rounded-xl text-xs font-medium active:scale-95 transition-all">
+          Cancel
+        </button>
       </div>
     </div>
   );
@@ -373,6 +379,8 @@ const GhostChatOverlay = ({ ghostChat, socket, onClose }) => {
   const [hoveredMsgId, setHoveredMsgId] = useState(null);
   const [showConnected, setShowConnected] = useState(false);
   const [drawingData, setDrawingData] = useState(null);
+  const [showTools, setShowTools] = useState(false);
+  const [activeMsgId, setActiveMsgId] = useState(null);
 
   // Refs
   const scrollRef = useRef(null);
@@ -744,11 +752,11 @@ const GhostChatOverlay = ({ ghostChat, socket, onClose }) => {
 
   return (
     <motion.div
-      initial={{ opacity: 0, scale: 0.95 }}
+      initial={{ opacity: 0, scale: 0.96 }}
       animate={{ opacity: 1, scale: 1 }}
-      exit={{ opacity: 0, scale: 0.95 }}
+      exit={{ opacity: 0, scale: 0.96 }}
       transition={{ type: "spring", stiffness: 300, damping: 30 }}
-      className={`fixed inset-0 z-[100] flex flex-col ${bgColor} overflow-hidden`}
+      className={`fixed inset-0 z-[100] flex flex-col ${bgColor} overflow-hidden h-[100dvh] pb-safe select-none`}
     >
       {/* 3D Holographic Wireframe */}
       <div className="absolute inset-0 pointer-events-none opacity-10">
@@ -756,17 +764,17 @@ const GhostChatOverlay = ({ ghostChat, socket, onClose }) => {
           <motion.div
             animate={{ rotate: [0, 360] }}
             transition={{ duration: 60, repeat: Infinity, ease: "linear" }}
-            className="w-96 h-96 border-2 border-violet-500/20 rounded-full"
+            className="w-72 sm:w-96 h-72 sm:h-96 border-2 border-violet-500/20 rounded-full"
           />
           <motion.div
             animate={{ rotate: [0, -360] }}
             transition={{ duration: 45, repeat: Infinity, ease: "linear" }}
-            className="absolute w-72 h-72 border-2 border-blue-500/20 rounded-full"
+            className="absolute w-56 sm:w-72 h-56 sm:h-72 border-2 border-blue-500/20 rounded-full"
           />
           <motion.div
             animate={{ rotate: [0, 360] }}
             transition={{ duration: 30, repeat: Infinity, ease: "linear" }}
-            className="absolute w-48 h-48 border-2 border-pink-500/20 rounded-full"
+            className="absolute w-36 sm:w-48 h-36 sm:h-48 border-2 border-pink-500/20 rounded-full"
           />
         </div>
       </div>
@@ -794,72 +802,75 @@ const GhostChatOverlay = ({ ghostChat, socket, onClose }) => {
             initial={{ y: -60 }}
             animate={{ y: 0 }}
             exit={{ y: -60 }}
-            className="absolute top-0 left-0 right-0 z-20 bg-emerald-500/30 backdrop-blur-xl border-b border-emerald-500/30 py-1.5 text-center text-xs font-medium text-emerald-200"
+            className="absolute top-0 left-0 right-0 z-30 bg-emerald-500/30 backdrop-blur-xl border-b border-emerald-500/30 py-1.5 text-center text-xs font-medium text-emerald-200"
           >
             👻 Connected — Holographic link established
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* Ephemeral countdown */}
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        className="absolute top-0 left-0 right-0 z-10 bg-white/[0.03] border-b border-white/5 py-1 text-center text-[10px] text-white/20 flex items-center justify-center gap-2"
-      >
-        <Icon path={ICONS.timer} className="h-3 w-3" />
-        Quantum link expires in {Math.floor(ephemeralCountdown / 60)}:{(ephemeralCountdown % 60).toString().padStart(2, '0')}
-      </motion.div>
-
       {/* TOP BAR */}
       <motion.div
         initial={{ y: -12, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
-        className="relative z-10 flex items-center justify-between border-b border-white/[0.06] bg-white/[0.03] px-4 py-3.5 backdrop-blur-xl sm:px-6 mt-8"
+        className="relative z-20 flex items-center justify-between border-b border-white/[0.08] bg-black/40 backdrop-blur-2xl px-3 sm:px-6 py-2.5 sm:py-3 pt-safe"
       >
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+          <button
+            type="button"
+            onClick={handleClose}
+            className="p-1.5 -ml-1 sm:hidden rounded-xl text-white/70 hover:bg-white/10 active:scale-95 transition-transform flex items-center justify-center"
+            aria-label="Back to main chat"
+          >
+            <Icon path={ICONS.back} className="h-5 w-5" />
+          </button>
           <HolographicGhost username={receiverName} isTyping={typing} />
-          <div>
-            <div className="flex items-center gap-2">
-              <h2 className="text-sm font-bold text-white/90 flex items-center gap-1">
+          <div className="min-w-0">
+            <div className="flex items-center gap-1.5">
+              <h2 className="text-xs sm:text-sm font-bold text-white/90 truncate">
                 Ghost Chat
-                <span className="text-[10px] text-white/20 ml-1">◈ 2030</span>
               </h2>
-              <span className="flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5">
-                <Icon path={ICONS.shield} className="h-2.5 w-2.5 text-emerald-400/70" />
-                <span className="text-[9px] font-semibold uppercase tracking-wider text-emerald-400/70">Private</span>
+              <span className="flex items-center gap-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 px-1.5 py-0.2 sm:px-2 sm:py-0.5 flex-shrink-0">
+                <Icon path={ICONS.shield} className="h-2 w-2 text-emerald-400" />
+                <span className="text-[8px] sm:text-[9px] font-semibold uppercase tracking-wider text-emerald-400">P2P</span>
               </span>
             </div>
-            <div className="flex items-center gap-1.5">
-              <span className="relative flex h-1.5 w-1.5">
+            <div className="flex items-center gap-1.5 text-[11px] text-white/40 truncate">
+              <span className="relative flex h-1.5 w-1.5 flex-shrink-0">
                 <span className={`absolute inline-flex h-full w-full rounded-full ${isConnected ? "bg-emerald-400" : "bg-white/20"}`} />
                 {isConnected && <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400/60" />}
               </span>
-              <p className="text-[11px] text-white/30">{receiverName}</p>
+              <span className="truncate">{receiverName}</span>
             </div>
           </div>
         </div>
 
-        <div className="flex items-center gap-1">
-          <button onClick={() => setMuted(!muted)} className="p-1.5 rounded-lg hover:bg-white/5 text-white/40">
-            <Icon path={muted ? ICONS.mute : ICONS.unmute} className="h-4 w-4" />
-          </button>
-          <button onClick={toggleGhostMode} className="p-1.5 rounded-lg hover:bg-white/5 text-white/40 text-xs">
-            {ghostMode === 'friendly' ? '👻' : '💀'}
-          </button>
-          <button onClick={() => setShowSearch(!showSearch)} className="p-1.5 rounded-lg hover:bg-white/5 text-white/40">
+        <div className="flex items-center gap-1 sm:gap-1.5 flex-shrink-0">
+          {/* Ephemeral countdown timer badge */}
+          <div className="flex items-center gap-1 rounded-full bg-white/5 border border-white/10 px-2 py-1 text-[10px] font-mono text-violet-300/90" title="Time remaining before link expires">
+            <Icon path={ICONS.timer} className="h-3 w-3 text-violet-400" />
+            <span>{Math.floor(ephemeralCountdown / 60)}:{(ephemeralCountdown % 60).toString().padStart(2, '0')}</span>
+          </div>
+
+          <button onClick={() => setShowSearch(!showSearch)} className="p-1.5 rounded-xl hover:bg-white/10 text-white/60 active:scale-95 transition-transform" title="Search messages">
             <Icon path={ICONS.search} className="h-4 w-4" />
           </button>
-          <button onClick={toggleQuantum} className="p-1.5 rounded-lg hover:bg-white/5 text-white/40">
+          <button onClick={() => setMuted(!muted)} className="p-1.5 rounded-xl hover:bg-white/10 text-white/60 active:scale-95 transition-transform hidden sm:flex" title={muted ? "Unmute" : "Mute"}>
+            <Icon path={muted ? ICONS.mute : ICONS.unmute} className="h-4 w-4" />
+          </button>
+          <button onClick={toggleGhostMode} className="p-1.5 rounded-xl hover:bg-white/10 text-white/60 text-xs active:scale-95 transition-transform hidden sm:flex" title="Toggle mood">
+            {ghostMode === 'friendly' ? '👻' : '💀'}
+          </button>
+          <button onClick={toggleQuantum} className="p-1.5 rounded-xl hover:bg-white/10 text-white/60 active:scale-95 transition-transform hidden sm:flex" title="Quantum shuffle">
             <Icon path={ICONS.quantum} className="h-4 w-4" />
           </button>
-          <motion.button
-            whileHover={{ rotate: 90 }}
+          <button
             onClick={handleClose}
-            className="p-1.5 rounded-lg hover:bg-white/5 text-white/40"
+            className="p-1.5 rounded-xl hover:bg-white/10 text-white/60 active:scale-95 transition-transform hidden sm:flex"
+            title="Exit Ghost Chat"
           >
             <Icon path={ICONS.close} className="h-4 w-4" />
-          </motion.button>
+          </button>
         </div>
       </motion.div>
 
@@ -930,49 +941,130 @@ const GhostChatOverlay = ({ ghostChat, socket, onClose }) => {
 
         <div className="pb-4 pt-2">
           <AnimatePresence initial={false}>
-            {filteredMessages.map((msg, index) => (
-              <motion.div
-                key={msg.id}
-                initial={{ opacity: 0, y: 20, rotateX: -15 }}
-                animate={{ opacity: 1, y: 0, rotateX: 0 }}
-                exit={{ opacity: 0, scale: 0.8 }}
-                transition={{ type: "spring", stiffness: 400, damping: 25 }}
-                className={`flex ${msg.senderId === myUserId.current ? "justify-end" : "justify-start"} px-4 py-1`}
-                onMouseEnter={() => setHoveredMsgId(msg.id)}
-                onMouseLeave={() => setHoveredMsgId(null)}
-              >
-                <div className={`max-w-[80%] sm:max-w-[70%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed shadow-lg backdrop-blur-sm
-                  ${msg.senderId === myUserId.current
-                    ? `bg-gradient-to-br from-${theme}-500/30 to-indigo-500/20 text-white/90 rounded-br-md border border-white/10`
-                    : 'bg-white/5 text-white/80 rounded-bl-md border border-white/5 backdrop-blur-sm'
-                  }`}
+            {filteredMessages.map((msg) => {
+              const isMe = msg.senderId === myUserId.current;
+              const isActionVisible = (hoveredMsgId === msg.id) || (activeMsgId === msg.id);
+
+              return (
+                <motion.div
+                  key={msg.id}
+                  initial={{ opacity: 0, y: 15, scale: 0.98 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.8 }}
+                  transition={{ type: "spring", stiffness: 400, damping: 25 }}
+                  className={`flex ${isMe ? "justify-end" : "justify-start"} px-3 sm:px-4 py-1.5 relative`}
+                  onMouseEnter={() => setHoveredMsgId(msg.id)}
+                  onMouseLeave={() => setHoveredMsgId(null)}
                 >
-                  {msg.drawing && (
-                    <img src={msg.drawing} alt="drawing" className="max-w-[200px] rounded-md mb-2" />
-                  )}
-                  <span>{msg.text}</span>
-                  {Object.entries(msg.reactions || {}).map(([emoji, count]) => (
-                    <span key={emoji} className="text-xs ml-1">{emoji}{count > 1 ? count : ''}</span>
-                  ))}
-                  {hoveredMsgId === msg.id && (
-                    <div className="absolute -top-6 right-0 flex gap-1">
-                      <button onClick={() => handleReaction(msg.id, '👻')} className="text-xs bg-white/10 rounded px-1">👻</button>
-                      <button onClick={() => handleReaction(msg.id, '💀')} className="text-xs bg-white/10 rounded px-1">💀</button>
-                      {msg.senderId === myUserId.current && (
-                        <>
-                          <button onClick={() => { setEditingMsgId(msg.id); setEditValue(msg.text); }} className="text-xs bg-white/10 rounded px-1">✏️</button>
-                          <button onClick={() => handleDelete(msg.id)} className="text-xs bg-white/10 rounded px-1">🗑️</button>
-                        </>
-                      )}
-                    </div>
-                  )}
-                  {msg.selfDestruct > 0 && (
-                    <span className="text-[10px] text-white/20 ml-2">⏳{msg.selfDestruct}s</span>
-                  )}
-                  {msg.isBurn && <span className="text-[10px] text-red-400/50 ml-2">🔥</span>}
-                </div>
-              </motion.div>
-            ))}
+                  <div
+                    onClick={() => setActiveMsgId(prev => prev === msg.id ? null : msg.id)}
+                    className={`max-w-[85%] sm:max-w-[70%] rounded-2xl px-3.5 py-2 sm:px-4 sm:py-2.5 text-sm leading-relaxed shadow-lg backdrop-blur-md relative cursor-pointer select-text touch-manipulation transition-all
+                      ${isMe
+                        ? `bg-gradient-to-br from-violet-600/30 to-indigo-600/20 text-white/90 rounded-br-sm border border-violet-500/20`
+                        : 'bg-white/5 text-white/80 rounded-bl-sm border border-white/10'
+                      } ${activeMsgId === msg.id ? 'ring-1 ring-violet-400/50' : ''}`}
+                  >
+                    {msg.drawing && (
+                      <img src={msg.drawing} alt="drawing" className="max-w-[200px] sm:max-w-[260px] rounded-lg mb-2 border border-white/10" />
+                    )}
+
+                    {editingMsgId === msg.id ? (
+                      <div className="flex flex-col gap-1.5 mt-1" onClick={(e) => e.stopPropagation()}>
+                        <input
+                          value={editValue}
+                          onChange={(e) => setEditValue(e.target.value)}
+                          className="w-full bg-black/60 border border-violet-500/50 rounded-lg px-2.5 py-1.5 text-xs text-white outline-none focus:border-violet-400"
+                          autoFocus
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              handleEdit(msg.id, editValue);
+                              setEditingMsgId(null);
+                            } else if (e.key === "Escape") {
+                              setEditingMsgId(null);
+                            }
+                          }}
+                        />
+                        <div className="flex justify-end gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => { handleEdit(msg.id, editValue); setEditingMsgId(null); }}
+                            className="px-2 py-0.5 bg-violet-500/40 text-violet-200 hover:bg-violet-500/60 rounded text-[11px] font-medium"
+                          >
+                            Save
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setEditingMsgId(null)}
+                            className="px-2 py-0.5 bg-white/10 text-white/60 hover:bg-white/20 rounded text-[11px]"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="break-words whitespace-pre-wrap select-text">{msg.text}</p>
+                    )}
+
+                    {/* Reactions display */}
+                    {Object.entries(msg.reactions || {}).length > 0 && (
+                      <div className="flex flex-wrap gap-1 mt-1.5 pt-1 border-t border-white/5">
+                        {Object.entries(msg.reactions || {}).map(([emoji, count]) => (
+                          <span key={emoji} className="inline-flex items-center gap-0.5 bg-white/10 rounded-full px-1.5 py-0.5 text-[11px]">
+                            <span>{emoji}</span>
+                            {count > 1 && <span className="text-[9px] text-white/60 font-bold">{count}</span>}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Badges: Self-destruct & Burn */}
+                    {(msg.selfDestruct > 0 || msg.isBurn) && (
+                      <div className="flex items-center gap-1.5 mt-1 text-[10px] text-white/30">
+                        {msg.selfDestruct > 0 && <span>⏳ {msg.selfDestruct}s</span>}
+                        {msg.isBurn && <span className="text-amber-400/70">🔥 Burn on read</span>}
+                      </div>
+                    )}
+
+                    {/* Touch & Hover Action Pill (Reactions, Edit, Delete) */}
+                    {isActionVisible && (
+                      <motion.div
+                        initial={{ opacity: 0, scale: 0.9, y: 4 }}
+                        animate={{ opacity: 1, scale: 1, y: 0 }}
+                        exit={{ opacity: 0, scale: 0.9 }}
+                        className={`absolute -top-8 ${isMe ? 'right-0' : 'left-0'} flex items-center gap-0.5 bg-black/80 backdrop-blur-xl px-2 py-1 rounded-xl border border-white/15 shadow-2xl z-30`}
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <button type="button" onClick={() => { handleReaction(msg.id, '👻'); setActiveMsgId(null); }} className="p-1 text-sm hover:scale-125 transition-transform">👻</button>
+                        <button type="button" onClick={() => { handleReaction(msg.id, '💀'); setActiveMsgId(null); }} className="p-1 text-sm hover:scale-125 transition-transform">💀</button>
+                        <button type="button" onClick={() => { handleReaction(msg.id, '🔥'); setActiveMsgId(null); }} className="p-1 text-sm hover:scale-125 transition-transform">🔥</button>
+                        <button type="button" onClick={() => { handleReaction(msg.id, '❤️'); setActiveMsgId(null); }} className="p-1 text-sm hover:scale-125 transition-transform">❤️</button>
+                        {isMe && (
+                          <>
+                            <div className="w-[1px] h-3 bg-white/20 mx-0.5" />
+                            <button
+                              type="button"
+                              onClick={() => { setEditingMsgId(msg.id); setEditValue(msg.text); setActiveMsgId(null); }}
+                              className="p-1 text-xs text-white/70 hover:text-white"
+                              title="Edit message"
+                            >
+                              ✏️
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => { handleDelete(msg.id); setActiveMsgId(null); }}
+                              className="p-1 text-xs text-red-400 hover:text-red-300"
+                              title="Delete message"
+                            >
+                              🗑️
+                            </button>
+                          </>
+                        )}
+                      </motion.div>
+                    )}
+                  </div>
+                </motion.div>
+              );
+            })}
           </AnimatePresence>
           {typing && <TypingIndicator speed={typingSpeed} />}
         </div>
@@ -982,32 +1074,111 @@ const GhostChatOverlay = ({ ghostChat, socket, onClose }) => {
       <motion.div
         initial={{ y: 20, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
-        className="relative z-10 border-t border-white/[0.06] bg-white/[0.02] px-4 py-3 backdrop-blur-xl sm:px-6"
+        className="relative z-20 border-t border-white/[0.08] bg-black/40 backdrop-blur-2xl px-2.5 sm:px-6 py-2.5 sm:py-3 pb-safe"
       >
-        <div className="flex items-end gap-2">
+        {/* Drawing Staged Preview */}
+        {drawingData && (
+          <div className="mb-2 flex items-center gap-2 bg-violet-500/20 border border-violet-500/30 rounded-xl px-2.5 py-1.5 w-fit">
+            <img src={drawingData} alt="drawing" className="h-8 w-12 object-cover rounded border border-white/20" />
+            <span className="text-xs text-violet-200">Drawing attached</span>
+            <button onClick={() => setDrawingData(null)} className="text-white/60 hover:text-white ml-1 text-xs p-1">✕</button>
+          </div>
+        )}
+
+        {/* Quick Tools Drawer (collapsible or contextual) */}
+        <AnimatePresence>
+          {showTools && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: "auto" }}
+              exit={{ opacity: 0, height: 0 }}
+              className="overflow-x-auto scrollbar-none pb-2 mb-1 flex items-center gap-1.5 touch-manipulation"
+            >
+              {/* Burn toggle */}
+              <button
+                type="button"
+                onClick={toggleBurn}
+                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-medium transition-all flex-shrink-0 ${burnAfterReading
+                    ? 'bg-amber-500/20 border border-amber-500/40 text-amber-300 shadow-sm'
+                    : 'bg-white/5 border border-white/10 text-white/60 hover:text-white'
+                  }`}
+              >
+                <Icon path={ICONS.burn} className="h-3.5 w-3.5" />
+                <span>Burn on Read {burnAfterReading ? '✓' : ''}</span>
+              </button>
+
+              {/* Self destruct timer toggle */}
+              <button
+                type="button"
+                onClick={() => setSelfDestructTimer(prev => prev === 0 ? 10 : prev === 10 ? 30 : 0)}
+                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-medium transition-all flex-shrink-0 ${selfDestructTimer > 0
+                    ? 'bg-red-500/20 border border-red-500/40 text-red-300 shadow-sm'
+                    : 'bg-white/5 border border-white/10 text-white/60 hover:text-white'
+                  }`}
+              >
+                <Icon path={ICONS.timer} className="h-3.5 w-3.5" />
+                <span>{selfDestructTimer > 0 ? `⏳ ${selfDestructTimer}s` : 'Timer: OFF'}</span>
+              </button>
+
+              {/* Drawing */}
+              {ENABLE_DRAWING && (
+                <button
+                  type="button"
+                  onClick={() => { setShowDrawing(true); setShowTools(false); }}
+                  className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-medium bg-white/5 border border-white/10 text-white/60 hover:text-white transition-all flex-shrink-0"
+                >
+                  <Icon path={ICONS.draw} className="h-3.5 w-3.5" />
+                  <span>Draw</span>
+                </button>
+              )}
+
+              {/* Voice recognition */}
+              {ENABLE_VOICE && (
+                <button
+                  type="button"
+                  onClick={toggleRecording}
+                  className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-medium transition-all flex-shrink-0 ${isRecording
+                      ? 'bg-red-500/20 border border-red-500/40 text-red-300 animate-pulse'
+                      : 'bg-white/5 border border-white/10 text-white/60 hover:text-white'
+                    }`}
+                >
+                  <Icon path={ICONS.mic} className="h-3.5 w-3.5" />
+                  <span>{isRecording ? 'Listening...' : 'Voice'}</span>
+                </button>
+              )}
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Main Input Row */}
+        <div className="flex items-end gap-1.5 sm:gap-2">
+          {/* Tools toggle button */}
           <button
-            onClick={() => setShowStickerPicker(!showStickerPicker)}
-            className="h-11 w-11 flex-shrink-0 rounded-2xl bg-white/5 text-white/30 hover:bg-white/10 flex items-center justify-center"
+            type="button"
+            onClick={() => setShowTools(prev => !prev)}
+            className={`h-10 w-10 sm:h-11 sm:w-11 flex-shrink-0 rounded-xl sm:rounded-2xl border transition-all flex items-center justify-center active:scale-90 ${showTools || burnAfterReading || selfDestructTimer > 0 || drawingData
+                ? 'bg-violet-500/20 border-violet-500/40 text-violet-300'
+                : 'bg-white/5 border-white/10 text-white/50 hover:text-white/80'
+              }`}
+            title="Ghost Chat Tools"
+            aria-label="Toggle tools"
+          >
+            <Icon path={ICONS.plus} className={`h-5 w-5 transition-transform ${showTools ? 'rotate-45' : ''}`} />
+          </button>
+
+          {/* Quick sticker button */}
+          <button
+            type="button"
+            onClick={() => setShowStickerPicker(prev => !prev)}
+            className="h-10 w-10 sm:h-11 sm:w-11 flex-shrink-0 rounded-xl sm:rounded-2xl bg-white/5 border border-white/10 text-white/50 hover:text-white/80 active:scale-90 transition-all flex items-center justify-center"
+            title="Stickers"
+            aria-label="Open stickers"
           >
             <Icon path={ICONS.sticker} className="h-5 w-5" />
           </button>
-          {ENABLE_VOICE && (
-            <button
-              onClick={toggleRecording}
-              className={`h-11 w-11 flex-shrink-0 rounded-2xl bg-white/5 text-white/30 hover:bg-white/10 flex items-center justify-center ${isRecording ? 'text-red-400 animate-pulse' : ''}`}
-            >
-              <Icon path={ICONS.mic} className="h-5 w-5" />
-            </button>
-          )}
-          {ENABLE_DRAWING && (
-            <button
-              onClick={() => setShowDrawing(!showDrawing)}
-              className="h-11 w-11 flex-shrink-0 rounded-2xl bg-white/5 text-white/30 hover:bg-white/10 flex items-center justify-center"
-            >
-              <Icon path={ICONS.draw} className="h-5 w-5" />
-            </button>
-          )}
-          <div className="relative flex-1">
+
+          {/* Textarea Container */}
+          <div className="relative flex-1 min-w-0">
             <textarea
               ref={inputRef}
               value={input}
@@ -1019,19 +1190,20 @@ const GhostChatOverlay = ({ ghostChat, socket, onClose }) => {
                 }
               }}
               onBlur={handleStopTyping}
-              placeholder="Message in the quantum void..."
+              placeholder={isRecording ? "Listening..." : "Message in the quantum void..."}
               disabled={!isConnected || isInvitePending}
               rows={1}
-              className="w-full resize-none rounded-2xl border border-white/[0.08] bg-white/[0.04] px-4 py-3 text-sm text-white/90 placeholder:text-white/20 outline-none transition focus:border-white/[0.15] focus:bg-white/[0.06] disabled:opacity-40"
-              style={{ minHeight: "44px", maxHeight: "120px" }}
+              className="w-full resize-none rounded-xl sm:rounded-2xl border border-white/10 bg-white/[0.05] px-3 py-2.5 sm:py-3 text-sm text-white/90 placeholder:text-white/30 outline-none transition focus:border-violet-500/50 focus:bg-white/[0.08] disabled:opacity-40"
+              style={{ minHeight: "40px", maxHeight: "110px" }}
             />
+            {/* AI Suggestions Chips */}
             {aiSuggestions.length > 0 && (
-              <div className="absolute bottom-full left-0 mb-1 flex gap-1 flex-wrap">
+              <div className="absolute bottom-full left-0 mb-1.5 flex gap-1 flex-wrap z-10">
                 {aiSuggestions.map((s, i) => (
                   <button
                     key={i}
                     onClick={() => { setInput(s); inputRef.current?.focus(); }}
-                    className="text-[10px] bg-violet-500/20 text-violet-200 px-2 py-0.5 rounded-full hover:bg-violet-500/30 transition"
+                    className="text-[10px] bg-violet-500/30 border border-violet-500/40 text-violet-200 px-2 py-0.5 rounded-full hover:bg-violet-500/40 transition"
                   >
                     🤖 {s}
                   </button>
@@ -1039,34 +1211,27 @@ const GhostChatOverlay = ({ ghostChat, socket, onClose }) => {
               </div>
             )}
           </div>
-          <button
-            onClick={() => setSelfDestructTimer(prev => prev === 0 ? 10 : 0)}
-            className={`h-11 w-11 flex-shrink-0 rounded-2xl ${selfDestructTimer > 0 ? 'bg-red-500/20 text-red-300' : 'bg-white/5 text-white/30'} flex items-center justify-center`}
-          >
-            <Icon path={ICONS.timer} className="h-5 w-5" />
-          </button>
-          <button
-            onClick={toggleBurn}
-            className={`h-11 w-11 flex-shrink-0 rounded-2xl ${burnAfterReading ? 'bg-amber-500/20 text-amber-300' : 'bg-white/5 text-white/30'} flex items-center justify-center`}
-          >
-            <Icon path={ICONS.burn} className="h-5 w-5" />
-          </button>
-          {/* SEND BUTTON — no disabled prop, we handle via onClick alerts */}
+
+          {/* Send Button */}
           <motion.button
             whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
+            whileTap={{ scale: 0.9 }}
             onClick={() => handleSend()}
-            className="h-11 w-11 flex-shrink-0 rounded-2xl bg-gradient-to-br from-violet-500/30 to-indigo-400/20 text-violet-300 shadow-lg backdrop-blur-sm flex items-center justify-center hover:opacity-80 transition"
+            disabled={!input.trim() && !drawingData}
+            className={`h-10 w-10 sm:h-11 sm:w-11 flex-shrink-0 rounded-xl sm:rounded-2xl bg-gradient-to-br from-violet-500 to-indigo-600 text-white shadow-lg backdrop-blur-sm flex items-center justify-center transition-all ${!input.trim() && !drawingData ? 'opacity-40 cursor-not-allowed' : 'hover:opacity-90 active:scale-95'
+              }`}
+            aria-label="Send message"
           >
-            <Icon path={ICONS.send} className="h-5 w-5" />
+            <Icon path={ICONS.send} className="h-4 w-4 sm:h-5 sm:w-5" />
           </motion.button>
         </div>
       </motion.div>
 
       {/* Drawing Modal */}
       {showDrawing && (
-        <div className="absolute inset-0 z-50 bg-black/80 backdrop-blur flex items-center justify-center">
-          <div className="bg-white/10 p-4 rounded-xl border border-white/10">
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="bg-[#12121e] p-4 rounded-2xl border border-white/15 shadow-2xl max-w-sm w-full flex flex-col items-center">
+            <h3 className="text-xs font-semibold text-white/70 mb-3 uppercase tracking-wider">Draw Ghost Sketch</h3>
             <DrawingPad onSave={handleDrawingSave} onClose={() => setShowDrawing(false)} />
           </div>
         </div>
@@ -1075,9 +1240,9 @@ const GhostChatOverlay = ({ ghostChat, socket, onClose }) => {
       {/* Sticker Picker */}
       <AnimatePresence>
         {showStickerPicker && (
-          <div className="absolute bottom-20 left-4 bg-white/10 backdrop-blur rounded-xl p-2 border border-white/10 grid grid-cols-3 gap-1 z-30">
-            {['👻','💀','🎃','🕷️','🕸️','🧟'].map(s => (
-              <button key={s} onClick={() => { setInput(prev => prev + s); setShowStickerPicker(false); }} className="text-3xl hover:scale-125 transition">
+          <div className="absolute bottom-20 left-3 sm:left-4 bg-[#12121e]/95 backdrop-blur-2xl rounded-2xl p-3 border border-white/15 shadow-2xl grid grid-cols-3 gap-2 z-40 max-w-[240px]">
+            {['👻', '💀', '🎃', '🕷️', '🕸️', '🧟'].map(s => (
+              <button key={s} type="button" onClick={() => { setInput(prev => prev + s); setShowStickerPicker(false); }} className="text-3xl p-1.5 hover:scale-125 active:scale-95 transition-transform flex items-center justify-center">
                 {s}
               </button>
             ))}

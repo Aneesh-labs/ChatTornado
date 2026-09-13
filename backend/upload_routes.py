@@ -53,6 +53,8 @@ def _find_binary(name: str) -> str:
         return str(bundled_unix)
 
     # Fallback to binary name in PATH
+    return shutil.which(name) or name
+
 def _has_binary(name_or_path: str) -> bool:
     if not name_or_path:
         return False
@@ -112,6 +114,8 @@ EXTENSION_MIME_MAP = {
     ".mov": ["video/quicktime"],
     ".mkv": ["video/x-matroska"],
     ".avi": ["video/x-msvideo"],
+    ".mkv": ["video/x-matroska", "video/mkv", "application/x-matroska"],
+    ".avi": ["video/x-msvideo", "video/avi"],
     ".webm": ["video/webm", "audio/webm"],
     ".m4v": ["video/x-m4v", "video/mp4"],
     ".3gp": ["video/3gpp"],
@@ -201,6 +205,8 @@ def is_allowed_file(extension: str, content_type: str) -> bool:
     # 2) Common browser aliases
     # application/octet-stream – trust the extension (we have a safe list)
     if ct == "application/octet-stream":
+    # application/octet-stream or empty – trust the extension (we have a safe list)
+    if not ct or ct == "application/octet-stream":
         return True
 
     # text/plain – acceptable for text/code files
@@ -303,16 +309,25 @@ def is_browser_compatible_video(info: dict) -> bool:
     if acodec and acodec != "aac":
         return False
 
+    # Cap at 1080p for smooth browser decoding
+    if info.get("width", 0) > 1920 or info.get("height", 0) > 1080:
+        return False
+
     return True
 
 
 def convert_video_to_mp4(input_path: Path, output_path: Path) -> tuple[bool, str]:
     """Convert to H264/AAC MP4, return True on success."""
+def convert_video_to_mp4(input_path: Path, output_path: Path, has_audio: bool = True) -> tuple[bool, str]:
+    """Convert to H264/AAC MP4 with auto-downscaling to max 1080p."""
     cmd = [
         str(FFMPEG_PATH),
         "-i", str(input_path),
+        "-vf", "scale=min(1920\\,iw):-2",
         "-c:v", "libx264",
         "-preset", "veryfast",
+        "-preset", "faster",
+        "-threads", "0",
         "-crf", "23",
         "-pix_fmt", "yuv420p",
         "-c:a", "aac",
@@ -321,6 +336,12 @@ def convert_video_to_mp4(input_path: Path, output_path: Path) -> tuple[bool, str
         "-y",
         str(output_path)
     ]
+    if has_audio:
+        cmd.extend(["-c:a", "aac", "-b:a", "128k"])
+    else:
+        cmd.append("-an")
+    cmd.extend(["-y", str(output_path)])
+
     try:
         result = subprocess.run(
                     cmd,
@@ -339,6 +360,7 @@ def convert_video_to_mp4(input_path: Path, output_path: Path) -> tuple[bool, str
 
 def generate_video_thumbnail(input_path: Path, output_path: Path, duration: float) -> tuple[bool, str]:
     """Generate a WebP thumbnail, using an appropriate timestamp."""
+    """Generate a WebP thumbnail, using fast seek and appropriate timestamp."""
     # Choose timestamp: at 1 second if duration > 1, else at half of duration (or 0 if duration <= 0)
     if duration > 1.0:
         seek_time = 1.0
@@ -349,10 +371,12 @@ def generate_video_thumbnail(input_path: Path, output_path: Path, duration: floa
 
     cmd = [
         str(FFMPEG_PATH),
+        "-ss", f"{seek_time:.3f}",
         "-i", str(input_path),
         "-ss", f"{seek_time:.3f}",
         "-vframes", "1",
         "-vf", "scale=480:-1",
+        "-vf", "scale=480:-2",
         "-f", "image2",
         "-c:v", "libwebp",
         "-quality", "90",
@@ -491,6 +515,8 @@ async def upload_file(token: str, file: UploadFile = File(...)):
             mp4_name = f"{Path(filename).stem}_converted.mp4"
             mp4_path = upload_dir / mp4_name
             success, error = convert_video_to_mp4(original_path, mp4_path)
+            has_audio = bool(info.get("audio_codec")) if info else True
+            success, error = convert_video_to_mp4(original_path, mp4_path, has_audio=has_audio)
 
             if success:
                 if original_path.exists():

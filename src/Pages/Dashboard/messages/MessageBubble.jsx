@@ -13,6 +13,7 @@ const QUICK_REACTIONS = ["👍", "❤️", "😂", "😮", "😢", "🔥", "🥸
 
 const IMAGE_EXTENSIONS = /\.(jpg|jpeg|png|gif|webp|svg|bmp|ico|heic|heif)(\?.*)?$/i;
 const VIDEO_EXTENSIONS = /\.(mp4|mov|mkv|avi|wmv|flv|m4v)(\?.*)?$/i;
+const VIDEO_EXTENSIONS = /\.(mp4|mov|mkv|avi|wmv|flv|m4v|webm|3gp|ogv|ts)(\?.*)?$/i;
 const AUDIO_EXTENSIONS = /\.(mp3|wav|ogg|aac|m4a|opus|flac|wma|webm)(\?.*)?$/i;
 
 const extractUrls = (text) => {
@@ -260,7 +261,9 @@ const VideoPreview = ({ videoUrl }) => {
                 controls
                 preload="metadata"
                 className="w-full max-h-[400px] object-contain"
+                className="w-full max-h-[400px] object-contain bg-black/40"
                 playsInline
+                onError={() => setError(true)}
             >
                 <source src={videoUrl} />
                 Your browser doesn't support video playback.
