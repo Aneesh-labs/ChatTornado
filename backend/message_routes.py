@@ -11,7 +11,7 @@ router = APIRouter()
 
 
 @router.get("/messages/{other_user_id}")
-def get_messages(
+async def get_messages(
     other_user_id: int,
     token: str,
     db: Session = Depends(get_db)
@@ -50,16 +50,34 @@ def get_messages(
         .all()
     )
 
+    # ✅ Mark incoming unread messages as read
+    db.query(Message).filter(
+        Message.sender_id == other_user_id,
+        Message.receiver_id == user_id,
+        Message.read_state != "read"
+    ).update({"read_state": "read"}, synchronize_session=False)
+    db.commit()
+
+    try:
+        await manager.send_personal_message(other_user_id, {
+            "type": "read_receipt",
+            "reader_id": user_id
+        })
+    except Exception:
+        pass
+
     # ✅ Convert to list of dicts
     result = []
     for msg in messages:
+        # If this message was sent to user_id, it is now read
+        current_read_state = "read" if msg.receiver_id == user_id else getattr(msg, "read_state", "sent")
         result.append({
             "id": msg.id,
             "sender_id": msg.sender_id,
             "receiver_id": msg.receiver_id,
             "message": msg.message,
             "created_at": msg.created_at.isoformat() if msg.created_at else None,
-            "read_state": getattr(msg, "read_state", "sent")
+            "read_state": current_read_state
         })
 
     return result

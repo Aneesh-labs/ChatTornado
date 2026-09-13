@@ -53,10 +53,20 @@ def _find_binary(name: str) -> str:
         return str(bundled_unix)
 
     # Fallback to binary name in PATH
-    return name
+def _has_binary(name_or_path: str) -> bool:
+    if not name_or_path:
+        return False
+    try:
+        if Path(name_or_path).exists():
+            return True
+    except Exception:
+        pass
+    return shutil.which(name_or_path) is not None
 
 FFMPEG_PATH = _find_binary("ffmpeg")
 FFPROBE_PATH = _find_binary("ffprobe")
+HAS_FFMPEG = _has_binary(FFMPEG_PATH)
+HAS_FFPROBE = _has_binary(FFPROBE_PATH)
 # ----------------------------------------------------------------------
 # Category sets for relaxed MIME validation
 # ----------------------------------------------------------------------
@@ -371,12 +381,6 @@ async def upload_file(token: str, file: UploadFile = File(...)):
     if not decode_token(token):
         raise HTTPException(status_code=401, detail="Invalid token")
 
-    # Check ffmpeg/ffprobe existence once
-    if not FFMPEG_PATH.exists():
-        raise HTTPException(status_code=500, detail="FFmpeg not found on server")
-    if not FFPROBE_PATH.exists():
-        raise HTTPException(status_code=500, detail="FFprobe not found on server")
-
     # Safe filename
     original_name = Path(file.filename or "upload").name
     if not original_name:
@@ -470,17 +474,15 @@ async def upload_file(token: str, file: UploadFile = File(...)):
     # --------------------------------------------------------------
     # Video processing (conversion + thumbnail)
     # --------------------------------------------------------------
-    elif is_video:
+    elif is_video and HAS_FFPROBE and HAS_FFMPEG:
         # Get video info
         try:
             info = get_video_info(original_path)
-        except HTTPException:
-            # If ffprobe fails, we cannot process; clean up and abort
-            if original_path.exists():
-                original_path.unlink()
-            raise HTTPException(status_code=500, detail="Failed to read video metadata")
+        except Exception as exc:
+            logger.warning("Failed to read video metadata: %s", exc)
+            info = {}
 
-        compatible = is_browser_compatible_video(info)
+        compatible = is_browser_compatible_video(info) if info else True
 
         if compatible:
             final_path = original_path
@@ -490,28 +492,24 @@ async def upload_file(token: str, file: UploadFile = File(...)):
             mp4_path = upload_dir / mp4_name
             success, error = convert_video_to_mp4(original_path, mp4_path)
 
-            if not success:
+            if success:
                 if original_path.exists():
                     original_path.unlink()
-                if mp4_path.exists():
-                    mp4_path.unlink()   
-                raise HTTPException(
-                    status_code=500,
-                    detail=error
-                )
-            # Delete original, keep converted
-            if original_path.exists():
-                original_path.unlink()
-            final_path = mp4_path
-            filename = mp4_name  # update filename
-            content_type = "video/mp4"
-            original_path = mp4_path
-            info = get_video_info(final_path)
+                final_path = mp4_path
+                filename = mp4_name
+                content_type = "video/mp4"
+                original_path = mp4_path
+                try:
+                    info = get_video_info(final_path)
+                except Exception:
+                    pass
+            else:
+                final_path = original_path
 
-        # Generate thumbnail for every video
+        # Generate thumbnail for video
         thumb_name = f"thumb_{Path(filename).stem}.webp"
         thumb_path = upload_dir / thumb_name
-        duration = info.get("duration", 0.0)
+        duration = info.get("duration", 0.0) if info else 0.0
         success, thumb_error = generate_video_thumbnail(
             final_path,
             thumb_path,
@@ -520,15 +518,14 @@ async def upload_file(token: str, file: UploadFile = File(...)):
         if success:
             thumbnail_path = thumb_path
         else:
-            # Thumbnail generation failed; delete any partial file
             if thumb_path.exists():
                 thumb_path.unlink()
             thumbnail_path = None
 
-        # For video, preview_url will point to thumbnail if available, else to video itself
         preview_for_response = thumbnail_path if thumbnail_path else final_path
     else:
-        # Non-video, non-HEIC: no extra processing
+        # Non-video, non-HEIC, or FFmpeg not available: serve file directly
+        info = {}
         final_path = original_path
         preview_for_response = original_path
 

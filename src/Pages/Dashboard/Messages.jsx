@@ -400,6 +400,16 @@ const Messages = () => {
         if (isNearBottom) scrollToBottom("smooth");
     }, [messages.length, scrollToBottom]);
 
+    useEffect(() => {
+        if (!Array.isArray(messages) || messages.length === 0) return;
+        const total = messages.length;
+        sessionStorage.setItem("totalMessages", String(total));
+        const todayStr = new Date().toISOString().slice(0, 10);
+        const todayCount = messages.filter((m) => m?.created_at && String(m.created_at).slice(0, 10) === todayStr).length;
+        sessionStorage.setItem("messagesToday", String(todayCount));
+        window.dispatchEvent(new Event("sessionStorageUpdate"));
+    }, [messages]);
+
     /* ── User Fetching ────────────────────────────────────────────────────── */
     useEffect(() => {
         const fetchUsers = async () => {
@@ -580,6 +590,35 @@ const Messages = () => {
                         });
                         return;
                     }
+                    if (packet.type === "reaction") {
+                        setMessages((prev) => prev.map((m) => {
+                            if (m.id !== packet.message_id) return m;
+                            const reactionsList = m.reactions || [];
+                            const existing = reactionsList.find((r) => r.glyph === packet.emoji);
+                            if (existing) {
+                                return {
+                                    ...m,
+                                    reactions: reactionsList.map((r) =>
+                                        r.glyph === packet.emoji
+                                            ? { ...r, users: [...new Set([...r.users, packet.sender_id])] }
+                                            : r
+                                    ),
+                                };
+                            }
+                            return { ...m, reactions: [...reactionsList, { glyph: packet.emoji, users: [packet.sender_id] }] };
+                        }));
+                        return;
+                    }
+                    if (packet.type === "read_receipt") {
+                        setMessages((prev) =>
+                            prev.map((m) =>
+                                m.receiver_id === packet.reader_id
+                                    ? { ...m, read_state: "read", readState: "read" }
+                                    : m
+                            )
+                        );
+                        return;
+                    }
                     if (packet.type === "message") {
                         // ✅ Fixed: Update existing messages instead of skipping
                         setMessages((prev) => {
@@ -733,7 +772,20 @@ const Messages = () => {
             }
             return { ...m, reactions: [...reactionsList, { glyph: safeEmoji, users: [myUserId.current] }] };
         }));
-    }, []);
+
+        if (socketRef.current?.readyState === WebSocket.OPEN && selectedUser?.id) {
+            try {
+                socketRef.current.send(JSON.stringify({
+                    type: "reaction",
+                    message_id: messageId,
+                    receiver_id: selectedUser.id,
+                    emoji: safeEmoji
+                }));
+            } catch (err) {
+                console.warn("Failed to transmit reaction over WebSocket:", err);
+            }
+        }
+    }, [selectedUser]);
 
     const togglePin = useCallback((userId) => {
         setPinnedChats((prev) => {

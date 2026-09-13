@@ -1545,45 +1545,45 @@ export default function LoginMobile() {
                         </button>
                     </motion.form>
 
-                {/* Interactive Component Badging Extensions */}
-                {flagHiddenMessageVisible && (
-                    <motion.p
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 0.3 }}
-                        className="mt-4 text-[8px] tracking-[0.3em] font-mono uppercase text-white"
-                    >
-                        System core resonance confirmed.
-                    </motion.p>
-                )}
+                    {/* Interactive Component Badging Extensions */}
+                    {flagHiddenMessageVisible && (
+                        <motion.p
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 0.3 }}
+                            className="mt-4 text-[8px] tracking-[0.3em] font-mono uppercase text-white"
+                        >
+                            System core resonance confirmed.
+                        </motion.p>
+                    )}
 
-                {flagExclusiveBadgeVisible && (
+                    {flagExclusiveBadgeVisible && (
+                        <motion.div
+                            initial={{ scale: 0.8, opacity: 0 }}
+                            animate={{ scale: 1, opacity: 1 }}
+                            className="mt-5 flex items-center space-x-1.5 bg-purple-500/10 border border-purple-500/20 px-3 py-1.5 rounded-xl text-[10px] text-purple-300 font-mono tracking-widest uppercase shadow-lg"
+                        >
+                            <Cpu className="w-3.5 h-3.5 text-purple-400 animate-spin" />
+                            <span>Developer Integrity Confirmed</span>
+                        </motion.div>
+                    )}
+
+                    {/* Expandable Engineering Subsystem Diagnostics Footer */}
+                    <DeveloperBioConsole expansionCounterHook={handleDeveloperBioTelemetry} />
+
+                </motion.div>
+
+                {/* Global Easter Egg Quote Backdrop Indicator Layer */}
+                {flagHiddenQuoteUnlocked && (
                     <motion.div
-                        initial={{ scale: 0.8, opacity: 0 }}
-                        animate={{ scale: 1, opacity: 1 }}
-                        className="mt-5 flex items-center space-x-1.5 bg-purple-500/10 border border-purple-500/20 px-3 py-1.5 rounded-xl text-[10px] text-purple-300 font-mono tracking-widest uppercase shadow-lg"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 0.12 }}
+                        className="absolute bottom-3 text-[9px] font-mono tracking-widest text-white text-center w-full pointer-events-none px-4"
                     >
-                        <Cpu className="w-3.5 h-3.5 text-purple-400 animate-spin" />
-                        <span>Developer Integrity Confirmed</span>
+                        "The perfect storm is structured line by line."
                     </motion.div>
                 )}
 
-                {/* Expandable Engineering Subsystem Diagnostics Footer */}
-                <DeveloperBioConsole expansionCounterHook={handleDeveloperBioTelemetry} />
-
-            </motion.div>
-
-            {/* Global Easter Egg Quote Backdrop Indicator Layer */}
-            {flagHiddenQuoteUnlocked && (
-                <motion.div
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 0.12 }}
-                    className="absolute bottom-3 text-[9px] font-mono tracking-widest text-white text-center w-full pointer-events-none px-4"
-                >
-                    "The perfect storm is structured line by line."
-                </motion.div>
-            )}
-
-        </div>
+            </div>
         </InteractionContext.Provider >
     );
 }

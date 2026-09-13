@@ -271,6 +271,42 @@ async def websocket_endpoint(websocket: WebSocket):
                 continue
 
             # ==========================
+            # Emoji Reaction
+            # ==========================
+            if data.get("type") == "reaction":
+                receiver_id = data.get("receiver_id")
+                message_id = data.get("message_id")
+                emoji = data.get("emoji")
+                if receiver_id is not None and message_id is not None and emoji:
+                    await manager.send_personal_message(
+                        int(receiver_id),
+                        {
+                            "type": "reaction",
+                            "message_id": message_id,
+                            "sender_id": user_id,
+                            "emoji": emoji
+                        }
+                    )
+                continue
+
+            # ==========================
+            # WebRTC Call Signaling
+            # ==========================
+            if data.get("type") == "signal":
+                receiver_id = data.get("receiver_id")
+                signal_data = data.get("signal")
+                if receiver_id is not None and signal_data:
+                    await manager.send_personal_message(
+                        int(receiver_id),
+                        {
+                            "type": "signal",
+                            "sender_id": user_id,
+                            "signal": signal_data
+                        }
+                    )
+                continue
+
+            # ==========================
             # Validate Packet
             # ==========================
 
