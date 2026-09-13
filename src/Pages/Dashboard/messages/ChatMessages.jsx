@@ -92,6 +92,7 @@ const ChatMessages = React.memo(({
             <MobileMessageActions
                 open={!!mobileActionMsg}
                 msg={mobileActionMsg}
+                isMe={mobileActionMsg?.sender_id === myUserId}
                 onClose={() => setMobileActionMsg(null)}
                 onReaction={addReaction}
                 onReply={setReplyingTo}

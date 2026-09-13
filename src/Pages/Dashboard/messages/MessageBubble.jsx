@@ -309,7 +309,7 @@ const FileLink = ({ url }) => {
 /* ═══════════════════════════════════════════════════════════════
    DELETE DIALOG COMPONENT
    ═══════════════════════════════════════════════════════════════ */
-const DeleteDialog = ({ isOpen, onClose, onDelete }) => {
+const DeleteDialog = ({ isOpen, isMe, onClose, onDelete }) => {
     if (!isOpen) return null;
 
     return (
@@ -339,25 +339,29 @@ const DeleteDialog = ({ isOpen, onClose, onDelete }) => {
                         <p className="text-[10px] text-white/30">Message will be hidden from your view</p>
                     </motion.button>
 
-                    <motion.button
-                        whileHover={{ scale: 1.01 }}
-                        whileTap={{ scale: 0.99 }}
-                        onClick={() => { onDelete("both"); onClose(); }}
-                        className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-4 py-3 text-left text-sm text-white/80 transition hover:bg-white/[0.06]"
-                    >
-                        <span className="font-medium text-red-400">Delete for everyone</span>
-                        <p className="text-[10px] text-white/30">Message will be hidden from both sides</p>
-                    </motion.button>
+                    {isMe && (
+                        <>
+                            <motion.button
+                                whileHover={{ scale: 1.01 }}
+                                whileTap={{ scale: 0.99 }}
+                                onClick={() => { onDelete("both"); onClose(); }}
+                                className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-4 py-3 text-left text-sm text-white/80 transition hover:bg-white/[0.06]"
+                            >
+                                <span className="font-medium text-red-400">Delete for everyone</span>
+                                <p className="text-[10px] text-white/30">Message will be hidden from both sides</p>
+                            </motion.button>
 
-                    <motion.button
-                        whileHover={{ scale: 1.01 }}
-                        whileTap={{ scale: 0.99 }}
-                        onClick={() => { onDelete("receiver"); onClose(); }}
-                        className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-4 py-3 text-left text-sm text-white/80 transition hover:bg-white/[0.06]"
-                    >
-                        <span className="font-medium text-amber-400">Delete for receiver</span>
-                        <p className="text-[10px] text-white/30">Message will be hidden from the recipient</p>
-                    </motion.button>
+                            <motion.button
+                                whileHover={{ scale: 1.01 }}
+                                whileTap={{ scale: 0.99 }}
+                                onClick={() => { onDelete("receiver"); onClose(); }}
+                                className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-4 py-3 text-left text-sm text-white/80 transition hover:bg-white/[0.06]"
+                            >
+                                <span className="font-medium text-amber-400">Delete for receiver</span>
+                                <p className="text-[10px] text-white/30">Message will be hidden from the recipient</p>
+                            </motion.button>
+                        </>
+                    )}
                 </div>
 
                 <motion.button
@@ -631,6 +635,7 @@ const MessageBubble = React.memo(({
             {/* Delete Dialog */}
             <DeleteDialog
                 isOpen={showDeleteDialog}
+                isMe={isMe}
                 onClose={() => setShowDeleteDialog(false)}
                 onDelete={(mode) => onDelete?.(msg.id, mode)}
             />

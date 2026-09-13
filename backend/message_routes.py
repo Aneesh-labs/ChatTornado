@@ -5,6 +5,7 @@ from sqlalchemy import or_, and_
 from auth import decode_token
 from database import get_db
 from models import Message, MessageVisibility
+from websocket_manager import manager
 
 router = APIRouter()
 
@@ -68,7 +69,7 @@ def get_messages(
 # DELETE MESSAGE ENDPOINT
 # ============================================================================
 @router.post("/delete_message/{message_id}")
-def delete_message(
+async def delete_message(
     message_id: int,
     mode: str,
     token: str,
@@ -126,6 +127,11 @@ def delete_message(
         if visibility:
             visibility.visible = False
 
+        await manager.send_personal_message(user_id, {
+            "type": "delete_message",
+            "message_id": message_id
+        })
+
     elif mode == "receiver":
         visibility = (
             db.query(MessageVisibility)
@@ -139,10 +145,22 @@ def delete_message(
         if visibility:
             visibility.visible = False
 
+        await manager.send_personal_message(message.receiver_id, {
+            "type": "delete_message",
+            "message_id": message_id
+        })
+
     elif mode == "both":
         db.query(MessageVisibility).filter(
             MessageVisibility.message_id == message_id
         ).update({"visible": False}, synchronize_session=False)
+
+        delete_packet = {
+            "type": "delete_message",
+            "message_id": message_id
+        }
+        await manager.send_personal_message(message.sender_id, delete_packet)
+        await manager.send_personal_message(message.receiver_id, delete_packet)
 
     db.commit()
 

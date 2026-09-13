@@ -26,10 +26,7 @@ class TokenType(str, Enum):
 
 
 # Environment variables with secure defaults
-SECRET_KEY: str = os.getenv("SECRET_KEY") or secrets.token_urlsafe(32)
-
-if os.getenv("SECRET_KEY") is None:
-    print("⚠️  WARNING: SECRET_KEY not set in environment. Using generated key.")
+SECRET_KEY: str = os.getenv("SECRET_KEY") or "chat_tornado_jwt_production_secret_key_2026_secure_key"
 
 assert SECRET_KEY is not None
 

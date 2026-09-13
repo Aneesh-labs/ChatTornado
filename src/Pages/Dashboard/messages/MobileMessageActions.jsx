@@ -5,7 +5,7 @@ import { useTheme } from "./constants";
 
 const QUICK_REACTIONS = ["👍", "❤️", "😂", "😮", "😢", "🔥"];
 
-const MobileMessageActions = React.memo(({ open, msg, onClose, onReaction, onReply, onSelect }) => {
+const MobileMessageActions = React.memo(({ open, msg, isMe, onClose, onReaction, onReply, onSelect, onDelete }) => {
     const theme = useTheme();
 
     return (
@@ -66,6 +66,14 @@ const MobileMessageActions = React.memo(({ open, msg, onClose, onReaction, onRep
                                 <span className="text-base">☑</span>
                                 Select message
                             </button>
+                            <button
+                                type="button"
+                                onClick={() => { onDelete?.(msg.id, isMe ? "both" : "me"); onClose?.(); }}
+                                className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left text-sm text-red-400 hover:bg-red-500/10 active:bg-red-500/20 transition-colors touch-manipulation"
+                            >
+                                <span className="text-base">🗑</span>
+                                Delete message
+                            </button>
                         </div>
 
                         <button
@@ -87,10 +95,12 @@ MobileMessageActions.displayName = "MobileMessageActions";
 MobileMessageActions.propTypes = {
     open: PropTypes.bool.isRequired,
     msg: PropTypes.object,
+    isMe: PropTypes.bool,
     onClose: PropTypes.func.isRequired,
     onReaction: PropTypes.func,
     onReply: PropTypes.func,
     onSelect: PropTypes.func,
+    onDelete: PropTypes.func,
 };
 
 export default MobileMessageActions;
