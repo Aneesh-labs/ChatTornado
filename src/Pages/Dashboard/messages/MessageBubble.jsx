@@ -6,11 +6,12 @@ import { Avatar, useTheme, fmtTime } from "./constants";
 const QUICK_REACTIONS = ["👍", "❤️", "😂", "😮", "😢", "🔥", "🥸", "👮🏿‍♀️"];
 
 /* ═══════════════════════════════════════════════════════════════
-   IMAGE & VIDEO DETECTION HELPERS
+   IMAGE, VIDEO & AUDIO DETECTION HELPERS
    ═══════════════════════════════════════════════════════════════ */
 
 const IMAGE_EXTENSIONS = /\.(jpg|jpeg|png|gif|webp|svg|bmp|ico|heic|heif)(\?.*)?$/i;
-const VIDEO_EXTENSIONS = /\.(mp4|webm|mov|mkv|avi|wmv|flv|m4v)(\?.*)?$/i;
+const VIDEO_EXTENSIONS = /\.(mp4|mov|mkv|avi|wmv|flv|m4v)(\?.*)?$/i;
+const AUDIO_EXTENSIONS = /\.(mp3|wav|ogg|aac|m4a|opus|flac|wma|webm)(\?.*)?$/i;
 
 const extractUrls = (text) => {
     if (!text) return [];
@@ -18,12 +19,14 @@ const extractUrls = (text) => {
 };
 
 const isImageUrl = (url) => IMAGE_EXTENSIONS.test(url);
-const isVideoUrl = (url) => VIDEO_EXTENSIONS.test(url);
+const isVideoUrl = (url, text) => VIDEO_EXTENSIONS.test(url) || (url.toLowerCase().includes('.webm') && !text.includes('🎤 Voice'));
+const isAudioUrl = (url, text) => AUDIO_EXTENSIONS.test(url) && !isVideoUrl(url, text);
 
 const extractImageUrls = (text) => extractUrls(text).filter(isImageUrl);
-const extractVideoUrls = (text) => extractUrls(text).filter(isVideoUrl);
+const extractVideoUrls = (text) => extractUrls(text).filter(url => isVideoUrl(url, text));
+const extractAudioUrls = (text) => extractUrls(text).filter(url => isAudioUrl(url, text));
 const extractNonImageUrls = (text) =>
-    extractUrls(text).filter((url) => !isImageUrl(url) && !isVideoUrl(url));
+    extractUrls(text).filter((url) => !isImageUrl(url) && !isVideoUrl(url, text) && !isAudioUrl(url, text));
 const extractCaption = (text) => {
     return text.replace(/https?:\/\/[^\s<>"']+/g, "").trim();
 };
@@ -279,6 +282,28 @@ const VideoPreview = ({ videoUrl }) => {
 };
 
 /* ═══════════════════════════════════════════════════════════════
+   AUDIO PREVIEW COMPONENT
+   ═══════════════════════════════════════════════════════════════ */
+const AudioPreview = ({ audioUrl, isVoiceNote = false }) => {
+    return (
+        <div className={`mt-1.5 rounded-2xl overflow-hidden border border-white/[0.08] bg-black/30 p-2 ${isVoiceNote ? 'w-full' : ''}`}>
+            <audio
+                controls
+                preload="metadata"
+                className={`h-10 ${isVoiceNote ? 'w-full min-w-[200px]' : 'w-full max-w-[260px]'}`}
+                style={{
+                    filter: "sepia(100%) hue-rotate(190deg) saturate(90%) brightness(80%)",
+                    outline: "none"
+                }}
+            >
+                <source src={audioUrl} />
+                Your browser doesn't support audio playback.
+            </audio>
+        </div>
+    );
+};
+
+/* ═══════════════════════════════════════════════════════════════
    FILE LINK COMPONENT (for non-image, non-video attachments)
    ═══════════════════════════════════════════════════════════════ */
 const FileLink = ({ url }) => {
@@ -458,11 +483,14 @@ const MessageBubble = React.memo(({
     // Detect content types
     const imageUrls = extractImageUrls(msg.message);
     const videoUrls = extractVideoUrls(msg.message);
+    const audioUrls = extractAudioUrls(msg.message);
     const nonImageUrls = extractNonImageUrls(msg.message);
     const caption = extractCaption(msg.message);
     const hasImages = imageUrls.length > 0;
     const hasVideos = videoUrls.length > 0;
+    const hasAudio = audioUrls.length > 0;
     const hasFiles = nonImageUrls.length > 0;
+    const isVoiceNote = msg.message.includes('🎤 Voice Message');
 
     return (
         <>
@@ -564,10 +592,17 @@ const MessageBubble = React.memo(({
                         `}
                     >
                         {/* Caption text */}
-                        {(hasImages || hasVideos || hasFiles) && caption && (
+                        {(hasImages || hasVideos || hasAudio || hasFiles) && caption && !isVoiceNote && (
                             <p className="text-[13px] sm:text-sm text-white/90 leading-relaxed whitespace-pre-wrap break-words selection:bg-white/20 mb-1">
                                 {decodeHtmlEntities(caption)}
                             </p>
+                        )}
+                        {/* Special voice note styling for caption */}
+                        {isVoiceNote && (
+                            <div className="flex items-center gap-2 mb-2 text-white/90">
+                                <span className="text-xl">🎤</span>
+                                <span className="text-sm font-semibold tracking-wide uppercase text-white/70">Voice Message</span>
+                            </div>
                         )}
 
                         {/* ✅ IMAGE PREVIEWS */}
@@ -579,7 +614,7 @@ const MessageBubble = React.memo(({
                             />
                         ))}
 
-                        {/* ✅ VIDEO PREVIEWS - Render BEFORE files */}
+                        {/* ✅ VIDEO PREVIEWS */}
                         {hasVideos && videoUrls.map((url, idx) => (
                             <VideoPreview
                                 key={`${msg.id}-video-${idx}`}
@@ -587,13 +622,22 @@ const MessageBubble = React.memo(({
                             />
                         ))}
 
-                        {/* ✅ FILE LINKS - ONLY for non-image, non-video files */}
+                        {/* ✅ AUDIO PREVIEWS */}
+                        {hasAudio && audioUrls.map((url, idx) => (
+                            <AudioPreview
+                                key={`${msg.id}-audio-${idx}`}
+                                audioUrl={url}
+                                isVoiceNote={isVoiceNote}
+                            />
+                        ))}
+
+                        {/* ✅ FILE LINKS */}
                         {hasFiles && nonImageUrls.map((url, idx) => (
                             <FileLink key={`${msg.id}-file-${idx}`} url={url} />
                         ))}
 
                         {/* Plain text fallback */}
-                        {!hasImages && !hasVideos && !hasFiles && msg.message && (
+                        {!hasImages && !hasVideos && !hasAudio && !hasFiles && msg.message && (
                             <p className="text-[13px] sm:text-sm text-white/90 leading-relaxed whitespace-pre-wrap break-words selection:bg-white/20">
                                 {decodeHtmlEntities(msg.message)}
                             </p>
