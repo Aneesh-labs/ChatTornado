@@ -1,6 +1,7 @@
 import React from "react";
 import PropTypes from "prop-types";
 import { IconBtn, Avatar, useTheme } from "./constants";
+import { triggerDemoNotification } from "../../../Services/notifications";
 
 const ChatHeader = React.memo(({
     user = null,
@@ -93,6 +94,11 @@ const ChatHeader = React.memo(({
                         </svg>
                     </IconBtn>
                 )}
+                <IconBtn title="Test & Enable Notifications" onClick={() => triggerDemoNotification()} small>
+                    <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                    </svg>
+                </IconBtn>
                 <IconBtn title="Voice call" onClick={() => onStartCall?.(false)} small>
                     <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
