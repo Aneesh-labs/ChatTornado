@@ -1,4 +1,6 @@
-backend/
-start_chat_tornado.bat
-start_chat_tornado.sh
-start_chat_tornado_hidden.vbs
+backend/**
+backend
+*.py
+*.bat
+*.sh
+*.vbs
