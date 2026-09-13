@@ -78,7 +78,7 @@ VIDEO_EXTENSIONS = {
 }
 AUDIO_EXTENSIONS = {
     ".mp3", ".wav", ".aac", ".m4a", ".ogg", ".opus", ".flac",
-    ".wma", ".amr", ".aiff"
+    ".wma", ".amr", ".aiff", ".webm"
 }
 TEXT_EXTENSIONS = {
     ".txt", ".csv", ".rtf", ".xml", ".yaml", ".yml", ".sql",
@@ -112,7 +112,7 @@ EXTENSION_MIME_MAP = {
     ".mov": ["video/quicktime"],
     ".mkv": ["video/x-matroska"],
     ".avi": ["video/x-msvideo"],
-    ".webm": ["video/webm"],
+    ".webm": ["video/webm", "audio/webm"],
     ".m4v": ["video/x-m4v", "video/mp4"],
     ".3gp": ["video/3gpp"],
     ".flv": ["video/x-flv"],
