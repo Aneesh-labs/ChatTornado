@@ -55,7 +55,7 @@ const CyberShieldModal = ({ isOpen, onClose, onApply }) => {
     };
 
     const modalContent = (
-        <div 
+        <div
             className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/75 backdrop-blur-md p-4 overflow-y-auto"
             onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
         >
@@ -78,8 +78,8 @@ const CyberShieldModal = ({ isOpen, onClose, onApply }) => {
                         <button
                             onClick={() => setMode('scan')}
                             className={`flex flex-col items-center justify-center p-4 rounded-xl border transition-all ${mode === 'scan'
-                                    ? 'bg-cyan-500/10 border-cyan-500 text-cyan-400 shadow-[inset_0_0_20px_rgba(6,182,212,0.1)]'
-                                    : 'bg-gray-800/50 border-gray-700 text-gray-400 hover:bg-gray-800'
+                                ? 'bg-cyan-500/10 border-cyan-500 text-cyan-400 shadow-[inset_0_0_20px_rgba(6,182,212,0.1)]'
+                                : 'bg-gray-800/50 border-gray-700 text-gray-400 hover:bg-gray-800'
                                 }`}
                         >
                             <Eye size={24} className="mb-2" />
@@ -90,8 +90,8 @@ const CyberShieldModal = ({ isOpen, onClose, onApply }) => {
                         <button
                             onClick={() => setMode('timelock')}
                             className={`flex flex-col items-center justify-center p-4 rounded-xl border transition-all ${mode === 'timelock'
-                                    ? 'bg-violet-500/10 border-violet-500 text-violet-400 shadow-[inset_0_0_20px_rgba(139,92,246,0.1)]'
-                                    : 'bg-gray-800/50 border-gray-700 text-gray-400 hover:bg-gray-800'
+                                ? 'bg-violet-500/10 border-violet-500 text-violet-400 shadow-[inset_0_0_20px_rgba(139,92,246,0.1)]'
+                                : 'bg-gray-800/50 border-gray-700 text-gray-400 hover:bg-gray-800'
                                 }`}
                         >
                             <Clock size={24} className="mb-2" />
@@ -110,8 +110,8 @@ const CyberShieldModal = ({ isOpen, onClose, onApply }) => {
                                         key={preset}
                                         onClick={() => setUnlockTime(preset)}
                                         className={`px-3 py-1.5 rounded-lg text-sm transition-colors border ${unlockTime === preset
-                                                ? 'bg-violet-500/20 border-violet-500 text-violet-300'
-                                                : 'bg-gray-800 border-gray-700 text-gray-300 hover:border-gray-600'
+                                            ? 'bg-violet-500/20 border-violet-500 text-violet-300'
+                                            : 'bg-gray-800 border-gray-700 text-gray-300 hover:border-gray-600'
                                             }`}
                                     >
                                         {preset === '15m' && '15 Mins'}
@@ -163,8 +163,8 @@ const CyberShieldModal = ({ isOpen, onClose, onApply }) => {
                         onClick={handleApply}
                         disabled={mode === 'timelock' && !unlockTime}
                         className={`px-5 py-2 rounded-lg text-sm font-bold shadow-lg transition-all ${mode === 'timelock'
-                                ? 'bg-violet-600 hover:bg-violet-500 text-white shadow-violet-500/25 disabled:opacity-50 disabled:cursor-not-allowed'
-                                : 'bg-cyan-600 hover:bg-cyan-500 text-white shadow-cyan-500/25'
+                            ? 'bg-violet-600 hover:bg-violet-500 text-white shadow-violet-500/25 disabled:opacity-50 disabled:cursor-not-allowed'
+                            : 'bg-cyan-600 hover:bg-cyan-500 text-white shadow-cyan-500/25'
                             }`}
                     >
                         Activate Shield

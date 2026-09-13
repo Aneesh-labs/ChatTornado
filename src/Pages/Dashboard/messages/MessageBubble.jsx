@@ -574,6 +574,7 @@ const MessageBubble = React.memo(({
     const [unlockedPayload, setUnlockedPayload] = useState(null);
 
     const handleUnlockCapsule = async () => {
+        if (msg.shield_mode !== 'timelock') return true;
         try {
             const token = sessionStorage.getItem("token");
             const res = await API.post(`/messages/${msg.id}/unlock?token=${encodeURIComponent(token || '')}`);

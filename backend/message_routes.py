@@ -400,3 +400,40 @@ async def toggle_message_reaction(
     await manager.send_personal_message(user_id, packet)
 
     return {"success": True, "reactions": formatted}
+
+
+# ============================================================================
+# UNLOCK CAPSULE ENDPOINT
+# ============================================================================
+@router.post("/messages/{message_id}/unlock")
+async def unlock_message_capsule(
+    message_id: int,
+    token: str,
+    db: Session = Depends(get_db)
+):
+    payload = decode_access_token(token)
+    if not payload or "user_id" not in payload:
+        raise HTTPException(status_code=401, detail="Invalid token.")
+
+    user_id = payload["user_id"]
+    msg = db.query(Message).filter(Message.id == message_id).first()
+    if not msg:
+        raise HTTPException(status_code=404, detail="Message not found.")
+
+    if user_id not in (msg.sender_id, msg.receiver_id):
+        raise HTTPException(status_code=403, detail="Not a participant.")
+
+    now = datetime.now(timezone.utc)
+
+    if msg.is_shielded and msg.shield_mode == "timelock" and msg.unlock_at:
+        unlock_time = msg.unlock_at
+        if unlock_time.tzinfo is None:
+            unlock_time = unlock_time.replace(tzinfo=timezone.utc)
+        if unlock_time > now:
+            return {"is_locked": True, "message": None}
+
+    return {
+        "is_locked": False,
+        "message": msg.message
+    }
+

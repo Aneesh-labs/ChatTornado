@@ -54,7 +54,7 @@ const CyberShieldVault = ({
         if (shieldMode === 'timelock' && locallyLocked) return; // Cannot manually reveal locked capsule
         if (revealed || scanning) return;
 
-        if (onUnlocked) {
+        if (shieldMode === 'timelock' && onUnlocked) {
             try {
                 const success = await onUnlocked();
                 if (success === false) return; // If explicitly failed
