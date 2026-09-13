@@ -217,7 +217,7 @@ export const Avatar = React.memo(({ user, size = "md", showStatus = true, classN
 });
 Avatar.displayName = "Avatar";
 
-export const IconBtn = React.memo(({ children, onClick, active = false, title, danger = false, small = false }) => {
+export const IconBtn = React.memo(({ children, onClick, active = false, title, danger = false, small = false, className = "" }) => {
     const theme = useTheme() || THEMES.dark;
     return (
         <motion.button
@@ -226,7 +226,7 @@ export const IconBtn = React.memo(({ children, onClick, active = false, title, d
             onClick={onClick}
             whileHover={window.innerWidth >= 640 ? { scale: 1.05 } : {}}
             whileTap={{ scale: 0.95 }}
-            className={`${small ? "w-7 h-7 sm:w-8 sm:h-8 text-sm sm:text-base" : "w-8.5 h-8.5 sm:w-9 sm:h-9 text-base sm:text-lg"} rounded-lg sm:rounded-xl flex items-center justify-center transition-all duration-150 flex-shrink-0 focus:outline-none touch-manipulation select-none ${active
+            className={`${small ? "w-7 h-7 sm:w-8 sm:h-8 text-sm sm:text-base" : "w-8.5 h-8.5 sm:w-9 sm:h-9 text-base sm:text-lg"} rounded-lg sm:rounded-xl flex items-center justify-center transition-all duration-150 flex-shrink-0 focus:outline-none touch-manipulation select-none ${className} ${active
                 ? `bg-gradient-to-br ${theme.accent} text-white shadow-md`
                 : danger
                     ? "hover:bg-red-500/10 text-red-400 focus:ring-2 focus:ring-red-500/20"

@@ -203,8 +203,6 @@ def is_allowed_file(extension: str, content_type: str) -> bool:
         return True
 
     # 2) Common browser aliases
-    # application/octet-stream – trust the extension (we have a safe list)
-    if ct == "application/octet-stream":
     # application/octet-stream or empty – trust the extension (we have a safe list)
     if not ct or ct == "application/octet-stream":
         return True
