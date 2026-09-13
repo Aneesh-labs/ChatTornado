@@ -610,6 +610,15 @@ const Messages = () => {
                         });
                         return;
                     }
+                    if (packet.type === "capsule_unlocked") {
+                        setMessages((prev) => prev.map((m) => {
+                            if (m.id === packet.message_id) {
+                                return { ...m, is_locked: false };
+                            }
+                            return m;
+                        }));
+                        return;
+                    }
                     if (packet.type === "reaction") {
                         setMessages((prev) => prev.map((m) => {
                             if (m.id !== packet.message_id) return m;
@@ -686,7 +695,11 @@ const Messages = () => {
                         if (!isFromCurrentUser) {
                             const senderObj = usersRef.current.find((u) => Number(u.id) === Number(packet.sender_id));
                             const senderName = senderObj?.username || "Friend";
-                            showMessageNotification(senderName, packet.message || "New message");
+                            let notificationBody = packet.message || "New message";
+                            if (packet.is_shielded) {
+                                notificationBody = packet.shield_mode === 'timelock' ? "🔒 Sent a Timelocked Capsule" : "🛡️ Sent a Shielded Message";
+                            }
+                            showMessageNotification(senderName, notificationBody);
                         }
                         if (!isFromCurrentUser && !isFromSelected) {
                             setUnreadCounts((prev) => ({
@@ -729,7 +742,7 @@ const Messages = () => {
     }, [validateToken]);
 
     /* ── Message Sending (with rate limiting & sanitization) ────────────── */
-    const sendMessage = useCallback((text) => {
+    const sendMessage = useCallback((text, options = {}) => {
         if (!selectedUser || !socketRef.current || socketRef.current.readyState !== WebSocket.OPEN) {
             return false;
         }
@@ -753,6 +766,7 @@ const Messages = () => {
             receiver_id: selectedUser.id,
             message: validation.text,
             created_at: new Date().toISOString(),
+            ...options
         };
         setMessages((prev) => {
             console.log("OPTIMISTIC ADD");
@@ -762,6 +776,7 @@ const Messages = () => {
         console.log("========== FRONTEND SENDING ==========")
         console.log("temp_id:", temp_id)
         console.log("message:", validation.text)
+        console.log("options:", options)
         console.log("====================================")
 
         try {
@@ -769,6 +784,7 @@ const Messages = () => {
                 temp_id,
                 receiver_id: selectedUser.id,
                 message: validation.text,
+                ...options
             }));
         } catch {
             pendingTempIds.current.delete(temp_id);

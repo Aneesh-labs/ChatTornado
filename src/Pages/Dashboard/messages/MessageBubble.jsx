@@ -4,6 +4,8 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Avatar, useTheme, fmtTime, getMyUserId } from "./constants";
 import { getLocalMediaUrl } from "../../../Services/db";
 import { requestP2PDownload } from "../../../Services/p2p";
+import API from "../../../Services/API";
+import CyberShieldVault from "./CyberShieldVault";
 
 const QUICK_REACTIONS = ["👍", "❤️", "😂", "😮", "😢", "🔥", "🥸", "👮🏿‍♀️"];
 
@@ -12,7 +14,6 @@ const QUICK_REACTIONS = ["👍", "❤️", "😂", "😮", "😢", "🔥", "🥸
    ═══════════════════════════════════════════════════════════════ */
 
 const IMAGE_EXTENSIONS = /\.(jpg|jpeg|png|gif|webp|svg|bmp|ico|heic|heif)(\?.*)?$/i;
-const VIDEO_EXTENSIONS = /\.(mp4|mov|mkv|avi|wmv|flv|m4v)(\?.*)?$/i;
 const VIDEO_EXTENSIONS = /\.(mp4|mov|mkv|avi|wmv|flv|m4v|webm|3gp|ogv|ts)(\?.*)?$/i;
 const AUDIO_EXTENSIONS = /\.(mp3|wav|ogg|aac|m4a|opus|flac|wma|webm)(\?.*)?$/i;
 
@@ -569,6 +570,23 @@ const MessageBubble = React.memo(({
     const [showDeleteDialog, setShowDeleteDialog] = useState(false);
     const longPressTimer = useRef(null);
 
+    // Cyber Shield state
+    const [unlockedPayload, setUnlockedPayload] = useState(null);
+
+    const handleUnlockCapsule = async () => {
+        try {
+            const token = sessionStorage.getItem("token");
+            const res = await API.post(`/messages/${msg.id}/unlock?token=${encodeURIComponent(token || '')}`);
+            if (!res.data.is_locked) {
+                setUnlockedPayload(res.data.message);
+                return true;
+            }
+        } catch (e) {
+            console.error("Unlock failed", e);
+        }
+        return false;
+    };
+
     const bubbleClass = isMe ? theme.bubble.me : theme.bubble.them;
 
     const readStateConfig = (() => {
@@ -608,17 +626,84 @@ const MessageBubble = React.memo(({
     }, []);
 
     // Detect content types
-    const isP2P = msg.message?.startsWith('⚡ P2P_MEDIA');
-    const imageUrls = !isP2P ? extractImageUrls(msg.message) : [];
-    const videoUrls = !isP2P ? extractVideoUrls(msg.message) : [];
-    const audioUrls = !isP2P ? extractAudioUrls(msg.message) : [];
-    const nonImageUrls = !isP2P ? extractNonImageUrls(msg.message) : [];
-    const caption = !isP2P ? extractCaption(msg.message) : "";
+    const actualMessage = unlockedPayload !== null ? unlockedPayload : msg.message;
+    const isP2P = actualMessage?.startsWith('⚡ P2P_MEDIA');
+    const imageUrls = !isP2P ? extractImageUrls(actualMessage) : [];
+    const videoUrls = !isP2P ? extractVideoUrls(actualMessage) : [];
+    const audioUrls = !isP2P ? extractAudioUrls(actualMessage) : [];
+    const nonImageUrls = !isP2P ? extractNonImageUrls(actualMessage) : [];
+    const caption = !isP2P ? extractCaption(actualMessage) : "";
     const hasImages = imageUrls.length > 0;
     const hasVideos = videoUrls.length > 0;
     const hasAudio = audioUrls.length > 0;
     const hasFiles = nonImageUrls.length > 0;
-    const isVoiceNote = !isP2P && msg.message.includes('🎤 Voice Message');
+    const isVoiceNote = !isP2P && actualMessage?.includes('🎤 Voice Message');
+
+    const renderMessageContent = () => (
+        <>
+            {/* Caption text */}
+            {(hasImages || hasVideos || hasAudio || hasFiles) && caption && !isVoiceNote && (
+                <p className="text-[13px] sm:text-sm text-white/90 leading-relaxed whitespace-pre-wrap break-words selection:bg-white/20 mb-1">
+                    {decodeHtmlEntities(caption)}
+                </p>
+            )}
+            {/* Special voice note styling for caption */}
+            {isVoiceNote && (
+                <div className="flex items-center gap-2 mb-2 text-white/90">
+                    <span className="text-xl">🎤</span>
+                    <span className="text-sm font-semibold tracking-wide uppercase text-white/70">Voice Message</span>
+                </div>
+            )}
+
+            {/* ✅ IMAGE PREVIEWS */}
+            {hasImages && imageUrls.map((url, idx) => (
+                <ImagePreview
+                    key={`${msg.id}-img-${idx}`}
+                    imageUrl={url}
+                    onOpenLightbox={setLightboxImage}
+                />
+            ))}
+
+            {/* ✅ VIDEO PREVIEWS */}
+            {hasVideos && videoUrls.map((url, idx) => (
+                <VideoPreview
+                    key={`${msg.id}-video-${idx}`}
+                    videoUrl={url}
+                />
+            ))}
+
+            {/* ✅ AUDIO PREVIEWS */}
+            {hasAudio && audioUrls.map((url, idx) => (
+                <AudioPreview
+                    key={`${msg.id}-audio-${idx}`}
+                    audioUrl={url}
+                    isVoiceNote={isVoiceNote}
+                />
+            ))}
+
+            {/* ✅ P2P ZERO-SERVER MEDIA */}
+            {isP2P && (
+                <P2PMediaPreview
+                    rawMessage={actualMessage}
+                    senderId={msg.sender_id}
+                    socket={socket}
+                    onOpenLightbox={setLightboxImage}
+                />
+            )}
+
+            {/* ✅ FILE LINKS */}
+            {hasFiles && nonImageUrls.map((url, idx) => (
+                <FileLink key={`${msg.id}-file-${idx}`} url={url} />
+            ))}
+
+            {/* Plain text fallback */}
+            {!hasImages && !hasVideos && !hasAudio && !hasFiles && !isP2P && actualMessage && (
+                <p className="text-[13px] sm:text-sm text-white/90 leading-relaxed whitespace-pre-wrap break-words selection:bg-white/20">
+                    {decodeHtmlEntities(actualMessage)}
+                </p>
+            )}
+        </>
+    );
 
     return (
         <>
@@ -719,66 +804,19 @@ const MessageBubble = React.memo(({
                             ${selected ? "ring-2 ring-violet-400/80 border-transparent shadow-lg" : "shadow-sm"}
                         `}
                     >
-                        {/* Caption text */}
-                        {(hasImages || hasVideos || hasAudio || hasFiles) && caption && !isVoiceNote && (
-                            <p className="text-[13px] sm:text-sm text-white/90 leading-relaxed whitespace-pre-wrap break-words selection:bg-white/20 mb-1">
-                                {decodeHtmlEntities(caption)}
-                            </p>
-                        )}
-                        {/* Special voice note styling for caption */}
-                        {isVoiceNote && (
-                            <div className="flex items-center gap-2 mb-2 text-white/90">
-                                <span className="text-xl">🎤</span>
-                                <span className="text-sm font-semibold tracking-wide uppercase text-white/70">Voice Message</span>
-                            </div>
-                        )}
-
-                        {/* ✅ IMAGE PREVIEWS */}
-                        {hasImages && imageUrls.map((url, idx) => (
-                            <ImagePreview
-                                key={`${msg.id}-img-${idx}`}
-                                imageUrl={url}
-                                onOpenLightbox={setLightboxImage}
-                            />
-                        ))}
-
-                        {/* ✅ VIDEO PREVIEWS */}
-                        {hasVideos && videoUrls.map((url, idx) => (
-                            <VideoPreview
-                                key={`${msg.id}-video-${idx}`}
-                                videoUrl={url}
-                            />
-                        ))}
-
-                        {/* ✅ AUDIO PREVIEWS */}
-                        {hasAudio && audioUrls.map((url, idx) => (
-                            <AudioPreview
-                                key={`${msg.id}-audio-${idx}`}
-                                audioUrl={url}
-                                isVoiceNote={isVoiceNote}
-                            />
-                        ))}
-
-                        {/* ✅ P2P ZERO-SERVER MEDIA */}
-                        {isP2P && (
-                            <P2PMediaPreview
-                                rawMessage={msg.message}
-                                senderId={msg.sender_id}
-                                socket={socket}
-                                onOpenLightbox={setLightboxImage}
-                            />
-                        )}
-
-                        {/* ✅ FILE LINKS */}
-                        {hasFiles && nonImageUrls.map((url, idx) => (
-                            <FileLink key={`${msg.id}-file-${idx}`} url={url} />
-                        ))}
-
-                        {/* Plain text fallback */}
-                        {!hasImages && !hasVideos && !hasAudio && !hasFiles && !isP2P && msg.message && (
-                            <p className="text-[13px] sm:text-sm text-white/90 leading-relaxed whitespace-pre-wrap break-words selection:bg-white/20">
-                                {decodeHtmlEntities(msg.message)}
-                            </p>
+                        {msg.is_shielded ? (
+                            <CyberShieldVault
+                                shieldMode={msg.shield_mode}
+                                unlockAt={msg.unlock_at}
+                                isLocked={msg.is_locked}
+                                messageId={msg.id}
+                                token={sessionStorage.getItem("token")}
+                                onUnlocked={handleUnlockCapsule}
+                            >
+                                {renderMessageContent()}
+                            </CyberShieldVault>
+                        ) : (
+                            renderMessageContent()
                         )}
 
                         {/* Timestamp */}

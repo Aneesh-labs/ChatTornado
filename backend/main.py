@@ -8,7 +8,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from database import Base, engine
+from database import Base, engine, run_migrations
 
 # Import models so SQLAlchemy can discover them
 import models
@@ -23,6 +23,7 @@ from upload_routes import router as upload_router
 # ============================================================================
 
 Base.metadata.create_all(bind=engine)
+run_migrations()
 
 # ============================================================================
 # FastAPI App

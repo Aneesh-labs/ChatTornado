@@ -1,12 +1,15 @@
 from fastapi import WebSocket
 from starlette.websockets import WebSocketDisconnect
-
+import asyncio
+from database import SessionLocal
+from models import Message
 
 class ConnectionManager:
 
     def __init__(self):
         self.active_connections: dict[int, WebSocket] = {}
         self.online_users: set[int] = set()
+        self.broadcasted_capsules: set[int] = set()
 
     async def connect(
         self,
@@ -17,6 +20,50 @@ class ConnectionManager:
 
         self.active_connections[user_id] = websocket
         self.online_users.add(user_id)
+        
+        # Start broadcaster if not already running (simplified for 1 worker)
+        if not hasattr(self, "_broadcaster_task"):
+            self._broadcaster_task = asyncio.create_task(self.capsule_unlock_broadcaster())
+
+    async def capsule_unlock_broadcaster(self):
+        while True:
+            await asyncio.sleep(15)
+            if not self.online_users:
+                continue
+            
+            try:
+                db = SessionLocal()
+                from datetime import datetime, timezone
+                now = datetime.now(timezone.utc)
+                
+                # Fetch pending timelocked messages
+                messages = db.query(Message).filter(
+                    Message.is_shielded == True,
+                    Message.shield_mode == "timelock",
+                    Message.unlock_at != None
+                ).all()
+                
+                for msg in messages:
+                    if msg.id in self.broadcasted_capsules:
+                        continue
+                        
+                    unlock_time = msg.unlock_at
+                    if unlock_time.tzinfo is None:
+                        unlock_time = unlock_time.replace(tzinfo=timezone.utc)
+                        
+                    if unlock_time <= now:
+                        self.broadcasted_capsules.add(msg.id)
+                        packet = {
+                            "type": "capsule_unlocked",
+                            "message_id": msg.id,
+                            "message": msg.message
+                        }
+                        await self.send_personal_message(msg.receiver_id, packet)
+                        await self.send_personal_message(msg.sender_id, packet)
+                        
+                db.close()
+            except Exception as e:
+                print("Broadcaster error:", e)
 
 
     def disconnect(

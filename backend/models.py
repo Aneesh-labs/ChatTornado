@@ -61,6 +61,11 @@ class Message(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False, index=True)
     read_state: Mapped[str] = mapped_column(String(20), default="sent", nullable=False)
     
+    # Shield Feature
+    is_shielded: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    shield_mode: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    unlock_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    
     # Relationships
     sender: Mapped["User"] = relationship("User", foreign_keys=[sender_id], back_populates="sent_messages")
     receiver: Mapped["User"] = relationship("User", foreign_keys=[receiver_id], back_populates="received_messages")

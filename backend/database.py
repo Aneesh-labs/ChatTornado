@@ -1,6 +1,6 @@
 import os
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
 
 # ============================================================================
@@ -56,3 +56,16 @@ def get_db():
         yield db
     finally:
         db.close()
+
+# ============================================================================
+# Migrations
+# ============================================================================
+
+def run_migrations():
+    """
+    Run idempotent migrations.
+    """
+    with engine.begin() as conn:
+        conn.execute(text("ALTER TABLE messages ADD COLUMN IF NOT EXISTS is_shielded BOOLEAN DEFAULT FALSE;"))
+        conn.execute(text("ALTER TABLE messages ADD COLUMN IF NOT EXISTS shield_mode VARCHAR(20);"))
+        conn.execute(text("ALTER TABLE messages ADD COLUMN IF NOT EXISTS unlock_at TIMESTAMP WITH TIME ZONE;"))

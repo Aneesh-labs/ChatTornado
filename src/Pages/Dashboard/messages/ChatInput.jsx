@@ -4,6 +4,8 @@ import { motion, AnimatePresence } from "framer-motion";
 import { IconBtn, useTheme } from "./constants";
 import API from "../../../Services/API";
 import { prepareP2PFile } from "../../../Services/p2p";
+import { Shield, X } from "lucide-react";
+import CyberShieldModal from "./CyberShieldModal";
 
 const VIDEO_EXTENSIONS = /\.(mp4|mov|mkv|avi|webm|m4v|3gp|flv|mpeg|mpg|ts|mts|m2ts|wmv|asf|ogv|vob)$/i;
 
@@ -19,6 +21,8 @@ const ChatInput = React.memo(({ onSend, replyTo, onCancelReply, selectedUser, so
     const [emojiOpen, setEmojiOpen] = useState(false);
     const [uploadError, setUploadError] = useState("");
     const isSendingRef = useRef(false);
+    const [shieldModalOpen, setShieldModalOpen] = useState(false);
+    const [shieldOptions, setShieldOptions] = useState(null);
 
     // Audio recording state
     const [isRecording, setIsRecording] = useState(false);
@@ -53,11 +57,12 @@ const ChatInput = React.memo(({ onSend, replyTo, onCancelReply, selectedUser, so
 
         if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
         sendStopTypingSignal();
-        if (!onSend(trimmed)) {
+        if (!onSend(trimmed, shieldOptions || {})) {
             isSendingRef.current = false;
             return;
         }
         setText("");
+        setShieldOptions(null);
         if (textareaRef.current) textareaRef.current.style.height = "auto";
 
         setTimeout(() => {
@@ -172,7 +177,7 @@ const ChatInput = React.memo(({ onSend, replyTo, onCancelReply, selectedUser, so
             const originalPath = (data.original_url || data.url).replace(/^\//, "");
             const originalUrl = `${baseUrl}/${originalPath}`;
 
-            onSend(`🎤 Voice Message\n${originalUrl}`);
+            onSend(`🎤 Voice Message\n${originalUrl}`, shieldOptions || {});
 
         } catch (error) {
             console.error("Voice note upload failed", error);
@@ -190,13 +195,13 @@ const ChatInput = React.memo(({ onSend, replyTo, onCancelReply, selectedUser, so
         setUploading(true);
 
         try {
-            const isVideo = file.type.startsWith("video/");
             const isVideo = Boolean(file.type?.startsWith("video/") || VIDEO_EXTENSIONS.test(file.name || ""));
 
             // 1. Heavy Photos & Documents: Use Pure P2P Zero-Server Transfer (IndexedDB)
             if (!isVideo) {
                 const p2pPayload = await prepareP2PFile(file, selectedUser.id, socket);
-                onSend(p2pPayload);
+                onSend(p2pPayload, shieldOptions || {});
+                setShieldOptions(null);
                 return;
             }
 
@@ -213,7 +218,8 @@ const ChatInput = React.memo(({ onSend, replyTo, onCancelReply, selectedUser, so
             const originalPath = (data.original_url || data.url).replace(/^\//, "");
             const originalUrl = `${baseUrl}/${originalPath}`;
 
-            onSend(`📎 ${data.name}\n${originalUrl}`);
+            onSend(`📎 ${data.name}\n${originalUrl}`, shieldOptions || {});
+            setShieldOptions(null);
 
         } catch (error) {
             console.error("Attachment failed", error);
@@ -260,6 +266,25 @@ const ChatInput = React.memo(({ onSend, replyTo, onCancelReply, selectedUser, so
                 )}
             </AnimatePresence>
 
+            <AnimatePresence>
+                {shieldOptions && (
+                    <motion.div
+                        initial={{ opacity: 0, height: 0, marginBottom: 0 }}
+                        animate={{ opacity: 1, height: "auto", marginBottom: 8 }}
+                        exit={{ opacity: 0, height: 0, marginBottom: 0 }}
+                        className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border text-xs ${shieldOptions.shield_mode === 'timelock' ? 'bg-violet-900/30 border-violet-500/50 text-violet-300' : 'bg-cyan-900/30 border-cyan-500/50 text-cyan-300'}`}
+                    >
+                        <Shield size={14} />
+                        <div className="flex-1 font-medium">
+                            {shieldOptions.shield_mode === 'timelock' ? 'Capsule Active (Timelocked)' : 'Laser Reveal Active'}
+                        </div>
+                        <button onClick={() => setShieldOptions(null)} className="opacity-50 hover:opacity-100 p-1">
+                            <X size={14} />
+                        </button>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
             <div className="flex items-end gap-1.5 sm:gap-2 max-w-full">
                 {isRecording ? (
                     <motion.div
@@ -288,11 +313,18 @@ const ChatInput = React.memo(({ onSend, replyTo, onCancelReply, selectedUser, so
                     <>
                         <input ref={fileInputRef} type="file" className="hidden" accept="image/*,video/*,audio/*,.pdf,.zip,.txt" onChange={handleAttachment} />
                         <input ref={fileInputRef} type="file" className="hidden" accept="image/*,video/*,audio/*,.mkv,.avi,.mov,.mp4,.webm,.m4v,.flv,.3gp,.pdf,.zip,.txt" onChange={handleAttachment} />
-                        <IconBtn title="Attach image, video, or file" onClick={() => fileInputRef.current?.click()} small className="flex-shrink-0">
-                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
-                            </svg>
-                        </IconBtn>
+
+                        <div className="flex gap-1 flex-shrink-0">
+                            <IconBtn title="Attach image, video, or file" onClick={() => fileInputRef.current?.click()} small>
+                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                                </svg>
+                            </IconBtn>
+
+                            <IconBtn title="Cyber Shield" onClick={() => setShieldModalOpen(true)} small className={shieldOptions ? (shieldOptions.shield_mode === 'timelock' ? 'text-violet-400 drop-shadow-[0_0_8px_rgba(139,92,246,0.6)]' : 'text-cyan-400 drop-shadow-[0_0_8px_rgba(6,182,212,0.6)]') : ''}>
+                                <Shield className="w-4 h-4" />
+                            </IconBtn>
+                        </div>
 
                         <div className={`flex-1 flex items-end gap-1.5 ${theme.input} border rounded-2xl px-3 py-2 sm:py-2.5 focus-within:border-white/20 transition-all duration-200 min-w-0`}>
                             <textarea
@@ -378,6 +410,12 @@ const ChatInput = React.memo(({ onSend, replyTo, onCancelReply, selectedUser, so
                 )}
             </div>
             {(uploading || uploadError) && <p className={`mt-1 text-[10px] ${uploadError ? "text-rose-300" : "text-violet-300"}`}>{uploadError || "Uploading securely…"}</p>}
+
+            <CyberShieldModal
+                isOpen={shieldModalOpen}
+                onClose={() => setShieldModalOpen(false)}
+                onApply={(opts) => setShieldOptions(opts)}
+            />
         </div>
     );
 });

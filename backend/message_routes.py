@@ -85,18 +85,46 @@ async def get_messages(
         pass
 
     # ✅ Convert to list of dicts
+    from datetime import timezone
+    now = datetime.now(timezone.utc)
+    
     result = []
     for msg in messages:
         # If this message was sent to user_id, it is now read
         current_read_state = "read" if msg.receiver_id == user_id else getattr(msg, "read_state", "sent")
+        
+        # Shield logic
+        is_locked = False
+        message_content = msg.message
+        
+        if msg.is_shielded and msg.shield_mode == "timelock" and msg.unlock_at:
+            # Ensure unlock_at is timezone aware for comparison
+            unlock_time = msg.unlock_at
+            if unlock_time.tzinfo is None:
+                unlock_time = unlock_time.replace(tzinfo=timezone.utc)
+                
+            if unlock_time > now:
+                # Still locked
+                if msg.receiver_id == user_id:
+                    # Withhold payload from recipient
+                    message_content = None
+                    is_locked = True
+                else:
+                    # Sender can see it, but we mark it as locked for UI
+                    is_locked = True
+
         result.append({
             "id": msg.id,
             "sender_id": msg.sender_id,
             "receiver_id": msg.receiver_id,
-            "message": msg.message,
+            "message": message_content,
             "created_at": msg.created_at.isoformat() if msg.created_at else None,
             "read_state": current_read_state,
-            "reactions": format_reactions(getattr(msg, "reactions", []))
+            "reactions": format_reactions(getattr(msg, "reactions", [])),
+            "is_shielded": msg.is_shielded,
+            "shield_mode": msg.shield_mode,
+            "unlock_at": msg.unlock_at.isoformat() if msg.unlock_at else None,
+            "is_locked": is_locked
         })
 
     return result

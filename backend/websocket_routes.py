@@ -374,6 +374,31 @@ async def websocket_endpoint(websocket: WebSocket):
                 continue
 
             # ==========================
+            # Capsule Unlock Handshake
+            # ==========================
+            if data.get("type") == "unlock_capsule":
+                message_id = data.get("message_id")
+                if message_id:
+                    msg = db.query(Message).filter(Message.id == message_id).first()
+                    if msg and msg.shield_mode == "timelock":
+                        from datetime import timezone, datetime
+                        now = datetime.now(timezone.utc)
+                        unlock_time = msg.unlock_at
+                        if unlock_time:
+                            if unlock_time.tzinfo is None:
+                                unlock_time = unlock_time.replace(tzinfo=timezone.utc)
+                            
+                            if unlock_time <= now:
+                                unlock_packet = {
+                                    "type": "capsule_unlocked",
+                                    "message_id": msg.id,
+                                    "message": msg.message
+                                }
+                                await manager.send_personal_message(msg.receiver_id, unlock_packet)
+                                await manager.send_personal_message(msg.sender_id, unlock_packet)
+                continue
+
+            # ==========================
             # Validate Packet
             # ==========================
 
@@ -394,10 +419,24 @@ async def websocket_endpoint(websocket: WebSocket):
             # Save Message
             # ==========================
 
+            is_shielded = bool(data.get("is_shielded", False))
+            shield_mode = data.get("shield_mode")
+            
+            unlock_at = None
+            if data.get("unlock_at"):
+                try:
+                    from dateutil import parser
+                    unlock_at = parser.isoparse(data.get("unlock_at"))
+                except Exception:
+                    pass
+
             new_message = Message(
                 sender_id=user_id,
                 receiver_id=receiver_id,
-                message=message_text
+                message=message_text,
+                is_shielded=is_shielded,
+                shield_mode=shield_mode,
+                unlock_at=unlock_at
             )
 
             db.add(new_message)
@@ -429,27 +468,42 @@ async def websocket_endpoint(websocket: WebSocket):
             # Packet
             # ==========================
 
-            packet = {
+            packet_sender = {
                 "type": "message",
                 "id": new_message.id,
                 "temp_id": temp_id,
                 "sender_id": user_id,
                 "receiver_id": receiver_id,
                 "message": message_text,
-                "created_at": str(new_message.created_at)
+                "created_at": str(new_message.created_at),
+                "is_shielded": is_shielded,
+                "shield_mode": shield_mode,
+                "unlock_at": unlock_at.isoformat() if unlock_at else None,
+                "is_locked": False
             }
+            
+            packet_receiver = dict(packet_sender)
+            
+            if is_shielded and shield_mode == "timelock" and unlock_at:
+                from datetime import timezone, datetime
+                now = datetime.now(timezone.utc)
+                u_time = unlock_at if unlock_at.tzinfo else unlock_at.replace(tzinfo=timezone.utc)
+                if u_time > now:
+                    packet_receiver["message"] = None
+                    packet_receiver["is_locked"] = True
+
             logger.info("Message: %s -> %s", user_id, receiver_id)
 
             # Send to receiver
             await manager.send_personal_message(
                 receiver_id,
-                packet
+                packet_receiver
             )
 
             # Echo back to sender
             await manager.send_personal_message(
                 user_id,
-                packet
+                packet_sender
             )
 
     except (WebSocketDisconnect, RuntimeError):
