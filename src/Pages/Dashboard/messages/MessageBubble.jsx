@@ -879,9 +879,9 @@ const MessageBubble = React.memo(({
                         whileHover={!isMobile ? { scale: 1.002 } : {}}
                         onClick={() => onSelect?.(msg.id)}
                         className={`
-                            px-3 py-2 sm:px-4 sm:py-2.5 rounded-2xl border backdrop-blur-xl transition-all duration-100 touch-manipulation
-                            ${isMe ? "rounded-br-md" : "rounded-bl-md"}
-                            ${bubbleClass}
+                            ${isGame ? "p-0 bg-transparent border-transparent shadow-none" : "px-3 py-2 sm:px-4 sm:py-2.5 rounded-2xl border backdrop-blur-xl " + bubbleClass}
+                            ${!isGame && (isMe ? "rounded-br-md" : "rounded-bl-md")}
+                            transition-all duration-100 touch-manipulation
                             ${selected ? "ring-2 ring-violet-400/80 border-transparent shadow-lg" : "shadow-sm"}
                         `}
                     >
