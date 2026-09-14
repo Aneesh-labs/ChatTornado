@@ -311,7 +311,6 @@ const ChatInput = React.memo(({ onSend, replyTo, onCancelReply, selectedUser, so
                     </motion.div>
                 ) : (
                     <>
-                        <input ref={fileInputRef} type="file" className="hidden" accept="image/*,video/*,audio/*,.pdf,.zip,.txt" onChange={handleAttachment} />
                         <input ref={fileInputRef} type="file" className="hidden" accept="image/*,video/*,audio/*,.mkv,.avi,.mov,.mp4,.webm,.m4v,.flv,.3gp,.pdf,.zip,.txt" onChange={handleAttachment} />
 
                         <div className="flex gap-1 flex-shrink-0">

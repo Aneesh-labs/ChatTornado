@@ -262,7 +262,6 @@ const VideoPreview = ({ videoUrl }) => {
             <video
                 controls
                 preload="metadata"
-                className="w-full max-h-[400px] object-contain"
                 className="w-full max-h-[400px] object-contain bg-black/40"
                 playsInline
                 onError={() => setError(true)}

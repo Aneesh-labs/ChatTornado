@@ -314,8 +314,6 @@ def is_browser_compatible_video(info: dict) -> bool:
     return True
 
 
-def convert_video_to_mp4(input_path: Path, output_path: Path) -> tuple[bool, str]:
-    """Convert to H264/AAC MP4, return True on success."""
 def convert_video_to_mp4(input_path: Path, output_path: Path, has_audio: bool = True) -> tuple[bool, str]:
     """Convert to H264/AAC MP4 with auto-downscaling to max 1080p."""
     cmd = [
@@ -323,16 +321,12 @@ def convert_video_to_mp4(input_path: Path, output_path: Path, has_audio: bool = 
         "-i", str(input_path),
         "-vf", "scale=min(1920\\,iw):-2",
         "-c:v", "libx264",
-        "-preset", "veryfast",
         "-preset", "faster",
         "-threads", "0",
         "-crf", "23",
         "-pix_fmt", "yuv420p",
-        "-c:a", "aac",
         "-profile:v", "high",
         "-movflags", "+faststart",
-        "-y",
-        str(output_path)
     ]
     if has_audio:
         cmd.extend(["-c:a", "aac", "-b:a", "128k"])
@@ -342,11 +336,11 @@ def convert_video_to_mp4(input_path: Path, output_path: Path, has_audio: bool = 
 
     try:
         result = subprocess.run(
-                    cmd,
-                    capture_output=True,
-                    text=True,
-                    timeout=3600,
-                )
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=3600,
+        )
         if result.returncode != 0:
             logger.error("FFmpeg conversion failed:\n%s", result.stderr)
             return False, result.stderr.strip()
@@ -357,9 +351,7 @@ def convert_video_to_mp4(input_path: Path, output_path: Path, has_audio: bool = 
 
 
 def generate_video_thumbnail(input_path: Path, output_path: Path, duration: float) -> tuple[bool, str]:
-    """Generate a WebP thumbnail, using an appropriate timestamp."""
     """Generate a WebP thumbnail, using fast seek and appropriate timestamp."""
-    # Choose timestamp: at 1 second if duration > 1, else at half of duration (or 0 if duration <= 0)
     if duration > 1.0:
         seek_time = 1.0
     elif duration > 0:
@@ -371,9 +363,7 @@ def generate_video_thumbnail(input_path: Path, output_path: Path, duration: floa
         str(FFMPEG_PATH),
         "-ss", f"{seek_time:.3f}",
         "-i", str(input_path),
-        "-ss", f"{seek_time:.3f}",
         "-vframes", "1",
-        "-vf", "scale=480:-1",
         "-vf", "scale=480:-2",
         "-f", "image2",
         "-c:v", "libwebp",
@@ -512,7 +502,6 @@ async def upload_file(token: str, file: UploadFile = File(...)):
             # Convert to MP4
             mp4_name = f"{Path(filename).stem}_converted.mp4"
             mp4_path = upload_dir / mp4_name
-            success, error = convert_video_to_mp4(original_path, mp4_path)
             has_audio = bool(info.get("audio_codec")) if info else True
             success, error = convert_video_to_mp4(original_path, mp4_path, has_audio=has_audio)
 

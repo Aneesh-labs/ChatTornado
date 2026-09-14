@@ -46,7 +46,7 @@ const ICONS = {
     mute: "M17.25 9.75L19.5 12m0 0l2.25 2.25M19.5 12l2.25-2.25M19.5 12l-2.25 2.25m-10.5-6l4.72-4.72a.75.75 0 011.28.53v15.88a.75.75 0 01-1.28.53l-4.72-4.72H4.51c-.88 0-1.704-.507-1.938-1.354A9.01 9.01 0 012.25 12c0-.83.112-1.633.322-2.396C2.806 8.756 3.63 8.25 4.51 8.25H6.75z",
     unmute: "M19.114 5.636a9 9 0 010 12.728M16.463 8.288a5.25 5.25 0 010 7.424M6.75 8.25l4.72-4.72a.75.75 0 011.28.53v15.88a.75.75 0 01-1.28.53l-4.72-4.72H4.51c-.88 0-1.704-.507-1.938-1.354A9.01 9.01 0 012.25 12c0-.83.112-1.633.322-2.396C2.806 8.756 3.63 8.25 4.51 8.25H6.75z",
     cameraOn: "M15.75 10.5l4.72-4.72a.75.75 0 011.28.53v11.38a.75.75 0 01-1.28.53l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 002.25-2.25v-9a2.25 2.25 0 00-2.25-2.25h-9A2.25 2.25 0 002.25 7.5v9a2.25 2.25 0 002.25 2.25z",
-    cameraOff: "M15.75 10.5l4.72-4.72a.75.75 0 011.28.53v11.38a.75.75 0 01-1.28.53l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 002.25-2.25v-9a2.25 2.25 0 00-2.25-2.25h-9A2.25 2.25 0 002.25 7.5v9a2.25 2.25 0 002.25 2.25z",
+    cameraOff: "m15.75 10.5 4.72-4.72a.75.75 0 0 1 1.28.53v11.38a.75.75 0 0 1-1.28.53l-4.72-4.72M12 18.75H4.5a2.25 2.25 0 0 1-2.25-2.25V9m12.841 9.091L3.75 4.5M21 21 3 3m14.25 9.75v-3.5a2.25 2.25 0 0 0-2.25-2.25H9.75",
     speaker: "M19.114 5.636a9 9 0 010 12.728M16.463 8.288a5.25 5.25 0 010 7.424M6.75 8.25l4.72-4.72a.75.75 0 011.28.53v15.88a.75.75 0 01-1.28.53l-4.72-4.72H4.51c-.88 0-1.704-.507-1.938-1.354A9.01 9.01 0 012.25 12c0-.83.112-1.633.322-2.396C2.806 8.756 3.63 8.25 4.51 8.25H6.75z",
     endCall: "M15.73 5.25h1.5A2.25 2.25 0 0119.48 7.5v2.25a2.25 2.25 0 01-2.25 2.25h-1.5m-6.75 0H7.5A2.25 2.25 0 015.25 9.75V7.5a2.25 2.25 0 012.25-2.25h1.5m6.75 0v1.5a2.25 2.25 0 01-2.25 2.25h-1.5m-6.75 0v-1.5a2.25 2.25 0 012.25-2.25h1.5",
     lock: "M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 0h10.5a2.25 2.25 0 012.25 2.25v6.75a2.25 2.25 0 01-2.25 2.25H5.25a2.25 2.25 0 01-2.25-2.25v-6.75a2.25 2.25 0 012.25-2.25z",
@@ -359,16 +359,24 @@ const CallOverlay = ({
                     transition={{ delay: 0.3, type: "spring", stiffness: 300, damping: 25 }}
                     className="absolute right-4 top-4 z-20 sm:right-6 sm:top-6"
                 >
-                    <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-black/30 backdrop-blur-md shadow-2xl">
+                    <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-black/40 backdrop-blur-md shadow-2xl h-24 w-36 sm:h-32 sm:w-48 flex items-center justify-center">
                         <video
                             ref={localVideo}
                             autoPlay
                             muted
                             playsInline
                             style={{ transform: "scaleX(-1)" }}
-                            className="h-24 w-36 object-cover sm:h-32 sm:w-48"
+                            className={`h-full w-full object-cover transition-opacity duration-200 ${isCameraOff ? "opacity-0" : "opacity-100"}`}
                         />
-                        <div className="absolute inset-0 rounded-2xl ring-1 ring-inset ring-white/10" />
+                        {isCameraOff && (
+                            <div className="absolute inset-0 flex flex-col items-center justify-center bg-zinc-900/90 gap-1.5">
+                                <div className="h-8 w-8 sm:h-9 sm:w-9 rounded-full bg-white/10 flex items-center justify-center text-white/60">
+                                    <Icon path={ICONS.cameraOff} className="h-4 w-4 sm:h-5 sm:w-5" />
+                                </div>
+                                <span className="text-[10px] sm:text-xs text-white/50 font-medium">Camera Off</span>
+                            </div>
+                        )}
+                        <div className="absolute inset-0 rounded-2xl ring-1 ring-inset ring-white/10 pointer-events-none" />
                     </div>
                 </motion.div>
             )}
@@ -532,7 +540,7 @@ const CallOverlay = ({
                                     <div className="flex flex-wrap items-center justify-center gap-4">
                                         <ActionButton
                                             onClick={onToggleMute}
-                                            icon={isMuted ? ICONS.unmute : ICONS.mute}
+                                            icon={isMuted ? ICONS.mute : ICONS.unmute}
                                             label={isMuted ? "Unmute" : "Mute"}
                                             isActive={isMuted}
                                             activeColor="rose"

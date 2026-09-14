@@ -124,6 +124,8 @@ const Messages = () => {
     const [showScrollBtn, setShowScrollBtn] = useState(false);
     const [socketReady, setSocketReady] = useState(false);
     const [call, setCall] = useState(null);
+    const [isMuted, setIsMuted] = useState(false);
+    const [isCameraOff, setIsCameraOff] = useState(false);
     const [ghostChat, setGhostChat] = useState({
         open: false,
         connected: false,
@@ -243,6 +245,8 @@ const Messages = () => {
         peerRef.current = null;
         iceCandidateQueue.current = [];
         setCall(null);
+        setIsMuted(false);
+        setIsCameraOff(false);
     }, [call?.user?.id, call?.localStream, sendSignal]);
 
     const createPeer = useCallback((user, video, stream) => {
@@ -314,6 +318,8 @@ const Messages = () => {
             return;
         }
         try {
+            setIsMuted(false);
+            setIsCameraOff(false);
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video });
             const peer = createPeer(enrichedSelected, video, stream);
             const offer = await peer.createOffer();
@@ -354,6 +360,8 @@ const Messages = () => {
     const acceptCall = useCallback(async () => {
         if (!call?.offer) return;
         try {
+            setIsMuted(false);
+            setIsCameraOff(false);
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: call.video });
             const peer = createPeer(call.user, call.video, stream);
             await peer.setRemoteDescription(new RTCSessionDescription(call.offer));
@@ -367,6 +375,26 @@ const Messages = () => {
             closeCall();
         }
     }, [call, closeCall, createPeer, drainQueuedCandidates, sendSignal]);
+
+    const handleToggleMute = useCallback(() => {
+        setIsMuted((prev) => {
+            const next = !prev;
+            call?.localStream?.getAudioTracks().forEach((track) => {
+                track.enabled = !next;
+            });
+            return next;
+        });
+    }, [call?.localStream]);
+
+    const handleToggleVideo = useCallback(() => {
+        setIsCameraOff((prev) => {
+            const next = !prev;
+            call?.localStream?.getVideoTracks().forEach((track) => {
+                track.enabled = !next;
+            });
+            return next;
+        });
+    }, [call?.localStream]);
 
     const handleCallSignal = useCallback(async ({ sender_id, signal }) => {
         if (!signal) return;
@@ -1122,8 +1150,10 @@ const Messages = () => {
                         onAccept={acceptCall}
                         onReject={() => closeCall()}
                         onHangup={() => closeCall()}
-                        onToggleMute={() => call?.localStream?.getAudioTracks().forEach((track) => { track.enabled = !track.enabled; })}
-                        onToggleVideo={() => call?.localStream?.getVideoTracks().forEach((track) => { track.enabled = !track.enabled; })}
+                        onToggleMute={handleToggleMute}
+                        onToggleVideo={handleToggleVideo}
+                        isMuted={isMuted}
+                        isCameraOff={isCameraOff}
                     />
                     <GhostChatOverlay
                         ghostChat={ghostChat}
