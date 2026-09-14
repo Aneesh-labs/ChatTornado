@@ -40,11 +40,56 @@ const AVAILABLE_GAMES = [
         color: "from-fuchsia-600 to-purple-600",
         initData: () => ({
             game: "connect4",
-            // 6 rows x 7 columns
             board: Array(6).fill(null).map(() => Array(7).fill(null)),
             turn: "🔴",
             winner: null,
             moves: 0,
+        })
+    },
+    {
+        id: "emojimatch",
+        name: "Emoji Match",
+        emoji: "🎴",
+        desc: "Memory card matching game!",
+        color: "from-emerald-500 to-teal-500",
+        initData: () => {
+            const emojis = ["🍎", "🐶", "🚗", "🌟", "🍔", "🎸", "⚽", "🎈"];
+            const pairs = [...emojis, ...emojis].sort(() => Math.random() - 0.5);
+            return {
+                game: "emojimatch",
+                board: pairs,
+                matched: [],
+                pendingFlipped: [],
+                winner: null,
+            };
+        }
+    },
+    {
+        id: "wordguess",
+        name: "Secret Word",
+        emoji: "🅰️",
+        desc: "Guess the hidden word!",
+        color: "from-pink-500 to-rose-500",
+        initData: () => ({
+            game: "wordguess",
+            word: "",
+            status: "setting",
+            guesses: [],
+            winner: null,
+        })
+    },
+    {
+        id: "numberguesser",
+        name: "Number Guesser",
+        emoji: "🔢",
+        desc: "Guess a number 1-100!",
+        color: "from-indigo-500 to-blue-600",
+        initData: () => ({
+            game: "numberguesser",
+            number: null,
+            status: "setting",
+            guesses: [],
+            winner: null,
         })
     }
 ];
