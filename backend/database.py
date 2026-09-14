@@ -69,3 +69,5 @@ def run_migrations():
         conn.execute(text("ALTER TABLE messages ADD COLUMN IF NOT EXISTS is_shielded BOOLEAN DEFAULT FALSE;"))
         conn.execute(text("ALTER TABLE messages ADD COLUMN IF NOT EXISTS shield_mode VARCHAR(20);"))
         conn.execute(text("ALTER TABLE messages ADD COLUMN IF NOT EXISTS unlock_at TIMESTAMP WITH TIME ZONE;"))
+        conn.execute(text("UPDATE connections SET status = 'accepted' WHERE status = 'accept';"))
+        conn.execute(text("UPDATE connections SET status = 'declined' WHERE status = 'decline';"))

@@ -38,7 +38,7 @@ async def send_connection_request(
     if existing:
         if existing.status == "pending":
             raise HTTPException(status_code=400, detail="Request already pending")
-        elif existing.status == "accepted":
+        elif existing.status in ["accepted", "accept"]:
             raise HTTPException(status_code=400, detail="Already connected")
         else:
             # Re-activate declined request
@@ -86,24 +86,36 @@ async def respond_connection_request(
     if not connection:
         raise HTTPException(status_code=404, detail="Connection request not found")
         
-    if connection.receiver_id != user_id:
-        raise HTTPException(status_code=403, detail="Not authorized to respond to this request")
-        
-    connection.status = action_data.action # 'accept' or 'decline'
+    status_value = "accepted" if action_data.action in ["accept", "accepted"] else "declined"
+    connection.status = status_value
     db.commit()
     
-    # Notify sender via WebSocket
-    if action_data.action == "accept" and connection.sender_id in manager.active_connections:
+    # Notify sender and receiver via WebSocket
+    if status_value == "accepted":
         receiver_user = db.query(User).filter(User.id == user_id).first()
-        await manager.send_personal_message(connection.sender_id, {
-            "type": "connection_accepted",
-            "connection_id": connection.id,
-            "user": {
-                "id": receiver_user.id,
-                "username": receiver_user.username,
-                "avatar_url": receiver_user.avatar_url
-            }
-        })
+        sender_user = db.query(User).filter(User.id == connection.sender_id).first()
+        
+        if connection.sender_id in manager.active_connections and receiver_user:
+            await manager.send_personal_message(connection.sender_id, {
+                "type": "connection_accepted",
+                "connection_id": connection.id,
+                "user": {
+                    "id": receiver_user.id,
+                    "username": receiver_user.username,
+                    "avatar_url": receiver_user.avatar_url
+                }
+            })
+            
+        if user_id in manager.active_connections and sender_user:
+            await manager.send_personal_message(user_id, {
+                "type": "connection_accepted",
+                "connection_id": connection.id,
+                "user": {
+                    "id": sender_user.id,
+                    "username": sender_user.username,
+                    "avatar_url": sender_user.avatar_url
+                }
+            })
             
     return {"status": "success", "connection_status": connection.status}
 
@@ -153,8 +165,8 @@ def get_active_connections(
     
     connections = db.query(Connection).filter(
         or_(
-            and_(Connection.sender_id == user_id, Connection.status == "accepted"),
-            and_(Connection.receiver_id == user_id, Connection.status == "accepted")
+            and_(Connection.sender_id == user_id, Connection.status.in_(["accepted", "accept"])),
+            and_(Connection.receiver_id == user_id, Connection.status.in_(["accepted", "accept"]))
         )
     ).all()
     
@@ -191,9 +203,10 @@ def get_all_connection_statuses(
     result = {}
     for conn in connections:
         other_id = conn.receiver_id if conn.sender_id == user_id else conn.sender_id
+        normalized_status = "accepted" if conn.status in ["accepted", "accept"] else ("declined" if conn.status in ["declined", "decline"] else conn.status)
         result[other_id] = {
             "connection_id": conn.id,
-            "status": conn.status,
+            "status": normalized_status,
             "is_sender": conn.sender_id == user_id
         }
         

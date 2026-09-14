@@ -62,13 +62,11 @@ export const ConversationCard = React.memo(({
             role="button"
             tabIndex={0}
             aria-selected={selected}
-            className={`relative flex items-center gap-3 px-3 py-3 rounded-2xl transition-all duration-150 group outline-none focus-visible:ring-2 focus-visible:ring-violet-500/50 touch-manipulation ${
-                canOpenChat ? "cursor-pointer active:scale-[0.99]" : "cursor-default"
-            } ${
-                selected && canOpenChat
+            className={`relative flex items-center gap-3 px-3 py-3 rounded-2xl transition-all duration-150 group outline-none focus-visible:ring-2 focus-visible:ring-violet-500/50 touch-manipulation ${canOpenChat ? "cursor-pointer active:scale-[0.99]" : "cursor-default"
+                } ${selected && canOpenChat
                     ? `bg-gradient-to-r ${theme?.accent || "from-violet-600 to-indigo-600"} bg-opacity-20 border border-white/[0.12] shadow-lg`
                     : `border border-transparent ${theme?.glassHover || "hover:bg-white/[0.02]"} hover:border-white/[0.06]`
-            }`}
+                }`}
         >
             {selected && canOpenChat && (
                 <motion.div
@@ -137,9 +135,8 @@ export const ConversationCard = React.memo(({
                                     e.stopPropagation();
                                     onPin?.();
                                 }}
-                                className={`text-[11px] p-1 transition-colors touch-manipulation lg:opacity-0 lg:group-hover:opacity-100 ${
-                                    pinned ? "text-violet-400 opacity-100" : "text-white/20 hover:text-white/50"
-                                }`}
+                                className={`text-[11px] p-1 transition-colors touch-manipulation lg:opacity-0 lg:group-hover:opacity-100 ${pinned ? "text-violet-400 opacity-100" : "text-white/20 hover:text-white/50"
+                                    }`}
                             >
                                 {pinned ? "★" : "☆"}
                             </button>
@@ -292,11 +289,10 @@ const Sidebar = React.memo(({
                             role="tab"
                             aria-selected={isTabActive}
                             onClick={() => setMainTab(key)}
-                            className={`flex-1 text-[12px] py-1.5 rounded-xl font-bold transition-all duration-150 outline-none focus-visible:ring-2 focus-visible:ring-white/20 touch-manipulation ${
-                                isTabActive
-                                    ? `bg-white/10 text-white shadow`
-                                    : "text-white/40 hover:text-white/70"
-                            }`}
+                            className={`flex-1 text-[12px] py-1.5 rounded-xl font-bold transition-all duration-150 outline-none focus-visible:ring-2 focus-visible:ring-white/20 touch-manipulation ${isTabActive
+                                ? `bg-white/10 text-white shadow`
+                                : "text-white/40 hover:text-white/70"
+                                }`}
                         >
                             {label}
                         </button>
@@ -316,11 +312,10 @@ const Sidebar = React.memo(({
                                 role="tab"
                                 aria-selected={isFilterActive}
                                 onClick={() => setFilter(key)}
-                                className={`flex-1 text-[10px] py-1 rounded-lg font-medium transition-all duration-150 outline-none touch-manipulation ${
-                                    isFilterActive
-                                        ? `bg-gradient-to-r ${theme?.accent || "from-violet-500 to-indigo-500"} text-white`
-                                        : "text-white/30 hover:bg-white/[0.04]"
-                                }`}
+                                className={`flex-1 text-[10px] py-1 rounded-lg font-medium transition-all duration-150 outline-none touch-manipulation ${isFilterActive
+                                    ? `bg-gradient-to-r ${theme?.accent || "from-violet-500 to-indigo-500"} text-white`
+                                    : "text-white/30 hover:bg-white/[0.04]"
+                                    }`}
                             >
                                 {label}
                             </button>
@@ -360,7 +355,12 @@ const Sidebar = React.memo(({
                                     unread={safeUnreadCounts[user.id] || 0}
                                     pinned={safePinnedChats.has(user.id)}
                                     typing={safeTypingUsers.has(user.id)}
-                                    onSelect={() => onSelectUser?.(user)}
+                                    onSelect={() => {
+                                        onSelectUser?.(user);
+                                        if (mainTab === "global" && status === "accepted") {
+                                            setMainTab("chats");
+                                        }
+                                    }}
                                     onPin={() => onPinUser?.(user.id)}
                                     isGlobal={mainTab === "global"}
                                     connectionStatus={status}
