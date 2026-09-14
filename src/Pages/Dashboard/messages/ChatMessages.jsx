@@ -23,6 +23,7 @@ const ChatMessages = React.memo(({
     onDelete,
     isMobile = false,
     socket = null,
+    onSend,
 }) => {
     const [mobileActionMsg, setMobileActionMsg] = useState(null);
 
@@ -79,6 +80,7 @@ const ChatMessages = React.memo(({
                                 onDelete={onDelete}
                                 selected={isSelected}
                                 isMobile={isMobile}
+                                onSend={onSend}
                             />
                         );
                     })}

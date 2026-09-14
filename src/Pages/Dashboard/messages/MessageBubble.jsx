@@ -6,6 +6,8 @@ import { getLocalMediaUrl } from "../../../Services/db";
 import { requestP2PDownload } from "../../../Services/p2p";
 import API from "../../../Services/API";
 import CyberShieldVault from "./CyberShieldVault";
+import { soundEngine } from "../../../utils/soundEffects";
+import InChatGameBoard from "./InChatGameBoard";
 
 const QUICK_REACTIONS = ["👍", "❤️", "😂", "😮", "😢", "🔥", "🥸", "👮🏿‍♀️"];
 
@@ -548,6 +550,52 @@ const DeleteDialog = ({ isOpen, isMe, onClose, onDelete }) => {
 };
 
 /* ═══════════════════════════════════════════════════════════════
+   SOUND BUBBLE COMPONENT
+   ═══════════════════════════════════════════════════════════════ */
+const SoundBubble = ({ rawMessage }) => {
+    const [isPlaying, setIsPlaying] = useState(false);
+    let soundObj = { name: "Cartoon Sound", emoji: "🔊", id: "tada", desc: "Sound effect" };
+    try {
+        soundObj = JSON.parse(rawMessage.replace(/^🔊 SOUND:\s*/, ""));
+    } catch (e) {
+        console.warn("Failed to parse sound metadata:", e);
+    }
+
+    const playSound = () => {
+        setIsPlaying(true);
+        soundEngine.play(soundObj.id);
+        setTimeout(() => setIsPlaying(false), 700);
+    };
+
+    return (
+        <div className="flex items-center gap-3 p-3 rounded-2xl bg-gradient-to-r from-fuchsia-950/60 to-violet-950/60 border border-fuchsia-500/30 min-w-[200px] shadow-lg select-none">
+            <motion.button
+                type="button"
+                whileHover={{ scale: 1.1 }}
+                whileTap={{ scale: 0.9 }}
+                onClick={playSound}
+                className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-fuchsia-600 to-violet-600 text-2xl flex items-center justify-center shadow-lg text-white flex-shrink-0"
+            >
+                {soundObj.emoji || "🔊"}
+            </motion.button>
+            <div className="flex-1 min-w-0">
+                <div className="text-xs font-black text-white truncate flex items-center gap-1.5">
+                    <span>{soundObj.name}</span>
+                    {isPlaying && <span className="animate-pulse text-[10px] text-amber-300 font-normal">Playing…</span>}
+                </div>
+                <button
+                    type="button"
+                    onClick={playSound}
+                    className="text-[11px] text-fuchsia-300 font-bold hover:text-white transition-colors block mt-0.5"
+                >
+                    Tap to play 🔊
+                </button>
+            </div>
+        </div>
+    );
+};
+
+/* ═══════════════════════════════════════════════════════════════
    MAIN MESSAGE BUBBLE COMPONENT
    ═══════════════════════════════════════════════════════════════ */
 const MessageBubble = React.memo(({
@@ -563,6 +611,7 @@ const MessageBubble = React.memo(({
     onDelete,
     selected,
     isMobile = false,
+    onSend,
 }) => {
     const theme = useTheme();
     const myId = getMyUserId();
@@ -630,25 +679,54 @@ const MessageBubble = React.memo(({
     // Detect content types
     const actualMessage = unlockedPayload !== null ? unlockedPayload : (msg.message || "");
     const isP2P = typeof actualMessage === "string" && actualMessage.startsWith('⚡ P2P_MEDIA');
-    const imageUrls = !isP2P ? extractImageUrls(actualMessage) : [];
-    const videoUrls = !isP2P ? extractVideoUrls(actualMessage) : [];
-    const audioUrls = !isP2P ? extractAudioUrls(actualMessage) : [];
-    const nonImageUrls = !isP2P ? extractNonImageUrls(actualMessage) : [];
-    const caption = !isP2P ? extractCaption(actualMessage) : "";
+    const isGame = typeof actualMessage === "string" && actualMessage.startsWith('🎮 GAME:');
+    const isSound = typeof actualMessage === "string" && actualMessage.startsWith('🔊 SOUND:');
+    let parsedGame = null;
+    if (isGame) {
+        try {
+            parsedGame = JSON.parse(actualMessage.replace(/^🎮 GAME:\s*/, ""));
+        } catch (e) {
+            console.warn("Failed to parse game data:", e);
+        }
+    }
+
+    const imageUrls = !isP2P && !isGame && !isSound ? extractImageUrls(actualMessage) : [];
+    const videoUrls = !isP2P && !isGame && !isSound ? extractVideoUrls(actualMessage) : [];
+    const audioUrls = !isP2P && !isGame && !isSound ? extractAudioUrls(actualMessage) : [];
+    const nonImageUrls = !isP2P && !isGame && !isSound ? extractNonImageUrls(actualMessage) : [];
+    const caption = !isP2P && !isGame && !isSound ? extractCaption(actualMessage) : "";
     const hasImages = imageUrls.length > 0;
     const hasVideos = videoUrls.length > 0;
     const hasAudio = audioUrls.length > 0;
     const hasFiles = nonImageUrls.length > 0;
-    const isVoiceNote = !isP2P && typeof actualMessage === "string" && actualMessage.includes('🎤 Voice Message');
+    const isVoiceNote = !isP2P && !isGame && !isSound && typeof actualMessage === "string" && actualMessage.includes('🎤 Voice Message');
 
-    const renderMessageContent = () => (
-        <>
-            {/* Caption text */}
-            {(hasImages || hasVideos || hasAudio || hasFiles) && caption && !isVoiceNote && (
-                <p className="text-[13px] sm:text-sm text-white/90 leading-relaxed whitespace-pre-wrap break-words selection:bg-white/20 mb-1">
-                    {decodeHtmlEntities(caption)}
-                </p>
-            )}
+    const renderMessageContent = () => {
+        if (isGame && parsedGame) {
+            return (
+                <InChatGameBoard
+                    gameData={parsedGame}
+                    myUserId={myId}
+                    senderId={msg.sender_id}
+                    onUpdateGame={(updatedGame) => {
+                        onSend?.("🎮 GAME:" + JSON.stringify(updatedGame));
+                    }}
+                />
+            );
+        }
+
+        if (isSound) {
+            return <SoundBubble rawMessage={actualMessage} />;
+        }
+
+        return (
+            <>
+                {/* Caption text */}
+                {(hasImages || hasVideos || hasAudio || hasFiles) && caption && !isVoiceNote && (
+                    <p className="text-[13px] sm:text-sm text-white/90 leading-relaxed whitespace-pre-wrap break-words selection:bg-white/20 mb-1">
+                        {decodeHtmlEntities(caption)}
+                    </p>
+                )}
             {/* Special voice note styling for caption */}
             {isVoiceNote && (
                 <div className="flex items-center gap-2 mb-2 text-white/90">
@@ -706,6 +784,7 @@ const MessageBubble = React.memo(({
             )}
         </>
     );
+};
 
     return (
         <>

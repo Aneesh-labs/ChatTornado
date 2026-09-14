@@ -2,6 +2,7 @@ import React, { useMemo } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import {
     BarChart3,
+    Gamepad2,
     Home,
     LogOut,
     MessageSquareText,
@@ -14,6 +15,7 @@ import {
 const navItems = [
     { to: "/home", label: "Home", icon: Home },
     { to: "/messages", label: "Messages", icon: MessageSquareText },
+    { to: "/arcade", label: "Arcade 🎮", icon: Gamepad2 },
     { to: "/insights", label: "Insights", icon: BarChart3 },
     { to: "/profile", label: "Profile", icon: UserRound },
     { to: "/settings", label: "Settings", icon: Settings },

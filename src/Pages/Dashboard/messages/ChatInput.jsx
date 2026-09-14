@@ -4,8 +4,10 @@ import { motion, AnimatePresence } from "framer-motion";
 import { IconBtn, useTheme } from "./constants";
 import API from "../../../Services/API";
 import { prepareP2PFile } from "../../../Services/p2p";
-import { Shield, X } from "lucide-react";
+import { Shield, X, Gamepad2, Volume2 } from "lucide-react";
 import CyberShieldModal from "./CyberShieldModal";
+import InChatGameModal from "./InChatGameModal";
+import SoundboardModal from "./SoundboardModal";
 
 const VIDEO_EXTENSIONS = /\.(mp4|mov|mkv|avi|webm|m4v|3gp|flv|mpeg|mpg|ts|mts|m2ts|wmv|asf|ogv|vob)$/i;
 
@@ -23,6 +25,8 @@ const ChatInput = React.memo(({ onSend, replyTo, onCancelReply, selectedUser, so
     const isSendingRef = useRef(false);
     const [shieldModalOpen, setShieldModalOpen] = useState(false);
     const [shieldOptions, setShieldOptions] = useState(null);
+    const [gameModalOpen, setGameModalOpen] = useState(false);
+    const [soundboardModalOpen, setSoundboardModalOpen] = useState(false);
 
     // Audio recording state
     const [isRecording, setIsRecording] = useState(false);
@@ -321,6 +325,24 @@ const ChatInput = React.memo(({ onSend, replyTo, onCancelReply, selectedUser, so
                             </IconBtn>
 
                             <IconBtn
+                                title="Play In-Chat Games (Tic-Tac-Toe, RPS, Connect 4)"
+                                onClick={() => setGameModalOpen(true)}
+                                small
+                                className="text-amber-400/80 hover:!text-amber-300 hover:bg-amber-500/10"
+                            >
+                                <Gamepad2 className="w-4 h-4" />
+                            </IconBtn>
+
+                            <IconBtn
+                                title="Fun Soundboard & Cartoon Sounds"
+                                onClick={() => setSoundboardModalOpen(true)}
+                                small
+                                className="text-fuchsia-400/80 hover:!text-fuchsia-300 hover:bg-fuchsia-500/10"
+                            >
+                                <Volume2 className="w-4 h-4" />
+                            </IconBtn>
+
+                            <IconBtn
                                 title="Cyber Shield (Laser Scan & Timelocked Capsules)"
                                 onClick={() => setShieldModalOpen(true)}
                                 small
@@ -424,6 +446,24 @@ const ChatInput = React.memo(({ onSend, replyTo, onCancelReply, selectedUser, so
                 isOpen={shieldModalOpen}
                 onClose={() => setShieldModalOpen(false)}
                 onApply={(opts) => setShieldOptions(opts)}
+            />
+
+            <InChatGameModal
+                isOpen={gameModalOpen}
+                onClose={() => setGameModalOpen(false)}
+                recipientName={selectedUser?.username || "Friend"}
+                onStartGame={(gamePayload) => {
+                    onSend("🎮 GAME:" + JSON.stringify(gamePayload), {});
+                }}
+            />
+
+            <SoundboardModal
+                isOpen={soundboardModalOpen}
+                onClose={() => setSoundboardModalOpen(false)}
+                recipientName={selectedUser?.username || "Friend"}
+                onSendSound={(sound) => {
+                    onSend("🔊 SOUND:" + JSON.stringify(sound), {});
+                }}
             />
         </div>
     );

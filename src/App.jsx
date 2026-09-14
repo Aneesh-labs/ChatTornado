@@ -10,6 +10,7 @@ import Messages from "./Pages/Dashboard/Messages";
 import Profile from "./Pages/Dashboard/Profile";
 import Settings from "./Pages/Dashboard/Settings";
 import Insights from "./Pages/Dashboard/Insights";
+import Arcade from "./Pages/Dashboard/Arcade";
 
 export default function App() {
   return (
@@ -28,6 +29,7 @@ export default function App() {
       >
         <Route path="home" element={<Home />} />
         <Route path="messages" element={<Messages />} />
+        <Route path="arcade" element={<Arcade />} />
         <Route path="insights" element={<Insights />} />
         <Route path="profile" element={<Profile />} />
         <Route path="settings" element={<Settings />} />
