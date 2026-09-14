@@ -1,7 +1,5 @@
-import React from "react";
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Bell, LogOut, Palette, Radio, ShieldCheck, SlidersHorizontal } from "lucide-react";
 import { Bell, LogOut, Palette, Radio, ShieldCheck, SlidersHorizontal, Users } from "lucide-react";
 import { motion } from "framer-motion";
 import API from "../../Services/API";

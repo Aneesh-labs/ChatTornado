@@ -29,7 +29,7 @@ import {
 import { useIsMobile } from "./messages/useMediaQuery";
 import Sidebar from "./messages/Sidebar";
 import ChatWindow from "./messages/ChatWindow";
-import EmptyState from "./messages/EmptyState"; uhuh
+import EmptyState from "./messages/EmptyState";
 import RightPanel from "./messages/RightPanel";
 import WallpaperLayer from "./messages/WallpaperLayer";
 import CommandPalette from "./messages/CommandPalette";
