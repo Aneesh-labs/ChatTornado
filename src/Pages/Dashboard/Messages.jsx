@@ -613,7 +613,7 @@ const Messages = () => {
                     if (packet.type === "capsule_unlocked") {
                         setMessages((prev) => prev.map((m) => {
                             if (m.id === packet.message_id) {
-                                return { ...m, is_locked: false };
+                                return { ...m, is_locked: false, message: packet.message ?? m.message };
                             }
                             return m;
                         }));
@@ -766,6 +766,7 @@ const Messages = () => {
             receiver_id: selectedUser.id,
             message: validation.text,
             created_at: new Date().toISOString(),
+            is_locked: options.shield_mode === 'timelock',
             ...options
         };
         setMessages((prev) => {

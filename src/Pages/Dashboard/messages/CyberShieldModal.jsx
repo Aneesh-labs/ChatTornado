@@ -28,7 +28,9 @@ const CyberShieldModal = ({ isOpen, onClose, onApply }) => {
             let unlockAt = null;
             const now = new Date();
 
-            if (unlockTime === '15m') unlockAt = new Date(now.getTime() + 15 * 60000);
+            if (unlockTime === '1m') unlockAt = new Date(now.getTime() + 60 * 1000);
+            else if (unlockTime === '5m') unlockAt = new Date(now.getTime() + 5 * 60000);
+            else if (unlockTime === '15m') unlockAt = new Date(now.getTime() + 15 * 60000);
             else if (unlockTime === '1h') unlockAt = new Date(now.getTime() + 60 * 60000);
             else if (unlockTime === '6h') unlockAt = new Date(now.getTime() + 6 * 60 * 60000);
             else if (unlockTime === 'tonight') {
@@ -105,7 +107,7 @@ const CyberShieldModal = ({ isOpen, onClose, onApply }) => {
                         <div className="space-y-4 animate-in slide-in-from-bottom-2 fade-in duration-200">
                             <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Unlock Preset</h3>
                             <div className="flex flex-wrap gap-2">
-                                {['15m', '1h', '6h', 'tonight', 'tomorrow', 'custom'].map((preset) => (
+                                {['1m', '5m', '15m', '1h', '6h', 'tonight', 'tomorrow', 'custom'].map((preset) => (
                                     <button
                                         key={preset}
                                         onClick={() => setUnlockTime(preset)}
@@ -114,6 +116,8 @@ const CyberShieldModal = ({ isOpen, onClose, onApply }) => {
                                             : 'bg-gray-800 border-gray-700 text-gray-300 hover:border-gray-600'
                                             }`}
                                     >
+                                        {preset === '1m' && '1 Min'}
+                                        {preset === '5m' && '5 Mins'}
                                         {preset === '15m' && '15 Mins'}
                                         {preset === '1h' && '1 Hour'}
                                         {preset === '6h' && '6 Hours'}

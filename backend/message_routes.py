@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import or_, and_
@@ -97,18 +97,23 @@ async def get_messages(
         is_locked = False
         message_content = msg.message
         
+        u_iso = None
         if msg.is_shielded and msg.shield_mode == "timelock" and msg.unlock_at:
             # Ensure unlock_at is timezone aware for comparison
             unlock_time = msg.unlock_at
             if unlock_time.tzinfo is None:
                 unlock_time = unlock_time.replace(tzinfo=timezone.utc)
                 
+            u_iso = unlock_time.isoformat()
+            if not u_iso.endswith('Z') and '+' not in u_iso:
+                u_iso += 'Z'
+
             if unlock_time > now:
                 # Still locked
+                is_locked = True
                 if msg.receiver_id == user_id:
                     # Withhold payload from recipient
                     message_content = None
-                    is_locked = True
                 else:
                     # Sender can see it, but we mark it as locked for UI
                     is_locked = True
@@ -123,7 +128,7 @@ async def get_messages(
             "reactions": format_reactions(getattr(msg, "reactions", [])),
             "is_shielded": msg.is_shielded,
             "shield_mode": msg.shield_mode,
-            "unlock_at": msg.unlock_at.isoformat() if msg.unlock_at else None,
+            "unlock_at": u_iso,
             "is_locked": is_locked
         })
 
@@ -411,7 +416,7 @@ async def unlock_message_capsule(
     token: str,
     db: Session = Depends(get_db)
 ):
-    payload = decode_access_token(token)
+    payload = decode_token(token)
     if not payload or "user_id" not in payload:
         raise HTTPException(status_code=401, detail="Invalid token.")
 

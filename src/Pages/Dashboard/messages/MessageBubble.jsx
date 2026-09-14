@@ -18,13 +18,13 @@ const VIDEO_EXTENSIONS = /\.(mp4|mov|mkv|avi|wmv|flv|m4v|webm|3gp|ogv|ts)(\?.*)?
 const AUDIO_EXTENSIONS = /\.(mp3|wav|ogg|aac|m4a|opus|flac|wma|webm)(\?.*)?$/i;
 
 const extractUrls = (text) => {
-    if (!text) return [];
+    if (!text || typeof text !== "string") return [];
     return text.match(/https?:\/\/[^\s<>"']+/g) || [];
 };
 
-const isImageUrl = (url) => IMAGE_EXTENSIONS.test(url);
-const isVideoUrl = (url, text) => VIDEO_EXTENSIONS.test(url) || (url.toLowerCase().includes('.webm') && !text.includes('🎤 Voice'));
-const isAudioUrl = (url, text) => AUDIO_EXTENSIONS.test(url) && !isVideoUrl(url, text);
+const isImageUrl = (url) => typeof url === "string" && IMAGE_EXTENSIONS.test(url);
+const isVideoUrl = (url, text) => (typeof url === "string" && VIDEO_EXTENSIONS.test(url)) || (typeof url === "string" && url.toLowerCase().includes('.webm') && (!text || typeof text !== "string" || !text.includes('🎤 Voice')));
+const isAudioUrl = (url, text) => typeof url === "string" && AUDIO_EXTENSIONS.test(url) && !isVideoUrl(url, text);
 
 const extractImageUrls = (text) => extractUrls(text).filter(isImageUrl);
 const extractVideoUrls = (text) => extractUrls(text).filter(url => isVideoUrl(url, text));
@@ -32,6 +32,7 @@ const extractAudioUrls = (text) => extractUrls(text).filter(url => isAudioUrl(ur
 const extractNonImageUrls = (text) =>
     extractUrls(text).filter((url) => !isImageUrl(url) && !isVideoUrl(url, text) && !isAudioUrl(url, text));
 const extractCaption = (text) => {
+    if (!text || typeof text !== "string") return "";
     return text.replace(/https?:\/\/[^\s<>"']+/g, "").trim();
 };
 
@@ -68,7 +69,7 @@ const downloadFile = async (fileUrl, filename) => {
 const downloadImage = downloadFile;
 
 const decodeHtmlEntities = (text) => {
-    if (!text) return text;
+    if (!text || typeof text !== "string") return "";
     const textarea = document.createElement('textarea');
     textarea.innerHTML = text;
     return textarea.value;
@@ -350,6 +351,7 @@ const P2PMediaPreview = ({ rawMessage, senderId, socket, onOpenLightbox }) => {
         try {
             // Decode any escaped HTML entities like &quot; or &#x27;
             const decoded = decodeHtmlEntities(rawMessage) || "";
+            if (!decoded) return;
             const jsonPart = decoded.replace(/^⚡ P2P_MEDIA\s*/, "").trim();
             const parsed = JSON.parse(jsonPart);
             setMeta(parsed);
@@ -627,8 +629,8 @@ const MessageBubble = React.memo(({
     }, []);
 
     // Detect content types
-    const actualMessage = unlockedPayload !== null ? unlockedPayload : msg.message;
-    const isP2P = actualMessage?.startsWith('⚡ P2P_MEDIA');
+    const actualMessage = unlockedPayload !== null ? unlockedPayload : (msg.message || "");
+    const isP2P = typeof actualMessage === "string" && actualMessage.startsWith('⚡ P2P_MEDIA');
     const imageUrls = !isP2P ? extractImageUrls(actualMessage) : [];
     const videoUrls = !isP2P ? extractVideoUrls(actualMessage) : [];
     const audioUrls = !isP2P ? extractAudioUrls(actualMessage) : [];
@@ -638,7 +640,7 @@ const MessageBubble = React.memo(({
     const hasVideos = videoUrls.length > 0;
     const hasAudio = audioUrls.length > 0;
     const hasFiles = nonImageUrls.length > 0;
-    const isVoiceNote = !isP2P && actualMessage?.includes('🎤 Voice Message');
+    const isVoiceNote = !isP2P && typeof actualMessage === "string" && actualMessage.includes('🎤 Voice Message');
 
     const renderMessageContent = () => (
         <>

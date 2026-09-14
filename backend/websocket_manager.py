@@ -27,10 +27,11 @@ class ConnectionManager:
 
     async def capsule_unlock_broadcaster(self):
         while True:
-            await asyncio.sleep(15)
+            await asyncio.sleep(5)
             if not self.online_users:
                 continue
             
+            db = None
             try:
                 db = SessionLocal()
                 from datetime import datetime, timezone
@@ -60,10 +61,11 @@ class ConnectionManager:
                         }
                         await self.send_personal_message(msg.receiver_id, packet)
                         await self.send_personal_message(msg.sender_id, packet)
-                        
-                db.close()
             except Exception as e:
                 print("Broadcaster error:", e)
+            finally:
+                if db:
+                    db.close()
 
 
     def disconnect(
@@ -82,8 +84,14 @@ class ConnectionManager:
         receiver_id: int,
         message: dict
     ) -> bool:
+        try:
+            rid = int(receiver_id)
+        except (ValueError, TypeError):
+            rid = receiver_id
 
-        websocket = self.active_connections.get(receiver_id)
+        websocket = self.active_connections.get(rid)
+        if websocket is None and isinstance(rid, int):
+            websocket = self.active_connections.get(str(rid))
 
         if websocket is None:
             return False
@@ -93,12 +101,11 @@ class ConnectionManager:
             return True
 
         except (WebSocketDisconnect, RuntimeError):
-            self.disconnect(receiver_id)
+            self.disconnect(rid)
             return False
 
         except Exception as e:
-            
-            self.disconnect(receiver_id)
+            self.disconnect(rid)
             return False
 
     async def broadcast_online_users(self) -> None:

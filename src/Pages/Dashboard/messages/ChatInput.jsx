@@ -11,7 +11,7 @@ const VIDEO_EXTENSIONS = /\.(mp4|mov|mkv|avi|webm|m4v|3gp|flv|mpeg|mpg|ts|mts|m2
 
 const ChatInput = React.memo(({ onSend, replyTo, onCancelReply, selectedUser, socket = null, disabled = false }) => {
     const theme = useTheme();
-    const baseUrl = API.defaults.baseURL.replace(/\/+$/, "");
+    const baseUrl = (API.defaults.baseURL || "").replace(/\/+$/, "");
     const [text, setText] = useState("");
     const [isTyping, setIsTyping] = useState(false);
     const textareaRef = useRef(null);
@@ -174,7 +174,7 @@ const ChatInput = React.memo(({ onSend, replyTo, onCancelReply, selectedUser, so
             );
 
             const data = response.data;
-            const originalPath = (data.original_url || data.url).replace(/^\//, "");
+            const originalPath = ((data.original_url || data.url) || "").replace(/^\//, "");
             const originalUrl = `${baseUrl}/${originalPath}`;
 
             onSend(`🎤 Voice Message\n${originalUrl}`, shieldOptions || {});
@@ -215,7 +215,7 @@ const ChatInput = React.memo(({ onSend, replyTo, onCancelReply, selectedUser, so
             );
 
             const data = response.data;
-            const originalPath = (data.original_url || data.url).replace(/^\//, "");
+            const originalPath = ((data.original_url || data.url) || "").replace(/^\//, "");
             const originalUrl = `${baseUrl}/${originalPath}`;
 
             onSend(`📎 ${data.name}\n${originalUrl}`, shieldOptions || {});

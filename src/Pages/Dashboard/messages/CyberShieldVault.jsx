@@ -25,13 +25,28 @@ const CyberShieldVault = ({
     useEffect(() => {
         if (shieldMode !== 'timelock' || !unlockAt || !locallyLocked) return;
 
+        const parseTargetDate = (dateStr) => {
+            if (!dateStr) return null;
+            let str = String(dateStr);
+            if (!str.endsWith('Z') && !/[+-]\d{2}:\d{2}$/.test(str)) {
+                str += 'Z';
+            }
+            const parsed = new Date(str);
+            return isNaN(parsed.getTime()) ? null : parsed;
+        };
+
         const updateTimer = () => {
             const now = new Date();
-            const target = new Date(unlockAt);
+            const target = parseTargetDate(unlockAt);
+            if (!target) return;
             const diff = target - now;
 
             if (diff <= 0) {
-                setTimeLeft('00h 00m 00s');
+                setTimeLeft('');
+                setLocallyLocked(false);
+                if (onUnlocked) {
+                    onUnlocked();
+                }
                 return;
             }
 
@@ -47,7 +62,7 @@ const CyberShieldVault = ({
         updateTimer();
         const interval = setInterval(updateTimer, 1000);
         return () => clearInterval(interval);
-    }, [shieldMode, unlockAt, locallyLocked]);
+    }, [shieldMode, unlockAt, locallyLocked, onUnlocked]);
 
     const handleReveal = async () => {
         if (shieldMode === 'timelock' && locallyLocked) return; // Cannot manually reveal locked capsule
@@ -121,7 +136,7 @@ const CyberShieldVault = ({
                                 </span>
                             ) : (
                                 <span className={`text-xs font-bold text-${themeColor}-300 tracking-wider uppercase`}>
-                                    {locallyLocked ? 'Locked' : 'Capsule Ready'}
+                                    {locallyLocked ? 'Locked' : 'Capsule Ready (Tap)'}
                                 </span>
                             )}
                         </>

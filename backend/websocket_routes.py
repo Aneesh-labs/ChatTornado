@@ -410,6 +410,11 @@ async def websocket_endpoint(websocket: WebSocket):
             if receiver_id is None:
                 continue
 
+            try:
+                receiver_id = int(receiver_id)
+            except (ValueError, TypeError):
+                continue
+
             if not message_text:
                 continue
 
@@ -468,6 +473,17 @@ async def websocket_endpoint(websocket: WebSocket):
             # Packet
             # ==========================
 
+            from datetime import timezone, datetime
+            now = datetime.now(timezone.utc)
+            u_time = unlock_at if (unlock_at and unlock_at.tzinfo) else (unlock_at.replace(tzinfo=timezone.utc) if unlock_at else None)
+            u_iso = None
+            if u_time:
+                u_iso = u_time.isoformat()
+                if not u_iso.endswith('Z') and '+' not in u_iso:
+                    u_iso += 'Z'
+
+            is_locked = bool(is_shielded and shield_mode == "timelock" and u_time and u_time > now)
+
             packet_sender = {
                 "type": "message",
                 "id": new_message.id,
@@ -478,19 +494,14 @@ async def websocket_endpoint(websocket: WebSocket):
                 "created_at": str(new_message.created_at),
                 "is_shielded": is_shielded,
                 "shield_mode": shield_mode,
-                "unlock_at": unlock_at.isoformat() if unlock_at else None,
-                "is_locked": False
+                "unlock_at": u_iso,
+                "is_locked": is_locked
             }
             
             packet_receiver = dict(packet_sender)
-            
-            if is_shielded and shield_mode == "timelock" and unlock_at:
-                from datetime import timezone, datetime
-                now = datetime.now(timezone.utc)
-                u_time = unlock_at if unlock_at.tzinfo else unlock_at.replace(tzinfo=timezone.utc)
-                if u_time > now:
-                    packet_receiver["message"] = None
-                    packet_receiver["is_locked"] = True
+            if is_locked:
+                packet_receiver["message"] = None
+                packet_receiver["is_locked"] = True
 
             logger.info("Message: %s -> %s", user_id, receiver_id)
 
