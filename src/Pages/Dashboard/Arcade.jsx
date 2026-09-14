@@ -812,6 +812,707 @@ const Game2048 = ({ onBack, isMuted }) => {
 };
 
 /* ═══════════════════════════════════════════════════════════════
+   5. ZOMBIE SHOOTER (Canvas-based Action Game 14+)
+   ═══════════════════════════════════════════════════════════════ */
+const ZombieShooter = ({ onBack, isMuted }) => {
+    const canvasRef = useRef(null);
+    const [score, setScore] = useState(0);
+    const [gameOver, setGameOver] = useState(false);
+    const [isPlaying, setIsPlaying] = useState(false);
+    const [highScore, setHighScore] = useState(() => Number(localStorage.getItem("zombie_highscore") || 0));
+
+    const playAudio = (type) => {
+        if (!isMuted) soundEngine.play(type);
+    };
+
+    const startGame = () => {
+        playAudio("whoosh");
+        setScore(0);
+        setGameOver(false);
+        setIsPlaying(true);
+    };
+
+    useEffect(() => {
+        if (!isPlaying || gameOver) return;
+
+        const canvas = canvasRef.current;
+        const ctx = canvas.getContext("2d");
+        let animationId;
+        let lastTime = 0;
+        let spawnTimer = 0;
+
+        const cw = canvas.width;
+        const ch = canvas.height;
+        const player = { x: cw / 2, y: ch / 2, radius: 15, angle: 0 };
+        const bullets = [];
+        const zombies = [];
+        let particles = [];
+        let currentScore = 0;
+
+        // Mouse tracking
+        const mouse = { x: cw / 2, y: ch / 2 };
+        const updateMouse = (e) => {
+            const rect = canvas.getBoundingClientRect();
+            mouse.x = (e.clientX - rect.left) * (canvas.width / rect.width);
+            mouse.y = (e.clientY - rect.top) * (canvas.height / rect.height);
+        };
+        const handleTouch = (e) => {
+            e.preventDefault(); // Prevent scrolling
+            const rect = canvas.getBoundingClientRect();
+            mouse.x = (e.touches[0].clientX - rect.left) * (canvas.width / rect.width);
+            mouse.y = (e.touches[0].clientY - rect.top) * (canvas.height / rect.height);
+        };
+        
+        const shoot = () => {
+            playAudio("laser");
+            const angle = Math.atan2(mouse.y - player.y, mouse.x - player.x);
+            bullets.push({
+                x: player.x + Math.cos(angle) * player.radius,
+                y: player.y + Math.sin(angle) * player.radius,
+                vx: Math.cos(angle) * 12,
+                vy: Math.sin(angle) * 12,
+                radius: 4
+            });
+        };
+
+        const handlePointerDown = (e) => {
+            if (e.touches) handleTouch(e);
+            else updateMouse(e);
+            shoot();
+        };
+
+        canvas.addEventListener("mousemove", updateMouse);
+        canvas.addEventListener("mousedown", handlePointerDown);
+        canvas.addEventListener("touchstart", handlePointerDown, { passive: false });
+        canvas.addEventListener("touchmove", handleTouch, { passive: false });
+
+        const spawnZombie = () => {
+            const radius = Math.random() * 8 + 10;
+            let x, y;
+            if (Math.random() < 0.5) {
+                x = Math.random() < 0.5 ? 0 - radius : cw + radius;
+                y = Math.random() * ch;
+            } else {
+                x = Math.random() * cw;
+                y = Math.random() < 0.5 ? 0 - radius : ch + radius;
+            }
+            zombies.push({ x, y, radius, speed: Math.random() * 1.5 + 0.5 });
+        };
+
+        const draw = (deltaTime) => {
+            ctx.fillStyle = "rgba(10, 15, 29, 0.4)"; // Trail effect
+            ctx.fillRect(0, 0, cw, ch);
+
+            // Update & Draw Player
+            player.angle = Math.atan2(mouse.y - player.y, mouse.x - player.x);
+            ctx.save();
+            ctx.translate(player.x, player.y);
+            ctx.rotate(player.angle);
+            ctx.fillStyle = "#38bdf8"; // cyan-400
+            ctx.beginPath();
+            ctx.arc(0, 0, player.radius, 0, Math.PI * 2);
+            ctx.fill();
+            // Gun barrel
+            ctx.fillStyle = "#cbd5e1";
+            ctx.fillRect(player.radius - 5, -4, 15, 8);
+            ctx.restore();
+
+            // Bullets
+            for (let i = bullets.length - 1; i >= 0; i--) {
+                const b = bullets[i];
+                b.x += b.vx;
+                b.y += b.vy;
+                ctx.fillStyle = "#fbbf24"; // amber-400
+                ctx.beginPath();
+                ctx.arc(b.x, b.y, b.radius, 0, Math.PI * 2);
+                ctx.fill();
+
+                if (b.x < 0 || b.x > cw || b.y < 0 || b.y > ch) {
+                    bullets.splice(i, 1);
+                }
+            }
+
+            // Particles
+            for (let i = particles.length - 1; i >= 0; i--) {
+                const p = particles[i];
+                p.x += p.vx;
+                p.y += p.vy;
+                p.alpha -= 0.02;
+                if (p.alpha <= 0) {
+                    particles.splice(i, 1);
+                    continue;
+                }
+                ctx.save();
+                ctx.globalAlpha = p.alpha;
+                ctx.fillStyle = p.color;
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+            }
+
+            // Zombies
+            spawnTimer += deltaTime;
+            if (spawnTimer > Math.max(300, 1500 - currentScore * 10)) {
+                spawnZombie();
+                spawnTimer = 0;
+            }
+
+            for (let i = zombies.length - 1; i >= 0; i--) {
+                const z = zombies[i];
+                const angle = Math.atan2(player.y - z.y, player.x - z.x);
+                z.x += Math.cos(angle) * z.speed;
+                z.y += Math.sin(angle) * z.speed;
+
+                ctx.fillStyle = "#84cc16"; // lime-500 (toxic green)
+                ctx.beginPath();
+                ctx.arc(z.x, z.y, z.radius, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Player collision (Game Over)
+                const distPlayer = Math.hypot(player.x - z.x, player.y - z.y);
+                if (distPlayer - z.radius - player.radius < 0) {
+                    playAudio("boom");
+                    setGameOver(true);
+                    return;
+                }
+
+                // Bullet collision
+                for (let j = bullets.length - 1; j >= 0; j--) {
+                    const b = bullets[j];
+                    const distBullet = Math.hypot(b.x - z.x, b.y - z.y);
+                    if (distBullet - z.radius - b.radius < 0) {
+                        // Explosion particles
+                        for (let k = 0; k < 8; k++) {
+                            particles.push({
+                                x: z.x, y: z.y,
+                                vx: (Math.random() - 0.5) * 6,
+                                vy: (Math.random() - 0.5) * 6,
+                                radius: Math.random() * 3,
+                                alpha: 1,
+                                color: "#84cc16"
+                            });
+                        }
+                        playAudio("coin"); // Use coin or similar for hit confirm
+                        currentScore += 10;
+                        setScore(currentScore);
+                        if (currentScore > highScore) {
+                            setHighScore(currentScore);
+                            localStorage.setItem("zombie_highscore", String(currentScore));
+                        }
+                        zombies.splice(i, 1);
+                        bullets.splice(j, 1);
+                        break;
+                    }
+                }
+            }
+        };
+
+        const loop = (timestamp) => {
+            const deltaTime = timestamp - lastTime;
+            lastTime = timestamp;
+            draw(deltaTime);
+            if (!gameOver) animationId = requestAnimationFrame(loop);
+        };
+        animationId = requestAnimationFrame(loop);
+
+        return () => {
+            cancelAnimationFrame(animationId);
+            canvas.removeEventListener("mousemove", updateMouse);
+            canvas.removeEventListener("mousedown", handlePointerDown);
+            canvas.removeEventListener("touchstart", handlePointerDown);
+            canvas.removeEventListener("touchmove", handleTouch);
+        };
+    }, [isPlaying, gameOver, highScore, isMuted]);
+
+    return (
+        <div className="flex flex-col items-center gap-4 max-w-md mx-auto w-full select-none">
+            <div className="flex items-center justify-between w-full px-2">
+                <button type="button" onClick={onBack} className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-xs font-bold text-white transition-colors">
+                    <ArrowLeft className="h-4 w-4" /> Back
+                </button>
+                <div className="flex items-center gap-3">
+                    <span className="text-xs font-bold text-white/70">Kills: <strong className="text-lime-400">{score / 10}</strong></span>
+                    <span className="text-xs font-bold text-amber-300 flex items-center gap-1">
+                        <Trophy className="h-3.5 w-3.5" /> {highScore / 10}
+                    </span>
+                </div>
+            </div>
+
+            <div className="relative w-[340px] h-[340px] sm:w-[400px] sm:h-[400px] rounded-3xl overflow-hidden border-2 border-lime-500/30 shadow-[0_0_40px_rgba(132,204,22,0.15)]">
+                <canvas ref={canvasRef} width={400} height={400} className="w-full h-full bg-[#0a0f1d] touch-none" />
+
+                {!isPlaying && !gameOver && (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/75 backdrop-blur-sm gap-3">
+                        <span className="text-5xl">🧟</span>
+                        <h3 className="text-xl font-black text-white tracking-tight">Zombie Survival</h3>
+                        <p className="text-xs text-white/60">Tap/Click anywhere to shoot!</p>
+                        <button onClick={startGame} className="flex items-center gap-2 px-7 py-3 rounded-2xl bg-lime-500 hover:bg-lime-400 text-black font-black text-sm shadow-[0_0_25px_rgba(132,204,22,0.4)] active:scale-95 transition-all">
+                            <Play className="h-4 w-4 fill-current" /> Survive
+                        </button>
+                    </div>
+                )}
+
+                {gameOver && (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/85 backdrop-blur-sm gap-3">
+                        <span className="text-5xl animate-pulse">💀</span>
+                        <h3 className="text-xl font-black text-rose-400">You Died</h3>
+                        <p className="text-xs text-white/70">Zombies Defeated: <strong className="text-lime-400 text-sm">{score / 10}</strong></p>
+                        <button onClick={startGame} className="flex items-center gap-2 px-6 py-3 rounded-2xl bg-lime-500 hover:bg-lime-400 text-black font-black text-sm shadow-[0_0_25px_rgba(132,204,22,0.4)] active:scale-95 transition-all">
+                            <RotateCcw className="h-4 w-4" /> Try Again
+                        </button>
+                    </div>
+                )}
+            </div>
+            <p className="text-[11px] text-white/40">Keep moving your mouse/finger and tap repeatedly to fire!</p>
+        </div>
+    );
+};
+
+
+/* ═══════════════════════════════════════════════════════════════
+   6. NEON DODGE (Fast-Paced Infinite Runner)
+   ═══════════════════════════════════════════════════════════════ */
+const NeonDodge = ({ onBack, isMuted }) => {
+    const canvasRef = useRef(null);
+    const [score, setScore] = useState(0);
+    const [gameOver, setGameOver] = useState(false);
+    const [isPlaying, setIsPlaying] = useState(false);
+    const [highScore, setHighScore] = useState(() => Number(localStorage.getItem("neondodge_highscore") || 0));
+
+    const playAudio = (type) => {
+        if (!isMuted) soundEngine.play(type);
+    };
+
+    const startGame = () => {
+        playAudio("whoosh");
+        setScore(0);
+        setGameOver(false);
+        setIsPlaying(true);
+    };
+
+    useEffect(() => {
+        if (!isPlaying || gameOver) return;
+
+        const canvas = canvasRef.current;
+        const ctx = canvas.getContext("2d");
+        let animationId;
+        
+        const cw = canvas.width;
+        const ch = canvas.height;
+        const player = { x: cw / 2, y: ch - 40, width: 30, height: 20, speed: 8 };
+        let obstacles = [];
+        let particles = [];
+        let currentScore = 0;
+        let speedMultiplier = 1;
+        let frameCount = 0;
+
+        // Controls
+        const keys = {};
+        const handleKeyDown = (e) => { keys[e.code] = true; };
+        const handleKeyUp = (e) => { keys[e.code] = false; };
+        window.addEventListener("keydown", handleKeyDown);
+        window.addEventListener("keyup", handleKeyUp);
+
+        const handleTouchMove = (e) => {
+            e.preventDefault();
+            const rect = canvas.getBoundingClientRect();
+            const touchX = (e.touches[0].clientX - rect.left) * (canvas.width / rect.width);
+            player.x = Math.max(player.width / 2, Math.min(cw - player.width / 2, touchX));
+        };
+        canvas.addEventListener("touchmove", handleTouchMove, { passive: false });
+
+        const draw = () => {
+            ctx.fillStyle = "rgba(10, 5, 25, 0.5)"; // Motion blur background
+            ctx.fillRect(0, 0, cw, ch);
+
+            // Player movement via keyboard
+            if ((keys["ArrowLeft"] || keys["KeyA"]) && player.x > player.width / 2) {
+                player.x -= player.speed;
+            }
+            if ((keys["ArrowRight"] || keys["KeyD"]) && player.x < cw - player.width / 2) {
+                player.x += player.speed;
+            }
+
+            // Draw Player
+            ctx.fillStyle = "#a855f7"; // purple-500
+            ctx.shadowBlur = 15;
+            ctx.shadowColor = "#a855f7";
+            ctx.fillRect(player.x - player.width / 2, player.y - player.height / 2, player.width, player.height);
+            ctx.shadowBlur = 0; // reset
+
+            // Spawn obstacles
+            frameCount++;
+            if (frameCount % Math.max(15, Math.floor(40 - speedMultiplier * 5)) === 0) {
+                const w = Math.random() * 50 + 20;
+                obstacles.push({
+                    x: Math.random() * (cw - w),
+                    y: -50,
+                    width: w,
+                    height: 20,
+                    color: Math.random() < 0.2 ? "#f43f5e" : "#e11d48", // rose colors
+                    speed: (Math.random() * 3 + 4) * speedMultiplier
+                });
+            }
+
+            // Update & Draw Obstacles
+            for (let i = obstacles.length - 1; i >= 0; i--) {
+                const obs = obstacles[i];
+                obs.y += obs.speed;
+                
+                ctx.fillStyle = obs.color;
+                ctx.shadowBlur = 10;
+                ctx.shadowColor = obs.color;
+                ctx.fillRect(obs.x, obs.y, obs.width, obs.height);
+                ctx.shadowBlur = 0;
+
+                // Collision detection
+                if (
+                    player.x - player.width / 2 < obs.x + obs.width &&
+                    player.x + player.width / 2 > obs.x &&
+                    player.y - player.height / 2 < obs.y + obs.height &&
+                    player.y + player.height / 2 > obs.y
+                ) {
+                    playAudio("boom");
+                    setGameOver(true);
+                    return;
+                }
+
+                if (obs.y > ch) {
+                    obstacles.splice(i, 1);
+                    currentScore += 10;
+                    setScore(currentScore);
+                    if (currentScore > highScore) {
+                        setHighScore(currentScore);
+                        localStorage.setItem("neondodge_highscore", String(currentScore));
+                    }
+                    if (currentScore % 200 === 0) {
+                        speedMultiplier += 0.2;
+                        playAudio("coin");
+                    }
+                }
+            }
+        };
+
+        const loop = () => {
+            draw();
+            if (!gameOver) animationId = requestAnimationFrame(loop);
+        };
+        animationId = requestAnimationFrame(loop);
+
+        return () => {
+            cancelAnimationFrame(animationId);
+            window.removeEventListener("keydown", handleKeyDown);
+            window.removeEventListener("keyup", handleKeyUp);
+            canvas.removeEventListener("touchmove", handleTouchMove);
+        };
+    }, [isPlaying, gameOver, highScore, isMuted]);
+
+    return (
+        <div className="flex flex-col items-center gap-4 max-w-md mx-auto w-full select-none">
+            <div className="flex items-center justify-between w-full px-2">
+                <button type="button" onClick={onBack} className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-xs font-bold text-white transition-colors">
+                    <ArrowLeft className="h-4 w-4" /> Back
+                </button>
+                <div className="flex items-center gap-3">
+                    <span className="text-xs font-bold text-white/70">Score: <strong className="text-purple-400">{score}</strong></span>
+                    <span className="text-xs font-bold text-amber-300 flex items-center gap-1">
+                        <Trophy className="h-3.5 w-3.5" /> {highScore}
+                    </span>
+                </div>
+            </div>
+
+            <div className="relative w-[340px] h-[400px] sm:w-[380px] sm:h-[450px] rounded-3xl overflow-hidden border-2 border-purple-500/30 shadow-[0_0_40px_rgba(168,85,247,0.15)]">
+                <canvas ref={canvasRef} width={380} height={450} className="w-full h-full bg-[#0a0519] touch-none" />
+
+                {!isPlaying && !gameOver && (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/75 backdrop-blur-sm gap-3">
+                        <span className="text-5xl animate-pulse">⚡</span>
+                        <h3 className="text-xl font-black text-white tracking-tight">Neon Dodge</h3>
+                        <p className="text-xs text-white/60">Drag left/right or use Arrow Keys to dodge!</p>
+                        <button onClick={startGame} className="flex items-center gap-2 px-7 py-3 rounded-2xl bg-purple-500 hover:bg-purple-400 text-black font-black text-sm shadow-[0_0_25px_rgba(168,85,247,0.4)] active:scale-95 transition-all">
+                            <Play className="h-4 w-4 fill-current" /> Start Engine
+                        </button>
+                    </div>
+                )}
+
+                {gameOver && (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/85 backdrop-blur-sm gap-3">
+                        <span className="text-5xl animate-bounce">💥</span>
+                        <h3 className="text-xl font-black text-rose-400">CRASHED!</h3>
+                        <p className="text-xs text-white/70">Final Score: <strong className="text-purple-400 text-sm">{score}</strong></p>
+                        <button onClick={startGame} className="flex items-center gap-2 px-6 py-3 rounded-2xl bg-purple-500 hover:bg-purple-400 text-black font-black text-sm shadow-[0_0_25px_rgba(168,85,247,0.4)] active:scale-95 transition-all">
+                            <RotateCcw className="h-4 w-4" /> Go Again
+                        </button>
+                    </div>
+                )}
+            </div>
+            <p className="text-[11px] text-white/40">Drag the purple block to dodge the falling neon hazards!</p>
+        </div>
+    );
+};
+
+
+/* ═══════════════════════════════════════════════════════════════
+   7. NEON BLADE (Knife Hit clone - Action puzzle)
+   ═══════════════════════════════════════════════════════════════ */
+const NeonBlade = ({ onBack, isMuted }) => {
+    const canvasRef = useRef(null);
+    const [level, setLevel] = useState(1);
+    const [score, setScore] = useState(0);
+    const [gameOver, setGameOver] = useState(false);
+    const [isPlaying, setIsPlaying] = useState(false);
+    const [highScore, setHighScore] = useState(() => Number(localStorage.getItem("neonblade_highscore") || 0));
+
+    const playAudio = (type) => {
+        if (!isMuted) soundEngine.play(type);
+    };
+
+    const startGame = () => {
+        playAudio("whoosh");
+        setScore(0);
+        setLevel(1);
+        setGameOver(false);
+        setIsPlaying(true);
+    };
+
+    useEffect(() => {
+        if (!isPlaying || gameOver) return;
+
+        const canvas = canvasRef.current;
+        const ctx = canvas.getContext("2d");
+        let animationId;
+        
+        const cw = canvas.width;
+        const ch = canvas.height;
+        const targetRadius = 60;
+        
+        let targetAngle = 0;
+        let rotationSpeed = 0.03 + (level * 0.005);
+        if (level > 3 && Math.random() > 0.5) rotationSpeed *= -1; // random reverse
+        
+        let knives = [];
+        // Add random initial knives based on level
+        const numInitKnives = Math.min(3, Math.floor(level / 2));
+        for (let i=0; i<numInitKnives; i++) {
+            knives.push(Math.random() * Math.PI * 2);
+        }
+
+        let knivesToThrow = 5 + Math.floor(level / 2);
+        let flyingKnife = null;
+        let particles = [];
+        
+        const throwKnife = () => {
+            if (flyingKnife || knivesToThrow <= 0) return;
+            playAudio("laser");
+            flyingKnife = { y: ch - 50, speed: 25 };
+        };
+
+        const handlePointerDown = (e) => {
+            e.preventDefault();
+            throwKnife();
+        };
+
+        canvas.addEventListener("mousedown", handlePointerDown);
+        canvas.addEventListener("touchstart", handlePointerDown, { passive: false });
+
+        const drawKnife = (ctx, isStuck) => {
+            ctx.fillStyle = "#38bdf8"; // cyan-400
+            ctx.shadowBlur = 10;
+            ctx.shadowColor = "#38bdf8";
+            ctx.beginPath();
+            ctx.moveTo(0, isStuck ? targetRadius : -20);
+            ctx.lineTo(-4, isStuck ? targetRadius + 30 : 10);
+            ctx.lineTo(4, isStuck ? targetRadius + 30 : 10);
+            ctx.fill();
+            ctx.shadowBlur = 0;
+        };
+
+        const draw = () => {
+            ctx.fillStyle = "rgba(5, 10, 20, 1)";
+            ctx.fillRect(0, 0, cw, ch);
+
+            // Update & Draw Particles
+            for (let i = particles.length - 1; i >= 0; i--) {
+                const p = particles[i];
+                p.x += p.vx;
+                p.y += p.vy;
+                p.alpha -= 0.03;
+                if (p.alpha <= 0) {
+                    particles.splice(i, 1);
+                    continue;
+                }
+                ctx.save();
+                ctx.globalAlpha = p.alpha;
+                ctx.fillStyle = p.color;
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+            }
+
+            // Draw Target Center
+            targetAngle += rotationSpeed;
+            // periodically change speed if high level
+            if (level > 4 && Math.random() < 0.01) rotationSpeed = -rotationSpeed;
+
+            ctx.save();
+            ctx.translate(cw / 2, ch / 3);
+            ctx.rotate(targetAngle);
+            
+            // Draw stuck knives
+            knives.forEach(angle => {
+                ctx.save();
+                ctx.rotate(angle);
+                drawKnife(ctx, true);
+                ctx.restore();
+            });
+
+            // Target wheel
+            ctx.fillStyle = "#f43f5e"; // rose-500
+            ctx.shadowBlur = 20;
+            ctx.shadowColor = "#f43f5e";
+            ctx.beginPath();
+            ctx.arc(0, 0, targetRadius, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = "#0f172a";
+            ctx.beginPath();
+            ctx.arc(0, 0, targetRadius - 10, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.shadowBlur = 0;
+            ctx.restore();
+
+            // Draw Flying Knife
+            if (flyingKnife) {
+                flyingKnife.y -= flyingKnife.speed;
+                ctx.save();
+                ctx.translate(cw / 2, flyingKnife.y);
+                drawKnife(ctx, false);
+                ctx.restore();
+
+                // Check hit
+                if (flyingKnife.y <= ch / 3 + targetRadius) {
+                    const hitAngle = (-targetAngle + Math.PI / 2) % (Math.PI * 2);
+                    const normalizedHitAngle = hitAngle < 0 ? hitAngle + Math.PI * 2 : hitAngle;
+                    
+                    // Check overlap
+                    const hitThreshold = 0.25; // radians
+                    let didHit = false;
+                    for (let angle of knives) {
+                        const normalizedAngle = angle < 0 ? angle + Math.PI * 2 : angle;
+                        let diff = Math.abs(normalizedHitAngle - normalizedAngle);
+                        if (diff > Math.PI) diff = Math.PI * 2 - diff;
+                        if (diff < hitThreshold) {
+                            didHit = true;
+                            break;
+                        }
+                    }
+
+                    if (didHit) {
+                        playAudio("boom");
+                        for (let k = 0; k < 15; k++) {
+                            particles.push({
+                                x: cw/2, y: ch/3 + targetRadius,
+                                vx: (Math.random() - 0.5) * 8, vy: (Math.random() - 0.5) * 8,
+                                radius: Math.random() * 4, alpha: 1, color: "#38bdf8"
+                            });
+                        }
+                        setGameOver(true);
+                        flyingKnife = null;
+                        return; // wait for next frame to stop
+                    } else {
+                        playAudio("coin");
+                        knives.push(normalizedHitAngle);
+                        knivesToThrow--;
+                        setScore(s => {
+                            const newScore = s + 10;
+                            if (newScore > highScore) {
+                                setHighScore(newScore);
+                                localStorage.setItem("neonblade_highscore", String(newScore));
+                            }
+                            return newScore;
+                        });
+                        flyingKnife = null;
+
+                        if (knivesToThrow <= 0) {
+                            playAudio("win");
+                            setLevel(l => l + 1);
+                            setIsPlaying(false); // pause to show next level
+                        }
+                    }
+                }
+            }
+
+            // Draw waiting knives
+            for(let i=0; i<knivesToThrow; i++) {
+                ctx.save();
+                ctx.translate(30, ch - 30 - (i * 20));
+                ctx.rotate(Math.PI / 2);
+                drawKnife(ctx, false);
+                ctx.restore();
+            }
+        };
+
+        const loop = () => {
+            draw();
+            if (!gameOver && isPlaying) animationId = requestAnimationFrame(loop);
+        };
+        animationId = requestAnimationFrame(loop);
+
+        return () => {
+            cancelAnimationFrame(animationId);
+            canvas.removeEventListener("mousedown", handlePointerDown);
+            canvas.removeEventListener("touchstart", handlePointerDown);
+        };
+    }, [isPlaying, gameOver, level, highScore, isMuted]);
+
+    return (
+        <div className="flex flex-col items-center gap-4 max-w-md mx-auto w-full select-none">
+            <div className="flex items-center justify-between w-full px-2">
+                <button type="button" onClick={onBack} className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-xs font-bold text-white transition-colors">
+                    <ArrowLeft className="h-4 w-4" /> Back
+                </button>
+                <div className="flex items-center gap-3">
+                    <span className="text-xs font-bold text-white/70">Level: <strong className="text-rose-400">{level}</strong></span>
+                    <span className="text-xs font-bold text-white/70">Score: <strong className="text-cyan-400">{score}</strong></span>
+                    <span className="text-xs font-bold text-amber-300 flex items-center gap-1">
+                        <Trophy className="h-3.5 w-3.5" /> {highScore}
+                    </span>
+                </div>
+            </div>
+
+            <div className="relative w-[340px] h-[450px] sm:w-[380px] sm:h-[500px] rounded-3xl overflow-hidden border-2 border-rose-500/30 shadow-[0_0_40px_rgba(244,63,94,0.15)]">
+                <canvas ref={canvasRef} width={380} height={500} className="w-full h-full bg-[#050a14] touch-none cursor-crosshair" />
+
+                {!isPlaying && !gameOver && (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/75 backdrop-blur-sm gap-3">
+                        <span className="text-5xl animate-spin-slow">🎯</span>
+                        <h3 className="text-xl font-black text-white tracking-tight">Neon Blade {level > 1 ? `Level ${level}` : ''}</h3>
+                        <p className="text-xs text-white/60">Tap to throw knives. Don't hit existing knives!</p>
+                        <button onClick={() => setIsPlaying(true)} className="flex items-center gap-2 px-7 py-3 rounded-2xl bg-rose-500 hover:bg-rose-400 text-black font-black text-sm shadow-[0_0_25px_rgba(244,63,94,0.4)] active:scale-95 transition-all">
+                            <Play className="h-4 w-4 fill-current" /> {level > 1 ? "Next Level" : "Start Game"}
+                        </button>
+                    </div>
+                )}
+
+                {gameOver && (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/85 backdrop-blur-sm gap-3">
+                        <span className="text-5xl animate-bounce">💥</span>
+                        <h3 className="text-xl font-black text-cyan-400">Blades Clashed!</h3>
+                        <p className="text-xs text-white/70">Final Score: <strong className="text-cyan-400 text-sm">{score}</strong></p>
+                        <button onClick={startGame} className="flex items-center gap-2 px-6 py-3 rounded-2xl bg-cyan-400 hover:bg-cyan-300 text-black font-black text-sm shadow-[0_0_25px_rgba(56,189,248,0.4)] active:scale-95 transition-all">
+                            <RotateCcw className="h-4 w-4" /> Try Again
+                        </button>
+                    </div>
+                )}
+            </div>
+            <p className="text-[11px] text-white/40">Tap anywhere to throw a blade. Clear all blades to advance!</p>
+        </div>
+    );
+};
+
+
+/* ═══════════════════════════════════════════════════════════════
    MAIN ARCADE DASHBOARD PAGE
    ═══════════════════════════════════════════════════════════════ */
 export default function Arcade() {
@@ -850,6 +1551,30 @@ export default function Arcade() {
             tag: "Brain Game",
             color: "from-fuchsia-500 to-pink-700",
             desc: "Test your memory and flip matching pairs of cute animal cards!"
+        },
+        {
+            id: "zombie",
+            title: "Zombie Survival",
+            emoji: "🧟🔫",
+            tag: "Action 14+",
+            color: "from-lime-500 to-green-700",
+            desc: "Survive the undead! Turn and shoot in 360 degrees to stay alive."
+        },
+        {
+            id: "neondodge",
+            title: "Neon Dodge",
+            emoji: "⚡🛸",
+            tag: "Fast Runner",
+            color: "from-purple-500 to-fuchsia-700",
+            desc: "Dodge falling neon hazards at breakneck speeds!"
+        },
+        {
+            id: "neonblade",
+            title: "Neon Blade",
+            emoji: "🎯🗡️",
+            tag: "Precision",
+            color: "from-rose-500 to-red-700",
+            desc: "Throw glowing blades into the spinning target without hitting the others!"
         }
     ];
 
@@ -895,6 +1620,12 @@ export default function Arcade() {
                     <Game2048 onBack={() => setSelectedGame(null)} isMuted={isMuted} />
                 ) : selectedGame === "memory" ? (
                     <MemoryMatchGame onBack={() => setSelectedGame(null)} isMuted={isMuted} />
+                ) : selectedGame === "zombie" ? (
+                    <ZombieShooter onBack={() => setSelectedGame(null)} isMuted={isMuted} />
+                ) : selectedGame === "neondodge" ? (
+                    <NeonDodge onBack={() => setSelectedGame(null)} isMuted={isMuted} />
+                ) : selectedGame === "neonblade" ? (
+                    <NeonBlade onBack={() => setSelectedGame(null)} isMuted={isMuted} />
                 ) : (
                     /* Games Selection Grid */
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
