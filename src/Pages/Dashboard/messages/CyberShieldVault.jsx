@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Shield, Lock, Unlock } from 'lucide-react';
 import { playLaserScanSound } from '../../../Services/audioFx';
-import api from '../../../Services/api';
 
 const CyberShieldVault = ({
     children,
