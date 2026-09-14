@@ -8,7 +8,7 @@ const AVAILABLE_GAMES = [
     {
         id: "tictactoe",
         name: "Tic-Tac-Toe",
-        emoji: "❌⭕",
+        emoji: "❌",
         desc: "Classic 3-in-a-row match!",
         color: "from-blue-600 to-cyan-500",
         initData: () => ({
@@ -22,7 +22,7 @@ const AVAILABLE_GAMES = [
     {
         id: "rps",
         name: "Rock Paper Scissors",
-        emoji: "🪨📄✂️",
+        emoji: "✌️",
         desc: "Best of 1 lightning duel!",
         color: "from-amber-500 to-rose-500",
         initData: () => ({
@@ -35,7 +35,7 @@ const AVAILABLE_GAMES = [
     {
         id: "connect4",
         name: "Connect 4",
-        emoji: "🔴🟡",
+        emoji: "🔴",
         desc: "Drop 4 in a row to win!",
         color: "from-fuchsia-600 to-purple-600",
         initData: () => ({
@@ -116,7 +116,7 @@ export default function InChatGameModal({ isOpen, onClose, onStartGame, recipien
                                 className="group relative flex items-center justify-between overflow-hidden rounded-2xl border border-white/10 bg-white/[0.04] p-4 text-left transition-all hover:border-white/25 hover:bg-white/[0.08]"
                             >
                                 <div className="flex items-center gap-3.5">
-                                    <div className={`flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br ${game.color} text-2xl shadow-lg`}>
+                                    <div className={`flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br ${game.color} text-2xl shadow-lg`}>
                                         {game.emoji}
                                     </div>
                                     <div>
