@@ -24,7 +24,9 @@ export const ConversationCard = React.memo(({
     onPin,
     isGlobal = false,
     connectionStatus = null,
+    isSender = true,
     onRequestConnection,
+    onAcceptConnection,
 }) => {
     const theme = useTheme();
 
@@ -43,6 +45,13 @@ export const ConversationCard = React.memo(({
         e.stopPropagation();
         if (onRequestConnection) {
             onRequestConnection(user.id);
+        }
+    };
+
+    const handleAcceptClick = (e) => {
+        e.stopPropagation();
+        if (onAcceptConnection) {
+            onAcceptConnection(user.id);
         }
     };
 
@@ -108,9 +117,19 @@ export const ConversationCard = React.memo(({
                                 Connected
                             </span>
                         ) : connectionStatus === "pending" ? (
-                            <span className="text-[10px] text-yellow-400 font-semibold bg-yellow-400/10 px-2 py-0.5 rounded-full">
-                                Pending
-                            </span>
+                            isSender ? (
+                                <span className="text-[10px] text-yellow-400 font-semibold bg-yellow-400/10 px-2 py-0.5 rounded-full">
+                                    Pending
+                                </span>
+                            ) : (
+                                <button
+                                    type="button"
+                                    onClick={handleAcceptClick}
+                                    className="text-[10px] bg-green-600 hover:bg-green-500 text-white font-bold px-2.5 py-1 rounded-full transition-colors active:scale-95 shadow"
+                                >
+                                    Accept
+                                </button>
+                            )
                         ) : (
                             <button
                                 type="button"
@@ -158,7 +177,9 @@ ConversationCard.propTypes = {
     onPin: PropTypes.func,
     isGlobal: PropTypes.bool,
     connectionStatus: PropTypes.string,
+    isSender: PropTypes.bool,
     onRequestConnection: PropTypes.func,
+    onAcceptConnection: PropTypes.func,
 };
 
 ConversationCard.displayName = "ConversationCard";
@@ -177,6 +198,7 @@ const Sidebar = React.memo(({
     onOpenSettings,
     onOpenInfoPanel,
     onRequestConnection,
+    onAcceptConnection,
     myUserId,
 }) => {
     const theme = useTheme();
@@ -343,9 +365,9 @@ const Sidebar = React.memo(({
                         </motion.div>
                     ) : (
                         sortedUsers.map((user) => {
-                            const status = connectionStatuses && connectionStatuses[user.id]
-                                ? connectionStatuses[user.id].status
-                                : null;
+                            const connInfo = connectionStatuses && connectionStatuses[user.id];
+                            const status = connInfo?.status || null;
+                            const isSender = connInfo?.is_sender ?? true;
 
                             return (
                                 <ConversationCard
@@ -364,7 +386,12 @@ const Sidebar = React.memo(({
                                     onPin={() => onPinUser?.(user.id)}
                                     isGlobal={mainTab === "global"}
                                     connectionStatus={status}
+                                    isSender={isSender}
                                     onRequestConnection={onRequestConnection}
+                                    onAcceptConnection={(userId) => {
+                                        onAcceptConnection?.(userId);
+                                        setMainTab("chats");
+                                    }}
                                 />
                             );
                         })
@@ -412,6 +439,7 @@ Sidebar.propTypes = {
     onOpenSettings: PropTypes.func,
     onOpenInfoPanel: PropTypes.func,
     onRequestConnection: PropTypes.func,
+    onAcceptConnection: PropTypes.func,
     myUserId: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
 };
 

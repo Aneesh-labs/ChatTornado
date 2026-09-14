@@ -577,6 +577,40 @@ const Messages = () => {
         }
     };
 
+    const handleAcceptConnection = async (userId, connectionId) => {
+        try {
+            const token = sessionStorage.getItem("token");
+            const connId = connectionId || connectionStatuses[userId]?.connection_id;
+            if (!connId) {
+                // If connId not in map, re-fetch pending or attempt action
+                const pendingRes = await API.get("/connections/pending", { params: { token } });
+                const found = (pendingRes.data || []).find((p) => p.sender?.id === userId);
+                if (found) {
+                    await API.post(`/connections/${found.connection_id}/action`, { action: "accept" }, { params: { token } });
+                }
+            } else {
+                await API.post(`/connections/${connId}/action`, { action: "accept" }, { params: { token } });
+            }
+
+            setConnectionStatuses((prev) => ({
+                ...prev,
+                [userId]: { ...prev[userId], status: "accepted" }
+            }));
+
+            const targetUser = users.find((u) => u.id === userId);
+            if (targetUser) {
+                setActiveUsers((prev) => {
+                    if (prev.find((u) => u.id === userId)) return prev;
+                    return [...prev, targetUser];
+                });
+                setSelectedUser(targetUser);
+            }
+            setCallNotice("Chat connection accepted!");
+        } catch (err) {
+            setCallNotice(err.response?.data?.detail || "Failed to accept request.");
+        }
+    };
+
     /* ── WebSocket Connection ───────────────────────────────────────────── */
     useEffect(() => {
         let ws = null;
@@ -1139,6 +1173,7 @@ const Messages = () => {
                                     activeUsers={enrichedActiveUsers}
                                     connectionStatuses={connectionStatuses}
                                     onRequestConnection={handleRequestConnection}
+                                    onAcceptConnection={handleAcceptConnection}
                                     selectedUser={enrichedSelected}
                                     unreadCounts={unreadCounts}
                                     pinnedChats={pinnedChats}
