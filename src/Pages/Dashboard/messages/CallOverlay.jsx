@@ -216,17 +216,23 @@ const CallOverlay = ({
     const [showConnected, setShowConnected] = useState(false);
     const [showEnded, setShowEnded] = useState(false);
 
-    /* ── Media stream attachment (unchanged) ──────────────────────────── */
+    /* ── Media stream attachment ──────────────────────────────────────── */
     useEffect(() => {
-        if (remoteVideo.current && remoteVideo.current.srcObject !== call?.remoteStream) {
-            remoteVideo.current.srcObject = call?.remoteStream || null;
+        if (remoteVideo.current && call?.remoteStream) {
+            if (remoteVideo.current.srcObject !== call.remoteStream) {
+                remoteVideo.current.srcObject = call.remoteStream;
+            }
+            remoteVideo.current.play().catch((e) => console.warn("Remote video auto-play prevented:", e));
         }
-        if (localVideo.current) {
-            localVideo.current.srcObject = call?.localStream || null;
+        if (localVideo.current && call?.localStream) {
+            if (localVideo.current.srcObject !== call.localStream) {
+                localVideo.current.srcObject = call.localStream;
+            }
+            localVideo.current.play().catch((e) => console.warn("Local video auto-play prevented:", e));
         }
         if (remoteAudio.current) {
-            if (!call?.video) {
-                remoteAudio.current.srcObject = call?.remoteStream || null;
+            if (!call?.video && call?.remoteStream) {
+                remoteAudio.current.srcObject = call.remoteStream;
                 remoteAudio.current.play().catch(() => { });
             } else {
                 remoteAudio.current.srcObject = null;

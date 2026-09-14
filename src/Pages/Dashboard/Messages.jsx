@@ -150,6 +150,7 @@ const Messages = () => {
     const pendingTempIds = useRef(new Set());
     const typingTimeouts = useRef({});
     const peerRef = useRef(null);
+    const iceCandidateQueue = useRef([]);
     const callSignalRef = useRef(null);
     const rateLimiterRef = useRef(createRateLimiter(15, 60000));
     const token = sessionStorage.getItem("token");
@@ -214,15 +215,33 @@ const Messages = () => {
         }
     }, [validateToken]);
 
+    const drainQueuedCandidates = useCallback(async (peer) => {
+        if (!peer || !peer.remoteDescription) return;
+        const queue = [...iceCandidateQueue.current];
+        iceCandidateQueue.current = [];
+        for (const cand of queue) {
+            try {
+                await peer.addIceCandidate(cand);
+            } catch (err) {
+                console.warn("Failed to add queued ICE candidate:", err);
+            }
+        }
+    }, []);
+
     const closeCall = useCallback((notify = true) => {
         const active = peerRef.current;
         if (notify && call?.user?.id) {
             sendSignal(call.user.id, { type: "hangup" });
         }
-        active?.getSenders().forEach((sender) => sender.track?.stop());
-        call?.localStream?.getTracks().forEach((track) => track.stop());
+        active?.getSenders().forEach((sender) => {
+            try { sender.track?.stop(); } catch {}
+        });
+        call?.localStream?.getTracks().forEach((track) => {
+            try { track.stop(); } catch {}
+        });
         active?.close();
         peerRef.current = null;
+        iceCandidateQueue.current = [];
         setCall(null);
     }, [call?.user?.id, call?.localStream, sendSignal]);
 
@@ -230,6 +249,9 @@ const Messages = () => {
         const turnUrl = import.meta.env.VITE_TURN_URL;
         const iceServers = [
             { urls: "stun:stun.l.google.com:19302" },
+            { urls: "stun:stun1.l.google.com:19302" },
+            { urls: "stun:stun2.l.google.com:19302" },
+            { urls: "stun:global.stun.twilio.com:3478" },
             ...(turnUrl ? [{
                 urls: turnUrl,
                 username: import.meta.env.VITE_TURN_USERNAME,
@@ -238,14 +260,40 @@ const Messages = () => {
         ];
 
         const peer = new RTCPeerConnection({ iceServers });
-        stream.getTracks().forEach((track) => peer.addTrack(track, stream));
-        peer.onicecandidate = ({ candidate }) => candidate && sendSignal(user.id, { type: "candidate", candidate });
-        peer.ontrack = ({ streams }) => setCall((current) => current ? { ...current, remoteStream: streams[0], status: "connected" } : current);
-        peer.onconnectionstatechange = () => {
-            if (["failed", "closed", "disconnected"].includes(peer.connectionState)) {
+        if (stream) {
+            stream.getTracks().forEach((track) => peer.addTrack(track, stream));
+        }
+
+        peer.onicecandidate = ({ candidate }) => {
+            if (candidate && user?.id) {
+                sendSignal(user.id, { type: "candidate", candidate });
+            }
+        };
+
+        peer.ontrack = (event) => {
+            const remoteStream = event.streams?.[0] || new MediaStream([event.track]);
+            setCall((current) => {
+                if (!current) return current;
+                return { ...current, remoteStream, status: "connected" };
+            });
+        };
+
+        peer.oniceconnectionstatechange = () => {
+            if (peer.iceConnectionState === "connected" || peer.iceConnectionState === "completed") {
+                setCall((current) => current ? { ...current, status: "connected" } : current);
+            } else if (peer.iceConnectionState === "failed") {
                 closeCall(false);
             }
         };
+
+        peer.onconnectionstatechange = () => {
+            if (peer.connectionState === "connected") {
+                setCall((current) => current ? { ...current, status: "connected" } : current);
+            } else if (["failed", "closed"].includes(peer.connectionState)) {
+                closeCall(false);
+            }
+        };
+
         peerRef.current = peer;
         setCall((current) => ({ ...(current || {}), user, video, localStream: stream, status: current?.status || "calling" }));
         return peer;
@@ -309,14 +357,16 @@ const Messages = () => {
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: call.video });
             const peer = createPeer(call.user, call.video, stream);
             await peer.setRemoteDescription(new RTCSessionDescription(call.offer));
+            await drainQueuedCandidates(peer);
             const answer = await peer.createAnswer();
             await peer.setLocalDescription(answer);
             sendSignal(call.user.id, { type: "answer", answer });
         } catch (error) {
+            console.error("Failed to answer call:", error);
             setCallNotice("Failed to answer call.");
             closeCall();
         }
-    }, [call, closeCall, createPeer, sendSignal]);
+    }, [call, closeCall, createPeer, drainQueuedCandidates, sendSignal]);
 
     const handleCallSignal = useCallback(async ({ sender_id, signal }) => {
         if (!signal) return;
@@ -334,14 +384,27 @@ const Messages = () => {
             closeCall(false);
             return;
         }
-        if (!peerRef.current) return;
         if (signal.type === "answer") {
-            await peerRef.current.setRemoteDescription(new RTCSessionDescription(signal.answer));
+            if (peerRef.current) {
+                await peerRef.current.setRemoteDescription(new RTCSessionDescription(signal.answer));
+                await drainQueuedCandidates(peerRef.current);
+            }
+            return;
         }
         if (signal.type === "candidate" && signal.candidate) {
-            await peerRef.current.addIceCandidate(new RTCIceCandidate(signal.candidate));
+            const cand = new RTCIceCandidate(signal.candidate);
+            if (peerRef.current && peerRef.current.remoteDescription && peerRef.current.remoteDescription.type) {
+                try {
+                    await peerRef.current.addIceCandidate(cand);
+                } catch (e) {
+                    console.warn("Failed to add ICE candidate:", e);
+                }
+            } else {
+                iceCandidateQueue.current.push(cand);
+            }
+            return;
         }
-    }, [closeCall, users]);
+    }, [closeCall, drainQueuedCandidates, users]);
     callSignalRef.current = handleCallSignal;
 
     /* ── Keyboard Navigation ──────────────────────────────────────────────── */

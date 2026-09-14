@@ -52,7 +52,11 @@ async def websocket_endpoint(websocket: WebSocket):
             if data.get("type") == "signal":
                 receiver_id = data.get("receiver_id")
                 signal = data.get("signal")
-                if isinstance(receiver_id, int) and isinstance(signal, dict):
+                try:
+                    receiver_id = int(receiver_id)
+                except (ValueError, TypeError):
+                    continue
+                if isinstance(signal, dict):
                     logger.info("WebRTC %s: %s -> %s", signal.get("type", "signal"), user_id, receiver_id)
                     await manager.send_personal_message(receiver_id, {
                         "type": "signal", "sender_id": user_id, "signal": signal,
