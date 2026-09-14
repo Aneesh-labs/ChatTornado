@@ -1,10 +1,37 @@
 import React from "react";
+import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Bell, LogOut, Palette, Radio, ShieldCheck, SlidersHorizontal } from "lucide-react";
+import { Bell, LogOut, Palette, Radio, ShieldCheck, SlidersHorizontal, Users } from "lucide-react";
 import { motion } from "framer-motion";
+import API from "../../Services/API";
 
 export default function Settings() {
     const navigate = useNavigate();
+    const [pendingRequests, setPendingRequests] = useState([]);
+
+    useEffect(() => {
+        const fetchPending = async () => {
+            try {
+                const token = sessionStorage.getItem("token");
+                const res = await API.get("/connections/pending", { params: { token } });
+                setPendingRequests(res.data || []);
+            } catch (err) {
+                console.error("Failed to fetch requests", err);
+            }
+        };
+        fetchPending();
+    }, []);
+
+    const handleAction = async (id, action) => {
+        try {
+            const token = sessionStorage.getItem("token");
+            await API.post(`/connections/${id}/action`, { action }, { params: { token } });
+            setPendingRequests((prev) => prev.filter((r) => r.connection_id !== id));
+        } catch (err) {
+            console.error(`Failed to ${action} request`, err);
+        }
+    };
 
     const handleLogout = () => {
         sessionStorage.removeItem("token");
@@ -72,6 +99,67 @@ export default function Settings() {
                                 </div>
                             </motion.div>
                         ))}
+
+                        {/* Connection Requests Section */}
+                        <motion.div
+                            initial={{ opacity: 0, y: 14 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            className="rounded-lg border border-white/10 bg-[#0d1118]/82 p-5 backdrop-blur-xl mt-4"
+                        >
+                            <div className="flex items-center gap-4 mb-4">
+                                <div className="grid h-11 w-11 shrink-0 place-items-center rounded-lg bg-violet-600 text-white">
+                                    <Users className="h-5 w-5" />
+                                </div>
+                                <div>
+                                    <h2 className="text-lg font-black">Connection Requests</h2>
+                                    <p className="mt-1 text-sm text-white/48">Manage who can chat with you.</p>
+                                </div>
+                                {pendingRequests.length > 0 && (
+                                    <div className="ml-auto bg-violet-600 px-3 py-1 rounded-full text-xs font-bold">
+                                        {pendingRequests.length} Pending
+                                    </div>
+                                )}
+                            </div>
+
+                            {pendingRequests.length === 0 ? (
+                                <div className="text-sm text-white/40 italic py-4">No pending requests at this time.</div>
+                            ) : (
+                                <div className="grid gap-3">
+                                    {pendingRequests.map((req) => (
+                                        <div key={req.connection_id} className="flex items-center justify-between p-3 rounded-lg border border-white/5 bg-white/5">
+                                            <div className="flex items-center gap-3">
+                                                {req.sender.avatar_url ? (
+                                                    <img src={req.sender.avatar_url} alt="avatar" className="w-10 h-10 rounded-full" />
+                                                ) : (
+                                                    <div className="w-10 h-10 rounded-full bg-indigo-600 flex items-center justify-center font-bold">
+                                                        {req.sender.username.charAt(0).toUpperCase()}
+                                                    </div>
+                                                )}
+                                                <div>
+                                                    <div className="font-bold">{req.sender.username}</div>
+                                                    <div className="text-xs text-white/40">Wants to chat</div>
+                                                </div>
+                                            </div>
+                                            <div className="flex gap-2">
+                                                <button
+                                                    onClick={() => handleAction(req.connection_id, "accept")}
+                                                    className="px-3 py-1.5 bg-green-500 hover:bg-green-400 text-black font-bold rounded-lg text-xs transition-colors"
+                                                >
+                                                    Accept
+                                                </button>
+                                                <button
+                                                    onClick={() => handleAction(req.connection_id, "decline")}
+                                                    className="px-3 py-1.5 bg-white/10 hover:bg-white/20 text-white font-bold rounded-lg text-xs transition-colors"
+                                                >
+                                                    Decline
+                                                </button>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </motion.div>
+
                     </section>
 
                     <aside className="grid content-start gap-4">

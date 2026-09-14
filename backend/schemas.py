@@ -216,3 +216,23 @@ class PaginatedResponse(BaseModel):
     limit: int
     offset: int
     has_more: bool
+
+# ============================================================================
+# CONNECTION SCHEMAS
+# ============================================================================
+
+class ConnectionCreate(BaseModel):
+    receiver_id: int
+
+class ConnectionAction(BaseModel):
+    action: str = Field(..., pattern=r"^(accept|decline)$")
+
+class ConnectionResponse(BaseModel):
+    id: int
+    sender_id: int
+    receiver_id: int
+    status: str
+    created_at: datetime
+    
+    class Config:
+        from_attributes = True

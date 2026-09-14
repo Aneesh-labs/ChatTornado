@@ -17,6 +17,7 @@ from auth_routes import router as auth_router
 from user_routes import router as user_router
 from websocket_routes import router as websocket_router
 from upload_routes import router as upload_router
+from connection_routes import router as connection_router
 
 # ============================================================================
 # Create Database Tables
@@ -57,6 +58,7 @@ app.include_router(user_router)
 app.include_router(message_router)
 app.include_router(websocket_router)
 app.include_router(upload_router)
+app.include_router(connection_router)
 
 UPLOAD_DIR = Path(os.getenv("UPLOAD_DIR", Path(__file__).parent / "uploads"))
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)

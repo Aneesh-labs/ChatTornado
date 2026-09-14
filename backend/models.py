@@ -149,3 +149,25 @@ class RefreshToken(Base):
         Index('idx_refresh_tokens_user_revoked', 'user_id', 'revoked'),
         Index('idx_refresh_tokens_expires', 'expires_at'),
     )    
+
+# ============================================================================
+# CONNECTION MODEL
+# ============================================================================
+
+class Connection(Base):
+    __tablename__ = "connections"
+    
+    id: Mapped[int] = mapped_column(primary_key=True, index=True, autoincrement=True)
+    sender_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    receiver_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    status: Mapped[str] = mapped_column(String(20), default="pending", nullable=False) # pending, accepted, declined
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    
+    # Relationships
+    sender: Mapped["User"] = relationship("User", foreign_keys=[sender_id])
+    receiver: Mapped["User"] = relationship("User", foreign_keys=[receiver_id])
+    
+    __table_args__ = (
+        UniqueConstraint('sender_id', 'receiver_id', name='uq_connection'),
+    )

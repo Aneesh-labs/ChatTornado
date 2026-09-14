@@ -29,7 +29,7 @@ import {
 import { useIsMobile } from "./messages/useMediaQuery";
 import Sidebar from "./messages/Sidebar";
 import ChatWindow from "./messages/ChatWindow";
-import EmptyState from "./messages/EmptyState";
+import EmptyState from "./messages/EmptyState"; uhuh
 import RightPanel from "./messages/RightPanel";
 import WallpaperLayer from "./messages/WallpaperLayer";
 import CommandPalette from "./messages/CommandPalette";
@@ -103,6 +103,8 @@ const generateSecureId = () => {
 const Messages = () => {
     // ── Core Domain State ──────────────────────────────────────────────────────
     const [users, setUsers] = useState([]);
+    const [activeUsers, setActiveUsers] = useState([]);
+    const [connectionStatuses, setConnectionStatuses] = useState({});
     const [messages, setMessages] = useState([]);
     const [selectedUser, setSelectedUser] = useState(null);
     const [unreadCounts, setUnreadCounts] = useState({});
@@ -183,10 +185,20 @@ const Messages = () => {
         }));
     }, [users, onlineUserIds]);
 
+    const enrichedActiveUsers = useMemo(() => {
+        return activeUsers.map((u) => ({
+            ...u,
+            avatar: u.avatar || avatarFor(u.id),
+            status: onlineUserIds.has(u.id) ? "online" : "offline",
+        }));
+    }, [activeUsers, onlineUserIds]);
+
     const enrichedSelected = useMemo(() => {
         if (!selectedUser) return null;
-        return enrichedUsers.find((u) => u.id === selectedUser.id) || selectedUser;
-    }, [enrichedUsers, selectedUser]);
+        // Prefer finding in activeUsers, fallback to global
+        const found = enrichedActiveUsers.find((u) => u.id === selectedUser.id) || enrichedUsers.find((u) => u.id === selectedUser.id);
+        return found || selectedUser;
+    }, [enrichedActiveUsers, enrichedUsers, selectedUser]);
 
     const groupedMessages = useMemo(() => {
         const result = [];
@@ -236,10 +248,10 @@ const Messages = () => {
             sendSignal(call.user.id, { type: "hangup" });
         }
         active?.getSenders().forEach((sender) => {
-            try { sender.track?.stop(); } catch {}
+            try { sender.track?.stop(); } catch { }
         });
         call?.localStream?.getTracks().forEach((track) => {
-            try { track.stop(); } catch {}
+            try { track.stop(); } catch { }
         });
         active?.close();
         peerRef.current = null;
@@ -522,14 +534,25 @@ const Messages = () => {
         const fetchUsers = async () => {
             if (!validateToken()) return;
             try {
-                const res = await API.get("/users", { params: { token } });
-                const freshUsers = res.data || [];
-                setUsers((prev) => (prev.length === freshUsers.length ? prev : freshUsers));
+                // Fetch global users
+                const resGlobal = await API.get("/users", { params: { token } });
+                const freshUsers = resGlobal.data || [];
+                setUsers(freshUsers);
+
+                // Fetch active chats
+                const resActive = await API.get("/connections/active", { params: { token } });
+                const active = resActive.data || [];
+                setActiveUsers(active);
+
+                // Fetch connection statuses for global tab
+                const resStatuses = await API.get("/connections/all", { params: { token } });
+                setConnectionStatuses(resStatuses.data || {});
+
                 setSelectedUser((prev) => {
-                    if (!prev && freshUsers.length > 0) return freshUsers[0];
+                    if (!prev && active.length > 0) return active[0];
                     if (!prev) return null;
-                    const stillExists = freshUsers.find((u) => u.id === prev.id);
-                    return stillExists ? prev : (freshUsers[0] || null);
+                    const stillExists = active.find((u) => u.id === prev.id);
+                    return stillExists ? prev : (active[0] || null);
                 });
             } catch (err) {
                 if (err.response?.status === 401) {
@@ -539,6 +562,20 @@ const Messages = () => {
         };
         fetchUsers();
     }, [token, validateToken]);
+
+    const handleRequestConnection = async (receiverId) => {
+        try {
+            const token = sessionStorage.getItem("token");
+            await API.post("/connections/request", { receiver_id: receiverId }, { params: { token } });
+            setConnectionStatuses((prev) => ({
+                ...prev,
+                [receiverId]: { status: "pending", is_sender: true }
+            }));
+            setCallNotice("Connection request sent!");
+        } catch (err) {
+            setCallNotice(err.response?.data?.detail || "Failed to send request.");
+        }
+    };
 
     /* ── WebSocket Connection ───────────────────────────────────────────── */
     useEffect(() => {
@@ -656,6 +693,28 @@ const Messages = () => {
 
                         ghostUserRef.current = null;
 
+                        return;
+                    }
+
+                    if (packet.type === "connection_request") {
+                        setConnectionStatuses((prev) => ({
+                            ...prev,
+                            [packet.sender.id]: { status: "pending", is_sender: false }
+                        }));
+                        showMessageNotification(packet.sender.username, "Sent you a chat request!");
+                        return;
+                    }
+
+                    if (packet.type === "connection_accepted") {
+                        setConnectionStatuses((prev) => ({
+                            ...prev,
+                            [packet.user.id]: { status: "accepted", is_sender: true }
+                        }));
+                        setActiveUsers((prev) => {
+                            if (prev.find(u => u.id === packet.user.id)) return prev;
+                            return [...prev, packet.user];
+                        });
+                        showMessageNotification(packet.user.username, "Accepted your chat request!");
                         return;
                     }
 
@@ -1077,6 +1136,9 @@ const Messages = () => {
                             >
                                 <Sidebar
                                     users={enrichedUsers}
+                                    activeUsers={enrichedActiveUsers}
+                                    connectionStatuses={connectionStatuses}
+                                    onRequestConnection={handleRequestConnection}
                                     selectedUser={enrichedSelected}
                                     unreadCounts={unreadCounts}
                                     pinnedChats={pinnedChats}
