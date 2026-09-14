@@ -350,8 +350,7 @@ const P2PMediaPreview = ({ rawMessage, senderId, socket, onOpenLightbox }) => {
 
     useEffect(() => {
         try {
-            // Decode any escaped HTML entities like &quot; or &#x27;
-            const decoded = decodeHtmlEntities(rawMessage) || "";
+            const decoded = rawMessage || "";
             if (!decoded) return;
             const jsonPart = decoded.replace(/^⚡ P2P_MEDIA\s*/, "").trim();
             const parsed = JSON.parse(jsonPart);
@@ -677,7 +676,8 @@ const MessageBubble = React.memo(({
     }, []);
 
     // Detect content types
-    const actualMessage = unlockedPayload !== null ? unlockedPayload : (msg.message || "");
+    const _rawPayload = unlockedPayload !== null ? unlockedPayload : (msg.message || "");
+    const actualMessage = typeof _rawPayload === "string" ? decodeHtmlEntities(_rawPayload) : _rawPayload;
     const isP2P = typeof actualMessage === "string" && actualMessage.startsWith('⚡ P2P_MEDIA');
     const isGame = typeof actualMessage === "string" && actualMessage.startsWith('🎮 GAME:');
     const isSound = typeof actualMessage === "string" && actualMessage.startsWith('🔊 SOUND:');
@@ -724,7 +724,7 @@ const MessageBubble = React.memo(({
                 {/* Caption text */}
                 {(hasImages || hasVideos || hasAudio || hasFiles) && caption && !isVoiceNote && (
                     <p className="text-[13px] sm:text-sm text-white/90 leading-relaxed whitespace-pre-wrap break-words selection:bg-white/20 mb-1">
-                        {decodeHtmlEntities(caption)}
+                        {caption}
                     </p>
                 )}
             {/* Special voice note styling for caption */}
@@ -779,7 +779,7 @@ const MessageBubble = React.memo(({
             {/* Plain text fallback */}
             {!hasImages && !hasVideos && !hasAudio && !hasFiles && !isP2P && actualMessage && (
                 <p className="text-[13px] sm:text-sm text-white/90 leading-relaxed whitespace-pre-wrap break-words selection:bg-white/20">
-                    {decodeHtmlEntities(actualMessage)}
+                    {actualMessage}
                 </p>
             )}
         </>
