@@ -182,11 +182,13 @@ async def generate_ai_text(prompt: str, chat_history: List[dict]) -> str:
         )
 
         models_to_try = [
-            "gemini-2.5-flash",
-            "gemini-2.0-flash",
-            "gemini-1.5-flash",
+            "gemini-3.6-flash",
+            "gemini-3.7-flash",
+            "gemini-3.8-flash",
+            "gemini-3.5-flash",
             "gemini-flash-latest",
-            "gemini-3.8-flash"
+            "gemini-3.1-pro-preview",
+            "gemini-2.5-flash"
         ]
 
         for model_name in models_to_try:
@@ -214,7 +216,25 @@ async def generate_ai_text(prompt: str, chat_history: List[dict]) -> str:
     # Strategy 2: Direct REST API fallback via httpx
     try:
         import httpx
-        for model_name in ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"]:
+        rest_contents = []
+        for f in filtered[-10:]:
+            rest_contents.append({
+                "role": f["role"],
+                "parts": [{"text": f["text"]}]
+            })
+        rest_contents.append({
+            "role": "user",
+            "parts": [{"text": clean_prompt}]
+        })
+
+        for model_name in [
+            "gemini-3.6-flash",
+            "gemini-3.7-flash",
+            "gemini-3.8-flash",
+            "gemini-3.5-flash",
+            "gemini-flash-latest",
+            "gemini-3.1-pro-preview"
+        ]:
             try:
                 print(f"[AI_SERVICE] Trying REST API with {model_name}...", flush=True)
                 rest_url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={api_key}"
@@ -222,9 +242,7 @@ async def generate_ai_text(prompt: str, chat_history: List[dict]) -> str:
                     "system_instruction": {
                         "parts": [{"text": VORTEX_SYSTEM_PROMPT}]
                     },
-                    "contents": [
-                        {"role": "user", "parts": [{"text": clean_prompt}]}
-                    ]
+                    "contents": rest_contents
                 }
                 async with httpx.AsyncClient(timeout=30.0) as http_client:
                     r = await http_client.post(rest_url, json=payload)
