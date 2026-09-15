@@ -208,14 +208,47 @@ const ImagePreview = ({ imageUrl, onOpenLightbox }) => {
     const [loaded, setLoaded] = useState(false);
     const [error, setError] = useState(false);
     const [hover, setHover] = useState(false);
+    const [retryCount, setRetryCount] = useState(0);
+
+    const activeSrc = retryCount > 0
+        ? (imageUrl.includes("?") ? `${imageUrl}&_r=${retryCount}` : `${imageUrl}?_r=${retryCount}`)
+        : imageUrl;
+
+    const handleImageError = () => {
+        if (retryCount < 3) {
+            // Auto-retry after 600ms, 1200ms, 2000ms
+            const delay = (retryCount + 1) * 600;
+            setTimeout(() => {
+                setRetryCount((prev) => prev + 1);
+            }, delay);
+        } else {
+            setError(true);
+        }
+    };
+
+    const handleManualRetry = (e) => {
+        e.stopPropagation();
+        setError(false);
+        setLoaded(false);
+        setRetryCount((prev) => prev + 1);
+    };
 
     if (error) {
         return (
-            <div className="mt-1.5 flex items-center gap-2 rounded-xl border border-red-500/20 bg-red-500/5 px-3 py-2">
-                <svg className="h-4 w-4 text-red-400/60" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
-                </svg>
-                <span className="text-xs text-red-300/70">Failed to load image</span>
+            <div className="mt-1.5 flex items-center justify-between gap-2 rounded-xl border border-red-500/20 bg-red-500/5 px-3 py-2">
+                <div className="flex items-center gap-2">
+                    <svg className="h-4 w-4 text-red-400/60" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+                    </svg>
+                    <span className="text-xs text-red-300/70">Failed to load image</span>
+                </div>
+                <button
+                    type="button"
+                    onClick={handleManualRetry}
+                    className="text-[11px] font-semibold text-amber-400 hover:text-amber-300 underline underline-offset-2 transition-colors"
+                >
+                    🔄 Retry
+                </button>
             </div>
         );
     }
@@ -225,7 +258,7 @@ const ImagePreview = ({ imageUrl, onOpenLightbox }) => {
             className="relative mt-1.5 cursor-pointer overflow-hidden rounded-xl"
             onMouseEnter={() => setHover(true)}
             onMouseLeave={() => setHover(false)}
-            onClick={(e) => { e.stopPropagation(); onOpenLightbox(imageUrl); }}
+            onClick={(e) => { e.stopPropagation(); onOpenLightbox(activeSrc); }}
             whileHover={{ scale: 1.01 }}
             whileTap={{ scale: 0.99 }}
         >
@@ -239,12 +272,13 @@ const ImagePreview = ({ imageUrl, onOpenLightbox }) => {
                 </div>
             )}
             <img
-                src={imageUrl}
+                key={activeSrc}
+                src={activeSrc}
                 alt="Message attachment"
                 className={`max-h-[400px] w-full rounded-xl object-cover transition-all duration-300 ${loaded ? "opacity-100" : "opacity-0 absolute inset-0"} ${hover ? "brightness-90" : ""}`}
                 loading="lazy"
-                onLoad={() => setLoaded(true)}
-                onError={() => setError(true)}
+                onLoad={() => { setLoaded(true); setError(false); }}
+                onError={handleImageError}
             />
 
             {/* Hover overlay with download */}
@@ -261,7 +295,7 @@ const ImagePreview = ({ imageUrl, onOpenLightbox }) => {
                             initial={{ scale: 0.8, opacity: 0 }}
                             animate={{ scale: 1, opacity: 1 }}
                             exit={{ scale: 0.8, opacity: 0 }}
-                            onClick={(e) => { e.stopPropagation(); downloadImage(imageUrl, getFilenameFromUrl(imageUrl)); }}
+                            onClick={(e) => { e.stopPropagation(); downloadImage(activeSrc, getFilenameFromUrl(activeSrc)); }}
                             className="flex h-8 w-8 items-center justify-center rounded-full bg-white/15 text-white/80 backdrop-blur-xl transition hover:bg-white/25 hover:text-white"
                             title="Download"
                         >

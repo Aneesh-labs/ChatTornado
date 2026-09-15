@@ -348,8 +348,13 @@ async def generate_ai_image(prompt: str) -> str:
 
         with open(target_path, "wb") as f:
             f.write(image_bytes)
+            f.flush()
+            try:
+                os.fsync(f.fileno())
+            except Exception:
+                pass
 
-        logger.info("Saved AI generated image to %s", target_path)
+        logger.info("Saved AI generated image to %s (%d bytes)", target_path, len(image_bytes))
 
         # Relative path served via FastAPI /uploads/ai/...
         image_rel_url = f"/uploads/ai/{file_name}"
