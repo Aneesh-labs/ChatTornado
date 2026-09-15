@@ -37,7 +37,24 @@ export default function VerifyEmail() {
             sessionStorage.setItem("emailVerified", "true");
         } catch (err) {
             setStatus("error");
-            setMessage(err.response?.data?.detail || "Invalid or expired token.");
+            if (!err.response) {
+                // Network error, CORS, or VITE_API_URL missing
+                const apiUrl = import.meta.env.VITE_API_URL || "http://localhost:8000";
+                if (apiUrl.includes("localhost") && window.location.hostname !== "localhost") {
+                    setMessage("Network Error: The frontend is trying to connect to localhost. Please set VITE_API_URL in your Vercel deployment settings.");
+                } else {
+                    setMessage(`Network Error: Could not reach the backend at ${apiUrl}. Is it running?`);
+                }
+            } else {
+                // Backend responded with an error (could be JSON or HTML string)
+                let errorMsg = "Invalid or expired token.";
+                if (err.response?.data?.detail) {
+                    errorMsg = err.response.data.detail;
+                } else if (typeof err.response?.data === 'string' && err.response.data.length < 100) {
+                    errorMsg = `Server Error: ${err.response.data}`;
+                }
+                setMessage(errorMsg);
+            }
         }
     };
 
