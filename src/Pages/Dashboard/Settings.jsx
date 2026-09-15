@@ -1,12 +1,16 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Bell, LogOut, Palette, Radio, ShieldCheck, SlidersHorizontal, Users } from "lucide-react";
-import { motion } from "framer-motion";
+import { Bell, LogOut, Palette, Radio, ShieldCheck, SlidersHorizontal, Users, Trash2, AlertTriangle, Loader2 } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
 import API from "../../Services/API";
 
 export default function Settings() {
     const navigate = useNavigate();
     const [pendingRequests, setPendingRequests] = useState([]);
+    const [showDeleteModal, setShowDeleteModal] = useState(false);
+    const [deleteConfirmText, setDeleteConfirmText] = useState("");
+    const [isDeleting, setIsDeleting] = useState(false);
+    const [deleteError, setDeleteError] = useState("");
 
     useEffect(() => {
         const fetchPending = async () => {
@@ -36,6 +40,22 @@ export default function Settings() {
         sessionStorage.removeItem("username");
         window.dispatchEvent(new Event("sessionStorageUpdate"));
         navigate("/", { replace: true });
+    };
+
+    const handleDeleteAccount = async () => {
+        setIsDeleting(true);
+        setDeleteError("");
+        try {
+            const token = sessionStorage.getItem("token");
+            await API.delete("/user/account", { params: { token } });
+            sessionStorage.clear();
+            window.dispatchEvent(new Event("sessionStorageUpdate"));
+            navigate("/", { replace: true });
+        } catch (err) {
+            console.error("Failed to delete account:", err);
+            setDeleteError(err.response?.data?.detail || "Failed to delete account. Please try again.");
+            setIsDeleting(false);
+        }
     };
 
     return (
@@ -183,9 +203,105 @@ export default function Settings() {
                                 Logout securely
                             </button>
                         </section>
+
+                        {/* Danger Zone: Delete Account */}
+                        <section className="rounded-lg border border-red-600/30 bg-red-950/20 p-5 backdrop-blur-xl" aria-label="Danger Zone">
+                            <div className="flex items-center gap-2 text-red-400">
+                                <AlertTriangle className="h-5 w-5" />
+                                <h2 className="text-xl font-black text-red-400">Danger Zone</h2>
+                            </div>
+                            <p className="mt-2 text-sm leading-6 text-red-200/60">
+                                Permanently wipe your account, chats, and connections from the database. This cannot be undone.
+                            </p>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setDeleteConfirmText("");
+                                    setDeleteError("");
+                                    setShowDeleteModal(true);
+                                }}
+                                className="mt-5 flex min-h-[48px] w-full items-center justify-center gap-2 rounded-lg border border-red-500/40 bg-red-500/10 px-4 text-sm font-black text-red-300 transition hover:bg-red-500/20 active:scale-[0.98]"
+                            >
+                                <Trash2 className="h-4 w-4 text-red-400" />
+                                Delete Account Permanently
+                            </button>
+                        </section>
                     </aside>
                 </div>
             </section>
+
+            {/* Permanent Account Deletion Modal */}
+            <AnimatePresence>
+                {showDeleteModal && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md">
+                        <motion.div
+                            initial={{ opacity: 0, scale: 0.95 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            exit={{ opacity: 0, scale: 0.95 }}
+                            className="w-full max-w-md rounded-2xl border border-red-500/30 bg-[#0c0d12] p-6 shadow-2xl"
+                        >
+                            <div className="flex items-center gap-3 text-red-400 mb-4">
+                                <div className="grid h-10 w-10 place-items-center rounded-xl bg-red-500/10 border border-red-500/20">
+                                    <Trash2 className="h-5 w-5" />
+                                </div>
+                                <div>
+                                    <h3 className="text-lg font-bold text-white">Delete Account Forever?</h3>
+                                    <p className="text-xs text-red-400/80">Permanent & irreversible action</p>
+                                </div>
+                            </div>
+
+                            <p className="text-xs leading-relaxed text-white/60 mb-4">
+                                This will completely wipe your account, conversations, messages, reactions, and connections from the database. Your username and email will immediately become available for anyone to register again.
+                            </p>
+
+                            <div className="rounded-xl border border-white/5 bg-white/[0.02] p-3 mb-4">
+                                <p className="text-xs text-white/70 mb-2">
+                                    Type <span className="font-bold text-red-400 font-mono">DELETE</span> below to confirm:
+                                </p>
+                                <input
+                                    type="text"
+                                    value={deleteConfirmText}
+                                    onChange={(e) => setDeleteConfirmText(e.target.value)}
+                                    placeholder="DELETE"
+                                    className="w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm text-white font-mono placeholder:text-white/20 focus:border-red-500 focus:outline-none"
+                                />
+                            </div>
+
+                            {deleteError && (
+                                <p className="text-xs text-red-400 mb-3 bg-red-500/10 p-2.5 rounded-lg border border-red-500/20">
+                                    {deleteError}
+                                </p>
+                            )}
+
+                            <div className="flex items-center gap-2">
+                                <button
+                                    type="button"
+                                    disabled={isDeleting}
+                                    onClick={() => setShowDeleteModal(false)}
+                                    className="flex-1 py-2.5 rounded-xl border border-white/10 bg-white/5 text-xs font-semibold text-white/70 hover:bg-white/10 transition-colors"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="button"
+                                    disabled={deleteConfirmText !== "DELETE" || isDeleting}
+                                    onClick={handleDeleteAccount}
+                                    className="flex-1 py-2.5 rounded-xl bg-red-600 text-xs font-bold text-white hover:bg-red-500 disabled:opacity-30 disabled:pointer-events-none transition-colors flex items-center justify-center gap-1.5"
+                                >
+                                    {isDeleting ? (
+                                        <>
+                                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                            Wiping...
+                                        </>
+                                    ) : (
+                                        "Delete Account"
+                                    )}
+                                </button>
+                            </div>
+                        </motion.div>
+                    </div>
+                )}
+            </AnimatePresence>
         </main>
     );
 }

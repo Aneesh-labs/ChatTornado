@@ -756,6 +756,12 @@ const Messages = () => {
                         setOnlineUserIds(new Set(packet.users || []));
                         return;
                     }
+                    if (packet.type === "chat_cleared") {
+                        if (selectedUserRef.current?.id === packet.cleared_by || selectedUserRef.current?.id === packet.partner_id) {
+                            setMessages([]);
+                        }
+                        return;
+                    }
                     if (packet.type === "signal") {
                         callSignalRef.current?.(packet);
                         return;
@@ -1129,6 +1135,19 @@ const Messages = () => {
         }
     }, [selectedMsgIds]);
 
+    const clearConversation = useCallback(async () => {
+        if (!selectedUser?.id) return;
+        try {
+            const token = sessionStorage.getItem("token");
+            await API.delete(`/messages/conversation/${selectedUser.id}?token=${encodeURIComponent(token)}`);
+            setMessages([]);
+            setCallNotice("Conversation permanently deleted.");
+        } catch (error) {
+            console.error("Failed to clear conversation:", error);
+            setCallNotice("Failed to delete conversation. Please try again.");
+        }
+    }, [selectedUser]);
+
     const showSidebar = !isMobile || mobileView === "list";
 
     // Security status color mapping
@@ -1234,6 +1253,7 @@ const Messages = () => {
                         messages={messages}
                         isOpen={rightPanelOpen}
                         onClose={handleCloseRightPanel}
+                        onClearChat={clearConversation}
                     />
 
                     <CommandPalette

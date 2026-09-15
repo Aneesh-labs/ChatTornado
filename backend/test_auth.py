@@ -149,6 +149,71 @@ def test_resend_invalidates_old_and_rate_limit(mock_email_service):
     assert res_limit.status_code == 429
 
 
+def test_delete_chat_conversation(mock_email_service):
+    # Setup two users
+    client.post("/signup", data={"username": "user_a", "email": "a@example.com", "password": "Password123!"})
+    client.post("/signup", data={"username": "user_b", "email": "b@example.com", "password": "Password123!"})
+    
+    # Verify both users
+    db = TestingSessionLocal()
+    user_a = db.query(models.User).filter_by(username="user_a").first()
+    user_b = db.query(models.User).filter_by(username="user_b").first()
+    user_a.email_verified = True
+    user_b.email_verified = True
+    
+    # Add messages between user_a and user_b
+    msg1 = models.Message(sender_id=user_a.id, receiver_id=user_b.id, message="Hello B")
+    msg2 = models.Message(sender_id=user_b.id, receiver_id=user_a.id, message="Hello A")
+    db.add_all([msg1, msg2])
+    db.commit()
+    
+    db.add(models.MessageVisibility(message_id=msg1.id, user_id=user_a.id, visible=True))
+    db.add(models.MessageVisibility(message_id=msg1.id, user_id=user_b.id, visible=True))
+    db.add(models.MessageVisibility(message_id=msg2.id, user_id=user_a.id, visible=True))
+    db.add(models.MessageVisibility(message_id=msg2.id, user_id=user_b.id, visible=True))
+    db.commit()
+    
+    # Log in as user_a
+    login_res = client.post("/login", json={"email": "a@example.com", "password": "Password123!"})
+    token_a = login_res.json()["access_token"]
+    
+    # Delete conversation with user_b
+    del_res = client.delete(f"/messages/conversation/{user_b.id}?token={token_a}")
+    assert del_res.status_code == 200
+    assert del_res.json()["success"] is True
+    
+    # Check messages are deleted from database
+    remaining = db.query(models.Message).all()
+    assert len(remaining) == 0
+    db.close()
+
+
+def test_delete_account_permanently(mock_email_service):
+    # Setup user
+    client.post("/signup", data={"username": "doomed_user", "email": "doomed@example.com", "password": "Password123!"})
+    db = TestingSessionLocal()
+    user = db.query(models.User).filter_by(username="doomed_user").first()
+    user.email_verified = True
+    db.commit()
+    
+    login_res = client.post("/login", json={"email": "doomed@example.com", "password": "Password123!"})
+    token = login_res.json()["access_token"]
+    
+    # Delete account
+    del_res = client.delete(f"/user/account?token={token}")
+    assert del_res.status_code == 200
+    assert del_res.json()["success"] is True
+    
+    # Verify user row is gone from DB
+    deleted = db.query(models.User).filter_by(username="doomed_user").first()
+    assert deleted is None
+    db.close()
+    
+    # Verify that the same email can immediately be used to register a new account!
+    new_signup = client.post("/signup", data={"username": "doomed_user", "email": "doomed@example.com", "password": "NewPassword123!"})
+    assert new_signup.status_code == 200
+
+
 # ---------------------------------------------------------------------------
 # email_service unit tests
 # ---------------------------------------------------------------------------

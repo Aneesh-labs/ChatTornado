@@ -241,11 +241,12 @@ async def delete_message(
     }
 
 # ============================================================================
-# DELETE CHAT ENDPOINT
+# DELETE CHAT ENDPOINT (Permanently wipe conversation)
 # ============================================================================
 
+@router.delete("/messages/conversation/{other_user_id}")
 @router.post("/delete_chat/{other_user_id}")
-def delete_chat(
+async def delete_chat_conversation(
     other_user_id: int,
     token: str,
     db: Session = Depends(get_db)
@@ -260,6 +261,7 @@ def delete_chat(
 
     user_id = payload["user_id"]
 
+    # Find all messages between user and other_user
     messages = (
         db.query(Message.id)
         .filter(
@@ -280,15 +282,24 @@ def delete_chat(
     message_ids = [msg.id for msg in messages]
 
     if message_ids:
-        db.query(MessageVisibility).filter(
-            MessageVisibility.message_id.in_(message_ids),
-            MessageVisibility.user_id == user_id
-        ).update({"visible": False}, synchronize_session=False)
-
+        # Delete reactions, visibility, and message rows
+        db.query(MessageReaction).filter(MessageReaction.message_id.in_(message_ids)).delete(synchronize_session=False)
+        db.query(MessageVisibility).filter(MessageVisibility.message_id.in_(message_ids)).delete(synchronize_session=False)
+        db.query(Message).filter(Message.id.in_(message_ids)).delete(synchronize_session=False)
         db.commit()
+
+        # Broadcast real-time clear event to both users
+        clear_packet = {
+            "type": "chat_cleared",
+            "cleared_by": user_id,
+            "partner_id": other_user_id
+        }
+        await manager.send_personal_message(user_id, clear_packet)
+        await manager.send_personal_message(other_user_id, clear_packet)
 
     return {
         "success": True,
+        "message": "Conversation permanently deleted.",
         "count": len(message_ids)
     }
 
