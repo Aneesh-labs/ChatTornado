@@ -122,48 +122,76 @@ def is_image_request(text: str) -> Tuple[bool, str]:
 
 
 async def generate_ai_text(prompt: str, chat_history: List[dict]) -> str:
-    """Generate conversational response using Gemini API."""
+    """Generate conversational response using Gemini API with SDK and REST fallback."""
     api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
+        print("[AI_SERVICE] No GEMINI_API_KEY set!", flush=True)
         return (
             "⚡ **VORTEX-9 Neural Link Offline**\n\n"
             "Gemini API key is not configured yet. Please add `GEMINI_API_KEY` to your backend environment (`.env`) to activate full conversational intelligence and image synthesis."
         )
 
+    clean_prompt = prompt.strip()
+
+    # Strategy 1: Google GenAI SDK
     try:
         from google import genai
         from google.genai import types
 
         client = genai.Client(api_key=api_key)
 
-        # Build contents from history
-        contents = []
-        # Add past turns for context (up to last 8 messages)
-        for h in chat_history[-8:]:
+        # Build strictly alternating history
+        filtered = []
+        for h in chat_history:
             role = "user" if h.get("is_user") else "model"
-            text_content = h.get("text", "")
-            if text_content:
-                contents.append(
-                    types.Content(
-                        role=role,
-                        parts=[types.Part.from_text(text=text_content)]
-                    )
-                )
+            text_content = (h.get("text") or "").strip()
+            if not text_content:
+                continue
+            if filtered and filtered[-1]["role"] == role:
+                filtered[-1]["text"] += "\n" + text_content
+            else:
+                filtered.append({"role": role, "text": text_content})
+                
+        # If the last history item is a user turn, we must merge or drop to maintain alternation
+        if filtered and filtered[-1]["role"] == "user":
+            if filtered[-1]["text"] == clean_prompt:
+                filtered.pop()
+            else:
+                clean_prompt = filtered.pop()["text"] + "\n" + clean_prompt
 
-        # Add current user prompt
+        # Gemini requires contents to start with 'user'
+        while filtered and filtered[0]["role"] != "user":
+            filtered.pop(0)
+            
+        contents = []
+        # Keep recent turns only
+        for f in filtered[-10:]:
+            contents.append(
+                types.Content(
+                    role=f["role"],
+                    parts=[types.Part.from_text(text=f["text"])]
+                )
+            )
+
+        # Add current user prompt (must be 'user' to end the sequence)
         contents.append(
             types.Content(
                 role="user",
-                parts=[types.Part.from_text(text=prompt)]
+                parts=[types.Part.from_text(text=clean_prompt)]
             )
         )
 
-        # Try current models with fallback
-        models_to_try = ["gemini-3.8-flash", "gemini-2.5-flash", "gemini-flash-latest"]
-        last_error = None
+        models_to_try = [
+            "gemini-2.5-flash",
+            "gemini-2.0-flash",
+            "gemini-1.5-flash",
+            "gemini-flash-latest",
+            "gemini-3.8-flash"
+        ]
 
         for model_name in models_to_try:
             try:
+                print(f"[AI_SERVICE] Calling Gemini SDK with {model_name}...", flush=True)
                 response = client.models.generate_content(
                     model=model_name,
                     contents=contents,
@@ -174,20 +202,48 @@ async def generate_ai_text(prompt: str, chat_history: List[dict]) -> str:
                     )
                 )
                 if response and response.text:
+                    print(f"[AI_SERVICE] Gemini SDK {model_name} succeeded!", flush=True)
                     return response.text.strip()
             except Exception as e:
-                logger.warning("Gemini model %s error: %s", model_name, e)
-                last_error = e
+                print(f"[AI_SERVICE] Gemini SDK model {model_name} failed: {e}", flush=True)
                 continue
 
-        if last_error:
-            raise last_error
-
-        return "⚡ Neural pulse processed, but output was empty. Try rephrasing your thought."
-
     except Exception as exc:
-        logger.exception("Error calling Gemini text generation: %s", exc)
-        return f"⚠️ **Neural Link Disruption**: {str(exc)}"
+        print(f"[AI_SERVICE] Gemini SDK exception: {exc}", flush=True)
+
+    # Strategy 2: Direct REST API fallback via httpx
+    try:
+        import httpx
+        for model_name in ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"]:
+            try:
+                print(f"[AI_SERVICE] Trying REST API with {model_name}...", flush=True)
+                rest_url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={api_key}"
+                payload = {
+                    "system_instruction": {
+                        "parts": [{"text": VORTEX_SYSTEM_PROMPT}]
+                    },
+                    "contents": [
+                        {"role": "user", "parts": [{"text": clean_prompt}]}
+                    ]
+                }
+                async with httpx.AsyncClient(timeout=30.0) as http_client:
+                    r = await http_client.post(rest_url, json=payload)
+                    res_data = r.json()
+                    if "candidates" in res_data and res_data["candidates"]:
+                        candidate_text = res_data["candidates"][0].get("content", {}).get("parts", [{}])[0].get("text", "")
+                        if candidate_text:
+                            print(f"[AI_SERVICE] REST API {model_name} succeeded!", flush=True)
+                            return candidate_text.strip()
+                    elif "error" in res_data:
+                        print(f"[AI_SERVICE] REST API {model_name} error: {res_data['error'].get('message')}", flush=True)
+            except Exception as re_err:
+                print(f"[AI_SERVICE] REST API {model_name} failed: {re_err}", flush=True)
+                continue
+    except Exception as rest_exc:
+        print(f"[AI_SERVICE] REST client exception: {rest_exc}", flush=True)
+
+    return "⚡ VORTEX-9 received your message, but the neural synthesis model returned no text. Please verify your GEMINI_API_KEY tier and quota."
+
 
 
 async def generate_ai_image(prompt: str) -> str:
@@ -244,6 +300,21 @@ async def generate_ai_image(prompt: str) -> str:
                         break
                 except Exception as e2:
                     logger.warning("%s failed: %s", imagen_model, e2)
+
+        # Strategy 3: Zero-key high-quality fallback (Pollinations AI)
+        if not image_bytes:
+            try:
+                import urllib.parse
+                import httpx
+                logger.info("Falling back to Pollinations AI for image generation...")
+                poll_url = f"https://image.pollinations.ai/prompt/{urllib.parse.quote(clean_prompt)}?width=768&height=768&nologo=true"
+                async with httpx.AsyncClient(timeout=30.0) as http_client:
+                    r = await http_client.get(poll_url)
+                    if r.status_code == 200 and len(r.content) > 1000:
+                        image_bytes = r.content
+                        mime_type = "image/jpeg"
+            except Exception as e3:
+                logger.warning("Pollinations fallback failed: %s", e3)
 
         if not image_bytes:
             return f"⚠️ **Visual Synthesis Failed**: Could not generate image for \"{clean_prompt}\". Please try a different prompt or verify your API key tier."

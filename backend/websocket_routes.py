@@ -538,7 +538,9 @@ async def websocket_endpoint(websocket: WebSocket):
                     })
                     reply_db = SessionLocal()
                     try:
+                        print(f"[BOT_HANDLER] Starting reply generation for user {u_id}: {prompt_text}", flush=True)
                         reply_text = await process_user_message_to_bot(u_id, prompt_text, reply_db)
+                        print(f"[BOT_HANDLER] Reply generated successfully ({len(reply_text)} chars)", flush=True)
 
                         bot_message = Message(
                             sender_id=b_id,
@@ -575,7 +577,41 @@ async def websocket_endpoint(websocket: WebSocket):
                             "reactions": []
                         })
                     except Exception as bot_err:
+                        print(f"[BOT_HANDLER] Exception during bot reply: {bot_err}", flush=True)
                         logger.exception("Error in bot reply task: %s", bot_err)
+                        err_text = f"⚠️ **Neural Link Disruption**: {str(bot_err)}"
+                        try:
+                            err_msg = Message(
+                                sender_id=b_id,
+                                receiver_id=u_id,
+                                message=err_text,
+                                is_shielded=False,
+                                read_state="sent"
+                            )
+                            reply_db.add(err_msg)
+                            reply_db.commit()
+                            reply_db.refresh(err_msg)
+                            reply_db.add_all([
+                                MessageVisibility(message_id=err_msg.id, user_id=b_id, visible=True),
+                                MessageVisibility(message_id=err_msg.id, user_id=u_id, visible=True),
+                            ])
+                            reply_db.commit()
+
+                            await manager.send_personal_message(u_id, {
+                                "type": "message",
+                                "id": err_msg.id,
+                                "sender_id": b_id,
+                                "receiver_id": u_id,
+                                "message": err_text,
+                                "created_at": str(err_msg.created_at),
+                                "is_shielded": False,
+                                "is_locked": False,
+                                "read_state": "sent",
+                                "reactions": []
+                            })
+                        except Exception as inner_err:
+                            logger.exception("Failed to deliver error message to user: %s", inner_err)
+
                         await manager.send_personal_message(u_id, {
                             "type": "typing_stop",
                             "sender_id": b_id
