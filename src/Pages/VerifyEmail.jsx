@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
-import axios from "axios";
-import { Mail, CheckCircle2, XCircle, RefreshCw, Loader2, LogOut } from "lucide-react";
+import API from "../Services/API";
+import { Mail, CheckCircle2, XCircle, RefreshCw, Loader2, LogOut, Send } from "lucide-react";
 
 export default function VerifyEmail() {
     const [searchParams] = useSearchParams();
@@ -12,8 +12,8 @@ export default function VerifyEmail() {
     const [message, setMessage] = useState("");
     const [resendCooldown, setResendCooldown] = useState(0);
     const [resending, setResending] = useState(false);
-
-    const API_URL = import.meta.env.VITE_API_URL;
+    const [emailInput, setEmailInput] = useState(() => sessionStorage.getItem("email") || "");
+    const [resendNotice, setResendNotice] = useState("");
 
     useEffect(() => {
         if (token) {
@@ -31,10 +31,9 @@ export default function VerifyEmail() {
 
     const verifyToken = async (t) => {
         try {
-            const res = await axios.get(`${API_URL}/verify-email?token=${t}`);
+            const res = await API.get(`/verify-email?token=${t}`);
             setStatus("success");
             setMessage(res.data.message || "Email verified successfully!");
-            // Update session storage
             sessionStorage.setItem("emailVerified", "true");
         } catch (err) {
             setStatus("error");
@@ -42,22 +41,25 @@ export default function VerifyEmail() {
         }
     };
 
-    const handleResend = async () => {
+    const handleResend = async (e) => {
+        if (e) e.preventDefault();
         if (resendCooldown > 0 || resending) return;
+
+        const targetEmail = (emailInput || sessionStorage.getItem("email") || "").trim();
+        if (!targetEmail) {
+            setResendNotice("Please enter your email address.");
+            return;
+        }
         
         setResending(true);
+        setResendNotice("");
         try {
-            // Need to get email from somewhere, either stored locally during signup/login or from backend.
-            // Let's assume the user is logged in if they are on the prompt page. 
-            // In a real app, they would provide it, or we infer it from the JWT session.
-            const userEmail = sessionStorage.getItem("email") || prompt("Please enter your email to resend:");
-            if (!userEmail) return;
-
-            const res = await axios.post(`${API_URL}/resend-verification`, { email: userEmail });
-            alert("Verification email resent! Check your inbox.");
+            const res = await API.post("/resend-verification", { email: targetEmail });
+            sessionStorage.setItem("email", targetEmail);
+            setResendNotice(res.data.message || "Verification link sent to your email!");
             setResendCooldown(60); // 60s cooldown
         } catch (err) {
-            alert(err.response?.data?.detail || "Error resending email.");
+            setResendNotice(err.response?.data?.detail || "Error resending verification email.");
         } finally {
             setResending(false);
         }
@@ -117,21 +119,39 @@ export default function VerifyEmail() {
                 {status === "prompt" && (
                     <div className="flex flex-col items-center text-center">
                         <Mail className="mb-4 h-12 w-12 text-blue-400" />
-                        <h2 className="text-xl font-bold">Check your email</h2>
+                        <h2 className="text-xl font-bold">Verify Your Email</h2>
                         <p className="mt-2 text-sm text-white/60">
-                            We've sent a verification link to your email address. Please click it to continue.
+                            We've sent a verification link. Please click the link in your inbox or request a new one below:
                         </p>
-                        
-                        <button 
-                            onClick={handleResend}
-                            disabled={resendCooldown > 0 || resending}
-                            className="mt-6 flex w-full items-center justify-center gap-2 rounded-xl bg-blue-500 py-3 font-bold text-white transition hover:bg-blue-400 disabled:opacity-50"
-                        >
-                            {resending ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-                            {resendCooldown > 0 ? `Resend in ${resendCooldown}s` : "Resend Email"}
-                        </button>
+
+                        <form onSubmit={handleResend} className="mt-5 w-full space-y-3">
+                            <input
+                                type="email"
+                                value={emailInput}
+                                onChange={(e) => setEmailInput(e.target.value)}
+                                placeholder="Enter your email"
+                                className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white placeholder-white/30 outline-none focus:border-blue-400/50"
+                                required
+                            />
+
+                            {resendNotice && (
+                                <p className={`text-xs ${resendNotice.includes("sent") ? "text-emerald-400" : "text-amber-300"}`}>
+                                    {resendNotice}
+                                </p>
+                            )}
+                            
+                            <button 
+                                type="submit"
+                                disabled={resendCooldown > 0 || resending}
+                                className="flex w-full items-center justify-center gap-2 rounded-xl bg-blue-500 py-3 font-bold text-white transition hover:bg-blue-400 disabled:opacity-50"
+                            >
+                                {resending ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+                                {resendCooldown > 0 ? `Resend in ${resendCooldown}s` : "Resend Verification Email"}
+                            </button>
+                        </form>
 
                         <button 
+                            type="button"
                             onClick={handleLogout}
                             className="mt-4 flex items-center justify-center gap-2 text-sm text-red-400 hover:text-red-300"
                         >

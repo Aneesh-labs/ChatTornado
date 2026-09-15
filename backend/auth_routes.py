@@ -4,6 +4,7 @@ import secrets
 import hashlib
 from fastapi import APIRouter, Depends, HTTPException, Form, Request
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 from datetime import datetime, timedelta
 from typing import Optional
 from slowapi import Limiter
@@ -36,6 +37,9 @@ def signup(
     invite_code: str = Form(None),
     db: Session = Depends(get_db)
 ):
+    username = (username or "").strip()
+    email = (email or "").strip().lower()
+
     # Check private invite code if configured in environment
     required_invite_code = os.getenv("INVITE_CODE")
     if required_invite_code and required_invite_code.strip():
@@ -51,12 +55,12 @@ def signup(
             detail="Invalid email format. Please reenter the email."
         )
     
-    # Check for existing user
+    # Check for existing user (case-insensitive)
     existing_user = (
         db.query(User)
         .filter(
-            (User.email == email) | 
-            (User.username == username)
+            (func.lower(User.email) == email) | 
+            (func.lower(User.username) == username.lower())
         )
         .first()
     )
@@ -122,30 +126,30 @@ def login(
     data: dict,
     db: Session = Depends(get_db)
 ):
-    email = data.get("email")
+    identifier = (data.get("email") or data.get("username") or "").strip()
     password = data.get("password")
     
-    if not email or not password:
+    if not identifier or not password:
         raise HTTPException(
             status_code=400,
-            detail="Email and password feilds are manidatory."
+            detail="Email and password fields are mandatory."
         )
     
-    if email == 'Aneesh@Secret.com' :
+    if identifier.lower() == 'aneesh@secret.com':
         raise HTTPException(
-            status_code = 401,
+            status_code=401,
             detail="You are the admin! Try using aneesh@chat.com and 123456!"
         )
     
-    # Find user
+    # Find user by email or username (case-insensitive)
     user = (
         db.query(User)
-        .filter(User.email == email)
+        .filter(
+            (func.lower(User.email) == identifier.lower()) |
+            (func.lower(User.username) == identifier.lower())
+        )
         .first()
     )
-
-    
-
     
     if not user:
         raise HTTPException(
@@ -197,6 +201,7 @@ def login(
         "token_type": "bearer",
         "expires_in": 900,
         "username": user.username,
+        "email": user.email,
         "user_id": user.id,
         "email_verified": user.email_verified
     }
@@ -314,7 +319,10 @@ def verify_user(
     # Check if user still exists
     user = (
         db.query(User)
-        .filter(User.email == payload.get("sub"))
+        .filter(
+            (User.id == payload.get("user_id")) |
+            (func.lower(User.email) == (payload.get("sub") or "").strip().lower())
+        )
         .first()
     )
     
@@ -326,8 +334,9 @@ def verify_user(
     
     return {
         "valid": True,
-        "username": payload.get("username"),
-        "user_id": payload.get("user_id"),
+        "username": user.username,
+        "email": user.email,
+        "user_id": user.id,
         "email_verified": user.email_verified
     }
 
@@ -362,14 +371,14 @@ def verify_email(token: str, db: Session = Depends(get_db)):
 @router.post("/resend-verification")
 @limiter.limit("3/minute")
 def resend_verification(request: Request, data: dict, db: Session = Depends(get_db)):
-    email = data.get("email")
+    email = (data.get("email") or "").strip().lower()
     if not email:
         raise HTTPException(status_code=400, detail="Email is required.")
         
     # Standard security practice: Do not leak whether the email exists.
     # We will return success regardless, but only actually process if the user exists and is unverified.
     
-    user = db.query(User).filter(User.email == email).first()
+    user = db.query(User).filter(func.lower(User.email) == email).first()
     
     if user and not user.email_verified:
         # Generate new token

@@ -1,13 +1,10 @@
 import { useEffect, useState } from "react"
 import { Navigate } from "react-router-dom"
-import axios from "axios"
-
+import API from "../Services/API"
 
 export default function ProtectedRoute({ children }) {
 
     const [loading, setLoading] = useState(true)
-    const API_URL =
-        import.meta.env.VITE_API_URL;
     const [authorized, setAuthorized] = useState(false);
     const [emailVerified, setEmailVerified] = useState(true);
 
@@ -19,11 +16,15 @@ export default function ProtectedRoute({ children }) {
             return
         }
 
-        axios.get(
-            `${API_URL}/verify?token=${token}`
-        )
+        API.get(`/verify?token=${token}`)
             .then((res) => {
-                sessionStorage.setItem("emailVerified", res.data.email_verified);
+                sessionStorage.setItem("emailVerified", String(res.data.email_verified));
+                if (res.data.email) {
+                    sessionStorage.setItem("email", res.data.email);
+                }
+                if (res.data.username) {
+                    sessionStorage.setItem("username", res.data.username);
+                }
                 setEmailVerified(res.data.email_verified);
                 setAuthorized(true)
             })
@@ -36,7 +37,7 @@ export default function ProtectedRoute({ children }) {
                 setLoading(false)
             })
 
-    }, [API_URL])
+    }, [])
 
     if (loading) {
         return <div>Authenticating...</div>

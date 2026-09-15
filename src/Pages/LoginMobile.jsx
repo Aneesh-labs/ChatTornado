@@ -124,7 +124,7 @@ import {
 // CORE ARCHITECTURAL CONFIGURATIONS & MATRICES
 // ============================================================================
 const API_URL =
-    import.meta.env.VITE_API_URL;
+    import.meta.env.VITE_API_URL || "http://localhost:8000";
 
 const SYSTEM_CONFIG = {
     BUILD_VERSION: "2.0.4-Premium-Flagship",

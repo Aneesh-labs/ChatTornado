@@ -1886,7 +1886,7 @@ export default function LoginMobile2() {
     // AUTHENTICATION SUBMISSION
     // ============================================================================
     const API_URL =
-        import.meta.env.VITE_API_URL;
+        import.meta.env.VITE_API_URL || "http://localhost:8000";
 
     const handleSubmit = async (e) => {
         e.preventDefault();

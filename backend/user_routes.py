@@ -35,7 +35,8 @@ def get_users(
     return [
         {
             "id": user.id,
-            "username": user.username
+            "username": user.username,
+            "email": user.email
         }
         for user in users
     ]
@@ -60,7 +61,8 @@ def get_user(
 
     return {
         "id": user.id,
-        "username": user.username
+        "username": user.username,
+        "email": user.email
     }
 
 
