@@ -501,3 +501,54 @@ async def process_user_message_to_bot(user_id: int, message_text: str, db: Sessi
         })
 
     return await generate_ai_text(message_text, history)
+
+
+async def ai_clean_text(text: str) -> str:
+    """Uses Gemini to clean up dictated text (removes umms, ahs, rambling, spaces)."""
+    api_key = os.getenv("GEMINI_API_KEY")
+    if not api_key:
+        return text
+
+    system_prompt = "You are a text cleanup assistant. The user will provide raw dictated text. Fix grammar, remove filler words like 'umm', 'ah', fix unnecessary spaces and rambling, and return ONLY the clean text. Do NOT add any extra commentary or quotes."
+    
+    try:
+        import httpx
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key={api_key}"
+        payload = {
+            "system_instruction": {"parts": [{"text": system_prompt}]},
+            "contents": [{"role": "user", "parts": [{"text": text}]}]
+        }
+        async with httpx.AsyncClient(timeout=15.0) as http_client:
+            r = await http_client.post(url, json=payload)
+            res_data = r.json()
+            if "candidates" in res_data and res_data["candidates"]:
+                return res_data["candidates"][0].get("content", {}).get("parts", [{}])[0].get("text", text).strip()
+    except Exception:
+        pass
+    return text
+
+
+async def ai_summarize_chat(messages_text: str) -> str:
+    """Uses Gemini to summarize a chat session."""
+    api_key = os.getenv("GEMINI_API_KEY")
+    if not api_key:
+        return "Cannot summarize: GEMINI_API_KEY missing."
+
+    system_prompt = "You are a chat summarizer. Summarize the following conversation session concisely in a few sentences."
+    
+    try:
+        import httpx
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key={api_key}"
+        payload = {
+            "system_instruction": {"parts": [{"text": system_prompt}]},
+            "contents": [{"role": "user", "parts": [{"text": messages_text}]}]
+        }
+        async with httpx.AsyncClient(timeout=15.0) as http_client:
+            r = await http_client.post(url, json=payload)
+            res_data = r.json()
+            if "candidates" in res_data and res_data["candidates"]:
+                return res_data["candidates"][0].get("content", {}).get("parts", [{}])[0].get("text", "Error summarizing.").strip()
+    except Exception:
+        pass
+    return "Error summarizing."
+

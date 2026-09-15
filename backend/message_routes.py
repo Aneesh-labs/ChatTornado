@@ -453,3 +453,83 @@ async def unlock_message_capsule(
         "message": msg.message
     }
 
+from pydantic import BaseModel
+from datetime import timedelta
+
+class EditMessageRequest(BaseModel):
+    new_text: str
+
+@router.put("/edit_message/{message_id}")
+async def edit_message(
+    message_id: int,
+    data: EditMessageRequest,
+    token: str,
+    db: Session = Depends(get_db)
+):
+    payload = decode_token(token)
+    if not payload:
+        raise HTTPException(status_code=401, detail="Invalid token.")
+
+    user_id = payload["user_id"]
+    msg = db.query(Message).filter(Message.id == message_id).first()
+    if not msg:
+        raise HTTPException(status_code=404, detail="Message not found.")
+
+    if msg.sender_id != user_id:
+        raise HTTPException(status_code=403, detail="You can only edit your own messages.")
+
+    if datetime.utcnow() - msg.created_at > timedelta(minutes=30):
+        raise HTTPException(status_code=400, detail="Cannot edit messages older than 30 minutes.")
+
+    msg.message = data.new_text
+    msg.is_edited = True
+    db.commit()
+
+    # Broadcast edit to users
+    packet = {
+        "type": "message_edited",
+        "message_id": message_id,
+        "new_text": data.new_text,
+        "sender_id": msg.sender_id,
+        "receiver_id": msg.receiver_id
+    }
+    await manager.send_personal_message(msg.sender_id, packet)
+    await manager.send_personal_message(msg.receiver_id, packet)
+
+    return {"success": True, "message_id": message_id, "is_edited": True}
+
+
+class AICleanupRequest(BaseModel):
+    text: str
+
+@router.post("/ai_cleanup")
+async def ai_cleanup(
+    data: AICleanupRequest,
+    token: str
+):
+    payload = decode_token(token)
+    if not payload:
+        raise HTTPException(status_code=401, detail="Invalid token.")
+
+    from ai_service import ai_clean_text
+    cleaned = await ai_clean_text(data.text)
+    return {"success": True, "cleaned_text": cleaned}
+
+
+class AISummarizeRequest(BaseModel):
+    chat_text: str
+
+@router.post("/ai_summarize")
+async def ai_summarize(
+    data: AISummarizeRequest,
+    token: str
+):
+    payload = decode_token(token)
+    if not payload:
+        raise HTTPException(status_code=401, detail="Invalid token.")
+
+    from ai_service import ai_summarize_chat
+    summary = await ai_summarize_chat(data.chat_text)
+    return {"success": True, "summary": summary}
+
+

@@ -49,7 +49,36 @@ const MobileMessageActions = React.memo(({ open, msg, isMe, onClose, onReaction,
                             ))}
                         </div>
 
-                        <div className="border-t border-white/[0.06] px-2 py-2 space-y-0.5">
+                        <div className="border-t border-white/[0.06] px-2 py-2 space-y-0.5 max-h-[40vh] overflow-y-auto">
+                            <button
+                                type="button"
+                                onClick={() => { 
+                                    if(msg?.message) {
+                                        navigator.clipboard.writeText(msg.message);
+                                    }
+                                    onClose?.(); 
+                                }}
+                                className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left text-sm text-white/80 hover:bg-white/[0.04] active:bg-white/[0.06] transition-colors touch-manipulation"
+                            >
+                                <span className="text-base">📋</span>
+                                Copy text
+                            </button>
+                            
+                            {isMe && (
+                                <button
+                                    type="button"
+                                    onClick={() => { 
+                                        // Emit a custom event so Messages.jsx can pick it up
+                                        window.dispatchEvent(new CustomEvent('edit_message', { detail: msg }));
+                                        onClose?.(); 
+                                    }}
+                                    className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left text-sm text-white/80 hover:bg-white/[0.04] active:bg-white/[0.06] transition-colors touch-manipulation"
+                                >
+                                    <span className="text-base">✏️</span>
+                                    Edit message
+                                </button>
+                            )}
+
                             <button
                                 type="button"
                                 onClick={() => { onReply?.(msg); onClose?.(); }}
@@ -79,7 +108,7 @@ const MobileMessageActions = React.memo(({ open, msg, isMe, onClose, onReaction,
                         <button
                             type="button"
                             onClick={onClose}
-                            className="w-full py-3.5 text-xs font-semibold text-white/40 border-t border-white/[0.06] touch-manipulation"
+                            className="w-full py-3.5 pb-8 sm:pb-3.5 text-xs font-semibold text-white/40 border-t border-white/[0.06] touch-manipulation"
                         >
                             Cancel
                         </button>

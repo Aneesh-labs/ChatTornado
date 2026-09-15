@@ -77,17 +77,17 @@ const ChatHeader = React.memo(({
                 )}
                 <Avatar user={user} size="md" className="flex-shrink-0 scale-90 sm:scale-100 origin-left" />
                 <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                        <h2 className="text-xs sm:text-sm font-semibold text-white leading-tight truncate tracking-wide">
+                    <div className="flex flex-wrap items-center gap-1 sm:gap-2">
+                        <h2 className="text-xs sm:text-sm font-semibold text-white leading-tight truncate tracking-wide max-w-[120px] sm:max-w-none">
                             {username}
                         </h2>
                         {Boolean(user?.is_bot || user?.username === "VORTEX-9") && (
-                            <span className="text-[10px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded-md bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 flex items-center gap-1 shadow-[0_0_8px_rgba(6,182,212,0.3)]">
+                            <span className="text-[8px] sm:text-[10px] uppercase font-bold tracking-wider px-1 sm:px-1.5 py-0.5 rounded-md bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 flex items-center gap-1 shadow-[0_0_8px_rgba(6,182,212,0.3)] flex-shrink-0">
                                 ⚡ AI CORE
                             </span>
                         )}
                     </div>
-                    <p className={`text-[10px] sm:text-xs mt-0.5 font-medium transition-colors ${
+                    <p className={`text-[9px] sm:text-xs mt-0.5 font-medium transition-colors truncate ${
                         Boolean(user?.is_bot || user?.username === "VORTEX-9")
                             ? "text-cyan-400 font-mono flex items-center gap-1"
                             : isOnline ? "text-emerald-400" : "text-white/25"

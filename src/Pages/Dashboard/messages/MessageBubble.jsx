@@ -719,6 +719,9 @@ const MessageBubble = React.memo(({
         }
         return { label: "Sent", marks: "✓", className: "text-white/20" };
     })();
+    
+    // Determine if it was edited
+    const isEdited = msg.is_edited === true;
 
     const handleTouchStart = useCallback(() => {
         if (!isMobile || onSelect) return;
@@ -949,7 +952,7 @@ const MessageBubble = React.memo(({
                         whileHover={!isMobile ? { scale: 1.002 } : {}}
                         onClick={() => onSelect?.(msg.id)}
                         className={`
-                            ${isGame ? "p-0 bg-transparent border-transparent shadow-none" : "px-3 py-2 sm:px-4 sm:py-2.5 rounded-2xl border backdrop-blur-xl " + bubbleClass}
+                            ${isGame ? "p-0 bg-transparent border-transparent shadow-none" : "px-2 py-1.5 sm:px-3 sm:py-2 rounded-2xl border backdrop-blur-xl " + bubbleClass}
                             ${!isGame && (isMe ? "rounded-br-md" : "rounded-bl-md")}
                             transition-all duration-100 touch-manipulation
                             ${selected ? "ring-2 ring-violet-400/80 border-transparent shadow-lg" : "shadow-sm"}
@@ -972,6 +975,9 @@ const MessageBubble = React.memo(({
 
                         {/* Timestamp */}
                         <div className={`flex items-center gap-1 mt-0.5 sm:mt-1 ${isMe ? "justify-end" : "justify-start"} select-none`}>
+                            {isEdited && (
+                                <span className="text-[8px] sm:text-[9px] text-white/30 italic mr-1">(edited)</span>
+                            )}
                             <span className="text-[9px] sm:text-[10px] text-white/30 font-medium tabular-nums">
                                 {fmtTime(msg.created_at)}
                             </span>

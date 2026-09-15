@@ -38,7 +38,26 @@ const ChatInput = React.memo(({ onSend, replyTo, onCancelReply, selectedUser, so
 
     // Voice-to-Text (Speech Recognition) state
     const [isListening, setIsListening] = useState(false);
+    const [editModeId, setEditModeId] = useState(null);
     const recognitionRef = useRef(null);
+
+    // Listen for edit custom event
+    useEffect(() => {
+        const handleEditEvent = (e) => {
+            const msg = e.detail;
+            if (msg && msg.id && msg.message) {
+                setEditModeId(msg.id);
+                setText(msg.message);
+                setTimeout(() => {
+                    if (textareaRef.current) {
+                        textareaRef.current.focus();
+                    }
+                }, 100);
+            }
+        };
+        window.addEventListener('edit_message', handleEditEvent);
+        return () => window.removeEventListener('edit_message', handleEditEvent);
+    }, []);
     const baseTextRef = useRef("");
 
     const toggleSpeechToText = useCallback(() => {
@@ -134,6 +153,24 @@ const ChatInput = React.memo(({ onSend, replyTo, onCancelReply, selectedUser, so
 
         if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
         sendStopTypingSignal();
+
+        if (editModeId) {
+            const token = sessionStorage.getItem("token");
+            fetch(`${API.defaults.baseURL}/edit_message/${editModeId}`, {
+                method: "PUT",
+                headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+                body: JSON.stringify({ new_text: trimmed })
+            }).then(() => {
+                setEditModeId(null);
+                setText("");
+                if (textareaRef.current) textareaRef.current.style.height = "auto";
+                isSendingRef.current = false;
+            }).catch(() => {
+                isSendingRef.current = false;
+            });
+            return;
+        }
+
         if (!onSend(trimmed, shieldOptions || {})) {
             isSendingRef.current = false;
             return;
@@ -145,7 +182,7 @@ const ChatInput = React.memo(({ onSend, replyTo, onCancelReply, selectedUser, so
         setTimeout(() => {
             isSendingRef.current = false;
         }, 200);
-    }, [text, onSend, sendStopTypingSignal, disabled]);
+    }, [text, disabled, onSend, shieldOptions, editModeId, sendStopTypingSignal]);
 
     const handleKeyDown = useCallback((e) => {
         if (e.key === "Enter" && !e.shiftKey) {
@@ -505,6 +542,30 @@ const ChatInput = React.memo(({ onSend, replyTo, onCancelReply, selectedUser, so
                         </div>
 
                         <div className={`flex-1 flex items-end gap-1.5 ${theme.input} border rounded-2xl px-3 py-2 sm:py-2.5 focus-within:border-white/20 transition-all duration-200 min-w-0`}>
+                            {/* AI Clean Wand */}
+                            {text.length > 5 && (
+                                <button
+                                    type="button"
+                                    title="AI Clean / Summarize Text"
+                                    onClick={async (e) => {
+                                        e.preventDefault();
+                                        const token = sessionStorage.getItem("token");
+                                        const res = await fetch(API.defaults.baseURL + "/ai_cleanup", {
+                                            method: "POST",
+                                            headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+                                            body: JSON.stringify({ text, token })
+                                        });
+                                        const data = await res.json();
+                                        if (data.success) {
+                                            setText(data.cleaned_text);
+                                        }
+                                    }}
+                                    className="p-2 -ml-1 text-sky-400 hover:bg-sky-500/20 rounded-xl transition-colors shrink-0"
+                                >
+                                    ✨
+                                </button>
+                            )}
+
                             <textarea
                                 ref={textareaRef}
                                 rows={1}

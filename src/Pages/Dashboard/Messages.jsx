@@ -204,6 +204,8 @@ const Messages = () => {
     const groupedMessages = useMemo(() => {
         const result = [];
         let lastDate = "";
+        let sessionId = 0;
+
         messages.forEach((msg, i) => {
             if (!msg?.created_at) return;
             const dateStr = fmtDate(msg.created_at);
@@ -211,8 +213,39 @@ const Messages = () => {
                 result.push({ type: "divider", label: dateStr, key: `d-${dateStr}` });
                 lastDate = dateStr;
             }
+
             const prev = messages[i - 1];
-            const showAvatar = !prev || prev.sender_id !== msg.sender_id;
+            let isNewSession = false;
+            if (prev) {
+                const diff = new Date(msg.created_at) - new Date(prev.created_at);
+                if (diff > 3600000) { // 1 hour
+                    isNewSession = true;
+                    sessionId++;
+                }
+            } else {
+                isNewSession = true;
+            }
+
+            if (isNewSession) {
+                // Collect all messages for this session ahead of time to pass to the divider
+                let sessionText = "";
+                for (let j = i; j < messages.length; j++) {
+                    const nextMsg = messages[j];
+                    if (j > i) {
+                        const prevMsg = messages[j-1];
+                        if (new Date(nextMsg.created_at) - new Date(prevMsg.created_at) > 3600000) {
+                            break;
+                        }
+                    }
+                    if (nextMsg.message && !nextMsg.message.startsWith('⚡') && !nextMsg.message.startsWith('🎮') && !nextMsg.message.startsWith('🔊')) {
+                        const sender = nextMsg.sender_id === myUserId.current ? "Me" : "Them";
+                        sessionText += `${sender}: ${nextMsg.message}\n`;
+                    }
+                }
+                result.push({ type: "session_divider", sessionText, key: `s-${sessionId}-${msg.id}` });
+            }
+
+            const showAvatar = !prev || prev.sender_id !== msg.sender_id || isNewSession;
             result.push({ type: "message", msg, showAvatar, key: msg.id || i });
         });
         return result;
@@ -790,6 +823,15 @@ const Messages = () => {
                     }
                     if (packet.type?.startsWith("p2p_")) {
                         handleP2PSignal(packet, ws);
+                        return;
+                    }
+                    if (packet.type === "message_edited") {
+                        setMessages((prev) => prev.map((m) => {
+                            if (m.id === packet.message_id) {
+                                return { ...m, message: packet.new_text, is_edited: true };
+                            }
+                            return m;
+                        }));
                         return;
                     }
                     if (packet.type === "message_deleted" || packet.type === "delete_message") {

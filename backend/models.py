@@ -63,6 +63,7 @@ class Message(Base):
     message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False, index=True)
     read_state: Mapped[str] = mapped_column(String(20), default="sent", nullable=False)
+    is_edited: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     
     # Shield Feature
     is_shielded: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)

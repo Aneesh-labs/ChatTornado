@@ -5,6 +5,67 @@ import { DateDivider } from "./constants";
 import MessageBubble from "./MessageBubble";
 import TypingIndicator from "./TypingIndicator";
 import MobileMessageActions from "./MobileMessageActions";
+import API from "../../../Services/API";
+import { motion } from "framer-motion";
+
+const SessionDivider = ({ sessionText }) => {
+    const [summary, setSummary] = useState(null);
+    const [loading, setLoading] = useState(false);
+
+    const handleSummarize = async () => {
+        if (!sessionText || sessionText.trim() === "") return;
+        setLoading(true);
+        try {
+            const token = sessionStorage.getItem("token");
+            const res = await fetch(API.defaults.baseURL + "/ai_summarize", {
+                method: "POST",
+                headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+                body: JSON.stringify({ chat_text: sessionText, token })
+            });
+            const data = await res.json();
+            if (data.success) {
+                setSummary(data.summary);
+            }
+        } catch (e) {
+            console.error(e);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    return (
+        <div className="flex flex-col items-center my-4 w-full px-4">
+            <div className="w-full flex items-center gap-4">
+                <div className="h-px bg-white/10 flex-1"></div>
+                {!summary && (
+                    <button 
+                        onClick={handleSummarize} 
+                        disabled={loading}
+                        className="text-[10px] sm:text-xs font-semibold text-cyan-400 bg-cyan-900/30 hover:bg-cyan-900/50 border border-cyan-500/30 px-3 py-1.5 rounded-full transition-all touch-manipulation disabled:opacity-50 flex items-center gap-1.5"
+                    >
+                        {loading ? "Summarizing..." : "✨ Summarize Session"}
+                    </button>
+                )}
+                {summary && (
+                    <span className="text-[10px] sm:text-xs font-bold text-cyan-400 px-3 py-1.5 rounded-full bg-cyan-900/20 border border-cyan-500/20 flex items-center gap-1.5">
+                        ✨ Session Summary
+                    </span>
+                )}
+                <div className="h-px bg-white/10 flex-1"></div>
+            </div>
+            
+            {summary && (
+                <motion.div 
+                    initial={{ opacity: 0, y: -10 }} 
+                    animate={{ opacity: 1, y: 0 }}
+                    className="mt-3 bg-cyan-950/40 border border-cyan-500/20 rounded-xl p-3 sm:p-4 text-xs sm:text-sm text-cyan-100/90 leading-relaxed text-left shadow-lg backdrop-blur-sm max-w-2xl w-full"
+                >
+                    {summary}
+                </motion.div>
+            )}
+        </div>
+    );
+};
 
 const ChatMessages = React.memo(({
     groupedMessages = [],
@@ -61,6 +122,9 @@ const ChatMessages = React.memo(({
                     {groupedMessages.map((item) => {
                         if (item.type === "divider") {
                             return <DateDivider key={item.key || item.label} label={item.label} />;
+                        }
+                        if (item.type === "session_divider") {
+                            return <SessionDivider key={item.key} sessionText={item.sessionText} />;
                         }
                         if (!item.msg?.id) return null;
                         const isMe = item.msg.sender_id === myUserId;
