@@ -8,6 +8,7 @@ import API from "../../../Services/API";
 import CyberShieldVault from "./CyberShieldVault";
 import { soundEngine } from "../../../utils/soundEffects";
 import InChatGameBoard from "./InChatGameBoard";
+import MathFormattedText from "./MathFormattedText";
 
 const QUICK_REACTIONS = ["👍", "❤️", "😂", "😮", "😢", "🔥", "🥸", "👮🏿‍♀️"];
 
@@ -796,9 +797,9 @@ const MessageBubble = React.memo(({
             <>
                 {/* Caption text */}
                 {(hasImages || hasVideos || hasAudio || hasFiles) && caption && !isVoiceNote && (
-                    <p className="text-[13px] sm:text-sm text-white/90 leading-relaxed whitespace-pre-wrap break-words selection:bg-white/20 mb-1">
-                        {caption}
-                    </p>
+                    <div className="mb-1">
+                        <MathFormattedText text={caption} className="text-[13px] sm:text-sm text-white/90 selection:bg-white/20" />
+                    </div>
                 )}
             {/* Special voice note styling for caption */}
             {isVoiceNote && (
@@ -849,11 +850,9 @@ const MessageBubble = React.memo(({
                 <FileLink key={`${msg.id}-file-${idx}`} url={url} />
             ))}
 
-            {/* Plain text fallback */}
+            {/* Math & text formatting */}
             {!hasImages && !hasVideos && !hasAudio && !hasFiles && !isP2P && actualMessage && (
-                <p className="text-[13px] sm:text-sm text-white/90 leading-relaxed whitespace-pre-wrap break-words selection:bg-white/20">
-                    {actualMessage}
-                </p>
+                <MathFormattedText text={actualMessage} className="text-[13px] sm:text-sm text-white/90 selection:bg-white/20" />
             )}
         </>
     );
