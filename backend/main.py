@@ -42,6 +42,16 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 from fastapi.responses import JSONResponse
 from auth import decode_token
 
+@app.exception_handler(Exception)
+async def global_exception_handler(request, exc):
+    print(f"[UNHANDLED SERVER ERROR] {request.method} {request.url.path}: {exc}")
+    import traceback
+    traceback.print_exc()
+    return JSONResponse(
+        status_code=500,
+        content={"detail": f"Internal Server Error: {str(exc)}"}
+    )
+
 # ============================================================================
 # CORS
 # ============================================================================

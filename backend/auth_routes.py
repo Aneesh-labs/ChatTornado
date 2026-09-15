@@ -362,7 +362,11 @@ def verify_email(token: str, db: Session = Depends(get_db)):
         print(f"[AUTH ROUTE] /verify-email: User '{user.username}' is already verified.")
         return {"message": "Email is already verified."}
         
-    if not user.verification_token_expires_at or user.verification_token_expires_at < datetime.utcnow():
+    expires_at = user.verification_token_expires_at
+    if expires_at and expires_at.tzinfo is not None:
+        expires_at = expires_at.replace(tzinfo=None)
+        
+    if not expires_at or expires_at < datetime.utcnow():
         print(f"[AUTH ROUTE] /verify-email: Token expired for user '{user.username}' (expires_at={user.verification_token_expires_at})")
         raise HTTPException(status_code=400, detail="Verification token has expired. Please request a new one.")
         
