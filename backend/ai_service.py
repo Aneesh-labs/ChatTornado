@@ -256,6 +256,25 @@ async def generate_ai_text(prompt: str, chat_history: List[dict]) -> str:
             )
         )
 
+        safety_settings = [
+            types.SafetySetting(
+                category=types.HarmCategory.HARM_CATEGORY_HARASSMENT,
+                threshold=types.HarmBlockThreshold.BLOCK_NONE,
+            ),
+            types.SafetySetting(
+                category=types.HarmCategory.HARM_CATEGORY_HATE_SPEECH,
+                threshold=types.HarmBlockThreshold.BLOCK_NONE,
+            ),
+            types.SafetySetting(
+                category=types.HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
+                threshold=types.HarmBlockThreshold.BLOCK_NONE,
+            ),
+            types.SafetySetting(
+                category=types.HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
+                threshold=types.HarmBlockThreshold.BLOCK_NONE,
+            ),
+        ]
+
         models_to_try = [
             "gemini-3.6-flash",
             "gemini-3.7-flash",
@@ -276,6 +295,7 @@ async def generate_ai_text(prompt: str, chat_history: List[dict]) -> str:
                         system_instruction=VORTEX_SYSTEM_PROMPT,
                         temperature=0.75,
                         max_output_tokens=1024,
+                        safety_settings=safety_settings
                     )
                 )
                 if response and response.text:
@@ -302,6 +322,14 @@ async def generate_ai_text(prompt: str, chat_history: List[dict]) -> str:
             "parts": [{"text": clean_prompt}]
         })
 
+        rest_safety = [
+            {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
+            {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
+            {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
+            {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"},
+            {"category": "HARM_CATEGORY_CIVIC_INTEGRITY", "threshold": "BLOCK_NONE"}
+        ]
+
         for model_name in [
             "gemini-3.6-flash",
             "gemini-3.7-flash",
@@ -317,7 +345,8 @@ async def generate_ai_text(prompt: str, chat_history: List[dict]) -> str:
                     "system_instruction": {
                         "parts": [{"text": VORTEX_SYSTEM_PROMPT}]
                     },
-                    "contents": rest_contents
+                    "contents": rest_contents,
+                    "safetySettings": rest_safety
                 }
                 async with httpx.AsyncClient(timeout=30.0) as http_client:
                     r = await http_client.post(rest_url, json=payload)
