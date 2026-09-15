@@ -525,6 +525,66 @@ async def websocket_endpoint(websocket: WebSocket):
                 packet_sender
             )
 
+            # Check if receiver is VORTEX-9 bot
+            from ai_service import get_or_create_bot_user, process_user_message_to_bot
+            bot = get_or_create_bot_user(db)
+            if bot and receiver_id == bot.id:
+                import asyncio
+
+                async def handle_bot_reply(u_id: int, b_id: int, prompt_text: str):
+                    await manager.send_personal_message(u_id, {
+                        "type": "typing_start",
+                        "sender_id": b_id
+                    })
+                    reply_db = SessionLocal()
+                    try:
+                        reply_text = await process_user_message_to_bot(u_id, prompt_text, reply_db)
+
+                        bot_message = Message(
+                            sender_id=b_id,
+                            receiver_id=u_id,
+                            message=reply_text,
+                            is_shielded=False,
+                            read_state="sent"
+                        )
+                        reply_db.add(bot_message)
+                        reply_db.commit()
+                        reply_db.refresh(bot_message)
+
+                        reply_db.add_all([
+                            MessageVisibility(message_id=bot_message.id, user_id=b_id, visible=True),
+                            MessageVisibility(message_id=bot_message.id, user_id=u_id, visible=True),
+                        ])
+                        reply_db.commit()
+
+                        await manager.send_personal_message(u_id, {
+                            "type": "typing_stop",
+                            "sender_id": b_id
+                        })
+
+                        await manager.send_personal_message(u_id, {
+                            "type": "message",
+                            "id": bot_message.id,
+                            "sender_id": b_id,
+                            "receiver_id": u_id,
+                            "message": reply_text,
+                            "created_at": str(bot_message.created_at),
+                            "is_shielded": False,
+                            "is_locked": False,
+                            "read_state": "sent",
+                            "reactions": []
+                        })
+                    except Exception as bot_err:
+                        logger.exception("Error in bot reply task: %s", bot_err)
+                        await manager.send_personal_message(u_id, {
+                            "type": "typing_stop",
+                            "sender_id": b_id
+                        })
+                    finally:
+                        reply_db.close()
+
+                asyncio.create_task(handle_bot_reply(user_id, bot.id, message_text))
+
     except (WebSocketDisconnect, RuntimeError):
 
         manager.disconnect(user_id)

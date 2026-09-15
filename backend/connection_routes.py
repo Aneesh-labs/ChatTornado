@@ -171,8 +171,22 @@ def get_active_connections(
     ).all()
     
     friends = []
+    from ai_service import get_or_create_bot_user
+    bot = get_or_create_bot_user(db)
+    if bot and bot.id != user_id:
+        friends.append({
+            "id": bot.id,
+            "username": bot.username,
+            "avatar_url": bot.avatar_url,
+            "status": "online",
+            "last_seen": bot.last_seen,
+            "is_bot": True
+        })
+
     for conn in connections:
         friend_id = conn.receiver_id if conn.sender_id == user_id else conn.sender_id
+        if bot and friend_id == bot.id:
+            continue
         friend = db.query(User).filter(User.id == friend_id).first()
         if friend:
             friends.append({
@@ -201,6 +215,16 @@ def get_all_connection_statuses(
     ).all()
     
     result = {}
+    from ai_service import get_or_create_bot_user
+    bot = get_or_create_bot_user(db)
+    if bot and bot.id != user_id:
+        result[bot.id] = {
+            "connection_id": -1,
+            "status": "accepted",
+            "is_sender": False,
+            "is_bot": True
+        }
+
     for conn in connections:
         other_id = conn.receiver_id if conn.sender_id == user_id else conn.sender_id
         normalized_status = "accepted" if conn.status in ["accepted", "accept"] else ("declined" if conn.status in ["declined", "decline"] else conn.status)
@@ -211,3 +235,4 @@ def get_all_connection_statuses(
         }
         
     return result
+

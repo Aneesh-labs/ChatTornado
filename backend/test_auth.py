@@ -285,3 +285,53 @@ class TestEmailService:
         assert "abc123" in captured_html["html"]
         assert "localhost" not in captured_html["html"]
         assert vercel_url in captured_html["plain"]
+
+
+def test_vortex_prompt_classification():
+    """Verify is_image_request identifies /image commands and conversational requests."""
+    from ai_service import is_image_request
+    is_img, prompt = is_image_request("/image a glowing cyber city")
+    assert is_img is True
+    assert prompt == "a glowing cyber city"
+
+    is_img, prompt = is_image_request("draw me a purple dragon")
+    assert is_img is True
+    assert "purple dragon" in prompt
+
+    is_img, prompt = is_image_request("What is quantum computing?")
+    assert is_img is False
+    assert prompt == "What is quantum computing?"
+
+
+def test_vortex_bot_user_seeded():
+    """Verify get_or_create_bot_user establishes VORTEX-9 in the database."""
+    from ai_service import get_or_create_bot_user
+    db = TestingSessionLocal()
+    bot = get_or_create_bot_user(db)
+    assert bot is not None
+    assert bot.username == "VORTEX-9"
+    assert bot.email == "vortex9@system.bot"
+    assert bot.status == "online"
+    db.close()
+
+
+def test_vortex_permanent_active_connection():
+    """Verify /connections/active returns VORTEX-9 for verified users."""
+    create_unverified_user()
+    db = TestingSessionLocal()
+    user = db.query(models.User).filter_by(username="testuser").first()
+    user.email_verified = True
+    db.commit()
+    db.close()
+
+    login_res = client.post("/login", json={"email": "test@example.com", "password": "strongpassword123!"})
+    token = login_res.json()["access_token"]
+
+    res = client.get("/connections/active", params={"token": token})
+    assert res.status_code == 200
+    active_chats = res.json()
+    assert len(active_chats) >= 1
+    assert active_chats[0]["username"] == "VORTEX-9"
+    assert active_chats[0]["is_bot"] is True
+
+

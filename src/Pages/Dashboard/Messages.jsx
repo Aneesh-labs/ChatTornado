@@ -181,7 +181,7 @@ const Messages = () => {
         return users.map((u) => ({
             ...u,
             avatar: u.avatar || avatarFor(u.id),
-            status: onlineUserIds.has(u.id) ? "online" : "offline",
+            status: (u.is_bot || u.username === "VORTEX-9" || onlineUserIds.has(u.id)) ? "online" : "offline",
         }));
     }, [users, onlineUserIds]);
 
@@ -189,9 +189,10 @@ const Messages = () => {
         return activeUsers.map((u) => ({
             ...u,
             avatar: u.avatar || avatarFor(u.id),
-            status: onlineUserIds.has(u.id) ? "online" : "offline",
+            status: (u.is_bot || u.username === "VORTEX-9" || onlineUserIds.has(u.id)) ? "online" : "offline",
         }));
     }, [activeUsers, onlineUserIds]);
+
 
     const enrichedSelected = useMemo(() => {
         if (!selectedUser) return null;

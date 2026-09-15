@@ -386,7 +386,57 @@ const ChatInput = React.memo(({ onSend, replyTo, onCancelReply, selectedUser, so
                 )}
             </AnimatePresence>
 
+            {Boolean(selectedUser?.is_bot || selectedUser?.username === "VORTEX-9") && !isRecording && (
+                <div className="flex items-center gap-1.5 overflow-x-auto pb-1.5 scrollbar-none mb-1 text-xs">
+                    <button
+                        type="button"
+                        onClick={() => {
+                            setText((prev) => prev.startsWith("/image ") ? prev : "/image ");
+                            textareaRef.current?.focus();
+                        }}
+                        className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/30 text-cyan-300 font-medium transition-all hover:scale-105 active:scale-95 flex-shrink-0"
+                    >
+                        <span>🎨</span>
+                        <span>/image</span>
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => {
+                            setText("Brainstorm 3 creative ideas for ");
+                            textareaRef.current?.focus();
+                        }}
+                        className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-violet-500/10 hover:bg-violet-500/20 border border-violet-500/30 text-violet-300 font-medium transition-all hover:scale-105 active:scale-95 flex-shrink-0"
+                    >
+                        <span>💡</span>
+                        <span>Brainstorm</span>
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => {
+                            setText("Explain simply how ");
+                            textareaRef.current?.focus();
+                        }}
+                        className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-300 font-medium transition-all hover:scale-105 active:scale-95 flex-shrink-0"
+                    >
+                        <span>⚡</span>
+                        <span>Explain simply</span>
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => {
+                            setText("Write code for ");
+                            textareaRef.current?.focus();
+                        }}
+                        className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 text-emerald-300 font-medium transition-all hover:scale-105 active:scale-95 flex-shrink-0"
+                    >
+                        <span>💻</span>
+                        <span>Code</span>
+                    </button>
+                </div>
+            )}
+
             <div className="flex items-end gap-1.5 sm:gap-2 max-w-full">
+
                 {isRecording ? (
                     <motion.div
                         initial={{ opacity: 0, x: -20 }}
@@ -462,7 +512,13 @@ const ChatInput = React.memo(({ onSend, replyTo, onCancelReply, selectedUser, so
                                 onChange={handleChange}
                                 onKeyDown={handleKeyDown}
                                 disabled={disabled}
-                                placeholder={isListening ? "Listening… (speaking converts to text)" : "Message…"}
+                                placeholder={
+                                    isListening
+                                        ? "Listening… (speaking converts to text)"
+                                        : Boolean(selectedUser?.is_bot || selectedUser?.username === "VORTEX-9")
+                                            ? "Ask VORTEX-9 anything or type /image <prompt>..."
+                                            : "Message…"
+                                }
                                 aria-label="Write a direct message"
                                 className="flex-1 bg-transparent text-sm text-white/90 placeholder-white/20 outline-none resize-none leading-relaxed max-h-[120px] min-h-[22px]"
                             />

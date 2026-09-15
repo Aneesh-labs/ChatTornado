@@ -91,7 +91,12 @@ export const ConversationCard = React.memo(({
                     <span className={`text-sm font-semibold truncate ${selected && canOpenChat ? "text-white" : "text-white/80"}`}>
                         {user?.username || "Unknown User"}
                     </span>
-                    {pinned && !isGlobal && (
+                    {user?.is_bot && (
+                        <span className="text-[10px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded-md bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 flex items-center gap-1 shadow-[0_0_8px_rgba(6,182,212,0.3)]">
+                            ⚡ AI
+                        </span>
+                    )}
+                    {pinned && !isGlobal && !user?.is_bot && (
                         <span role="img" aria-label="Pinned conversation" className="text-[10px] text-white/25 flex-shrink-0">
                             📌
                         </span>
@@ -100,13 +105,19 @@ export const ConversationCard = React.memo(({
 
                 {typing && !isGlobal ? (
                     <span className={`text-xs ${theme?.accentText || "text-violet-400"} font-medium`}>
-                        typing…
+                        {user?.is_bot ? "synthesizing…" : "typing…"}
+                    </span>
+                ) : user?.is_bot ? (
+                    <span className="text-xs text-cyan-400/80 font-medium truncate flex items-center gap-1.5">
+                        <span className="inline-block w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse"></span>
+                        Neural Core
                     </span>
                 ) : (
                     <span className="text-xs text-white/30 truncate block">
                         {user?.status === "online" ? "Active now" : "Offline"}
                     </span>
                 )}
+
             </div>
 
             <div className="flex flex-col items-end gap-1.5 flex-shrink-0 min-w-[24px]">
@@ -213,29 +224,34 @@ const Sidebar = React.memo(({
         const sourceList = mainTab === "chats" ? activeUsers : users;
         if (!Array.isArray(sourceList)) return [];
 
+        const botList = [];
         const pinnedList = [];
         const unpinnedList = [];
 
         sourceList.forEach((user) => {
             if (!user || typeof user.id === "undefined") return;
 
+            const isBot = Boolean(user.is_bot || user.username === "VORTEX-9");
             const isPinned = safePinnedChats.has(user.id);
             const isUnread = (safeUnreadCounts[user.id] || 0) > 0;
 
             if (mainTab === "chats") {
-                if (filter === "pinned" && !isPinned) return;
-                if (filter === "unread" && !isUnread) return;
+                if (filter === "pinned" && !isPinned && !isBot) return;
+                if (filter === "unread" && !isUnread && !isBot) return;
             }
 
-            if (isPinned && mainTab === "chats") {
+            if (isBot && mainTab === "chats") {
+                botList.push(user);
+            } else if (isPinned && mainTab === "chats") {
                 pinnedList.push(user);
             } else {
                 unpinnedList.push(user);
             }
         });
 
-        return [...pinnedList, ...unpinnedList];
+        return [...botList, ...pinnedList, ...unpinnedList];
     }, [users, activeUsers, mainTab, safePinnedChats, safeUnreadCounts, filter]);
+
 
     const totalUnread = useMemo(() => {
         return Object.values(safeUnreadCounts).reduce((acc, curr) => acc + (Number(curr) || 0), 0);

@@ -27,7 +27,7 @@ def get_users(
 
     users = (
         db.query(User)
-        .filter(User.id != current_user_id)
+        .filter(User.id != current_user_id, User.email != "vortex9@system.bot")
         .order_by(User.username)
         .all()
     )

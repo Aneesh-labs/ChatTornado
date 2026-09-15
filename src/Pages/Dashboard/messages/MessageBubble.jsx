@@ -19,12 +19,31 @@ const IMAGE_EXTENSIONS = /\.(jpg|jpeg|png|gif|webp|svg|bmp|ico|heic|heif)(\?.*)?
 const VIDEO_EXTENSIONS = /\.(mp4|mov|mkv|avi|wmv|flv|m4v|webm|3gp|ogv|ts)(\?.*)?$/i;
 const AUDIO_EXTENSIONS = /\.(mp3|wav|ogg|aac|m4a|opus|flac|wma|webm)(\?.*)?$/i;
 
-const extractUrls = (text) => {
-    if (!text || typeof text !== "string") return [];
-    return text.match(/https?:\/\/[^\s<>"']+/g) || [];
+const resolveMediaUrl = (url) => {
+    if (!url || typeof url !== "string") return "";
+    if (url.startsWith("http://") || url.startsWith("https://") || url.startsWith("data:") || url.startsWith("blob:")) {
+        return url;
+    }
+    if (url.startsWith("/uploads/")) {
+        const apiBase = API?.defaults?.baseURL ? API.defaults.baseURL.replace(/\/+$/, '') : "";
+        return `${apiBase}${url}`;
+    }
+    return url;
 };
 
-const isImageUrl = (url) => typeof url === "string" && IMAGE_EXTENSIONS.test(url);
+const extractUrls = (text) => {
+    if (!text || typeof text !== "string") return [];
+    const fullUrls = text.match(/https?:\/\/[^\s<>"']+/g) || [];
+    const dataUrls = text.match(/data:image\/[a-zA-Z0-9+]+;base64,[^\s<>"']+/g) || [];
+    const uploadPaths = (text.match(/\/uploads\/[^\s<>"']+/g) || []).map(resolveMediaUrl);
+    return [...fullUrls, ...dataUrls, ...uploadPaths];
+};
+
+const isImageUrl = (url) => {
+    if (typeof url !== "string") return false;
+    return IMAGE_EXTENSIONS.test(url) || url.startsWith("data:image/") || url.includes("/uploads/");
+};
+
 const isVideoUrl = (url, text) => (typeof url === "string" && VIDEO_EXTENSIONS.test(url)) || (typeof url === "string" && url.toLowerCase().includes('.webm') && (!text || typeof text !== "string" || !text.includes('🎤 Voice')));
 const isAudioUrl = (url, text) => typeof url === "string" && AUDIO_EXTENSIONS.test(url) && !isVideoUrl(url, text);
 
@@ -33,12 +52,19 @@ const extractVideoUrls = (text) => extractUrls(text).filter(url => isVideoUrl(ur
 const extractAudioUrls = (text) => extractUrls(text).filter(url => isAudioUrl(url, text));
 const extractNonImageUrls = (text) =>
     extractUrls(text).filter((url) => !isImageUrl(url) && !isVideoUrl(url, text) && !isAudioUrl(url, text));
+
 const extractCaption = (text) => {
     if (!text || typeof text !== "string") return "";
-    return text.replace(/https?:\/\/[^\s<>"']+/g, "").trim();
+    return text
+        .replace(/https?:\/\/[^\s<>"']+/g, "")
+        .replace(/data:image\/[a-zA-Z0-9+]+;base64,[^\s<>"']+/g, "")
+        .replace(/\/uploads\/[^\s<>"']+/g, "")
+        .trim();
 };
 
 const getFilenameFromUrl = (url) => {
+    if (!url || typeof url !== "string") return "download";
+    if (url.startsWith("data:")) return `vortex_${Date.now()}.png`;
     try {
         const pathname = new URL(url).pathname;
         return pathname.split("/").pop() || "download";
@@ -52,6 +78,15 @@ const getFilenameFromUrl = (url) => {
    ═══════════════════════════════════════════════════════════════ */
 const downloadFile = async (fileUrl, filename) => {
     try {
+        if (fileUrl.startsWith("data:")) {
+            const link = document.createElement("a");
+            link.href = fileUrl;
+            link.download = filename || `vortex_${Date.now()}.png`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            return;
+        }
         const response = await fetch(fileUrl, { mode: "cors" });
         if (!response.ok) throw new Error("Network response was not ok");
         const blob = await response.blob();
@@ -67,6 +102,7 @@ const downloadFile = async (fileUrl, filename) => {
         window.open(fileUrl, "_blank");
     }
 };
+
 
 const downloadImage = downloadFile;
 

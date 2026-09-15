@@ -194,6 +194,7 @@ export const StatusDot = React.memo(({ status, size = "sm" }) => {
 StatusDot.displayName = "StatusDot";
 
 export const Avatar = React.memo(({ user, size = "md", showStatus = true, className = "" }) => {
+    const isBot = Boolean(user?.is_bot || user?.username === "VORTEX-9");
     const sizes = {
         xs: "w-6 h-6 sm:w-7 sm:h-7 text-xs sm:text-sm",
         sm: "w-8 h-8 sm:w-9 sm:h-9 text-sm sm:text-base",
@@ -204,18 +205,23 @@ export const Avatar = React.memo(({ user, size = "md", showStatus = true, classN
     const dotSz = { xs: "sm", sm: "sm", md: "md", lg: "lg", xl: "lg" };
     const dotPos = { xs: "-bottom-0.5 -right-0.5", sm: "bottom-0 right-0", md: "bottom-0.5 right-0.5", lg: "bottom-0.5 right-0.5", xl: "bottom-0.5 right-0.5 sm:bottom-1 sm:right-1" };
 
+    const botRing = isBot 
+        ? "border-cyan-400/60 bg-gradient-to-br from-cyan-950/80 to-blue-900/40 shadow-[0_0_12px_rgba(6,182,212,0.45)]" 
+        : "border-white/10 bg-gradient-to-br from-white/10 to-white/5";
+
     return (
-        <div className={`relative flex-shrink-0 ${sizes[size] || sizes.md} rounded-full bg-gradient-to-br from-white/10 to-white/5 border border-white/10 flex items-center justify-center select-none ${className}`}>
-            <span>{user?.avatar || "🧑"}</span>
+        <div className={`relative flex-shrink-0 ${sizes[size] || sizes.md} rounded-full border flex items-center justify-center select-none ${botRing} ${className}`}>
+            <span>{isBot ? "⚡" : (user?.avatar || "🧑")}</span>
             {showStatus && (
                 <span className={`absolute ${dotPos[size] || dotPos.md} border sm:border-2 border-[#111114] bg-[#111114] rounded-full flex items-center justify-center`}>
-                    <StatusDot status={user?.status} size={dotSz[size] || "sm"} />
+                    <StatusDot status={isBot ? "online" : user?.status} size={dotSz[size] || "sm"} />
                 </span>
             )}
         </div>
     );
 });
 Avatar.displayName = "Avatar";
+
 
 export const IconBtn = React.memo(({ children, onClick, active = false, title, danger = false, small = false, className = "" }) => {
     const theme = useTheme() || THEMES.dark;
