@@ -43,7 +43,7 @@ export default function VerifyEmail() {
                 if (apiUrl.includes("localhost") && window.location.hostname !== "localhost") {
                     setMessage("Network Error: The frontend is trying to connect to localhost. Please set VITE_API_URL in your Vercel deployment settings.");
                 } else {
-                    setMessage(`Network Error: Could not reach the backend at ${apiUrl}. Is it running?`);
+                    setMessage(`Fetch Failed [${err.name}: ${err.message}]. Backend URL: ${apiUrl}`);
                 }
             } else {
                 // Backend responded with an error (could be JSON or HTML string)
