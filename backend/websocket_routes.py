@@ -28,6 +28,10 @@ async def websocket_endpoint(websocket: WebSocket):
     if payload is None:
         await websocket.close()
         return
+        
+    if payload.get("email_verified") is False:
+        await websocket.close(code=1008, reason="Email not verified")
+        return
 
     user_id = payload["user_id"]
 

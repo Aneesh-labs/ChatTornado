@@ -66,6 +66,13 @@ def run_migrations():
     Run idempotent migrations.
     """
     with engine.begin() as conn:
+        conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified BOOLEAN DEFAULT FALSE;"))
+        conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS verification_token_hash VARCHAR(255);"))
+        conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS verification_token_expires_at TIMESTAMP WITH TIME ZONE;"))
+        
+        # Grandfather existing users
+        conn.execute(text("UPDATE users SET email_verified = TRUE WHERE verification_token_hash IS NULL;"))
+        
         conn.execute(text("ALTER TABLE messages ADD COLUMN IF NOT EXISTS is_shielded BOOLEAN DEFAULT FALSE;"))
         conn.execute(text("ALTER TABLE messages ADD COLUMN IF NOT EXISTS shield_mode VARCHAR(20);"))
         conn.execute(text("ALTER TABLE messages ADD COLUMN IF NOT EXISTS unlock_at TIMESTAMP WITH TIME ZONE;"))

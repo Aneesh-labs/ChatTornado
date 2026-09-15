@@ -1,8 +1,13 @@
 import os
-from fastapi import APIRouter, Depends, HTTPException, Form
+import re
+import secrets
+import hashlib
+from fastapi import APIRouter, Depends, HTTPException, Form, Request
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
-import re
+from typing import Optional
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 
 from auth import (
     hash_password,
@@ -13,9 +18,15 @@ from auth import (
 )
 from database import get_db
 from models import User, RefreshToken
+from email_service import send_verification_email
 
 router = APIRouter()
+limiter = Limiter(key_func=get_remote_address)
 
+def generate_verification_token():
+    token = secrets.token_urlsafe(32)
+    token_hash = hashlib.sha256(token.encode()).hexdigest()
+    return token, token_hash
 
 @router.post("/signup")
 def signup(
@@ -73,10 +84,17 @@ def signup(
     # Hash password
     hashed_password = hash_password(password)
     
+    # Generate verification token
+    raw_token, token_hash = generate_verification_token()
+    expires_at = datetime.utcnow() + timedelta(hours=24)
+    
     new_user = User(
         username=username,
         email=email,
         password=hashed_password,
+        email_verified=False,
+        verification_token_hash=token_hash,
+        verification_token_expires_at=expires_at,
         created_at=datetime.utcnow()
     )
     
@@ -84,8 +102,16 @@ def signup(
     db.commit()
     db.refresh(new_user)
     
+    # Send verification email asynchronously (in a real app you might use Celery/BackgroundTasks)
+    # For now, synchronous or just standard function call (won't block too long with standard SMTP, but BackgroundTasks is better)
+    # I'll use simple synchronous call for this MVP
+    try:
+        send_verification_email(email, raw_token)
+    except Exception as e:
+        print("Failed to send email:", e)
+    
     return {
-        "message": "Account created successfully! Welcome to ChatTornado!",
+        "message": "Account created successfully! Please check your email to verify your account.",
         "user_id": new_user.id,
         "username": new_user.username
     }
@@ -142,7 +168,8 @@ def login(
     token_data = {
         "sub": user.email,
         "username": user.username,
-        "user_id": user.id
+        "user_id": user.id,
+        "email_verified": user.email_verified
     }
     
     access_token = create_access_token(
@@ -170,7 +197,8 @@ def login(
         "token_type": "bearer",
         "expires_in": 900,
         "username": user.username,
-        "user_id": user.id
+        "user_id": user.id,
+        "email_verified": user.email_verified
     }
 
 
@@ -299,5 +327,61 @@ def verify_user(
     return {
         "valid": True,
         "username": payload.get("username"),
-        "user_id": payload.get("user_id")
+        "user_id": payload.get("user_id"),
+        "email_verified": user.email_verified
     }
+
+
+@router.get("/verify-email")
+def verify_email(token: str, db: Session = Depends(get_db)):
+    if not token:
+        raise HTTPException(status_code=400, detail="Token is required.")
+        
+    token_hash = hashlib.sha256(token.encode()).hexdigest()
+    
+    user = db.query(User).filter(User.verification_token_hash == token_hash).first()
+    
+    if not user:
+        raise HTTPException(status_code=400, detail="Invalid verification token.")
+        
+    if user.email_verified:
+        return {"message": "Email is already verified."}
+        
+    if not user.verification_token_expires_at or user.verification_token_expires_at < datetime.utcnow():
+        raise HTTPException(status_code=400, detail="Verification token has expired. Please request a new one.")
+        
+    # Mark as verified
+    user.email_verified = True
+    user.verification_token_hash = None
+    user.verification_token_expires_at = None
+    db.commit()
+    
+    return {"message": "Email successfully verified!"}
+
+
+@router.post("/resend-verification")
+@limiter.limit("3/minute")
+def resend_verification(request: Request, data: dict, db: Session = Depends(get_db)):
+    email = data.get("email")
+    if not email:
+        raise HTTPException(status_code=400, detail="Email is required.")
+        
+    # Standard security practice: Do not leak whether the email exists.
+    # We will return success regardless, but only actually process if the user exists and is unverified.
+    
+    user = db.query(User).filter(User.email == email).first()
+    
+    if user and not user.email_verified:
+        # Generate new token
+        raw_token, token_hash = generate_verification_token()
+        user.verification_token_hash = token_hash
+        user.verification_token_expires_at = datetime.utcnow() + timedelta(hours=24)
+        db.commit()
+        
+        # Send new email
+        try:
+            send_verification_email(user.email, raw_token)
+        except Exception as e:
+            print("Failed to send resend email:", e)
+            
+    return {"message": "If the email is registered and unverified, a new verification link has been sent."}

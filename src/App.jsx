@@ -11,12 +11,14 @@ import Profile from "./Pages/Dashboard/Profile";
 import Settings from "./Pages/Dashboard/Settings";
 import Insights from "./Pages/Dashboard/Insights";
 import Arcade from "./Pages/Dashboard/Arcade";
+import VerifyEmail from "./Pages/VerifyEmail";
 
 export default function App() {
   return (
     <Routes>
       {/* PUBLIC ROUTE */}
       <Route path="/" element={<Login />} />
+      <Route path="/verify-email" element={<VerifyEmail />} />
 
       {/* PROTECTED DASHBOARD */}
       <Route
