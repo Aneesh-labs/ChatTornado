@@ -15,9 +15,14 @@ export default function VerifyEmail() {
     const [emailInput, setEmailInput] = useState(() => sessionStorage.getItem("email") || "");
     const [resendNotice, setResendNotice] = useState("");
 
+    const [debugInfo, setDebugInfo] = useState(null);
+
     useEffect(() => {
+        console.log("[VerifyEmail] Component mounted. Query:", window.location.search, "token extracted:", token);
         if (token) {
             verifyToken(token);
+        } else {
+            console.log("[VerifyEmail] No token in URL, showing prompt view.");
         }
     }, [token]);
 
@@ -30,23 +35,38 @@ export default function VerifyEmail() {
     }, [resendCooldown]);
 
     const verifyToken = async (t) => {
+        console.log("[VerifyEmail] verifyToken called with token:", t);
         try {
             const res = await API.get(`/verify-email?token=${t}`);
+            console.log("[VerifyEmail] Verification success response:", res);
             setStatus("success");
             setMessage(res.data.message || "Email verified successfully!");
             sessionStorage.setItem("emailVerified", "true");
         } catch (err) {
+            console.error("[VerifyEmail] Verification error caught:", err);
             setStatus("error");
+            
+            const apiUrl = import.meta.env.VITE_API_URL || "http://localhost:8000";
+            const debugPayload = {
+                message: err.message,
+                code: err.code,
+                name: err.name,
+                status: err.response?.status,
+                responseData: err.response?.data,
+                targetApiUrl: apiUrl,
+                currentUrl: window.location.href,
+                hasResponse: Boolean(err.response),
+                hasRequest: Boolean(err.request)
+            };
+            setDebugInfo(debugPayload);
+
             if (!err.response) {
-                // Network error, CORS, or VITE_API_URL missing
-                const apiUrl = import.meta.env.VITE_API_URL || "http://localhost:8000";
                 if (apiUrl.includes("localhost") && window.location.hostname !== "localhost") {
                     setMessage("Network Error: The frontend is trying to connect to localhost. Please set VITE_API_URL in your Vercel deployment settings.");
                 } else {
-                    setMessage(`Fetch Failed [${err.name}: ${err.message}]. Backend URL: ${apiUrl}`);
+                    setMessage(`Fetch Failed [${err.name}: ${err.message}]. Target: ${apiUrl}`);
                 }
             } else {
-                // Backend responded with an error (could be JSON or HTML string)
                 let errorMsg = "Invalid or expired token.";
                 if (err.response?.data?.detail) {
                     errorMsg = err.response.data.detail;
@@ -124,6 +144,14 @@ export default function VerifyEmail() {
                         <XCircle className="mb-4 h-12 w-12 text-red-400" />
                         <h2 className="text-xl font-bold text-red-400">Verification Failed</h2>
                         <p className="mt-2 text-sm text-white/60">{message}</p>
+                        
+                        {debugInfo && (
+                            <details className="mt-4 w-full text-left rounded-lg bg-black/40 p-3 text-xs font-mono text-white/70 border border-white/5 overflow-x-auto">
+                                <summary className="cursor-pointer text-white/40 hover:text-white/80">Diagnostic Details</summary>
+                                <pre className="mt-2 whitespace-pre-wrap">{JSON.stringify(debugInfo, null, 2)}</pre>
+                            </details>
+                        )}
+
                         <button 
                             onClick={() => setStatus("prompt")}
                             className="mt-6 w-full rounded-xl bg-white/10 py-3 font-bold text-white transition hover:bg-white/20"

@@ -56,6 +56,21 @@ app.add_middleware(
 )
 
 # ============================================================================
+# Request Logger Middleware
+# ============================================================================
+
+@app.middleware("http")
+async def log_requests_middleware(request, call_next):
+    origin = request.headers.get("origin", "no-origin")
+    method = request.method
+    path = request.url.path
+    query = str(request.url.query)
+    print(f"[HTTP INCOMING] {method} {path}?{query} | Origin: {origin} | Client: {request.client}")
+    response = await call_next(request)
+    print(f"[HTTP OUTGOING] {method} {path} -> Status {response.status_code} | CORS Origin: {response.headers.get('access-control-allow-origin')}")
+    return response
+
+# ============================================================================
 # Email Verification Middleware
 # ============================================================================
 

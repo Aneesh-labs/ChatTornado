@@ -343,25 +343,33 @@ def verify_user(
 
 @router.get("/verify-email")
 def verify_email(token: str, db: Session = Depends(get_db)):
+    print(f"[AUTH ROUTE] /verify-email called with raw token: {token[:8]}... (length: {len(token) if token else 0})")
     if not token:
+        print("[AUTH ROUTE] /verify-email: Token is missing")
         raise HTTPException(status_code=400, detail="Token is required.")
         
     token_hash = hashlib.sha256(token.encode()).hexdigest()
+    print(f"[AUTH ROUTE] /verify-email: Computed hash: {token_hash[:12]}...")
     
     user = db.query(User).filter(User.verification_token_hash == token_hash).first()
     
     if not user:
+        print(f"[AUTH ROUTE] /verify-email: No user found for hash {token_hash[:12]}...")
         raise HTTPException(status_code=400, detail="Invalid verification token.")
         
+    print(f"[AUTH ROUTE] /verify-email: Found user '{user.username}' (id={user.id}, email_verified={user.email_verified})")
     if user.email_verified:
+        print(f"[AUTH ROUTE] /verify-email: User '{user.username}' is already verified.")
         return {"message": "Email is already verified."}
         
     if not user.verification_token_expires_at or user.verification_token_expires_at < datetime.utcnow():
+        print(f"[AUTH ROUTE] /verify-email: Token expired for user '{user.username}' (expires_at={user.verification_token_expires_at})")
         raise HTTPException(status_code=400, detail="Verification token has expired. Please request a new one.")
         
     # Mark as verified
     user.email_verified = True
     db.commit()
+    print(f"[AUTH ROUTE] /verify-email: Successfully verified user '{user.username}'!")
     
     return {"message": "Email successfully verified!"}
 
@@ -370,6 +378,7 @@ def verify_email(token: str, db: Session = Depends(get_db)):
 @limiter.limit("3/minute")
 def resend_verification(request: Request, data: dict, db: Session = Depends(get_db)):
     email = (data.get("email") or "").strip().lower()
+    print(f"[AUTH ROUTE] /resend-verification called for email: '{email}'")
     if not email:
         raise HTTPException(status_code=400, detail="Email is required.")
         
@@ -379,6 +388,7 @@ def resend_verification(request: Request, data: dict, db: Session = Depends(get_
     user = db.query(User).filter(func.lower(User.email) == email).first()
     
     if user and not user.email_verified:
+        print(f"[AUTH ROUTE] /resend-verification: User '{user.username}' exists and is unverified. Generating new token.")
         # Generate new token
         raw_token, token_hash = generate_verification_token()
         user.verification_token_hash = token_hash
@@ -388,7 +398,10 @@ def resend_verification(request: Request, data: dict, db: Session = Depends(get_
         # Send new email
         try:
             send_verification_email(user.email, raw_token)
+            print(f"[AUTH ROUTE] /resend-verification: Email sent successfully to {user.email}")
         except Exception as e:
-            print("Failed to send resend email:", e)
+            print(f"[AUTH ROUTE] /resend-verification: Failed to send resend email: {e}")
+    else:
+        print(f"[AUTH ROUTE] /resend-verification: User not found or already verified (user={user})")
             
     return {"message": "If the email is registered and unverified, a new verification link has been sent."}
