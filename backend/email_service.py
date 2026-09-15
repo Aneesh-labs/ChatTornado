@@ -33,7 +33,9 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 def _frontend_url() -> str:
-    url = os.getenv("FRONTEND_URL", "http://localhost:5173").rstrip("/")
+    url = os.getenv("FRONTEND_URL", "https://chattornado.vercel.app").strip().rstrip("/")
+    if url and not url.startswith("http://") and not url.startswith("https://"):
+        url = f"https://{url}"
     return url
 
 

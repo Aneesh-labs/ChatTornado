@@ -46,18 +46,13 @@ from auth import decode_token
 # CORS
 # ============================================================================
 
-allowed_origins = [
-    "https://chattornado.vercel.app",
-    "http://localhost:5173",
-    "http://localhost:3000"
-]
-
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=allowed_origins,
+    allow_origin_regex=r"https?://.*",
     allow_credentials=True,
     allow_methods=["*"],
-    allow_headers=["*"]
+    allow_headers=["*"],
+    expose_headers=["*"]
 )
 
 # ============================================================================
