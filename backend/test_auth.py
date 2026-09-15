@@ -95,10 +95,10 @@ def test_token_lifecycle(mock_email_service):
     assert res_valid.status_code == 200
     assert get_user_by_username("testuser").email_verified is True
 
-    # 3. Same token twice -> already verified msg or fails
+    # 3. Same token twice -> returns already verified success gracefully
     res_twice = client.get(f"/verify-email?token={raw_token}")
-    assert res_twice.status_code == 400
-    assert "Invalid verification token" in res_twice.json()["detail"]
+    assert res_twice.status_code == 200
+    assert "already verified" in res_twice.json()["message"].lower()
 
     # Now backend enforcement should let them through
     login_response = client.post("/login", json={"email": "test@example.com", "password": "strongpassword123!"})

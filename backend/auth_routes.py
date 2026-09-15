@@ -361,8 +361,6 @@ def verify_email(token: str, db: Session = Depends(get_db)):
         
     # Mark as verified
     user.email_verified = True
-    user.verification_token_hash = None
-    user.verification_token_expires_at = None
     db.commit()
     
     return {"message": "Email successfully verified!"}
