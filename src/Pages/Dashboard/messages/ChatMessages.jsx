@@ -11,8 +11,16 @@ import { motion } from "framer-motion";
 const SessionDivider = ({ sessionText }) => {
     const [summary, setSummary] = useState(null);
     const [loading, setLoading] = useState(false);
+    const [open, setOpen] = useState(false);
+
+    const messageLines = (sessionText || "").trim().split('\n').filter(Boolean);
+    const hasEnoughContent = messageLines.length >= 2;
 
     const handleSummarize = async () => {
+        if (summary) {
+            setOpen((prev) => !prev);
+            return;
+        }
         if (!sessionText || sessionText.trim() === "") return;
         setLoading(true);
         try {
@@ -25,42 +33,52 @@ const SessionDivider = ({ sessionText }) => {
             const data = await res.json();
             if (data.success) {
                 setSummary(data.summary);
+                setOpen(true);
             }
         } catch (e) {
-            console.error(e);
+            console.error("Failed to summarize session:", e);
         } finally {
             setLoading(false);
         }
     };
 
     return (
-        <div className="flex flex-col items-center my-4 w-full px-4">
-            <div className="w-full flex items-center gap-4">
-                <div className="h-px bg-white/10 flex-1"></div>
-                {!summary && (
+        <div className="flex flex-col items-center my-3 w-full px-4 select-none">
+            <div className="flex items-center gap-2 max-w-md w-full justify-center">
+                <div className="h-px bg-white/[0.06] flex-1"></div>
+                {hasEnoughContent ? (
                     <button 
+                        type="button"
                         onClick={handleSummarize} 
                         disabled={loading}
-                        className="text-[10px] sm:text-xs font-semibold text-cyan-400 bg-cyan-900/30 hover:bg-cyan-900/50 border border-cyan-500/30 px-3 py-1.5 rounded-full transition-all touch-manipulation disabled:opacity-50 flex items-center gap-1.5"
+                        className="text-[10px] text-cyan-400/80 hover:text-cyan-300 bg-cyan-950/40 hover:bg-cyan-900/50 border border-cyan-500/20 px-2.5 py-0.5 rounded-full transition-all touch-manipulation disabled:opacity-50 flex items-center gap-1.5 active:scale-95 shadow-sm"
                     >
-                        {loading ? "Summarizing..." : "✨ Summarize Session"}
+                        <span>✨</span>
+                        <span>{loading ? "Summarizing…" : (summary ? (open ? "Hide Summary" : "View Summary") : "Summarize Session")}</span>
                     </button>
+                ) : (
+                    <span className="text-[10px] text-white/20 font-medium">1h+ gap</span>
                 )}
-                {summary && (
-                    <span className="text-[10px] sm:text-xs font-bold text-cyan-400 px-3 py-1.5 rounded-full bg-cyan-900/20 border border-cyan-500/20 flex items-center gap-1.5">
-                        ✨ Session Summary
-                    </span>
-                )}
-                <div className="h-px bg-white/10 flex-1"></div>
+                <div className="h-px bg-white/[0.06] flex-1"></div>
             </div>
             
-            {summary && (
+            {open && summary && (
                 <motion.div 
-                    initial={{ opacity: 0, y: -10 }} 
-                    animate={{ opacity: 1, y: 0 }}
-                    className="mt-3 bg-cyan-950/40 border border-cyan-500/20 rounded-xl p-3 sm:p-4 text-xs sm:text-sm text-cyan-100/90 leading-relaxed text-left shadow-lg backdrop-blur-sm max-w-2xl w-full"
+                    initial={{ opacity: 0, y: -6, scale: 0.98 }} 
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    className="mt-2.5 bg-cyan-950/50 border border-cyan-500/25 rounded-xl p-3 sm:p-3.5 text-xs text-cyan-100/90 leading-relaxed text-left shadow-xl backdrop-blur-md max-w-xl w-full"
                 >
-                    {summary}
+                    <div className="flex items-center justify-between mb-1 text-[10px] font-bold text-cyan-300">
+                        <span className="flex items-center gap-1">✨ AI Session Summary</span>
+                        <button 
+                            type="button" 
+                            onClick={() => setOpen(false)}
+                            className="text-cyan-400/50 hover:text-cyan-200 text-xs px-1"
+                        >
+                            ✕
+                        </button>
+                    </div>
+                    <p className="whitespace-pre-wrap">{summary}</p>
                 </motion.div>
             )}
         </div>

@@ -204,7 +204,6 @@ const Messages = () => {
     const groupedMessages = useMemo(() => {
         const result = [];
         let lastDate = "";
-        let sessionId = 0;
 
         messages.forEach((msg, i) => {
             if (!msg?.created_at) return;
@@ -215,37 +214,33 @@ const Messages = () => {
             }
 
             const prev = messages[i - 1];
-            let isNewSession = false;
-            if (prev) {
+            if (prev && prev.created_at) {
                 const diff = new Date(msg.created_at) - new Date(prev.created_at);
-                if (diff > 3600000) { // 1 hour
-                    isNewSession = true;
-                    sessionId++;
-                }
-            } else {
-                isNewSession = true;
-            }
-
-            if (isNewSession) {
-                // Collect all messages for this session ahead of time to pass to the divider
-                let sessionText = "";
-                for (let j = i; j < messages.length; j++) {
-                    const nextMsg = messages[j];
-                    if (j > i) {
-                        const prevMsg = messages[j-1];
-                        if (new Date(nextMsg.created_at) - new Date(prevMsg.created_at) > 3600000) {
-                            break;
+                if (diff >= 3600000) { // 1 hour gap between consecutive messages
+                    // Collect text of the previous completed session
+                    let prevSessionText = "";
+                    let k = i - 1;
+                    while (k >= 0) {
+                        const m = messages[k];
+                        if (k < i - 1) {
+                            const nextM = messages[k + 1];
+                            if (new Date(nextM.created_at) - new Date(m.created_at) >= 3600000) break;
                         }
+                        if (m.message && !m.message.startsWith('⚡') && !m.message.startsWith('🎮') && !m.message.startsWith('🔊')) {
+                            const sender = m.sender_id === myUserId.current ? "Me" : "Them";
+                            prevSessionText = `${sender}: ${m.message}\n` + prevSessionText;
+                        }
+                        k--;
                     }
-                    if (nextMsg.message && !nextMsg.message.startsWith('⚡') && !nextMsg.message.startsWith('🎮') && !nextMsg.message.startsWith('🔊')) {
-                        const sender = nextMsg.sender_id === myUserId.current ? "Me" : "Them";
-                        sessionText += `${sender}: ${nextMsg.message}\n`;
-                    }
+                    result.push({
+                        type: "session_divider",
+                        sessionText: prevSessionText,
+                        key: `session-gap-${msg.id || i}`
+                    });
                 }
-                result.push({ type: "session_divider", sessionText, key: `s-${sessionId}-${msg.id}` });
             }
 
-            const showAvatar = !prev || prev.sender_id !== msg.sender_id || isNewSession;
+            const showAvatar = !prev || prev.sender_id !== msg.sender_id;
             result.push({ type: "message", msg, showAvatar, key: msg.id || i });
         });
         return result;
