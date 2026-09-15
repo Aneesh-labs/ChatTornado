@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { IconBtn, useTheme } from "./constants";
 import API from "../../../Services/API";
 import { prepareP2PFile } from "../../../Services/p2p";
-import { Shield, X, Gamepad2, Volume2 } from "lucide-react";
+import { Shield, X, Gamepad2, Volume2, Mic, MicOff } from "lucide-react";
 import CyberShieldModal from "./CyberShieldModal";
 import InChatGameModal from "./InChatGameModal";
 import SoundboardModal from "./SoundboardModal";
@@ -28,13 +28,85 @@ const ChatInput = React.memo(({ onSend, replyTo, onCancelReply, selectedUser, so
     const [gameModalOpen, setGameModalOpen] = useState(false);
     const [soundboardModalOpen, setSoundboardModalOpen] = useState(false);
 
-    // Audio recording state
+    // Audio recording state (Voice Notes)
     const [isRecording, setIsRecording] = useState(false);
     const [recordingDuration, setRecordingDuration] = useState(0);
     const mediaRecorderRef = useRef(null);
     const audioChunksRef = useRef([]);
     const recordingTimerRef = useRef(null);
     const streamRef = useRef(null);
+
+    // Voice-to-Text (Speech Recognition) state
+    const [isListening, setIsListening] = useState(false);
+    const recognitionRef = useRef(null);
+    const baseTextRef = useRef("");
+
+    const toggleSpeechToText = useCallback(() => {
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (!SpeechRecognition) {
+            alert("Speech recognition is not supported in this browser. Please try Chrome, Edge, or Safari.");
+            return;
+        }
+
+        if (isListening) {
+            recognitionRef.current?.stop();
+            setIsListening(false);
+            return;
+        }
+
+        try {
+            const recognition = new SpeechRecognition();
+            recognition.continuous = true;
+            recognition.interimResults = true;
+            recognition.lang = "en-US";
+
+            baseTextRef.current = text ? (text.endsWith(" ") ? text : text + " ") : "";
+
+            recognition.onstart = () => {
+                setIsListening(true);
+            };
+
+            recognition.onresult = (event) => {
+                let interimTranscript = "";
+                let finalTranscript = "";
+
+                for (let i = event.resultIndex; i < event.results.length; ++i) {
+                    if (event.results[i].isFinal) {
+                        finalTranscript += event.results[i][0].transcript;
+                    } else {
+                        interimTranscript += event.results[i][0].transcript;
+                    }
+                }
+
+                const currentTranscript = finalTranscript || interimTranscript;
+                if (currentTranscript) {
+                    const newText = baseTextRef.current + currentTranscript;
+                    setText(newText);
+                    if (textareaRef.current) {
+                        textareaRef.current.style.height = "auto";
+                        textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 120)}px`;
+                    }
+                }
+            };
+
+            recognition.onerror = (event) => {
+                console.warn("[SpeechRecognition error]", event.error);
+                if (event.error !== "no-speech") {
+                    setIsListening(false);
+                }
+            };
+
+            recognition.onend = () => {
+                setIsListening(false);
+            };
+
+            recognitionRef.current = recognition;
+            recognition.start();
+        } catch (err) {
+            console.error("Failed to start speech recognition:", err);
+            setIsListening(false);
+        }
+    }, [isListening, text]);
 
     const sendStopTypingSignal = useCallback(() => {
         if (!isTyping) return;
@@ -48,6 +120,7 @@ const ChatInput = React.memo(({ onSend, replyTo, onCancelReply, selectedUser, so
         return () => {
             if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
             stopRecording(false);
+            recognitionRef.current?.stop();
         };
     }, [selectedUser?.id]);
 
@@ -289,6 +362,30 @@ const ChatInput = React.memo(({ onSend, replyTo, onCancelReply, selectedUser, so
                 )}
             </AnimatePresence>
 
+            <AnimatePresence>
+                {isListening && (
+                    <motion.div
+                        initial={{ opacity: 0, y: 4 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: 4 }}
+                        className="flex items-center gap-2 px-3 py-1.5 mb-2 rounded-xl bg-cyan-500/10 border border-cyan-500/30 text-cyan-300 w-fit"
+                    >
+                        <span className="flex h-2 w-2 relative">
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
+                            <span className="relative inline-flex rounded-full h-2 w-2 bg-cyan-500"></span>
+                        </span>
+                        <span className="font-medium font-mono text-[11px]">Listening… speak into your microphone</span>
+                        <button
+                            type="button"
+                            onClick={toggleSpeechToText}
+                            className="ml-2 px-2 py-0.5 rounded bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 text-[10px] font-bold uppercase tracking-wider transition-colors"
+                        >
+                            Done
+                        </button>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
             <div className="flex items-end gap-1.5 sm:gap-2 max-w-full">
                 {isRecording ? (
                     <motion.div
@@ -365,10 +462,26 @@ const ChatInput = React.memo(({ onSend, replyTo, onCancelReply, selectedUser, so
                                 onChange={handleChange}
                                 onKeyDown={handleKeyDown}
                                 disabled={disabled}
-                                placeholder="Message…"
+                                placeholder={isListening ? "Listening… (speaking converts to text)" : "Message…"}
                                 aria-label="Write a direct message"
                                 className="flex-1 bg-transparent text-sm text-white/90 placeholder-white/20 outline-none resize-none leading-relaxed max-h-[120px] min-h-[22px]"
                             />
+                            
+                            {/* Speech-to-Text Dictation Button */}
+                            <button
+                                type="button"
+                                onClick={toggleSpeechToText}
+                                className={`transition-all flex-shrink-0 focus:outline-none touch-manipulation p-1 rounded-lg ${
+                                    isListening
+                                        ? "text-cyan-300 bg-cyan-500/25 shadow-[0_0_10px_rgba(6,182,212,0.6)] animate-pulse"
+                                        : "text-white/25 hover:text-cyan-400 hover:bg-white/[0.05]"
+                                }`}
+                                title={isListening ? "Stop Voice-to-Text" : "Voice-to-Text (Speech Recognition)"}
+                                aria-label="Voice to text dictation"
+                            >
+                                {isListening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+                            </button>
+
                             <button
                                 type="button"
                                 className="text-white/25 hover:text-white/50 transition-colors flex-shrink-0 focus:outline-none touch-manipulation"
