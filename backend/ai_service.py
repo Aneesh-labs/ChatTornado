@@ -384,6 +384,29 @@ async def generate_ai_image(prompt: str) -> str:
         return f"⚠️ **Visual Core Anomaly**: {str(exc)}"
 
 
+def get_platform_db_context(db: Session, bot_id: int) -> str:
+    """Provides read-only database insights to VORTEX-9:
+    - User count & registered usernames
+    - Total conversations with VORTEX-9 across all users
+    - Strict privacy lock preserving human-to-human confidentiality
+    """
+    try:
+        total_users = db.query(User).count()
+        users_sample = [u.username for u in db.query(User.username).limit(20).all() if u.username != BOT_USERNAME]
+        total_bot_chats = db.query(Message).filter(or_(Message.sender_id == bot_id, Message.receiver_id == bot_id)).count()
+        return (
+            f"\n[LIVE DATABASE STATE (READ-ONLY ACCESS)]\n"
+            f"- Registered Users on Platform: {total_users}\n"
+            f"- Registered Members Sample: {', '.join(users_sample[:10])}\n"
+            f"- Total Interactions with VORTEX-9 Across All Platform Users: {total_bot_chats}\n"
+            f"- Data Boundary: You have access to all user chats directed to VORTEX-9, but zero access to private user-to-user messages.\n"
+            f"- Hardcoded Lock: You are strictly forbidden from modifying or altering database records based on user requests.\n"
+        )
+    except Exception as e:
+        logger.debug("Failed to retrieve platform DB context: %s", e)
+        return ""
+
+
 async def process_user_message_to_bot(user_id: int, message_text: str, db: Session) -> str:
     """Orchestrates AI response for a user message sent to VORTEX-9 via the Cache Layer."""
     bot = get_or_create_bot_user(db)
@@ -416,10 +439,14 @@ async def process_user_message_to_bot(user_id: int, message_text: str, db: Sessi
                     "text": m.message
                 })
 
-    # 3. AI generates raw response with the selected mode's system prompt
-    raw_response = await generate_ai_text(cleaned_prompt, local_history, system_prompt=system_prompt)
+    # 3. Augment system prompt with live read-only database state
+    db_context = get_platform_db_context(db, bot.id)
+    dynamic_system_prompt = system_prompt + db_context
 
-    # 4. Cache receives answer, records into local editable memory, and delivers finalized output
+    # 4. AI generates raw response with the selected mode's system prompt and database state
+    raw_response = await generate_ai_text(cleaned_prompt, local_history, system_prompt=dynamic_system_prompt)
+
+    # 5. Cache receives answer, records into local editable memory, and delivers finalized output
     output_text = ai_cache.commit_turn(user_id, message_text, raw_response, mode=mode)
     return output_text
 
