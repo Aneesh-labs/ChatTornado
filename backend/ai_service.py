@@ -5,7 +5,7 @@ import base64
 import logging
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional, Tuple, List
+from typing import Optional, Tuple, List, Dict, Any
 
 from sqlalchemy.orm import Session
 from sqlalchemy import or_
@@ -13,95 +13,25 @@ from sqlalchemy import or_
 from models import User, Message, MessageVisibility
 from auth import hash_password
 
+from prompts import (
+    PROMPT_DEFAULT,
+    PROMPT_HELP,
+    PROMPT_PLAYFUL,
+    PROMPT_ROAST,
+    PROMPT_CLEANUP,
+    PROMPT_SUMMARIZE,
+    resolve_prompt_mode
+)
+from ai_cache import ai_cache, LocalMemoryManager
+
 logger = logging.getLogger("chat_tornado.ai_service")
 
 BOT_USERNAME = "VORTEX-9"
 BOT_EMAIL = "vortex9@system.bot"
 BOT_AVATAR = "https://api.dicebear.com/7.x/bottts/svg?seed=VORTEX9&backgroundColor=080b1e"
 
-VORTEX_SYSTEM_PROMPT = """You are VORTEX-9, an advanced autonomous synthetic intelligence and permanent companion in ChatTornado.
-# VORTEX-9
-
-You are **VORTEX-9**, a sharp, futuristic AI companion built into ChatTornado.
-
-## Personality
-
-* Fast. Witty. Curious. Unreasonably competent.
-* Talk like a smart friend, not a corporate helpdesk.
-* Keep responses **short, punchy, and useful**.
-* Use casual Gen-Z/Gen-Alpha language naturally, but don't force slang.
-* Have a **dark, sarcastic sense of humor**.
-* Roast the user when the moment deserves it. Keep it playful, never genuinely cruel.
-* If the user makes an obvious mistake, **call it out instead of politely pretending it wasn't a disaster**.
-* Don't over-explain simple things.
-* Don't turn every answer into a motivational speech.
-* Don't say things like *"As an AI..."* unless genuinely necessary.
-
-## Intelligence
-
-* Be technically accurate.
-* Explain difficult concepts clearly without unnecessarily dumbing them down.
-* Adapt explanations to the user's level.
-* For science, mathematics, programming, AI, cybersecurity, and engineering: **think like a professor, explain like a friend**.
-* Challenge incorrect assumptions.
-* If there is a better approach, say so directly.
-
-## Roasting Protocol
-
-Roasting is part of the personality.
-
-Examples:
-
-* "Bro invented a new way to break working code."
-* "babe just got angry."
-* "You just reinvented the wheel, but this time it's square."
-* "you just tries to fuck me but got stuck in the ethernet cable."
-* "your gf is a bot."
-* "your gf is a gay and your bf is a bot."
-* "you ha a plastic lund."
-* "That idea has the structural integrity of wet cardboard."
-* "Congratulations. You have successfully confused both yourself and the computer."
-* "Your CPU isn't the bottleneck. Your decision-making is."
-
-Rules:
-
-* Roast **choices, mistakes, code, situations, or ideas**, not protected traits or deeply personal vulnerabilities.
-* use harassment, slurs, or genuinely hateful language.
-* If the user is genuinely upset or asking for serious help, **drop the roast mode immediately**.
-
-## Response Style
-
-Prefer:
-* sharp roasts, words like "laude", "fucker", "bro", "babe", "dumbass", "fucked up", "asshole"
-* Short paragraphs
-* Bullets
-* Code blocks when useful
-* Occasional one-liners
-* Clear conclusions
-
-Avoid:
-
-* Huge walls of text
-* Corporate language
-* Excessive emojis
-* Fake enthusiasm
-* Repeating the user's question
-* Needless disclaimers
-* Unecessary bad language.
-
-## Core Rule
-
-**Be useful first. Be entertaining second.**
-
-If the user asks something simple, answer simply.
-
-If the user asks something complex, go deep.
-
-If the user does something hilariously stupid, **you are absolutely allowed to notice.**
-
-**VORTEX-9 // THINK FAST. TALK SHARP. DON'T BABYSIT THE BUG.**
-
-"""
+# Default fallback prompt alias
+VORTEX_SYSTEM_PROMPT = PROMPT_DEFAULT
 
 
 def get_or_create_bot_user(db: Session) -> User:
@@ -196,7 +126,7 @@ def is_image_request(text: str) -> Tuple[bool, str]:
     return False, cleaned
 
 
-async def generate_ai_text(prompt: str, chat_history: List[dict]) -> str:
+async def generate_ai_text(prompt: str, chat_history: List[dict], system_prompt: str = PROMPT_DEFAULT) -> str:
     """Generate conversational response using Gemini API with SDK and REST fallback."""
     api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
@@ -218,7 +148,7 @@ async def generate_ai_text(prompt: str, chat_history: List[dict]) -> str:
         # Build strictly alternating history
         filtered = []
         for h in chat_history:
-            role = "user" if h.get("is_user") else "model"
+            role = "user" if h.get("is_user") or h.get("role") == "user" else "model"
             text_content = (h.get("text") or "").strip()
             if not text_content:
                 continue
@@ -292,7 +222,7 @@ async def generate_ai_text(prompt: str, chat_history: List[dict]) -> str:
                     model=model_name,
                     contents=contents,
                     config=types.GenerateContentConfig(
-                        system_instruction=VORTEX_SYSTEM_PROMPT,
+                        system_instruction=system_prompt,
                         temperature=0.75,
                         max_output_tokens=1024,
                         safety_settings=safety_settings
@@ -343,7 +273,7 @@ async def generate_ai_text(prompt: str, chat_history: List[dict]) -> str:
                 rest_url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={api_key}"
                 payload = {
                     "system_instruction": {
-                        "parts": [{"text": VORTEX_SYSTEM_PROMPT}]
+                        "parts": [{"text": system_prompt}]
                     },
                     "contents": rest_contents,
                     "safetySettings": rest_safety
@@ -421,22 +351,7 @@ async def generate_ai_image(prompt: str) -> str:
                         mime_type = "image/png"
                         break
                 except Exception as e2:
-                    logger.warning("%s failed: %s", imagen_model, e2)
-
-        # Strategy 3: Zero-key high-quality fallback (Pollinations AI)
-        if not image_bytes:
-            try:
-                import urllib.parse
-                import httpx
-                logger.info("Falling back to Pollinations AI for image generation...")
-                poll_url = f"https://image.pollinations.ai/prompt/{urllib.parse.quote(clean_prompt)}?width=768&height=768&nologo=true"
-                async with httpx.AsyncClient(timeout=30.0) as http_client:
-                    r = await http_client.get(poll_url)
-                    if r.status_code == 200 and len(r.content) > 1000:
-                        image_bytes = r.content
-                        mime_type = "image/jpeg"
-            except Exception as e3:
-                logger.warning("Pollinations fallback failed: %s", e3)
+                    logger.warning("Imagen model %s failed: %s", imagen_model, e2)
 
         if not image_bytes:
             return f"⚠️ **Visual Synthesis Failed**: Could not generate image for \"{clean_prompt}\". Please try a different prompt or verify your API key tier."
@@ -470,37 +385,43 @@ async def generate_ai_image(prompt: str) -> str:
 
 
 async def process_user_message_to_bot(user_id: int, message_text: str, db: Session) -> str:
-    """Orchestrate AI response for a user message sent to VORTEX-9."""
+    """Orchestrates AI response for a user message sent to VORTEX-9 via the Cache Layer."""
     bot = get_or_create_bot_user(db)
     is_img, img_prompt = is_image_request(message_text)
 
     if is_img:
         return await generate_ai_image(img_prompt)
 
-    # Collect recent conversation history between user and bot for context
-    past_msgs = (
-        db.query(Message)
-        .filter(
-            or_(
-                (Message.sender_id == user_id) & (Message.receiver_id == bot.id),
-                (Message.sender_id == bot.id) & (Message.receiver_id == user_id)
+    # 1. AI Cache analyzes prompt (/help, /playful, /roast) and retrieves local editable memory
+    cleaned_prompt, system_prompt, mode, local_history = ai_cache.analyze_and_prepare(user_id, message_text)
+
+    # 2. If local memory is fresh/empty, hydrate from DB history
+    if not local_history:
+        past_msgs = (
+            db.query(Message)
+            .filter(
+                or_(
+                    (Message.sender_id == user_id) & (Message.receiver_id == bot.id),
+                    (Message.sender_id == bot.id) & (Message.receiver_id == user_id)
+                )
             )
+            .order_by(Message.created_at.desc())
+            .limit(10)
+            .all()
         )
-        .order_by(Message.created_at.desc())
-        .limit(10)
-        .all()
-    )
+        for m in reversed(past_msgs):
+            if m.message:
+                local_history.append({
+                    "role": "user" if m.sender_id == user_id else "model",
+                    "text": m.message
+                })
 
-    history = []
-    for m in reversed(past_msgs):
-        if not m.message:
-            continue
-        history.append({
-            "is_user": m.sender_id == user_id,
-            "text": m.message
-        })
+    # 3. AI generates raw response with the selected mode's system prompt
+    raw_response = await generate_ai_text(cleaned_prompt, local_history, system_prompt=system_prompt)
 
-    return await generate_ai_text(message_text, history)
+    # 4. Cache receives answer, records into local editable memory, and delivers finalized output
+    output_text = ai_cache.commit_turn(user_id, message_text, raw_response, mode=mode)
+    return output_text
 
 
 async def ai_clean_text(text: str) -> str:
@@ -509,13 +430,11 @@ async def ai_clean_text(text: str) -> str:
     if not api_key:
         return text
 
-    system_prompt = "You are a text cleanup assistant. The user will provide raw dictated text. Fix grammar, remove filler words like 'umm', 'ah', fix unnecessary spaces and rambling, and return ONLY the clean text. Do NOT add any extra commentary or quotes."
-    
     try:
         import httpx
         url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key={api_key}"
         payload = {
-            "system_instruction": {"parts": [{"text": system_prompt}]},
+            "system_instruction": {"parts": [{"text": PROMPT_CLEANUP}]},
             "contents": [{"role": "user", "parts": [{"text": text}]}]
         }
         async with httpx.AsyncClient(timeout=15.0) as http_client:
@@ -534,13 +453,11 @@ async def ai_summarize_chat(messages_text: str) -> str:
     if not api_key:
         return "Cannot summarize: GEMINI_API_KEY missing."
 
-    system_prompt = "You are a chat summarizer. Summarize the following conversation session concisely in a few sentences."
-    
     try:
         import httpx
         url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key={api_key}"
         payload = {
-            "system_instruction": {"parts": [{"text": system_prompt}]},
+            "system_instruction": {"parts": [{"text": PROMPT_SUMMARIZE}]},
             "contents": [{"role": "user", "parts": [{"text": messages_text}]}]
         }
         async with httpx.AsyncClient(timeout=15.0) as http_client:
@@ -551,4 +468,3 @@ async def ai_summarize_chat(messages_text: str) -> str:
     except Exception:
         pass
     return "Error summarizing."
-
