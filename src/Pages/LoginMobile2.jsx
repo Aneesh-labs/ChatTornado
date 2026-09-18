@@ -816,6 +816,10 @@ const IdentityOrb = memo(({
 // FLOATING AUTH CARD — Glassmorphic login panel
 // ============================================================================
 const FloatingAuthCard = memo(({
+    mode,
+    setMode,
+    username,
+    setUsername,
     email,
     setEmail,
     password,
@@ -858,6 +862,38 @@ const FloatingAuthCard = memo(({
                 />
 
                 <form onSubmit={onSubmit} className="relative space-y-4">
+                    {/* Toggle mode */}
+                    <div className="flex justify-center mb-4">
+                        <div className="flex bg-white/5 rounded-full p-1 border border-white/10">
+                            <button
+                                type="button"
+                                onClick={() => setMode('login')}
+                                className={`px-4 py-1.5 rounded-full text-[10px] font-mono tracking-widest transition-all ${mode === 'login' ? 'bg-purple-500/50 text-white shadow-lg shadow-purple-500/20' : 'text-white/40 hover:text-white/80'}`}
+                            >
+                                LOGIN
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setMode('signup')}
+                                className={`px-4 py-1.5 rounded-full text-[10px] font-mono tracking-widest transition-all ${mode === 'signup' ? 'bg-purple-500/50 text-white shadow-lg shadow-purple-500/20' : 'text-white/40 hover:text-white/80'}`}
+                            >
+                                SIGNUP
+                            </button>
+                        </div>
+                    </div>
+
+                    {mode === 'signup' && (
+                        <GlassInput
+                            type="text"
+                            placeholder="new user"
+                            value={username}
+                            onChange={(e) => setUsername(e.target.value)}
+                            icon={User}
+                            disabled={isProcessing}
+                            label="USERNAME"
+                        />
+                    )}
+
                     {/* Email field */}
                     <GlassInput
                         type="email"
@@ -1624,6 +1660,8 @@ export default function LoginMobile2() {
     const capabilities = useDeviceCapabilities();
 
     // Core auth state
+    const [mode, setMode] = useState('login');
+    const [username, setUsername] = useState('');
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
@@ -1894,6 +1932,10 @@ export default function LoginMobile2() {
             setError('Network offline. Gateway unreachable.');
             return;
         }
+        if (mode === 'signup' && !username) {
+            setError('Username required for registration.');
+            return;
+        }
         if (!email || !password) {
             setError('Credentials payload incomplete.');
             return;
@@ -1905,10 +1947,12 @@ export default function LoginMobile2() {
         vibrate(15);
 
         try {
-            const response = await API.post('/login', {
-                email,
-                password
-            });
+            const endpoint = mode === 'signup' ? '/signup' : '/login';
+            const payload = mode === 'signup' 
+                ? { username, email, password }
+                : { email, password };
+            
+            const response = await API.post(endpoint, payload);
             const token = response.data.access_token || response.data.token;
             if (token) {
                 sessionStorage.setItem('token', token);
@@ -2153,6 +2197,10 @@ export default function LoginMobile2() {
 
                 {/* Auth card */}
                 <FloatingAuthCard
+                    mode={mode}
+                    setMode={setMode}
+                    username={username}
+                    setUsername={setUsername}
                     email={email}
                     setEmail={setEmail}
                     password={password}

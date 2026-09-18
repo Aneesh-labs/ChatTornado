@@ -31,14 +31,13 @@ def generate_verification_token():
 
 @router.post("/signup")
 def signup(
-    username: str = Form(...),
-    email: str = Form(...),
-    password: str = Form(...),
-    invite_code: str = Form(None),
+    data: dict,
     db: Session = Depends(get_db)
 ):
-    username = (username or "").strip()
-    email = (email or "").strip().lower()
+    username = (data.get("username") or "").strip()
+    email = (data.get("email") or "").strip().lower()
+    password = data.get("password") or ""
+    invite_code = data.get("invite_code")
 
     # Check private invite code if configured in environment
     required_invite_code = os.getenv("INVITE_CODE")

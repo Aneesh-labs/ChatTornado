@@ -1200,13 +1200,12 @@ export default function LoginMobile() {
 
         try {
             if (mode === 'signup') {
-                const formData = new URLSearchParams();
-                formData.append("username", displayName);
-                formData.append("email", usernameCredential);
-                formData.append("password", passwordCredential);
-                await API.post("/signup", formData, {
-                    headers: { "Content-Type": "application/x-www-form-urlencoded" }
-                });
+                const payload = {
+                    username: displayName,
+                    email: usernameCredential,
+                    password: passwordCredential
+                };
+                await API.post("/signup", payload);
                 setAmbientGreetingText("Identity established. Logging in...");
                 setMode('login');
                 setTimeout(() => executeAuthenticationRequest(), 1500);

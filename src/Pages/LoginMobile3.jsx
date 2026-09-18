@@ -1085,6 +1085,8 @@ export default function LoginMobile3() {
     const capabilities = useDeviceCapabilities();
 
     // State
+    const [mode, setMode] = useState('login');
+    const [username, setUsername] = useState('');
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [state, setState] = useState('idle');
@@ -1234,6 +1236,12 @@ export default function LoginMobile3() {
             return;
         }
 
+        if (mode === 'signup' && !username) {
+            setError('Username required for registration.');
+            triggerHapticFeedback(20);
+            return;
+        }
+
         if (!email || !password) {
             setError('Credentials payload incomplete.');
             triggerHapticFeedback(20);
@@ -1253,10 +1261,12 @@ export default function LoginMobile3() {
         triggerHapticFeedback(18);
 
         try {
-            const response = await API.post('/login', {
-                email: email,
-                password: password
-            });
+            const endpoint = mode === 'signup' ? '/signup' : '/login';
+            const payload = mode === 'signup' 
+                ? { username, email, password }
+                : { email, password };
+
+            const response = await API.post(endpoint, payload);
 
             const token = response.data.access_token || response.data.token;
             if (token) {
@@ -1482,6 +1492,37 @@ export default function LoginMobile3() {
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.6, delay: 0.2 }}
                 >
+                    {/* Toggle mode */}
+                    <div className="flex justify-center mb-4">
+                        <div className="flex bg-white/5 rounded-full p-1 border border-white/10">
+                            <button
+                                type="button"
+                                onClick={() => setMode('login')}
+                                className={`px-4 py-1.5 rounded-full text-[10px] font-mono tracking-widest transition-all ${mode === 'login' ? 'bg-purple-500/50 text-white shadow-lg shadow-purple-500/20' : 'text-white/40 hover:text-white/80'}`}
+                            >
+                                LOGIN
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setMode('signup')}
+                                className={`px-4 py-1.5 rounded-full text-[10px] font-mono tracking-widest transition-all ${mode === 'signup' ? 'bg-purple-500/50 text-white shadow-lg shadow-purple-500/20' : 'text-white/40 hover:text-white/80'}`}
+                            >
+                                SIGNUP
+                            </button>
+                        </div>
+                    </div>
+
+                    {mode === 'signup' && (
+                        <GlassInput
+                            type="text"
+                            placeholder="Username"
+                            value={username}
+                            onChange={(e) => setUsername(e.target.value)}
+                            icon={User}
+                            error={error}
+                            locked={state !== 'idle'}
+                        />
+                    )}
                     <GlassInput
                         type="email"
                         placeholder="Email address"

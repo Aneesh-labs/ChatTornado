@@ -533,14 +533,13 @@ export default function LoginDesktop() {
                     throw new Error("Username must be at least 3 characters.");
                 }
 
-                const formData = new FormData();
-                formData.append("username", username.trim());
-                formData.append("email", email.trim());
-                formData.append("password", password);
+                const payload = {
+                    username: username.trim(),
+                    email: email.trim(),
+                    password: password
+                };
 
-                const response = await API.post("/signup", formData, {
-                    headers: { "Content-Type": "multipart/form-data" }
-                });
+                const response = await API.post("/signup", payload);
 
                 if (!isMountedRef.current) return;
                 convergeRef.current = { active: false, strength: 0, x: 0.5, y: 0.5 };
