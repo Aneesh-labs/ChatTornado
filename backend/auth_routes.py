@@ -54,20 +54,26 @@ def signup(
             detail="Invalid email format. Please reenter the email."
         )
     
-    # Check for existing user (case-insensitive)
-    existing_user = (
-        db.query(User)
-        .filter(
-            (func.lower(User.email) == email) | 
-            (func.lower(User.username) == username.lower())
-        )
-        .first()
-    )
-    
-    if existing_user:
+    if not username or len(username) < 3:
         raise HTTPException(
             status_code=400,
-            detail="Email or username already registered."
+            detail="Username must be at least 3 characters long."
+        )
+
+    # Check for existing email (case-insensitive)
+    existing_email = db.query(User).filter(func.lower(User.email) == email).first()
+    if existing_email:
+        raise HTTPException(
+            status_code=400,
+            detail="Email is already registered."
+        )
+        
+    # Check for existing username (case-insensitive)
+    existing_username = db.query(User).filter(func.lower(User.username) == username.lower()).first()
+    if existing_username:
+        raise HTTPException(
+            status_code=400,
+            detail="Username is already taken."
         )
     
     # Validate password length (at least 6 characters)
