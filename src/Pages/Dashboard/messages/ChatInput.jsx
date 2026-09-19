@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { IconBtn, useTheme } from "./constants";
 import API from "../../../Services/API";
 import { prepareP2PFile } from "../../../Services/p2p";
-import { Shield, X, Gamepad2, Volume2, Mic, MicOff } from "lucide-react";
+import { Shield, X, Gamepad2, Volume2, Mic, MicOff, MoreVertical } from "lucide-react";
 import CyberShieldModal from "./CyberShieldModal";
 import InChatGameModal from "./InChatGameModal";
 import SoundboardModal from "./SoundboardModal";
@@ -22,6 +22,7 @@ const ChatInput = React.memo(({ onSend, replyTo, onCancelReply, selectedUser, so
     const [uploading, setUploading] = useState(false);
     const [emojiOpen, setEmojiOpen] = useState(false);
     const [uploadError, setUploadError] = useState("");
+    const [showMoreOptions, setShowMoreOptions] = useState(false);
     const isSendingRef = useRef(false);
     const [shieldModalOpen, setShieldModalOpen] = useState(false);
     const [shieldOptions, setShieldOptions] = useState(null);
@@ -501,44 +502,59 @@ const ChatInput = React.memo(({ onSend, replyTo, onCancelReply, selectedUser, so
                     <>
                         <input ref={fileInputRef} type="file" className="hidden" accept="image/*,video/*,audio/*,.mkv,.avi,.mov,.mp4,.webm,.m4v,.flv,.3gp,.pdf,.zip,.txt" onChange={handleAttachment} />
 
-                        <div className="flex gap-1 flex-shrink-0">
-                            <IconBtn title="Attach image, video, or file" onClick={() => fileInputRef.current?.click()} small>
-                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
-                                </svg>
+                        <div className="flex gap-1 flex-shrink-0 items-center">
+                            <IconBtn title="More options" onClick={() => setShowMoreOptions(!showMoreOptions)} small className={showMoreOptions ? "bg-white/10" : ""}>
+                                <MoreVertical className="w-4 h-4" />
                             </IconBtn>
 
-                            <IconBtn
-                                title="Play In-Chat Games (Tic-Tac-Toe, RPS, Connect 4)"
-                                onClick={() => setGameModalOpen(true)}
-                                small
-                                className="text-amber-400/80 hover:!text-amber-300 hover:bg-amber-500/10"
-                            >
-                                <Gamepad2 className="w-4 h-4" />
-                            </IconBtn>
+                            <AnimatePresence>
+                                {showMoreOptions && (
+                                    <motion.div
+                                        initial={{ opacity: 0, width: 0, x: -10 }}
+                                        animate={{ opacity: 1, width: "auto", x: 0 }}
+                                        exit={{ opacity: 0, width: 0, x: -10 }}
+                                        className="flex gap-1 overflow-hidden"
+                                    >
+                                        <IconBtn title="Attach image, video, or file" onClick={() => fileInputRef.current?.click()} small className="shrink-0">
+                                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                                            </svg>
+                                        </IconBtn>
 
-                            <IconBtn
-                                title="Fun Soundboard & Cartoon Sounds"
-                                onClick={() => setSoundboardModalOpen(true)}
-                                small
-                                className="text-fuchsia-400/80 hover:!text-fuchsia-300 hover:bg-fuchsia-500/10"
-                            >
-                                <Volume2 className="w-4 h-4" />
-                            </IconBtn>
+                                        <IconBtn
+                                            title="Play In-Chat Games (Tic-Tac-Toe, RPS, Connect 4)"
+                                            onClick={() => setGameModalOpen(true)}
+                                            small
+                                            className="text-amber-400/80 hover:!text-amber-300 hover:bg-amber-500/10 shrink-0"
+                                        >
+                                            <Gamepad2 className="w-4 h-4" />
+                                        </IconBtn>
 
-                            <IconBtn
-                                title="Cyber Shield (Laser Scan & Timelocked Capsules)"
-                                onClick={() => setShieldModalOpen(true)}
-                                small
-                                className={`transition-all ${shieldOptions
-                                    ? (shieldOptions.shield_mode === 'timelock'
-                                        ? '!text-violet-400 bg-violet-500/20 border border-violet-500/50 shadow-[0_0_12px_rgba(139,92,246,0.5)]'
-                                        : '!text-cyan-400 bg-cyan-500/20 border border-cyan-500/50 shadow-[0_0_12px_rgba(6,182,212,0.5)]')
-                                    : 'text-cyan-400/70 hover:!text-cyan-300 hover:bg-cyan-500/10'
-                                    }`}
-                            >
-                                <Shield className="w-4 h-4" />
-                            </IconBtn>
+                                        <IconBtn
+                                            title="Fun Soundboard & Cartoon Sounds"
+                                            onClick={() => setSoundboardModalOpen(true)}
+                                            small
+                                            className="text-fuchsia-400/80 hover:!text-fuchsia-300 hover:bg-fuchsia-500/10 shrink-0"
+                                        >
+                                            <Volume2 className="w-4 h-4" />
+                                        </IconBtn>
+
+                                        <IconBtn
+                                            title="Cyber Shield (Laser Scan & Timelocked Capsules)"
+                                            onClick={() => setShieldModalOpen(true)}
+                                            small
+                                            className={`transition-all shrink-0 ${shieldOptions
+                                                ? (shieldOptions.shield_mode === 'timelock'
+                                                    ? '!text-violet-400 bg-violet-500/20 border border-violet-500/50 shadow-[0_0_12px_rgba(139,92,246,0.5)]'
+                                                    : '!text-cyan-400 bg-cyan-500/20 border border-cyan-500/50 shadow-[0_0_12px_rgba(6,182,212,0.5)]')
+                                                : 'text-cyan-400/70 hover:!text-cyan-300 hover:bg-cyan-500/10'
+                                                }`}
+                                        >
+                                            <Shield className="w-4 h-4" />
+                                        </IconBtn>
+                                    </motion.div>
+                                )}
+                            </AnimatePresence>
                         </div>
 
                         <div className={`flex-1 flex items-end gap-1.5 ${theme.input} border rounded-2xl px-3 py-2 sm:py-2.5 focus-within:border-white/20 transition-all duration-200 min-w-0`}>
