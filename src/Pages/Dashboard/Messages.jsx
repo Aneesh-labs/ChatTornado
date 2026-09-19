@@ -1204,15 +1204,17 @@ const Messages = () => {
                     <WallpaperLayer wallpaper={wallpaper} />
 
                     {/* Security Status Indicator */}
-                    <div className="fixed top-3 right-3 z-[60] flex items-center gap-2 rounded-full border border-white/10 bg-black/60 px-3 py-1.5 backdrop-blur-xl">
-                        <span className="relative flex h-2 w-2">
-                            <span className="absolute inline-flex h-full w-full animate-ping rounded-full opacity-60" style={{ background: statusColors[securityStatus] || "#ef4444" }} />
-                            <span className="relative inline-flex h-2 w-2 rounded-full" style={{ background: statusColors[securityStatus] || "#ef4444" }} />
-                        </span>
-                        <span className="text-[9px] font-mono font-bold uppercase tracking-widest text-white/50">
-                            {securityStatus}
-                        </span>
-                    </div>
+                    {!isMobile && (
+                        <div className="hidden lg:flex fixed top-3 right-3 z-[60] items-center gap-2 rounded-full border border-white/10 bg-black/60 px-3 py-1.5 backdrop-blur-xl">
+                            <span className="relative flex h-2 w-2">
+                                <span className="absolute inline-flex h-full w-full animate-ping rounded-full opacity-60" style={{ background: statusColors[securityStatus] || "#ef4444" }} />
+                                <span className="relative inline-flex h-2 w-2 rounded-full" style={{ background: statusColors[securityStatus] || "#ef4444" }} />
+                            </span>
+                            <span className="text-[9px] font-mono font-bold uppercase tracking-widest text-white/50">
+                                {securityStatus}
+                            </span>
+                        </div>
+                    )}
 
                     {/* Conversation list */}
                     <AnimatePresence mode="wait">
