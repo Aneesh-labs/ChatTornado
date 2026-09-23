@@ -1,5 +1,7 @@
-import React from "react";
+import React, { useState } from "react";
 import PropTypes from "prop-types";
+import { motion, AnimatePresence } from "framer-motion";
+import { MoreVertical } from "lucide-react";
 import { IconBtn, Avatar, useTheme } from "./constants";
 import { triggerDemoNotification } from "../../../Services/notifications";
 
@@ -18,6 +20,7 @@ const ChatHeader = React.memo(({
     onDeleteSelected, // ✅ NEW PROP
 }) => {
     const theme = useTheme();
+    const [showMoreMenu, setShowMoreMenu] = useState(false);
     const username = user?.username || "Chat Room";
     const isOnline = user?.status === "online";
 
@@ -100,57 +103,86 @@ const ChatHeader = React.memo(({
             </div>
 
             <div className="flex items-center gap-0.5 sm:gap-1 flex-shrink-0">
-                {onOpenSearch && (
-                    <IconBtn title="Search" onClick={onOpenSearch} small className="lg:hidden">
+                {/* --- MOBILE MORE MENU --- */}
+                <div className="relative flex sm:hidden items-center">
+                    <IconBtn title="More options" onClick={() => setShowMoreMenu(!showMoreMenu)} small className={showMoreMenu ? "bg-white/10" : ""}>
+                        <MoreVertical className="w-4 h-4" />
+                    </IconBtn>
+                    
+                    <AnimatePresence>
+                        {showMoreMenu && (
+                            <motion.div
+                                initial={{ opacity: 0, scale: 0.95, y: -5 }}
+                                animate={{ opacity: 1, scale: 1, y: 0 }}
+                                exit={{ opacity: 0, scale: 0.95, y: -5 }}
+                                className="absolute top-full right-0 mt-2 bg-black/80 backdrop-blur-xl border border-white/10 rounded-xl shadow-2xl flex flex-col p-1 z-50 min-w-[140px]"
+                            >
+                                {onOpenSearch && (
+                                    <button onClick={() => { onOpenSearch(); setShowMoreMenu(false); }} className="flex items-center gap-2 px-3 py-2 text-xs text-white/80 hover:text-white hover:bg-white/10 rounded-lg text-left">
+                                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                                        Search
+                                    </button>
+                                )}
+                                {!Boolean(user?.is_bot || user?.username === "VORTEX-9") && (
+                                    <>
+                                        <button onClick={() => { onStartCall?.(false); setShowMoreMenu(false); }} className="flex items-center gap-2 px-3 py-2 text-xs text-white/80 hover:text-white hover:bg-white/10 rounded-lg text-left">
+                                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" /></svg>
+                                            Voice Call
+                                        </button>
+                                        <button onClick={() => { onStartCall?.(true); setShowMoreMenu(false); }} className="flex items-center gap-2 px-3 py-2 text-xs text-white/80 hover:text-white hover:bg-white/10 rounded-lg text-left">
+                                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.069A1 1 0 0121 8.867v6.266a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+                                            Video Call
+                                        </button>
+                                        <button onClick={() => { onStartGhostChat?.(); setShowMoreMenu(false); }} className="flex items-center gap-2 px-3 py-2 text-xs text-white/80 hover:text-white hover:bg-white/10 rounded-lg text-left">
+                                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 10h.01M15 10h.01M9 14h6M7 20l-3-3V7a2 2 0 012-2h12a2 2 0 012 2v10a2 2 0 01-2 2H7z" /></svg>
+                                            Ghost Chat
+                                        </button>
+                                    </>
+                                )}
+                                <button onClick={() => { onToggleSelectionMode(); setShowMoreMenu(false); }} className="flex items-center gap-2 px-3 py-2 text-xs text-white/80 hover:text-white hover:bg-white/10 rounded-lg text-left">
+                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" /></svg>
+                                    Select
+                                </button>
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
+                </div>
+
+                {/* --- DESKTOP ACTIONS --- */}
+                <div className="hidden sm:flex items-center gap-0.5 sm:gap-1">
+                    {onOpenSearch && (
+                        <IconBtn title="Search" onClick={onOpenSearch} small className="lg:hidden">
+                            <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                            </svg>
+                        </IconBtn>
+                    )}
+                    {!Boolean(user?.is_bot || user?.username === "VORTEX-9") && (
+                        <>
+                            <IconBtn title="Voice call" onClick={() => onStartCall?.(false)} small>
+                                <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                                </svg>
+                            </IconBtn>
+                            <IconBtn title="Video call" onClick={() => onStartCall?.(true)} small>
+                                <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.069A1 1 0 0121 8.867v6.266a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                </svg>
+                            </IconBtn>
+                            <IconBtn title="Ghost Chat" onClick={() => onStartGhostChat?.()} small>
+                                <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 10h.01M15 10h.01M9 14h6M7 20l-3-3V7a2 2 0 012-2h12a2 2 0 012 2v10a2 2 0 01-2 2H7z" />
+                                </svg>
+                            </IconBtn>
+                        </>
+                    )}
+                    <IconBtn title="Select messages" onClick={onToggleSelectionMode} small>
                         <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
                         </svg>
                     </IconBtn>
-                )}
-                {!Boolean(user?.is_bot || user?.username === "VORTEX-9") && (
-                    <>
-                        <IconBtn title="Voice call" onClick={() => onStartCall?.(false)} small>
-                            <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
-                            </svg>
-                        </IconBtn>
-                        <IconBtn title="Video call" onClick={() => onStartCall?.(true)} small>
-                            <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.069A1 1 0 0121 8.867v6.266a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                            </svg>
-                        </IconBtn>
-                        <IconBtn
-                            title="Ghost Chat"
-                            onClick={() => onStartGhostChat?.()}
-                            small
-                        >
-                            <svg
-                                className="w-3.5 h-3.5 sm:w-4 sm:h-4"
-                                fill="none"
-                                viewBox="0 0 24 24"
-                                stroke="currentColor"
-                            >
-                                <path
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                    strokeWidth={2}
-                                    d="M9 10h.01M15 10h.01M9 14h6M7 20l-3-3V7a2 2 0 012-2h12a2 2 0 012 2v10a2 2 0 01-2 2H7z"
-                                />
-                            </svg>
-                        </IconBtn>
-                    </>
-                )}
+                </div>
 
-                <IconBtn title="Select messages" onClick={onToggleSelectionMode} small className="sm:hidden">
-                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
-                    </svg>
-                </IconBtn>
-                <IconBtn title="Select messages" onClick={onToggleSelectionMode} small className="hidden sm:flex">
-                    <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                    </svg>
-                </IconBtn>
                 <IconBtn title="Info" active={panelOpen} onClick={onTogglePanel} small>
                     <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />

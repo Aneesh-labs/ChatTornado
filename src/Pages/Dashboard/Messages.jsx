@@ -34,6 +34,7 @@ import RightPanel from "./messages/RightPanel";
 import WallpaperLayer from "./messages/WallpaperLayer";
 import CommandPalette from "./messages/CommandPalette";
 import CallOverlay from "./messages/CallOverlay";
+import PerformanceMonitor, { usePerformanceMonitor } from "./messages/PerformanceMonitor";
 
 /* ==========================================================================
    SECURITY & UTILITY FUNCTIONS
@@ -114,6 +115,7 @@ const Messages = () => {
 
     // ── Layout UI State ────────────────────────────────────────────────────────
     const isMobile = useIsMobile();
+    const isLowPerformance = usePerformanceMonitor();
     const [mobileView, setMobileView] = useState("list");
     const [rightPanelOpen, setRightPanelOpen] = useState(false);
     const [searchOpen, setSearchOpen] = useState(false);
@@ -1198,10 +1200,11 @@ const Messages = () => {
 
     return (
         <ThemeContext.Provider value={currentTheme}>
+            <PerformanceMonitor isLowPerformance={isLowPerformance} />
             <LayoutGroup>
                 <div className={`w-full h-full min-h-0 flex flex-col lg:flex-row overflow-hidden relative select-none text-white bg-gradient-to-br ${currentTheme.bg || "from-neutral-900 to-black"}`}>
 
-                    <WallpaperLayer wallpaper={wallpaper} />
+                    <WallpaperLayer wallpaper={wallpaper} isLowPerformance={isLowPerformance} />
 
                     {/* Security Status Indicator */}
                     {!isMobile && (

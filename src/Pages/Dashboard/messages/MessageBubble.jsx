@@ -798,7 +798,7 @@ const MessageBubble = React.memo(({
                 {/* Caption text */}
                 {(hasImages || hasVideos || hasAudio || hasFiles) && caption && !isVoiceNote && (
                     <div className="mb-1">
-                        <MathFormattedText text={caption} className="text-[13px] sm:text-sm text-white/90 selection:bg-white/20" />
+                        <MathFormattedText text={caption} className="text-[13px] sm:text-[15px] leading-relaxed text-white/90 selection:bg-white/20" />
                     </div>
                 )}
             {/* Special voice note styling for caption */}
@@ -852,7 +852,7 @@ const MessageBubble = React.memo(({
 
             {/* Math & text formatting */}
             {!hasImages && !hasVideos && !hasAudio && !hasFiles && !isP2P && actualMessage && (
-                <MathFormattedText text={actualMessage} className="text-[13px] sm:text-sm text-white/90 selection:bg-white/20" />
+                <MathFormattedText text={actualMessage} className="text-[13px] sm:text-[15px] leading-relaxed text-white/90 selection:bg-white/20" />
             )}
         </>
     );
@@ -866,7 +866,7 @@ const MessageBubble = React.memo(({
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.96 }}
                 transition={{ type: "spring", stiffness: 400, damping: 28 }}
-                className={`flex ${isMe ? "justify-end" : "justify-start"} group relative px-1 sm:px-4 my-0.5 sm:my-1.5`}
+                className={`flex ${isMe ? "justify-end" : "justify-start"} group relative px-2 sm:px-4 my-1 sm:my-1.5`}
                 onMouseEnter={() => setHover(true)}
                 onMouseLeave={() => setHover(false)}
                 onTouchStart={handleTouchStart}
@@ -875,12 +875,10 @@ const MessageBubble = React.memo(({
                 onContextMenu={handleContextMenu}
             >
                 {!isMe && (
-                    <div className="w-7 sm:w-8 flex-shrink-0 mr-1 sm:mr-2 self-end mb-0.5 sm:mb-1 select-none">
+                    <div className="w-6 sm:w-8 flex-shrink-0 mr-1.5 sm:mr-2 self-end mb-0.5 sm:mb-1 select-none">
                         {showAvatar && user ? (
                             <Avatar user={user} size="xs" showStatus={false} />
-                        ) : (
-                            <div className="w-6 h-6" aria-hidden="true" />
-                        )}
+                        ) : null}
                     </div>
                 )}
 

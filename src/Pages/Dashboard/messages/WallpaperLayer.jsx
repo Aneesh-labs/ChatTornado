@@ -2,10 +2,11 @@ import React from "react";
 import PropTypes from "prop-types";
 import { WALLPAPERS } from "./constants";
 
-const WallpaperLayer = React.memo(({ wallpaper }) => {
+const WallpaperLayer = React.memo(({ wallpaper, isLowPerformance }) => {
     // 1. Safe dynamic lookup with optional chaining to prevent runtime exceptions
     const currentWallpaperConfig = WALLPAPERS?.[wallpaper];
-    const TargetWallpaperComponent = currentWallpaperConfig?.component;
+    // Disable animated component if in low performance mode to save RAM/CPU
+    const TargetWallpaperComponent = isLowPerformance ? null : currentWallpaperConfig?.component;
 
     return (
         <div
@@ -29,8 +30,12 @@ const WallpaperLayer = React.memo(({ wallpaper }) => {
                 // 4. Elegant pure CSS default glass mesh gradient if everything else is missing
                 !currentWallpaperConfig?.value && (
                     <div className="absolute inset-0 bg-neutral-950">
-                        <div className="absolute top-[-20%] left-[-10%] w-[600px] h-[600px] rounded-full bg-violet-600/10 blur-[140px] pointer-events-none" />
-                        <div className="absolute bottom-[-10%] right-[-10%] w-[500px] h-[500px] rounded-full bg-indigo-600/10 blur-[130px] pointer-events-none" />
+                        {!isLowPerformance && (
+                            <>
+                                <div className="absolute top-[-20%] left-[-10%] w-[600px] h-[600px] rounded-full bg-violet-600/10 blur-[140px] pointer-events-none" />
+                                <div className="absolute bottom-[-10%] right-[-10%] w-[500px] h-[500px] rounded-full bg-indigo-600/10 blur-[130px] pointer-events-none" />
+                            </>
+                        )}
                     </div>
                 )
             )}
@@ -40,6 +45,7 @@ const WallpaperLayer = React.memo(({ wallpaper }) => {
 
 WallpaperLayer.propTypes = {
     wallpaper: PropTypes.oneOfType([PropTypes.string, PropTypes.number]).isRequired,
+    isLowPerformance: PropTypes.bool,
 };
 
 WallpaperLayer.displayName = "WallpaperLayer";
