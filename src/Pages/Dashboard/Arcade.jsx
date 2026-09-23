@@ -17,10 +17,18 @@ const SnakeGame = ({ onBack, isMuted }) => {
     const [isPlaying, setIsPlaying] = useState(false);
     const dirRef = useRef(dir);
     dirRef.current = dir;
+    const foodRef = useRef(food);
+    foodRef.current = food;
+    const scoreRef = useRef(score);
+    scoreRef.current = score;
+    const highScoreRef = useRef(highScore);
+    highScoreRef.current = highScore;
+    const isMutedRef = useRef(isMuted);
+    isMutedRef.current = isMuted;
 
-    const playAudio = (type) => {
-        if (!isMuted) soundEngine.play(type);
-    };
+    const playAudio = useCallback((type) => {
+        if (!isMutedRef.current) soundEngine.play(type);
+    }, []);
 
     const generateFood = useCallback((currentSnake) => {
         let newFood;
@@ -39,11 +47,15 @@ const SnakeGame = ({ onBack, isMuted }) => {
     const resetGame = () => {
         playAudio("whoosh");
         const initialSnake = [[9, 9], [9, 10], [9, 11]];
+        const newFood = generateFood(initialSnake);
+        foodRef.current = newFood;
         setSnake(initialSnake);
-        setFood(generateFood(initialSnake));
+        setFood(newFood);
         setDir([0, -1]);
+        dirRef.current = [0, -1];
         setGameOver(false);
         setScore(0);
+        scoreRef.current = 0;
         setIsPlaying(true);
     };
 
@@ -96,20 +108,23 @@ const SnakeGame = ({ onBack, isMuted }) => {
                 }
 
                 // Check food
-                const ateFood = newHead[0] === food[0] && newHead[1] === food[1];
+                const currentF = foodRef.current;
+                const ateFood = newHead[0] === currentF[0] && newHead[1] === currentF[1];
                 let nextSnake;
 
                 if (ateFood) {
                     playAudio("coin");
-                    setScore((s) => {
-                        const newScore = s + 10;
-                        if (newScore > highScore) {
-                            setHighScore(newScore);
-                            localStorage.setItem("snake_highscore", String(newScore));
-                        }
-                        return newScore;
-                    });
-                    setFood(generateFood([newHead, ...prev]));
+                    const newScore = scoreRef.current + 10;
+                    scoreRef.current = newScore;
+                    setScore(newScore);
+                    if (newScore > highScoreRef.current) {
+                        highScoreRef.current = newScore;
+                        setHighScore(newScore);
+                        localStorage.setItem("snake_highscore", String(newScore));
+                    }
+                    const nextF = generateFood([newHead, ...prev]);
+                    foodRef.current = nextF;
+                    setFood(nextF);
                     nextSnake = [newHead, ...prev];
                 } else {
                     nextSnake = [newHead, ...prev.slice(0, -1)];
@@ -117,10 +132,10 @@ const SnakeGame = ({ onBack, isMuted }) => {
 
                 return nextSnake;
             });
-        }, Math.max(85, 140 - Math.floor(score / 30) * 8)); // Speed increases with score!
+        }, 110);
 
         return () => clearInterval(interval);
-    }, [isPlaying, gameOver, food, generateFood, highScore, score, isMuted]);
+    }, [isPlaying, gameOver, generateFood, playAudio]);
 
     return (
         <div className="flex flex-col items-center gap-4 max-w-md mx-auto w-full select-none">
@@ -257,10 +272,14 @@ const FlappyTornadoGame = ({ onBack, isMuted }) => {
     
     const velocityRef = useRef(0);
     const tornadoYRef = useRef(150);
+    const highScoreRef = useRef(highScore);
+    highScoreRef.current = highScore;
+    const isMutedRef = useRef(isMuted);
+    isMutedRef.current = isMuted;
 
     const playAudio = useCallback((type) => {
-        if (!isMuted) soundEngine.play(type);
-    }, [isMuted]);
+        if (!isMutedRef.current) soundEngine.play(type);
+    }, []);
 
     const jump = useCallback(() => {
         if (!isPlaying || gameOver) return;
@@ -324,7 +343,8 @@ const FlappyTornadoGame = ({ onBack, isMuted }) => {
                         playAudio("coin");
                         setScore((s) => {
                             const newScore = s + 1;
-                            if (newScore > highScore) {
+                            if (newScore > highScoreRef.current) {
+                                highScoreRef.current = newScore;
                                 setHighScore(newScore);
                                 localStorage.setItem("flappy_highscore", String(newScore));
                             }
@@ -346,7 +366,7 @@ const FlappyTornadoGame = ({ onBack, isMuted }) => {
         }, 1000 / 40);
 
         return () => clearInterval(loop);
-    }, [isPlaying, gameOver, highScore, playAudio]);
+    }, [isPlaying, gameOver, playAudio]);
 
     return (
         <div className="flex flex-col items-center gap-4 max-w-md mx-auto w-full select-none">
@@ -690,16 +710,19 @@ const Game2048 = ({ onBack, isMuted }) => {
         }
     };
 
+    const moveRef = useRef(move);
+    moveRef.current = move;
+
     useEffect(() => {
         const handleKeyDown = (e) => {
-            if (e.key === "ArrowLeft" || e.key === "a" || e.key === "A") { e.preventDefault(); move("left"); }
-            else if (e.key === "ArrowRight" || e.key === "d" || e.key === "D") { e.preventDefault(); move("right"); }
-            else if (e.key === "ArrowUp" || e.key === "w" || e.key === "W") { e.preventDefault(); move("up"); }
-            else if (e.key === "ArrowDown" || e.key === "s" || e.key === "S") { e.preventDefault(); move("down"); }
+            if (e.key === "ArrowLeft" || e.key === "a" || e.key === "A") { e.preventDefault(); moveRef.current("left"); }
+            else if (e.key === "ArrowRight" || e.key === "d" || e.key === "D") { e.preventDefault(); moveRef.current("right"); }
+            else if (e.key === "ArrowUp" || e.key === "w" || e.key === "W") { e.preventDefault(); moveRef.current("up"); }
+            else if (e.key === "ArrowDown" || e.key === "s" || e.key === "S") { e.preventDefault(); moveRef.current("down"); }
         };
         window.addEventListener("keydown", handleKeyDown);
         return () => window.removeEventListener("keydown", handleKeyDown);
-    }, [board, score, highScore, gameOver]);
+    }, []);
 
     const getTileColor = (val) => {
         switch (val) {
@@ -822,10 +845,14 @@ const ZombieShooter = ({ onBack, isMuted }) => {
     const [gameOver, setGameOver] = useState(false);
     const [isPlaying, setIsPlaying] = useState(false);
     const [highScore, setHighScore] = useState(() => Number(localStorage.getItem("zombie_highscore") || 0));
+    const highScoreRef = useRef(highScore);
+    highScoreRef.current = highScore;
+    const isMutedRef = useRef(isMuted);
+    isMutedRef.current = isMuted;
 
-    const playAudio = (type) => {
-        if (!isMuted) soundEngine.play(type);
-    };
+    const playAudio = useCallback((type) => {
+        if (!isMutedRef.current) soundEngine.play(type);
+    }, []);
 
     const startGame = () => {
         playAudio("whoosh");
@@ -998,7 +1025,8 @@ const ZombieShooter = ({ onBack, isMuted }) => {
                         playAudio("coin"); // Use coin or similar for hit confirm
                         currentScore += 10;
                         setScore(currentScore);
-                        if (currentScore > highScore) {
+                        if (currentScore > highScoreRef.current) {
+                            highScoreRef.current = currentScore;
                             setHighScore(currentScore);
                             localStorage.setItem("zombie_highscore", String(currentScore));
                         }
@@ -1025,7 +1053,7 @@ const ZombieShooter = ({ onBack, isMuted }) => {
             canvas.removeEventListener("touchstart", handlePointerDown);
             canvas.removeEventListener("touchmove", handleTouch);
         };
-    }, [isPlaying, gameOver, highScore, isMuted]);
+    }, [isPlaying, gameOver, playAudio]);
 
     return (
         <div className="flex flex-col items-center gap-4 max-w-md mx-auto w-full select-none">
@@ -1081,10 +1109,14 @@ const NeonDodge = ({ onBack, isMuted }) => {
     const [gameOver, setGameOver] = useState(false);
     const [isPlaying, setIsPlaying] = useState(false);
     const [highScore, setHighScore] = useState(() => Number(localStorage.getItem("neondodge_highscore") || 0));
+    const highScoreRef = useRef(highScore);
+    highScoreRef.current = highScore;
+    const isMutedRef = useRef(isMuted);
+    isMutedRef.current = isMuted;
 
-    const playAudio = (type) => {
-        if (!isMuted) soundEngine.play(type);
-    };
+    const playAudio = useCallback((type) => {
+        if (!isMutedRef.current) soundEngine.play(type);
+    }, []);
 
     const startGame = () => {
         playAudio("whoosh");
@@ -1184,7 +1216,8 @@ const NeonDodge = ({ onBack, isMuted }) => {
                     obstacles.splice(i, 1);
                     currentScore += 10;
                     setScore(currentScore);
-                    if (currentScore > highScore) {
+                    if (currentScore > highScoreRef.current) {
+                        highScoreRef.current = currentScore;
                         setHighScore(currentScore);
                         localStorage.setItem("neondodge_highscore", String(currentScore));
                     }
@@ -1208,7 +1241,7 @@ const NeonDodge = ({ onBack, isMuted }) => {
             window.removeEventListener("keyup", handleKeyUp);
             canvas.removeEventListener("touchmove", handleTouchMove);
         };
-    }, [isPlaying, gameOver, highScore, isMuted]);
+    }, [isPlaying, gameOver, playAudio]);
 
     return (
         <div className="flex flex-col items-center gap-4 max-w-md mx-auto w-full select-none">
@@ -1265,10 +1298,14 @@ const NeonBlade = ({ onBack, isMuted }) => {
     const [gameOver, setGameOver] = useState(false);
     const [isPlaying, setIsPlaying] = useState(false);
     const [highScore, setHighScore] = useState(() => Number(localStorage.getItem("neonblade_highscore") || 0));
+    const highScoreRef = useRef(highScore);
+    highScoreRef.current = highScore;
+    const isMutedRef = useRef(isMuted);
+    isMutedRef.current = isMuted;
 
-    const playAudio = (type) => {
-        if (!isMuted) soundEngine.play(type);
-    };
+    const playAudio = useCallback((type) => {
+        if (!isMutedRef.current) soundEngine.play(type);
+    }, []);
 
     const startGame = () => {
         playAudio("whoosh");
@@ -1428,7 +1465,8 @@ const NeonBlade = ({ onBack, isMuted }) => {
                         knivesToThrow--;
                         setScore(s => {
                             const newScore = s + 10;
-                            if (newScore > highScore) {
+                            if (newScore > highScoreRef.current) {
+                                highScoreRef.current = newScore;
                                 setHighScore(newScore);
                                 localStorage.setItem("neonblade_highscore", String(newScore));
                             }
@@ -1466,7 +1504,7 @@ const NeonBlade = ({ onBack, isMuted }) => {
             canvas.removeEventListener("mousedown", handlePointerDown);
             canvas.removeEventListener("touchstart", handlePointerDown);
         };
-    }, [isPlaying, gameOver, level, highScore, isMuted]);
+    }, [isPlaying, gameOver, level, playAudio]);
 
     return (
         <div className="flex flex-col items-center gap-4 max-w-md mx-auto w-full select-none">
@@ -1524,10 +1562,14 @@ const SubwaySurfersGame = ({ onBack, isMuted }) => {
     const [gameOver, setGameOver] = useState(false);
     const [isPlaying, setIsPlaying] = useState(false);
     const [highScore, setHighScore] = useState(() => Number(localStorage.getItem("subwaysurfers_highscore") || 0));
+    const highScoreRef = useRef(highScore);
+    highScoreRef.current = highScore;
+    const isMutedRef = useRef(isMuted);
+    isMutedRef.current = isMuted;
 
     const playAudio = useCallback((type) => {
-        if (!isMuted) soundEngine.play(type);
-    }, [isMuted]);
+        if (!isMutedRef.current) soundEngine.play(type);
+    }, []);
 
     const startGame = () => {
         playAudio("whoosh");
@@ -1686,7 +1728,8 @@ const SubwaySurfersGame = ({ onBack, isMuted }) => {
 
             currentScore = Math.floor(distanceTravelled / 4) + currentCoins * 50;
             setScore(currentScore);
-            if (currentScore > highScore) {
+            if (currentScore > highScoreRef.current) {
+                highScoreRef.current = currentScore;
                 setHighScore(currentScore);
                 localStorage.setItem("subwaysurfers_highscore", String(currentScore));
             }
@@ -1932,7 +1975,7 @@ const SubwaySurfersGame = ({ onBack, isMuted }) => {
             canvas.removeEventListener("touchstart", handleTouchStart);
             canvas.removeEventListener("touchend", handleTouchEnd);
         };
-    }, [isPlaying, gameOver, highScore, playAudio]);
+    }, [isPlaying, gameOver, playAudio]);
 
     return (
         <div className="flex flex-col items-center gap-4 max-w-md mx-auto w-full select-none">
@@ -2046,6 +2089,7 @@ const SubwaySurfersGame = ({ onBack, isMuted }) => {
 export default function Arcade() {
     const [selectedGame, setSelectedGame] = useState(null);
     const [isMuted, setIsMuted] = useState(false);
+    const handleBack = useCallback(() => setSelectedGame(null), []);
 
     const GAMES = [
         {
@@ -2149,21 +2193,21 @@ export default function Arcade() {
 
                 {/* Content Area */}
                 {selectedGame === "subwaysurfers" ? (
-                    <SubwaySurfersGame onBack={() => setSelectedGame(null)} isMuted={isMuted} />
+                    <SubwaySurfersGame onBack={handleBack} isMuted={isMuted} />
                 ) : selectedGame === "snake" ? (
-                    <SnakeGame onBack={() => setSelectedGame(null)} isMuted={isMuted} />
+                    <SnakeGame onBack={handleBack} isMuted={isMuted} />
                 ) : selectedGame === "flappy" ? (
-                    <FlappyTornadoGame onBack={() => setSelectedGame(null)} isMuted={isMuted} />
+                    <FlappyTornadoGame onBack={handleBack} isMuted={isMuted} />
                 ) : selectedGame === "2048" ? (
-                    <Game2048 onBack={() => setSelectedGame(null)} isMuted={isMuted} />
+                    <Game2048 onBack={handleBack} isMuted={isMuted} />
                 ) : selectedGame === "memory" ? (
-                    <MemoryMatchGame onBack={() => setSelectedGame(null)} isMuted={isMuted} />
+                    <MemoryMatchGame onBack={handleBack} isMuted={isMuted} />
                 ) : selectedGame === "zombie" ? (
-                    <ZombieShooter onBack={() => setSelectedGame(null)} isMuted={isMuted} />
+                    <ZombieShooter onBack={handleBack} isMuted={isMuted} />
                 ) : selectedGame === "neondodge" ? (
-                    <NeonDodge onBack={() => setSelectedGame(null)} isMuted={isMuted} />
+                    <NeonDodge onBack={handleBack} isMuted={isMuted} />
                 ) : selectedGame === "neonblade" ? (
-                    <NeonBlade onBack={() => setSelectedGame(null)} isMuted={isMuted} />
+                    <NeonBlade onBack={handleBack} isMuted={isMuted} />
                 ) : (
                     /* Games Selection Grid */
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
