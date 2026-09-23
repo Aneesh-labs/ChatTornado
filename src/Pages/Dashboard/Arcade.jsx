@@ -249,32 +249,35 @@ const SnakeGame = ({ onBack, isMuted }) => {
    ═══════════════════════════════════════════════════════════════ */
 const FlappyTornadoGame = ({ onBack, isMuted }) => {
     const [tornadoY, setTornadoY] = useState(150);
-    const [velocity, setVelocity] = useState(0);
     const [pipes, setPipes] = useState([]);
     const [score, setScore] = useState(0);
     const [highScore, setHighScore] = useState(() => Number(localStorage.getItem("flappy_highscore") || 0));
     const [isPlaying, setIsPlaying] = useState(false);
     const [gameOver, setGameOver] = useState(false);
+    
+    const velocityRef = useRef(0);
+    const tornadoYRef = useRef(150);
 
-    const playAudio = (type) => {
+    const playAudio = useCallback((type) => {
         if (!isMuted) soundEngine.play(type);
-    };
+    }, [isMuted]);
 
     const jump = useCallback(() => {
         if (!isPlaying || gameOver) return;
         playAudio("boing");
-        setVelocity(-7.2);
-    }, [isPlaying, gameOver, isMuted]);
+        velocityRef.current = -7.2;
+    }, [isPlaying, gameOver, playAudio]);
 
-    const startGame = () => {
+    const startGame = useCallback(() => {
         playAudio("whoosh");
+        tornadoYRef.current = 140;
         setTornadoY(140);
-        setVelocity(0);
+        velocityRef.current = 0;
         setPipes([{ x: 320, top: 75, bottom: 125 }]);
         setScore(0);
         setGameOver(false);
         setIsPlaying(true);
-    };
+    }, [playAudio]);
 
     useEffect(() => {
         const handleKeyDown = (e) => {
@@ -286,7 +289,7 @@ const FlappyTornadoGame = ({ onBack, isMuted }) => {
         };
         window.addEventListener("keydown", handleKeyDown);
         return () => window.removeEventListener("keydown", handleKeyDown);
-    }, [isPlaying, jump]);
+    }, [isPlaying, jump, startGame]);
 
     // Game loop
     useEffect(() => {
@@ -294,15 +297,14 @@ const FlappyTornadoGame = ({ onBack, isMuted }) => {
 
         const loop = setInterval(() => {
             // Gravity
-            setTornadoY((y) => {
-                const nextY = y + velocity;
-                if (nextY >= 275 || nextY <= 0) {
-                    playAudio("boom");
-                    setGameOver(true);
-                }
-                return nextY;
-            });
-            setVelocity((v) => v + 0.48);
+            tornadoYRef.current += velocityRef.current;
+            velocityRef.current += 0.48;
+            setTornadoY(tornadoYRef.current);
+
+            if (tornadoYRef.current >= 275 || tornadoYRef.current <= 0) {
+                playAudio("boom");
+                setGameOver(true);
+            }
 
             // Move pipes
             setPipes((prev) => {
@@ -318,7 +320,7 @@ const FlappyTornadoGame = ({ onBack, isMuted }) => {
 
                 // Check scoring & collision
                 next.forEach((p) => {
-                    if (p.x < 50 && p.x >= 46) {
+                    if (p.x < 50 && p.x >= 46.8) { // precise score trigger
                         playAudio("coin");
                         setScore((s) => {
                             const newScore = s + 1;
@@ -332,7 +334,7 @@ const FlappyTornadoGame = ({ onBack, isMuted }) => {
 
                     // Collision check
                     if (p.x > 22 && p.x < 76) {
-                        if (tornadoY < p.top || tornadoY > 300 - p.bottom - 26) {
+                        if (tornadoYRef.current < p.top || tornadoYRef.current > 300 - p.bottom - 26) {
                             playAudio("boom");
                             setGameOver(true);
                         }
@@ -344,7 +346,7 @@ const FlappyTornadoGame = ({ onBack, isMuted }) => {
         }, 1000 / 40);
 
         return () => clearInterval(loop);
-    }, [isPlaying, gameOver, velocity, tornadoY, highScore, isMuted]);
+    }, [isPlaying, gameOver, highScore, playAudio]);
 
     return (
         <div className="flex flex-col items-center gap-4 max-w-md mx-auto w-full select-none">
@@ -697,7 +699,7 @@ const Game2048 = ({ onBack, isMuted }) => {
         };
         window.addEventListener("keydown", handleKeyDown);
         return () => window.removeEventListener("keydown", handleKeyDown);
-    });
+    }, [board, score, highScore, gameOver]);
 
     const getTileColor = (val) => {
         switch (val) {
