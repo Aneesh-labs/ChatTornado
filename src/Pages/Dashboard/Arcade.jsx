@@ -1515,6 +1515,532 @@ const NeonBlade = ({ onBack, isMuted }) => {
 
 
 /* ═══════════════════════════════════════════════════════════════
+   8. TORNADO SURFERS COMPONENT (Pseudo-3D Track Runner)
+   ═══════════════════════════════════════════════════════════════ */
+const SubwaySurfersGame = ({ onBack, isMuted }) => {
+    const canvasRef = useRef(null);
+    const [score, setScore] = useState(0);
+    const [coins, setCoins] = useState(0);
+    const [gameOver, setGameOver] = useState(false);
+    const [isPlaying, setIsPlaying] = useState(false);
+    const [highScore, setHighScore] = useState(() => Number(localStorage.getItem("subwaysurfers_highscore") || 0));
+
+    const playAudio = useCallback((type) => {
+        if (!isMuted) soundEngine.play(type);
+    }, [isMuted]);
+
+    const startGame = () => {
+        playAudio("whoosh");
+        setScore(0);
+        setCoins(0);
+        setGameOver(false);
+        setIsPlaying(true);
+    };
+
+    useEffect(() => {
+        if (!isPlaying || gameOver) return;
+
+        const canvas = canvasRef.current;
+        const ctx = canvas.getContext("2d");
+        let animationId;
+
+        const cw = canvas.width;
+        const ch = canvas.height;
+        const horizonY = ch * 0.28;
+        const vanishingX = cw / 2;
+
+        let targetLane = 0; // -1 = Left, 0 = Center, 1 = Right
+        let lanePosX = 0;
+
+        let jumpY = 0;
+        let jumpVelocity = 0;
+        let isJumping = false;
+
+        let slideTimer = 0;
+        let isDucking = false;
+
+        let currentScore = 0;
+        let currentCoins = 0;
+        let gameSpeed = 5;
+        let distanceTravelled = 0;
+
+        let entities = [];
+        let particles = [];
+        let spawnTimer = 0;
+        let trackOffset = 0;
+
+        const moveLeft = () => {
+            if (targetLane > -1) {
+                targetLane--;
+                playAudio("whoosh");
+            }
+        };
+
+        const moveRight = () => {
+            if (targetLane < 1) {
+                targetLane++;
+                playAudio("whoosh");
+            }
+        };
+
+        const triggerJump = () => {
+            if (!isJumping && !isDucking) {
+                isJumping = true;
+                jumpVelocity = 11;
+                playAudio("boing");
+            }
+        };
+
+        const triggerSlide = () => {
+            if (!isDucking && !isJumping) {
+                isDucking = true;
+                slideTimer = 32;
+                playAudio("whoosh");
+            }
+        };
+
+        const handleKeyDown = (e) => {
+            if (e.key === "ArrowLeft" || e.key === "a" || e.key === "A") {
+                e.preventDefault();
+                moveLeft();
+            } else if (e.key === "ArrowRight" || e.key === "d" || e.key === "D") {
+                e.preventDefault();
+                moveRight();
+            } else if (e.key === "ArrowUp" || e.key === "w" || e.key === "W" || e.code === "Space") {
+                e.preventDefault();
+                triggerJump();
+            } else if (e.key === "ArrowDown" || e.key === "s" || e.key === "S") {
+                e.preventDefault();
+                triggerSlide();
+            }
+        };
+
+        let touchStartX = 0;
+        let touchStartY = 0;
+
+        const handleTouchStart = (e) => {
+            touchStartX = e.touches[0].clientX;
+            touchStartY = e.touches[0].clientY;
+        };
+
+        const handleTouchEnd = (e) => {
+            const deltaX = e.changedTouches[0].clientX - touchStartX;
+            const deltaY = e.changedTouches[0].clientY - touchStartY;
+
+            if (Math.abs(deltaX) > Math.abs(deltaY)) {
+                if (deltaX > 30) moveRight();
+                else if (deltaX < -30) moveLeft();
+            } else {
+                if (deltaY < -30) triggerJump();
+                else if (deltaY > 30) triggerSlide();
+            }
+        };
+
+        window.addEventListener("keydown", handleKeyDown);
+        canvas.addEventListener("touchstart", handleTouchStart, { passive: true });
+        canvas.addEventListener("touchend", handleTouchEnd, { passive: true });
+
+        const project = (lane, z, heightOffset = 0) => {
+            const fov = 300;
+            const scale = fov / (fov + z);
+            const x = vanishingX + lane * (cw * 0.36) * scale;
+            const y = horizonY + (ch - horizonY) * scale - heightOffset * scale;
+            return { x, y, scale };
+        };
+
+        const spawnEntityPattern = () => {
+            const laneChoices = [-1, 0, 1];
+            const randType = Math.random();
+
+            if (randType < 0.4) {
+                const lane = laneChoices[Math.floor(Math.random() * laneChoices.length)];
+                for (let i = 0; i < 5; i++) {
+                    entities.push({ type: "coin", lane, z: 900 + i * 80 });
+                }
+            } else if (randType < 0.7) {
+                const lane = laneChoices[Math.floor(Math.random() * laneChoices.length)];
+                const isLow = Math.random() > 0.5;
+                entities.push({
+                    type: isLow ? "low_hurdle" : "high_barrier",
+                    lane,
+                    z: 950
+                });
+                const otherLane = laneChoices.find((l) => l !== lane);
+                for (let i = 0; i < 3; i++) {
+                    entities.push({ type: "coin", lane: otherLane, z: 920 + i * 70 });
+                }
+            } else {
+                const freeLane = laneChoices[Math.floor(Math.random() * laneChoices.length)];
+                laneChoices.forEach((l) => {
+                    if (l !== freeLane && Math.random() < 0.8) {
+                        entities.push({ type: "train", lane: l, z: 1000 });
+                    }
+                });
+            }
+        };
+
+        const draw = () => {
+            gameSpeed += 0.0008;
+            distanceTravelled += gameSpeed;
+            trackOffset = (trackOffset + gameSpeed * 4) % 40;
+
+            currentScore = Math.floor(distanceTravelled / 4) + currentCoins * 50;
+            setScore(currentScore);
+            if (currentScore > highScore) {
+                setHighScore(currentScore);
+                localStorage.setItem("subwaysurfers_highscore", String(currentScore));
+            }
+
+            lanePosX += (targetLane - lanePosX) * 0.25;
+
+            if (isJumping) {
+                jumpY += jumpVelocity;
+                jumpVelocity -= 0.7;
+                if (jumpY <= 0) {
+                    jumpY = 0;
+                    isJumping = false;
+                }
+            }
+
+            if (isDucking) {
+                slideTimer--;
+                if (slideTimer <= 0) {
+                    isDucking = false;
+                }
+            }
+
+            ctx.fillStyle = "#090514";
+            ctx.fillRect(0, 0, cw, ch);
+
+            const skyGrad = ctx.createLinearGradient(0, 0, 0, horizonY);
+            skyGrad.addColorStop(0, "#1e0b36");
+            skyGrad.addColorStop(1, "#090514");
+            ctx.fillStyle = skyGrad;
+            ctx.fillRect(0, 0, cw, horizonY);
+
+            ctx.fillStyle = "#f43f5e";
+            ctx.shadowBlur = 25;
+            ctx.shadowColor = "#f43f5e";
+            ctx.beginPath();
+            ctx.arc(vanishingX, horizonY - 10, 30, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.shadowBlur = 0;
+
+            [-1.5, -0.5, 0.5, 1.5].forEach((laneEdge) => {
+                const start = project(laneEdge, 1000);
+                const end = project(laneEdge, 0);
+                ctx.beginPath();
+                ctx.moveTo(start.x, start.y);
+                ctx.lineTo(end.x, end.y);
+                ctx.strokeStyle = "rgba(56, 189, 248, 0.3)";
+                ctx.stroke();
+            });
+
+            for (let z = 50 + trackOffset; z < 1000; z += 60) {
+                const leftP = project(-1.5, z);
+                const rightP = project(1.5, z);
+                const scale = leftP.scale;
+                ctx.strokeStyle = `rgba(168, 85, 247, ${scale * 0.8})`;
+                ctx.lineWidth = Math.max(1, 3 * scale);
+                ctx.beginPath();
+                ctx.moveTo(leftP.x, leftP.y);
+                ctx.lineTo(rightP.x, rightP.y);
+                ctx.stroke();
+            }
+
+            spawnTimer++;
+            if (spawnTimer > Math.max(22, 55 - Math.floor(gameSpeed * 2))) {
+                spawnEntityPattern();
+                spawnTimer = 0;
+            }
+
+            entities.sort((a, b) => b.z - a.z);
+
+            for (let i = entities.length - 1; i >= 0; i--) {
+                const ent = entities[i];
+                ent.z -= gameSpeed * 12;
+
+                const pos = project(ent.lane, ent.z);
+                const scale = pos.scale;
+
+                if (ent.z <= 0) {
+                    entities.splice(i, 1);
+                    continue;
+                }
+
+                if (ent.type === "coin") {
+                    const coinRadius = 13 * scale;
+                    const coinY = pos.y - 20 * scale;
+
+                    ctx.fillStyle = "#fbbf24";
+                    ctx.shadowBlur = 10 * scale;
+                    ctx.shadowColor = "#fbbf24";
+                    ctx.beginPath();
+                    ctx.arc(pos.x, coinY, coinRadius, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.fillStyle = "#f59e0b";
+                    ctx.beginPath();
+                    ctx.arc(pos.x, coinY, coinRadius * 0.6, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.shadowBlur = 0;
+
+                    if (ent.z > 30 && ent.z < 130 && Math.abs(ent.lane - lanePosX) < 0.6) {
+                        const playerYCenter = ch - 50 - jumpY;
+                        if (Math.abs(coinY - playerYCenter) < 45) {
+                            playAudio("coin");
+                            currentCoins++;
+                            setCoins(currentCoins);
+                            for (let p = 0; p < 6; p++) {
+                                particles.push({
+                                    x: pos.x,
+                                    y: coinY,
+                                    vx: (Math.random() - 0.5) * 6,
+                                    vy: (Math.random() - 0.5) * 6,
+                                    alpha: 1,
+                                    color: "#fbbf24"
+                                });
+                            }
+                            entities.splice(i, 1);
+                            continue;
+                        }
+                    }
+                } else if (ent.type === "low_hurdle") {
+                    const w = 70 * scale;
+                    const h = 25 * scale;
+                    ctx.fillStyle = "#f43f5e";
+                    ctx.shadowBlur = 12 * scale;
+                    ctx.shadowColor = "#f43f5e";
+                    ctx.fillRect(pos.x - w / 2, pos.y - h, w, h);
+                    ctx.shadowBlur = 0;
+
+                    ctx.fillStyle = "#ffffff";
+                    ctx.fillRect(pos.x - w / 2 + 5 * scale, pos.y - h + 5 * scale, w - 10 * scale, 4 * scale);
+
+                    if (ent.z > 30 && ent.z < 120 && Math.abs(ent.lane - lanePosX) < 0.55) {
+                        if (jumpY < 32) {
+                            playAudio("boom");
+                            setGameOver(true);
+                            return;
+                        }
+                    }
+                } else if (ent.type === "high_barrier") {
+                    const w = 75 * scale;
+                    const h = 30 * scale;
+                    const barrierY = pos.y - 50 * scale;
+                    ctx.fillStyle = "#e11d48";
+                    ctx.shadowBlur = 12 * scale;
+                    ctx.shadowColor = "#e11d48";
+                    ctx.fillRect(pos.x - w / 2, barrierY, w, h);
+
+                    ctx.fillRect(pos.x - w / 2, barrierY, 6 * scale, 50 * scale);
+                    ctx.fillRect(pos.x + w / 2 - 6 * scale, barrierY, 6 * scale, 50 * scale);
+                    ctx.shadowBlur = 0;
+
+                    if (ent.z > 30 && ent.z < 120 && Math.abs(ent.lane - lanePosX) < 0.55) {
+                        if (!isDucking) {
+                            playAudio("boom");
+                            setGameOver(true);
+                            return;
+                        }
+                    }
+                } else if (ent.type === "train") {
+                    const w = 90 * scale;
+                    const h = 110 * scale;
+                    const trainY = pos.y - h;
+
+                    ctx.fillStyle = "#0284c7";
+                    ctx.shadowBlur = 15 * scale;
+                    ctx.shadowColor = "#0284c7";
+                    ctx.fillRect(pos.x - w / 2, trainY, w, h);
+                    ctx.shadowBlur = 0;
+
+                    ctx.fillStyle = "#38bdf8";
+                    ctx.fillRect(pos.x - w * 0.35, trainY + 15 * scale, w * 0.7, 30 * scale);
+
+                    ctx.fillStyle = "#fbbf24";
+                    ctx.beginPath();
+                    ctx.arc(pos.x - w * 0.3, trainY + h - 20 * scale, 8 * scale, 0, Math.PI * 2);
+                    ctx.arc(pos.x + w * 0.3, trainY + h - 20 * scale, 8 * scale, 0, Math.PI * 2);
+                    ctx.fill();
+
+                    if (ent.z > 30 && ent.z < 130 && Math.abs(ent.lane - lanePosX) < 0.6) {
+                        playAudio("boom");
+                        setGameOver(true);
+                        return;
+                    }
+                }
+            }
+
+            for (let i = particles.length - 1; i >= 0; i--) {
+                const p = particles[i];
+                p.x += p.vx;
+                p.y += p.vy;
+                p.alpha -= 0.04;
+                if (p.alpha <= 0) {
+                    particles.splice(i, 1);
+                    continue;
+                }
+                ctx.save();
+                ctx.globalAlpha = p.alpha;
+                ctx.fillStyle = p.color;
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, 4, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+            }
+
+            const playerPos = project(lanePosX, 40);
+            const playerX = playerPos.x;
+            const playerBaseY = ch - 50;
+            const playerY = playerBaseY - jumpY;
+
+            const playerWidth = 36 * (isDucking ? 1.2 : 1.0);
+            const playerHeight = isDucking ? 24 : 52;
+
+            ctx.save();
+            ctx.translate(playerX, playerY);
+
+            ctx.fillStyle = "#a855f7";
+            ctx.shadowBlur = 15;
+            ctx.shadowColor = "#a855f7";
+            ctx.beginPath();
+            ctx.ellipse(0, 10, 24, 6, 0, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.fillStyle = "#06b6d4";
+            ctx.shadowColor = "#06b6d4";
+            ctx.fillRect(-playerWidth / 2, -playerHeight, playerWidth, playerHeight * 0.7);
+
+            ctx.fillStyle = "#f43f5e";
+            ctx.beginPath();
+            ctx.arc(0, -playerHeight - 8, 12, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.shadowBlur = 0;
+
+            ctx.restore();
+        };
+
+        const loop = () => {
+            draw();
+            if (!gameOver) animationId = requestAnimationFrame(loop);
+        };
+        animationId = requestAnimationFrame(loop);
+
+        return () => {
+            cancelAnimationFrame(animationId);
+            window.removeEventListener("keydown", handleKeyDown);
+            canvas.removeEventListener("touchstart", handleTouchStart);
+            canvas.removeEventListener("touchend", handleTouchEnd);
+        };
+    }, [isPlaying, gameOver, highScore, playAudio]);
+
+    return (
+        <div className="flex flex-col items-center gap-4 max-w-md mx-auto w-full select-none">
+            <div className="flex items-center justify-between w-full px-2">
+                <button
+                    type="button"
+                    onClick={onBack}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-xs font-bold text-white transition-colors"
+                >
+                    <ArrowLeft className="h-4 w-4" /> Back to Arcade
+                </button>
+                <div className="flex items-center gap-3">
+                    <span className="text-xs font-bold text-amber-300 flex items-center gap-1">
+                        🪙 {coins}
+                    </span>
+                    <span className="text-xs font-bold text-white/70">
+                        Score: <strong className="text-cyan-400">{score}</strong>
+                    </span>
+                    <span className="text-xs font-bold text-amber-300 flex items-center gap-1">
+                        <Trophy className="h-3.5 w-3.5" /> {highScore}
+                    </span>
+                </div>
+            </div>
+
+            <div className="relative w-[340px] h-[450px] sm:w-[380px] sm:h-[500px] rounded-3xl overflow-hidden border-2 border-cyan-500/30 shadow-[0_0_40px_rgba(6,182,212,0.15)]">
+                <canvas ref={canvasRef} width={380} height={500} className="w-full h-full bg-[#090514] touch-none" />
+
+                {!isPlaying && !gameOver && (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/75 backdrop-blur-sm gap-3">
+                        <span className="text-5xl animate-bounce">🏃‍♂️💨</span>
+                        <h3 className="text-xl font-black text-white tracking-tight">Tornado Surfers</h3>
+                        <p className="text-xs text-white/60 max-w-[240px] text-center">
+                            Dodge trains, jump hurdles, duck barriers & collect golden coins!
+                        </p>
+                        <button
+                            type="button"
+                            onClick={startGame}
+                            className="mt-2 flex items-center gap-2 px-6 py-2.5 rounded-2xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-extrabold text-sm shadow-lg hover:scale-105 transition-all"
+                        >
+                            <Play className="h-4 w-4 fill-white" /> Start Surfing
+                        </button>
+                    </div>
+                )}
+
+                {gameOver && (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/85 backdrop-blur-md gap-3">
+                        <span className="text-5xl">💥</span>
+                        <h3 className="text-2xl font-black text-rose-400 tracking-tight">GAME OVER!</h3>
+                        <div className="flex items-center gap-4 text-sm font-bold">
+                            <span className="text-white/80">Coins: <strong className="text-amber-300">🪙 {coins}</strong></span>
+                            <span className="text-white/80">Score: <strong className="text-cyan-400">{score}</strong></span>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={startGame}
+                            className="mt-2 flex items-center gap-2 px-6 py-2.5 rounded-2xl bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white font-extrabold text-sm shadow-lg hover:scale-105 transition-all"
+                        >
+                            <RotateCcw className="h-4 w-4" /> Try Again
+                        </button>
+                    </div>
+                )}
+            </div>
+
+            <div className="flex flex-col items-center gap-2 w-full max-w-[380px] sm:hidden pt-1">
+                <div className="flex items-center justify-center gap-3 w-full">
+                    <button
+                        type="button"
+                        onClick={() => {
+                            window.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft" }));
+                        }}
+                        className="flex-1 py-2.5 rounded-xl bg-white/10 active:bg-cyan-600/50 border border-white/10 text-white text-xs font-bold shadow"
+                    >
+                        ◀ Left
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => {
+                            window.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowUp" }));
+                        }}
+                        className="flex-1 py-2.5 rounded-xl bg-cyan-600/40 active:bg-cyan-600/80 border border-cyan-400/30 text-cyan-200 text-xs font-bold shadow"
+                    >
+                        ▲ Jump
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => {
+                            window.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown" }));
+                        }}
+                        className="flex-1 py-2.5 rounded-xl bg-fuchsia-600/40 active:bg-fuchsia-600/80 border border-fuchsia-400/30 text-fuchsia-200 text-xs font-bold shadow"
+                    >
+                        ▼ Duck
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => {
+                            window.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight" }));
+                        }}
+                        className="flex-1 py-2.5 rounded-xl bg-white/10 active:bg-cyan-600/50 border border-white/10 text-white text-xs font-bold shadow"
+                    >
+                        Right ▶
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+/* ═══════════════════════════════════════════════════════════════
    MAIN ARCADE DASHBOARD PAGE
    ═══════════════════════════════════════════════════════════════ */
 export default function Arcade() {
@@ -1577,6 +2103,14 @@ export default function Arcade() {
             tag: "Precision",
             color: "from-rose-500 to-red-700",
             desc: "Throw glowing blades into the spinning target without hitting the others!"
+        },
+        {
+            id: "subwaysurfers",
+            title: "Tornado Surfers",
+            emoji: "🏃‍♂️💨",
+            tag: "3D Runner",
+            color: "from-cyan-500 to-blue-700",
+            desc: "Dodge trains, jump hurdles, duck barriers & collect golden coins!"
         }
     ];
 
@@ -1614,7 +2148,9 @@ export default function Arcade() {
                 </header>
 
                 {/* Content Area */}
-                {selectedGame === "snake" ? (
+                {selectedGame === "subwaysurfers" ? (
+                    <SubwaySurfersGame onBack={() => setSelectedGame(null)} isMuted={isMuted} />
+                ) : selectedGame === "snake" ? (
                     <SnakeGame onBack={() => setSelectedGame(null)} isMuted={isMuted} />
                 ) : selectedGame === "flappy" ? (
                     <FlappyTornadoGame onBack={() => setSelectedGame(null)} isMuted={isMuted} />
