@@ -728,3 +728,54 @@ async def websocket_endpoint(websocket: WebSocket):
     finally:
 
         db.close()
+
+@router.websocket("/ws/ai/live/{user_id}")
+async def ai_live_websocket(websocket: WebSocket, user_id: int):
+    from google import genai
+    from google.genai import types
+    import os
+    import asyncio
+    
+    await websocket.accept()
+    api_key = os.getenv("GEMINI_API_KEY")
+    if not api_key:
+        await websocket.close(code=1008, reason="No Gemini API Key")
+        return
+
+    client = genai.Client(api_key=api_key)
+    config = types.LiveConnectConfig(
+        response_modalities=[types.Modality.AUDIO],
+        system_instruction=types.Content(
+            parts=[types.Part.from_text(text="You are VORTEX-9, in a live voice call. Keep answers short.")]
+        )
+    )
+
+    try:
+        async with client.aio.live.connect(model="gemini-3.1-flash-live-preview", config=config) as session:
+            
+            async def receive_from_frontend():
+                try:
+                    while True:
+                        data = await websocket.receive_bytes()
+                        await session.send_realtime_input(audio=types.Blob(data=data, mime_type="audio/pcm;rate=16000"))
+                except Exception:
+                    pass
+
+            async def receive_from_gemini():
+                try:
+                    async for response in session.receive():
+                        content = response.server_content
+                        if content and content.model_turn:
+                            for part in content.model_turn.parts:
+                                if part.inline_data:
+                                    await websocket.send_bytes(part.inline_data.data)
+                except Exception:
+                    pass
+
+            await asyncio.gather(receive_from_frontend(), receive_from_gemini())
+    except Exception as e:
+        print(f"[AI_LIVE] Error: {e}")
+        try:
+            await websocket.close()
+        except:
+            pass

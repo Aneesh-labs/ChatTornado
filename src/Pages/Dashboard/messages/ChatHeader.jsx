@@ -138,7 +138,7 @@ const ChatHeader = React.memo(({
                                         Search
                                     </button>
                                 )}
-                                {!Boolean(user?.is_bot || user?.username === "VORTEX-9") && (
+                                {!Boolean(user?.is_bot || user?.username === "VORTEX-9") ? (
                                     <>
                                         <button onClick={() => { onStartCall?.(false); setShowMoreMenu(false); }} className="flex items-center gap-2 px-3 py-2 text-xs text-white/80 hover:text-white hover:bg-white/10 rounded-lg text-left">
                                             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" /></svg>
@@ -151,6 +151,13 @@ const ChatHeader = React.memo(({
                                         <button onClick={() => { onStartGhostChat?.(); setShowMoreMenu(false); }} className="flex items-center gap-2 px-3 py-2 text-xs text-white/80 hover:text-white hover:bg-white/10 rounded-lg text-left">
                                             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 10h.01M15 10h.01M9 14h6M7 20l-3-3V7a2 2 0 012-2h12a2 2 0 012 2v10a2 2 0 01-2 2H7z" /></svg>
                                             Ghost Chat
+                                        </button>
+                                    </>
+                                ) : (
+                                    <>
+                                        <button onClick={() => { onStartCall?.("ai"); setShowMoreMenu(false); }} className="flex items-center gap-2 px-3 py-2 text-xs text-white/80 hover:text-white hover:bg-white/10 rounded-lg text-left">
+                                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" /></svg>
+                                            Voice Call (Live AI)
                                         </button>
                                     </>
                                 )}
@@ -172,7 +179,7 @@ const ChatHeader = React.memo(({
                             </svg>
                         </IconBtn>
                     )}
-                    {!Boolean(user?.is_bot || user?.username === "VORTEX-9") && (
+                    {!Boolean(user?.is_bot || user?.username === "VORTEX-9") ? (
                         <>
                             <IconBtn title="Voice call" onClick={() => onStartCall?.(false)} small>
                                 <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -190,6 +197,12 @@ const ChatHeader = React.memo(({
                                 </svg>
                             </IconBtn>
                         </>
+                    ) : (
+                        <IconBtn title="Live AI Voice Call" onClick={() => onStartCall?.("ai")} small>
+                            <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                            </svg>
+                        </IconBtn>
                     )}
                     <IconBtn title="Select messages" onClick={onToggleSelectionMode} small>
                         <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">

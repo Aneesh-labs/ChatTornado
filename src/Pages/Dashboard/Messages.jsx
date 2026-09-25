@@ -347,6 +347,10 @@ const Messages = () => {
     }, [closeCall, sendSignal]);
 
     const startCall = useCallback(async (video) => {
+        if (video === "ai") {
+            alert("Live AI Voice (Gemini WebSocket) is active on the backend (ws://ai/live), but requires a compatible native app client for PCM 16kHz audio capture.");
+            return;
+        }
         setCallNotice("");
         if (!enrichedSelected) {
             setCallNotice("Select a conversation before initiating a call.");
