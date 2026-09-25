@@ -138,11 +138,32 @@ async def generate_ai_text(prompt: str, chat_history: List[dict], system_prompt:
 
     clean_prompt = prompt.strip()
 
+    # Image extraction logic
+    import re
+    from google import genai
+    from google.genai import types
+
+    image_parts = []
+    # Match /uploads/ followed by anything ending in image extensions
+    upload_matches = re.finditer(r'/uploads/([^\s]+\.(?:png|jpg|jpeg|gif|webp))', clean_prompt, re.IGNORECASE)
+    upload_base = Path(os.getenv("UPLOAD_DIR", Path(__file__).parent / "uploads"))
+    
+    for match in upload_matches:
+        rel_path = match.group(1)
+        full_path = upload_base / rel_path
+        if full_path.exists():
+            import mimetypes
+            mime, _ = mimetypes.guess_type(str(full_path))
+            mime = mime or "image/png"
+            with open(full_path, "rb") as f:
+                image_parts.append(
+                    types.Part.from_bytes(data=f.read(), mime_type=mime)
+                )
+            # Remove the URL from the prompt so we don't confuse the model
+            clean_prompt = clean_prompt.replace(match.group(0), "[Image Attached]")
+
     # Strategy 1: Google GenAI SDK
     try:
-        from google import genai
-        from google.genai import types
-
         client = genai.Client(api_key=api_key)
 
         # Build strictly alternating history
@@ -179,10 +200,13 @@ async def generate_ai_text(prompt: str, chat_history: List[dict], system_prompt:
             )
 
         # Add current user prompt (must be 'user' to end the sequence)
+        user_parts = [types.Part.from_text(text=clean_prompt)]
+        user_parts.extend(image_parts) # Add the extracted images!
+
         contents.append(
             types.Content(
                 role="user",
-                parts=[types.Part.from_text(text=clean_prompt)]
+                parts=user_parts
             )
         )
 
@@ -225,7 +249,8 @@ async def generate_ai_text(prompt: str, chat_history: List[dict], system_prompt:
                         system_instruction=system_prompt,
                         temperature=0.75,
                         max_output_tokens=1024,
-                        safety_settings=safety_settings
+                        safety_settings=safety_settings,
+                        tools=[{"google_search": {}}]  # Enable native Google Search Grounding!
                     )
                 )
                 if response and response.text:

@@ -583,6 +583,53 @@ async def websocket_endpoint(websocket: WebSocket):
                             
                             reply_text = f"✅ Admin Broadcast Sent to User {target_id}."
                         
+                        # REMINDER INTERCEPT
+                        rem_match = re.search(r'\[REMINDER:\s*(\d+)\s*\|\s*(.*?)\]', reply_text, re.IGNORECASE)
+                        if rem_match:
+                            delay_sec = int(rem_match.group(1))
+                            rem_msg = rem_match.group(2).strip()
+                            
+                            async def send_reminder_task(t_uid: int, t_bid: int, delay: int, msg: str):
+                                await asyncio.sleep(delay)
+                                
+                                # Send real message
+                                rem_db = SessionLocal()
+                                try:
+                                    final_msg = f"🔔 **Reminder:** {msg}"
+                                    b_msg = Message(
+                                        sender_id=t_bid,
+                                        receiver_id=t_uid,
+                                        message=final_msg,
+                                        is_shielded=False,
+                                        read_state="sent"
+                                    )
+                                    rem_db.add(b_msg)
+                                    rem_db.commit()
+                                    rem_db.refresh(b_msg)
+                                    rem_db.add_all([
+                                        MessageVisibility(message_id=b_msg.id, user_id=t_bid, visible=True),
+                                        MessageVisibility(message_id=b_msg.id, user_id=t_uid, visible=True),
+                                    ])
+                                    rem_db.commit()
+                                    
+                                    await manager.send_personal_message(t_uid, {
+                                        "type": "message",
+                                        "id": b_msg.id,
+                                        "sender_id": t_bid,
+                                        "receiver_id": t_uid,
+                                        "message": final_msg,
+                                        "created_at": str(b_msg.created_at),
+                                        "is_shielded": False,
+                                        "is_locked": False,
+                                        "read_state": "sent",
+                                        "reactions": []
+                                    })
+                                finally:
+                                    rem_db.close()
+                            
+                            asyncio.create_task(send_reminder_task(u_id, b_id, delay_sec, rem_msg))
+                            reply_text = reply_text.replace(rem_match.group(0), f"*(Reminder set for {delay_sec} seconds)*")
+
                         bot_message = Message(
                             sender_id=b_id,
                             receiver_id=u_id,

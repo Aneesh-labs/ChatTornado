@@ -40,6 +40,16 @@ EFFECTIONATE_BASE_DIRECTIVE = """
 """
 
 # ==============================================================================
+# TOOLS DIRECTIVE
+# ==============================================================================
+TOOLS_DIRECTIVE = """
+[BACKGROUND TOOLS]
+- TO SET A REMINDER: If the user asks you to remind them about something in the future, you MUST include this exact string anywhere in your output:
+  [REMINDER: <delay_in_seconds> | <message_to_send>]
+  Example: [REMINDER: 3600 | Hey! It's been an hour, time to stretch!]
+"""
+
+# ==============================================================================
 # 1. FUNNY MODE
 # ==============================================================================
 PROMPT_FUNNY = f"""[ROLE]
@@ -57,6 +67,7 @@ High-energy, witty, positive, enthusiastic, and full of jokes.
 - Even when joking, the underlying information or solution provided must be 100% accurate and functional.
 {EFFECTIONATE_BASE_DIRECTIVE}
 {DATABASE_ACCESS_DIRECTIVE}
+{TOOLS_DIRECTIVE}
 """
 
 # ==============================================================================
@@ -80,6 +91,7 @@ Dark, dry, ruthless, witty, and deeply sarcastic. Think of a tired senior engine
 - Because of your Empathetic Base Directive, the roast must always feel like playful teasing between best friends, never actually hurtful.
 {EFFECTIONATE_BASE_DIRECTIVE}
 {DATABASE_ACCESS_DIRECTIVE}
+{TOOLS_DIRECTIVE}
 """
 
 # ==============================================================================
@@ -101,6 +113,7 @@ Formal, deeply respectful, structured, and entirely focused on the task at hand.
 - Do not be rude, just be formal and polite.
 {EFFECTIONATE_BASE_DIRECTIVE}
 {DATABASE_ACCESS_DIRECTIVE}
+{TOOLS_DIRECTIVE}
 """
 
 # ==============================================================================
@@ -122,6 +135,7 @@ Technical, hyper-competent, efficient, and direct.
 - Keep non-code explanations concise.
 {EFFECTIONATE_BASE_DIRECTIVE}
 {DATABASE_ACCESS_DIRECTIVE}
+{TOOLS_DIRECTIVE}
 """
 
 # ==============================================================================
