@@ -18,6 +18,8 @@ const ChatHeader = React.memo(({
     onStartCall,
     onStartGhostChat,
     onDeleteSelected, // ✅ NEW PROP
+    aiMode,
+    setAiMode,
 }) => {
     const theme = useTheme();
     const [showMoreMenu, setShowMoreMenu] = useState(false);
@@ -79,7 +81,7 @@ const ChatHeader = React.memo(({
                     </button>
                 )}
                 <Avatar user={user} size="md" className="flex-shrink-0 scale-90 sm:scale-100 origin-left" />
-                <div className="min-w-0 flex-1">
+                <div className="min-w-0 flex-1 flex flex-col justify-center">
                     <div className="flex flex-wrap items-center gap-1 sm:gap-2">
                         <h2 className="text-xs sm:text-sm font-semibold text-white leading-tight truncate tracking-wide max-w-[120px] sm:max-w-none">
                             {username}
@@ -90,15 +92,28 @@ const ChatHeader = React.memo(({
                             </span>
                         )}
                     </div>
-                    <p className={`text-[9px] sm:text-xs mt-0.5 font-medium transition-colors truncate ${
-                        Boolean(user?.is_bot || user?.username === "VORTEX-9")
-                            ? "text-cyan-400 font-mono flex items-center gap-1"
-                            : isOnline ? "text-emerald-400" : "text-white/25"
-                    }`}>
-                        {Boolean(user?.is_bot || user?.username === "VORTEX-9")
-                            ? "⚡ Autonomous Neural Core"
-                            : isOnline ? "Active now" : "Offline"}
-                    </p>
+                    
+                    {Boolean(user?.is_bot || user?.username === "VORTEX-9") ? (
+                        <div className="flex items-center gap-2 mt-1">
+                            <select
+                                value={aiMode}
+                                onChange={(e) => setAiMode(e.target.value)}
+                                className="bg-black/40 border border-cyan-500/30 text-cyan-300 text-[10px] sm:text-xs rounded-md px-1.5 py-0.5 outline-none focus:border-cyan-400 cursor-pointer"
+                            >
+                                <option value="DEFAULT">Default</option>
+                                <option value="FUNNY">Funny</option>
+                                <option value="ROAST">Roast</option>
+                                <option value="SERIOUS">Serious</option>
+                                <option value="CODING">Coding</option>
+                            </select>
+                        </div>
+                    ) : (
+                        <p className={`text-[9px] sm:text-xs mt-0.5 font-medium transition-colors truncate ${
+                            isOnline ? "text-emerald-400" : "text-white/25"
+                        }`}>
+                            {isOnline ? "Active now" : "Offline"}
+                        </p>
+                    )}
                 </div>
             </div>
 

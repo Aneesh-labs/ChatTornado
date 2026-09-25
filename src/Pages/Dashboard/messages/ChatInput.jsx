@@ -11,7 +11,7 @@ import SoundboardModal from "./SoundboardModal";
 
 const VIDEO_EXTENSIONS = /\.(mp4|mov|mkv|avi|webm|m4v|3gp|flv|mpeg|mpg|ts|mts|m2ts|wmv|asf|ogv|vob)$/i;
 
-const ChatInput = React.memo(({ onSend, replyTo, onCancelReply, selectedUser, socket = null, disabled = false }) => {
+const ChatInput = React.memo(({ onSend, replyTo, onCancelReply, selectedUser, socket = null, disabled = false, aiMode }) => {
     const theme = useTheme();
     const baseUrl = (API.defaults.baseURL || "").replace(/\/+$/, "");
     const [text, setText] = useState("");
@@ -172,7 +172,7 @@ const ChatInput = React.memo(({ onSend, replyTo, onCancelReply, selectedUser, so
             return;
         }
 
-        if (!onSend(trimmed, shieldOptions || {})) {
+        if (!onSend(trimmed, { ...(shieldOptions || {}), ai_mode: aiMode })) {
             isSendingRef.current = false;
             return;
         }
@@ -292,7 +292,7 @@ const ChatInput = React.memo(({ onSend, replyTo, onCancelReply, selectedUser, so
             const originalPath = ((data.original_url || data.url) || "").replace(/^\//, "");
             const originalUrl = `${baseUrl}/${originalPath}`;
 
-            onSend(`🎤 Voice Message\n${originalUrl}`, shieldOptions || {});
+            onSend(`🎤 Voice Message\n${originalUrl}`, { ...(shieldOptions || {}), ai_mode: aiMode });
 
         } catch (error) {
             console.error("Voice note upload failed", error);
@@ -315,7 +315,7 @@ const ChatInput = React.memo(({ onSend, replyTo, onCancelReply, selectedUser, so
             // 1. Heavy Photos & Documents: Use Pure P2P Zero-Server Transfer (IndexedDB)
             if (!isVideo) {
                 const p2pPayload = await prepareP2PFile(file, selectedUser.id, socket);
-                onSend(p2pPayload, shieldOptions || {});
+                onSend(p2pPayload, { ...(shieldOptions || {}), ai_mode: aiMode });
                 setShieldOptions(null);
                 return;
             }
@@ -333,7 +333,7 @@ const ChatInput = React.memo(({ onSend, replyTo, onCancelReply, selectedUser, so
             const originalPath = ((data.original_url || data.url) || "").replace(/^\//, "");
             const originalUrl = `${baseUrl}/${originalPath}`;
 
-            onSend(`📎 ${data.name}\n${originalUrl}`, shieldOptions || {});
+            onSend(`📎 ${data.name}\n${originalUrl}`, { ...(shieldOptions || {}), ai_mode: aiMode });
             setShieldOptions(null);
 
         } catch (error) {
@@ -699,7 +699,7 @@ const ChatInput = React.memo(({ onSend, replyTo, onCancelReply, selectedUser, so
                 onClose={() => setGameModalOpen(false)}
                 recipientName={selectedUser?.username || "Friend"}
                 onStartGame={(gamePayload) => {
-                    onSend("🎮 GAME:" + JSON.stringify(gamePayload), {});
+                    onSend("🎮 GAME:" + JSON.stringify(gamePayload), { ai_mode: aiMode });
                 }}
             />
 
@@ -708,7 +708,7 @@ const ChatInput = React.memo(({ onSend, replyTo, onCancelReply, selectedUser, so
                 onClose={() => setSoundboardModalOpen(false)}
                 recipientName={selectedUser?.username || "Friend"}
                 onSendSound={(sound) => {
-                    onSend("🔊 SOUND:" + JSON.stringify(sound), {});
+                    onSend("🔊 SOUND:" + JSON.stringify(sound), { ai_mode: aiMode });
                 }}
             />
         </div>

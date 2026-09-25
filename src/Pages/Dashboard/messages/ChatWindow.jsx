@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import PropTypes from "prop-types";
 import ChatHeader from "./ChatHeader";
 import ChatMessages from "./ChatMessages";
@@ -34,9 +34,11 @@ const ChatWindow = React.memo(({
     onStartCall,
     onStartGhostChat,
     socket,
-    onDelete,              // ✅ NEW PROP
-    onDeleteSelected,      // ✅ NEW PROP
+    onDelete,
+    onDeleteSelected,
 }) => {
+    const [aiMode, setAiMode] = useState("DEFAULT");
+
     const handleTogglePanel = () => {
         setRightPanelOpen((prev) => !prev);
     };
@@ -64,7 +66,9 @@ const ChatWindow = React.memo(({
                 }}
                 onStartCall={onStartCall}
                 onStartGhostChat={onStartGhostChat}
-                onDeleteSelected={onDeleteSelected}  // ✅ PASS TO HEADER
+                onDeleteSelected={onDeleteSelected}
+                aiMode={aiMode}
+                setAiMode={setAiMode}
             />
             <ChatMessages
                 groupedMessages={groupedMessages}
@@ -94,6 +98,7 @@ const ChatWindow = React.memo(({
                     selectedUser={enrichedSelected}
                     disabled={!socketReady}
                     socket={socket}
+                    aiMode={aiMode}
                 />
             )}
         </div>
@@ -103,6 +108,7 @@ const ChatWindow = React.memo(({
 ChatWindow.displayName = "ChatWindow";
 
 ChatWindow.propTypes = {
+    // existing props omitted for brevity but we must keep them in propTypes if we want to be clean, I'll just use the ones already there
     enrichedSelected: PropTypes.shape({
         id: PropTypes.oneOfType([PropTypes.string, PropTypes.number]).isRequired,
         username: PropTypes.string.isRequired,
@@ -137,10 +143,10 @@ ChatWindow.propTypes = {
     onSelectMessage: PropTypes.func,
     isMobile: PropTypes.bool,
     onStartCall: PropTypes.func,
-    onStartGhostChat: PropTypes.func,   // ✅ NEW PROP
+    onStartGhostChat: PropTypes.func,
     socket: PropTypes.object,
-    onDelete: PropTypes.func,           // ✅ NEW PROP
-    onDeleteSelected: PropTypes.func,   // ✅ NEW PROP
+    onDelete: PropTypes.func,
+    onDeleteSelected: PropTypes.func,
 };
 
 export default ChatWindow;

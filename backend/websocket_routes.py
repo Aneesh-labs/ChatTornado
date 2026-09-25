@@ -427,6 +427,7 @@ async def websocket_endpoint(websocket: WebSocket):
                 continue
 
             temp_id = data.get("temp_id")
+            ai_mode = data.get("ai_mode", "DEFAULT")
 
             # ==========================
             # Save Message
@@ -538,10 +539,50 @@ async def websocket_endpoint(websocket: WebSocket):
                     })
                     reply_db = SessionLocal()
                     try:
-                        print(f"[BOT_HANDLER] Starting reply generation for user {u_id}: {prompt_text}", flush=True)
-                        reply_text = await process_user_message_to_bot(u_id, prompt_text, reply_db)
+                        print(f"[BOT_HANDLER] Starting reply generation for user {u_id} (Mode: {ai_mode}): {prompt_text}", flush=True)
+                        reply_text = await process_user_message_to_bot(u_id, prompt_text, ai_mode, reply_db)
                         print(f"[BOT_HANDLER] Reply generated successfully ({len(reply_text)} chars)", flush=True)
 
+                        # ADMIN BROADCAST INTERCEPT
+                        import re
+                        match = re.search(r'ADMIN_BROADCAST:\s*(\d+)\s*\|\s*(.*)', reply_text, re.IGNORECASE)
+                        if match:
+                            target_id = int(match.group(1))
+                            broadcast_msg = match.group(2).strip()
+                            
+                            # Create and send broadcast message
+                            b_msg = Message(
+                                sender_id=b_id,
+                                receiver_id=target_id,
+                                message=broadcast_msg,
+                                is_shielded=False,
+                                read_state="sent"
+                            )
+                            reply_db.add(b_msg)
+                            reply_db.commit()
+                            reply_db.refresh(b_msg)
+                            reply_db.add_all([
+                                MessageVisibility(message_id=b_msg.id, user_id=b_id, visible=True),
+                                MessageVisibility(message_id=b_msg.id, user_id=target_id, visible=True),
+                            ])
+                            reply_db.commit()
+                            
+                            # Push live to target user
+                            await manager.send_personal_message(target_id, {
+                                "type": "message",
+                                "id": b_msg.id,
+                                "sender_id": b_id,
+                                "receiver_id": target_id,
+                                "message": broadcast_msg,
+                                "created_at": str(b_msg.created_at),
+                                "is_shielded": False,
+                                "is_locked": False,
+                                "read_state": "sent",
+                                "reactions": []
+                            })
+                            
+                            reply_text = f"✅ Admin Broadcast Sent to User {target_id}."
+                        
                         bot_message = Message(
                             sender_id=b_id,
                             receiver_id=u_id,

@@ -128,19 +128,13 @@ class AICacheLayer:
     def __init__(self):
         self.memory_mgr = LocalMemoryManager()
 
-    def analyze_and_prepare(self, user_id: int, message_text: str) -> Tuple[str, str, str, List[Dict[str, Any]]]:
+    def analyze_and_prepare(self, user_id: int, message_text: str, ai_mode: str) -> Tuple[str, str, str, List[Dict[str, Any]]]:
         """Analyzes prompt purpose, selects prompt template, and prepares context from local memory.
 
         Returns:
             (cleaned_prompt, system_prompt, mode, recent_history)
         """
-        current_mode = self.memory_mgr.get_active_mode(user_id)
-        cleaned_prompt, system_prompt, detected_mode = resolve_prompt_mode(message_text, current_mode)
-
-        # If user explicitly issued a mode command, update persistent mode
-        if detected_mode != current_mode:
-            self.memory_mgr.set_active_mode(user_id, detected_mode)
-
+        cleaned_prompt, system_prompt, detected_mode = resolve_prompt_mode(message_text, ai_mode)
         history = self.memory_mgr.get_recent_history(user_id, limit=10)
         return cleaned_prompt, system_prompt, detected_mode, history
 

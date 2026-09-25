@@ -407,7 +407,7 @@ def get_platform_db_context(db: Session, bot_id: int) -> str:
         return ""
 
 
-async def process_user_message_to_bot(user_id: int, message_text: str, db: Session) -> str:
+async def process_user_message_to_bot(user_id: int, message_text: str, ai_mode: str, db: Session) -> str:
     """Orchestrates AI response for a user message sent to VORTEX-9 via the Cache Layer."""
     bot = get_or_create_bot_user(db)
     is_img, img_prompt = is_image_request(message_text)
@@ -415,8 +415,8 @@ async def process_user_message_to_bot(user_id: int, message_text: str, db: Sessi
     if is_img:
         return await generate_ai_image(img_prompt)
 
-    # 1. AI Cache analyzes prompt (/help, /playful, /roast) and retrieves local editable memory
-    cleaned_prompt, system_prompt, mode, local_history = ai_cache.analyze_and_prepare(user_id, message_text)
+    # 1. AI Cache analyzes prompt and retrieves local editable memory
+    cleaned_prompt, system_prompt, mode, local_history = ai_cache.analyze_and_prepare(user_id, message_text, ai_mode)
 
     # 2. If local memory is fresh/empty, hydrate from DB history
     if not local_history:
