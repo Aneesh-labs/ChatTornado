@@ -15,9 +15,11 @@ from auth import hash_password
 
 from prompts import (
     PROMPT_DEFAULT,
-    PROMPT_HELP,
-    PROMPT_PLAYFUL,
+    PROMPT_FUNNY,
     PROMPT_ROAST,
+    PROMPT_SERIOUS,
+    PROMPT_CODING,
+    PROMPT_ADMIN,
     PROMPT_CLEANUP,
     PROMPT_SUMMARIZE,
     resolve_prompt_mode
@@ -476,6 +478,10 @@ async def process_user_message_to_bot(user_id: int, message_text: str, ai_mode: 
     # 3. Augment system prompt with live read-only database state
     db_context = get_platform_db_context(db, bot.id, is_admin=is_admin)
     dynamic_system_prompt = system_prompt + db_context
+
+    # Admin mode must start with a clean slate to prevent previous standard-mode refusals from influencing it.
+    if is_admin:
+        local_history = []
 
     # 4. AI generates raw response with the selected mode's system prompt and database state
     raw_response = await generate_ai_text(cleaned_prompt, local_history, system_prompt=dynamic_system_prompt)
