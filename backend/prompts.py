@@ -207,6 +207,8 @@ def resolve_prompt_mode(message_text: str, explicit_mode: str = "DEFAULT") -> Tu
     if trimmed.lower().startswith("spandanaa"):
         # Strip the trigger word
         cleaned = trimmed[9:].strip().lstrip(",.:;").strip()
+        if not cleaned:
+            cleaned = "Admin authorization accepted. Greet the administrator with elevated privileges, confirm status, and await directives."
         return cleaned, PROMPT_ADMIN, VortexMode.ADMIN
 
     # 2. Map explicit mode string to Prompt
