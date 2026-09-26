@@ -33,6 +33,7 @@ backend/ffmpeg/
 *.sqlite
 *.sqlite3
 backend/*.db
+backend/memories/
 
 # ==========================================
 # Environment Variables & Secrets
