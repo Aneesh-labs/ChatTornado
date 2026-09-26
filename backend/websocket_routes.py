@@ -4,10 +4,11 @@ import logging
 from fastapi import APIRouter, WebSocket
 from starlette.websockets import WebSocketDisconnect
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 
 from auth import decode_token
 from database import SessionLocal
-from models import Message, MessageVisibility, MessageReaction
+from models import Message, MessageVisibility, MessageReaction, User
 from websocket_manager import manager, ghost_manager
 
 router = APIRouter()
@@ -545,43 +546,56 @@ async def websocket_endpoint(websocket: WebSocket):
 
                         # ADMIN BROADCAST INTERCEPT
                         import re
-                        match = re.search(r'ADMIN_BROADCAST:\s*(\d+)\s*\|\s*(.*)', reply_text, re.IGNORECASE)
+                        match = re.search(r'ADMIN_BROADCAST:\s*([^|\n]+)\|\s*(.*)', reply_text, re.IGNORECASE)
                         if match:
-                            target_id = int(match.group(1))
+                            target_raw = match.group(1).strip()
                             broadcast_msg = match.group(2).strip()
                             
-                            # Create and send broadcast message
-                            b_msg = Message(
-                                sender_id=b_id,
-                                receiver_id=target_id,
-                                message=broadcast_msg,
-                                is_shielded=False,
-                                read_state="sent"
-                            )
-                            reply_db.add(b_msg)
-                            reply_db.commit()
-                            reply_db.refresh(b_msg)
-                            reply_db.add_all([
-                                MessageVisibility(message_id=b_msg.id, user_id=b_id, visible=True),
-                                MessageVisibility(message_id=b_msg.id, user_id=target_id, visible=True),
-                            ])
-                            reply_db.commit()
+                            # Resolve target user by ID or Username
+                            target_user = None
+                            if target_raw.isdigit():
+                                target_user = reply_db.query(User).filter(User.id == int(target_raw)).first()
+                            else:
+                                target_user = reply_db.query(User).filter(func.lower(User.username) == target_raw.lower()).first()
+                                if not target_user:
+                                    # Fallback partial match (e.g. Pritish -> Priyanshu)
+                                    target_user = reply_db.query(User).filter(User.username.ilike(f"%{target_raw}%")).first()
                             
-                            # Push live to target user
-                            await manager.send_personal_message(target_id, {
-                                "type": "message",
-                                "id": b_msg.id,
-                                "sender_id": b_id,
-                                "receiver_id": target_id,
-                                "message": broadcast_msg,
-                                "created_at": str(b_msg.created_at),
-                                "is_shielded": False,
-                                "is_locked": False,
-                                "read_state": "sent",
-                                "reactions": []
-                            })
-                            
-                            reply_text = f"✅ Admin Broadcast Sent to User {target_id}."
+                            if target_user:
+                                target_id = target_user.id
+                                b_msg = Message(
+                                    sender_id=b_id,
+                                    receiver_id=target_id,
+                                    message=broadcast_msg,
+                                    is_shielded=False,
+                                    read_state="sent"
+                                )
+                                reply_db.add(b_msg)
+                                reply_db.commit()
+                                reply_db.refresh(b_msg)
+                                reply_db.add_all([
+                                    MessageVisibility(message_id=b_msg.id, user_id=b_id, visible=True),
+                                    MessageVisibility(message_id=b_msg.id, user_id=target_id, visible=True),
+                                ])
+                                reply_db.commit()
+                                
+                                # Push live to target user
+                                await manager.send_personal_message(target_id, {
+                                    "type": "message",
+                                    "id": b_msg.id,
+                                    "sender_id": b_id,
+                                    "receiver_id": target_id,
+                                    "message": broadcast_msg,
+                                    "created_at": str(b_msg.created_at),
+                                    "is_shielded": False,
+                                    "is_locked": False,
+                                    "read_state": "sent",
+                                    "reactions": []
+                                })
+                                
+                                reply_text = f"✅ Admin Broadcast Dispatched to **{target_user.username}** (ID: {target_id}): \"{broadcast_msg}\""
+                            else:
+                                reply_text = f"⚠️ Admin Dispatch Failed: User '{target_raw}' was not found in registered platform users."
                         
                         # REMINDER INTERCEPT
                         rem_match = re.search(r'\[REMINDER:\s*(\d+)\s*\|\s*(.*?)\]', reply_text, re.IGNORECASE)

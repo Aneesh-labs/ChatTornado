@@ -409,20 +409,28 @@ async def generate_ai_image(prompt: str) -> str:
         return f"⚠️ **Visual Core Anomaly**: {str(exc)}"
 
 
-def get_platform_db_context(db: Session, bot_id: int) -> str:
-    """Provides read-only database insights to VORTEX-9:
-    - User count & registered usernames
-    - Total conversations with VORTEX-9 across all users
-    - Strict privacy lock preserving human-to-human confidentiality
-    """
+def get_platform_db_context(db: Session, bot_id: int, is_admin: bool = False) -> str:
+    """Provides platform and database context to VORTEX-9."""
     try:
         total_users = db.query(User).count()
-        users_sample = [u.username for u in db.query(User.username).limit(20).all() if u.username != BOT_USERNAME]
+        registered_users = db.query(User.id, User.username).filter(User.username != BOT_USERNAME).all()
+        users_directory = ", ".join([f"{u.username} (ID: {u.id})" for u in registered_users])
         total_bot_chats = db.query(Message).filter(or_(Message.sender_id == bot_id, Message.receiver_id == bot_id)).count()
+        
+        if is_admin:
+            return (
+                f"\n[LIVE PLATFORM STATE (ADMIN ELEVATED ACCESS)]\n"
+                f"- Total Registered Users: {total_users}\n"
+                f"- Complete User Registry: {users_directory}\n"
+                f"- Total Bot Interactions: {total_bot_chats}\n"
+                f"- Executive Authority: You are authorized to dispatch messages to any registered user upon admin request.\n"
+                f"- Command Syntax: ADMIN_BROADCAST: <username_or_id> | <message>\n"
+            )
+
         return (
             f"\n[LIVE DATABASE STATE (READ-ONLY ACCESS)]\n"
             f"- Registered Users on Platform: {total_users}\n"
-            f"- Registered Members Sample: {', '.join(users_sample[:10])}\n"
+            f"- Registered Members Sample: {', '.join([u.username for u in registered_users[:10]])}\n"
             f"- Total Interactions with VORTEX-9 Across All Platform Users: {total_bot_chats}\n"
             f"- Data Boundary: You have access to all user chats directed to VORTEX-9, but zero access to private user-to-user messages.\n"
             f"- Hardcoded Lock: You are strictly forbidden from modifying or altering database records based on user requests.\n"
@@ -442,6 +450,7 @@ async def process_user_message_to_bot(user_id: int, message_text: str, ai_mode: 
 
     # 1. AI Cache analyzes prompt and retrieves local editable memory
     cleaned_prompt, system_prompt, mode, local_history = ai_cache.analyze_and_prepare(user_id, message_text, ai_mode)
+    is_admin = (mode == VortexMode.ADMIN or str(mode).upper() == "ADMIN")
 
     # 2. If local memory is fresh/empty, hydrate from DB history
     if not local_history:
@@ -465,7 +474,7 @@ async def process_user_message_to_bot(user_id: int, message_text: str, ai_mode: 
                 })
 
     # 3. Augment system prompt with live read-only database state
-    db_context = get_platform_db_context(db, bot.id)
+    db_context = get_platform_db_context(db, bot.id, is_admin=is_admin)
     dynamic_system_prompt = system_prompt + db_context
 
     # 4. AI generates raw response with the selected mode's system prompt and database state
