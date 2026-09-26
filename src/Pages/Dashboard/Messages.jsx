@@ -130,6 +130,7 @@ const Messages = () => {
     const [call, setCall] = useState(null);
     const [isMuted, setIsMuted] = useState(false);
     const [isCameraOff, setIsCameraOff] = useState(false);
+    const [aiMode, setAiMode] = useState("SERIOUS");
     const [ghostChat, setGhostChat] = useState({
         open: false,
         connected: false,
@@ -999,6 +1000,7 @@ const Messages = () => {
             sender_id: myUserId.current,
             receiver_id: selectedUser.id,
             message: validation.text,
+                  ai_mode: aiMode,
             created_at: new Date().toISOString(),
             is_locked: options.shield_mode === 'timelock',
             ...options
@@ -1019,6 +1021,7 @@ const Messages = () => {
                 temp_id,
                 receiver_id: selectedUser.id,
                 message: validation.text,
+                  ai_mode: aiMode,
                 ...options
             }));
         } catch {
@@ -1287,6 +1290,8 @@ const Messages = () => {
                                 onStartGhostChat={startGhostChat}
                                 onDelete={deleteMessage}
                                 onDeleteSelected={deleteSelectedMessages}
+                                aiMode={aiMode}
+                                setAiMode={setAiMode}
                                 socket={socketRef.current}
                                 isMobile={isMobile}
                             />
