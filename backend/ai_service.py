@@ -22,7 +22,8 @@ from prompts import (
     PROMPT_ADMIN,
     PROMPT_CLEANUP,
     PROMPT_SUMMARIZE,
-    resolve_prompt_mode
+    resolve_prompt_mode,
+    VortexMode
 )
 from ai_cache import ai_cache, LocalMemoryManager
 
