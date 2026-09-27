@@ -1021,15 +1021,27 @@ const Messages = () => {
         };
         setMessages((prev) => [...prev, optimisticMessage]);
 
+        const outgoingPayload = {
+            temp_id,
+            receiver_id: selectedUser.id,
+            message: validation.text,
+            ai_mode: options.ai_mode || aiMode,
+            ...options
+        };
+
+        console.log(
+            `%c[WS SEND]%c To: ${selectedUser.username} (ID: ${selectedUser.id}) | Mode: %c${outgoingPayload.ai_mode}%c | Text: "${validation.text}"`,
+            "background: #059669; color: white; font-weight: bold; padding: 2px 6px; border-radius: 3px;",
+            "",
+            "color: #34d399; font-weight: bold;",
+            "",
+            outgoingPayload
+        );
+
         try {
-            socketRef.current.send(JSON.stringify({
-                temp_id,
-                receiver_id: selectedUser.id,
-                message: validation.text,
-                ai_mode: options.ai_mode || aiMode,
-                ...options
-            }));
-        } catch {
+            socketRef.current.send(JSON.stringify(outgoingPayload));
+        } catch (err) {
+            console.error("[WS SEND ERROR]", err);
             pendingTempIds.current.delete(temp_id);
             // Remove optimistic message on error
             setMessages((prev) => prev.filter((m) => m.temp_id !== temp_id));

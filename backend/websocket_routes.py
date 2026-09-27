@@ -567,6 +567,7 @@ async def websocket_endpoint(websocket: WebSocket):
                                 
                                 if target_user:
                                     target_id = target_user.id
+                                    print(f"👑 [ADMIN_DIRECT] Matched direct dispatch: target='{target_user.username}' (ID: {target_id}) | message='{broadcast_msg}'", flush=True)
                                     b_msg = Message(
                                         sender_id=u_id,
                                         receiver_id=target_id,
@@ -611,7 +612,9 @@ async def websocket_endpoint(websocket: WebSocket):
                                     })
                                     direct_dispatched = True
                                     reply_text = f"✅ Message dispatched directly to **{target_user.username}** (ID: {target_id}): \"{broadcast_msg}\""
-                                    print(f"[BOT_HANDLER] Direct admin dispatch executed to {target_user.username}", flush=True)
+                                    print(f"👑 [ADMIN_DIRECT SUCCESS] Sent message {b_msg.id} from Admin {u_id} to {target_user.username} ({target_id})", flush=True)
+                                else:
+                                    print(f"⚠️ [ADMIN_DIRECT] Target '{target_raw}' not found in user database!", flush=True)
 
                         if not direct_dispatched:
                             reply_text = await process_user_message_to_bot(u_id, prompt_text, ai_mode, reply_db)

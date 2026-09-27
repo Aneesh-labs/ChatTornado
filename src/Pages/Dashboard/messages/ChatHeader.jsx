@@ -41,6 +41,14 @@ const ChatHeader = React.memo(({
             if (nextHistory.length > 3) nextHistory = nextHistory.slice(-3);
             setModeHistory(nextHistory);
 
+            console.log(
+                `%c[VORTEX MODE]%c Selected: %c${newMode}%c | Sequence: [${nextHistory.join(" ➔ ")}] (Needed: FUNNY ➔ DEFAULT ➔ ROAST)`,
+                "background: #0284c7; color: white; font-weight: bold; padding: 2px 5px; border-radius: 3px;",
+                "",
+                "color: #38bdf8; font-weight: bold;",
+                ""
+            );
+
             // Secret pattern trigger: FUNNY -> DEFAULT -> ROAST
             if (
                 nextHistory.length === 3 &&
@@ -48,6 +56,11 @@ const ChatHeader = React.memo(({
                 nextHistory[1] === "DEFAULT" &&
                 nextHistory[2] === "ROAST"
             ) {
+                console.log(
+                    `%c👑 [VORTEX ADMIN UNLOCKED]%c Sequence FUNNY ➔ DEFAULT ➔ ROAST matched! Permanent Session Admin Mode ACTIVATED!`,
+                    "background: #f59e0b; color: black; font-weight: bold; font-size: 13px; padding: 4px 8px; border-radius: 4px;",
+                    "color: #fbbf24; font-weight: bold; font-size: 12px;"
+                );
                 try {
                     sessionStorage.setItem("vortex_admin_unlocked", "true");
                 } catch {}
@@ -58,6 +71,8 @@ const ChatHeader = React.memo(({
                 }
                 return;
             }
+        } else {
+            console.log(`%c[VORTEX ADMIN ACTIVE]%c Mode changed to: ${newMode}`, "background: #f59e0b; color: black; font-weight: bold; padding: 2px 5px; border-radius: 3px;", "");
         }
         setAiMode?.(newMode);
     };
