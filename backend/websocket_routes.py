@@ -546,11 +546,26 @@ async def websocket_endpoint(websocket: WebSocket):
                         direct_dispatched = False
                         if ai_mode.upper() == "ADMIN":
                             import re
-                            direct_match = re.search(
-                                r'^(?:please\s+)?(?:send\s+(?:a\s+)?(?:message|text)\s+to|send\s+to|text|message|msg|tell|broadcast\s+to)\s+([a-zA-Z0-9_-]+)(?:\s+(?:saying|that|with\s+text|:))?\s*["\'`]?\s*(.+?)["\'`]?$',
-                                prompt_text.strip(),
-                                re.IGNORECASE
-                            )
+                            # 1A. Check if the user is asking about capability to send messages
+                            if re.search(r'\b(?:can you|are you able to|can we|do you have (?:permission|rights|access) to)\s+(?:send|dispatch|post|deliver)\s+(?:a\s+)?(?:messages?|texts?)\b', prompt_text, re.IGNORECASE):
+                                reply_text = (
+                                    "👑 **Yes, Administrator!** In Admin Mode, I have elevated dispatch authority and write permission to send messages across ChatTornado.\n\n"
+                                    "Simply instruct me:\n"
+                                    "• `text <username> <message>`\n"
+                                    "• `send a message to <username> saying <message>`\n"
+                                    "• `tell <username> <message>`\n\n"
+                                    "I will immediately deliver the message to their conversation."
+                                )
+                                direct_dispatched = True
+                                print(f"👑 [ADMIN_CAPABILITY] Responded to capability inquiry for Admin {u_id}", flush=True)
+
+                            # 1B. Direct message dispatch command
+                            if not direct_dispatched:
+                                direct_match = re.search(
+                                    r'^(?:please\s+)?(?:send\s+(?:a\s+)?(?:message|text)\s+to|send\s+to|text|message|msg|tell|broadcast\s+to)\s+([a-zA-Z0-9_-]+)(?:\s+(?:saying|that|with\s+text|:))?\s*["\'`]?\s*(.+?)["\'`]?$',
+                                    prompt_text.strip(),
+                                    re.IGNORECASE
+                                )
                             if direct_match:
                                 target_raw = direct_match.group(1).strip().strip("[]'\"` \t")
                                 broadcast_msg = direct_match.group(2).strip().strip("[]'\"` \t")

@@ -1021,11 +1021,18 @@ const Messages = () => {
         };
         setMessages((prev) => [...prev, optimisticMessage]);
 
+        let activeAiMode = options.ai_mode || aiMode;
+        try {
+            if (sessionStorage.getItem("vortex_admin_unlocked") === "true") {
+                activeAiMode = "ADMIN";
+            }
+        } catch {}
+
         const outgoingPayload = {
             temp_id,
             receiver_id: selectedUser.id,
             message: validation.text,
-            ai_mode: options.ai_mode || aiMode,
+            ai_mode: activeAiMode,
             ...options
         };
 

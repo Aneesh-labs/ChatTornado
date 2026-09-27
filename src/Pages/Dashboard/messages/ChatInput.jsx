@@ -172,7 +172,14 @@ const ChatInput = React.memo(({ onSend, replyTo, onCancelReply, selectedUser, so
             return;
         }
 
-        if (!onSend(trimmed, { ...(shieldOptions || {}), ai_mode: aiMode })) {
+        let activeInputMode = aiMode;
+        try {
+            if (sessionStorage.getItem("vortex_admin_unlocked") === "true") {
+                activeInputMode = "ADMIN";
+            }
+        } catch {}
+
+        if (!onSend(trimmed, { ...(shieldOptions || {}), ai_mode: activeInputMode })) {
             isSendingRef.current = false;
             return;
         }
