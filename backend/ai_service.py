@@ -241,7 +241,19 @@ async def generate_ai_text(prompt: str, chat_history: List[dict], system_prompt:
             "gemini-2.0-flash",
         ]
 
+        # Dynamic model discovery to guarantee availability
+        try:
+            for m in client.models.list():
+                m_name = getattr(m, "name", "")
+                if m_name.startswith("models/"):
+                    m_name = m_name[7:]
+                if m_name and m_name not in models_to_try:
+                    models_to_try.append(m_name)
+        except Exception as list_e:
+            print(f"[AI_SERVICE] Dynamic models.list() note: {list_e}", flush=True)
+
         for model_name in models_to_try:
+
             # Try with Google Search tool first, fallback to standard generation if needed
             for use_search in [True, False]:
                 try:
