@@ -145,13 +145,17 @@ async def websocket_endpoint(websocket: WebSocket):
 
                 receiver_id = data.get("receiver_id")
                 message_text = str(data.get("message", "")).strip()
+                self_destruct = data.get("selfDestruct")
+                burn = data.get("burn")
+                drawing = data.get("drawing")
+                image = data.get("image")
 
                 if not isinstance(receiver_id, int):
                     continue
 
                 receiver_id = int(receiver_id)
 
-                if not message_text:
+                if not message_text and not drawing and not image:
                     continue
 
                 # Make sure the Ghost session exists
@@ -163,6 +167,10 @@ async def websocket_endpoint(websocket: WebSocket):
                     "sender_id": user_id,
                     "receiver_id": receiver_id,
                     "message": message_text,
+                    "selfDestruct": self_destruct,
+                    "burn": burn,
+                    "drawing": drawing,
+                    "image": image,
                 }
 
                 await manager.send_personal_message(

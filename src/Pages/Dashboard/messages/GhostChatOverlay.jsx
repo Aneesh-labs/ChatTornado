@@ -48,6 +48,7 @@ const ICONS = {
   hologram: "M3 12h18M3 6h18M3 18h18M12 3v18M6 6l12 12M18 6L6 18",
   back: "M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18",
   plus: "M12 4.5v15m7.5-7.5h-15",
+  image: "M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 001.5-1.5V6a1.5 1.5 0 00-1.5-1.5H3.75A1.5 1.5 0 002.25 6v12a1.5 1.5 0 001.5 1.5zm10.5-11.25h.008v.008h-.008V8.25zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z",
 };
 
 /* ==========================================================================
@@ -379,6 +380,7 @@ const GhostChatOverlay = ({ ghostChat, socket, onClose }) => {
   const [hoveredMsgId, setHoveredMsgId] = useState(null);
   const [showConnected, setShowConnected] = useState(false);
   const [drawingData, setDrawingData] = useState(null);
+  const [imageData, setImageData] = useState(null);
   const [showTools, setShowTools] = useState(false);
   const [activeMsgId, setActiveMsgId] = useState(null);
 
@@ -577,8 +579,8 @@ const GhostChatOverlay = ({ ghostChat, socket, onClose }) => {
     const text = (customText || input).trim();
     debug('Send clicked', { text, socketReady: socket?.readyState, isConnected, currentUser });
 
-    if (!text) {
-      debug('No text to send');
+    if (!text && !drawingData && !imageData) {
+      debug('No text or media to send');
       return;
     }
     if (!socket || socket.readyState !== WebSocket.OPEN) {
@@ -610,6 +612,7 @@ const GhostChatOverlay = ({ ghostChat, socket, onClose }) => {
       selfDestruct: selfDestructTimer > 0 ? selfDestructTimer : null,
       isBurn: burnAfterReading,
       drawing: drawingData || null,
+      image: imageData || null,
     };
 
     setMessages(prev => [...prev, newMsg]);
@@ -624,6 +627,7 @@ const GhostChatOverlay = ({ ghostChat, socket, onClose }) => {
     playSound('send', muted);
     setInput('');
     setDrawingData(null);
+    setImageData(null);
     handleStopTyping();
 
     socket.send(JSON.stringify({
@@ -633,8 +637,9 @@ const GhostChatOverlay = ({ ghostChat, socket, onClose }) => {
       selfDestruct: selfDestructTimer,
       burn: burnAfterReading,
       drawing: drawingData,
+      image: imageData,
     }));
-  }, [input, socket, currentUser, isConnected, selfDestructTimer, burnAfterReading, firstMessageSent, muted, drawingData]);
+  }, [input, socket, currentUser, isConnected, selfDestructTimer, burnAfterReading, firstMessageSent, muted, drawingData, imageData]);
 
   // --- Typing handlers ---
   const handleTyping = useCallback(() => {
@@ -737,6 +742,15 @@ const GhostChatOverlay = ({ ghostChat, socket, onClose }) => {
   const handleDrawingSave = (dataUrl) => {
     setDrawingData(dataUrl);
     setShowDrawing(false);
+  };
+
+  const handleImageUpload = (e) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = (ev) => setImageData(ev.target.result);
+      reader.readAsDataURL(file);
+    }
   };
 
   // --- Render helpers ---
@@ -967,6 +981,9 @@ const GhostChatOverlay = ({ ghostChat, socket, onClose }) => {
                     {msg.drawing && (
                       <img src={msg.drawing} alt="drawing" className="max-w-[200px] sm:max-w-[260px] rounded-lg mb-2 border border-white/10" />
                     )}
+                    {msg.image && (
+                      <img src={msg.image} alt="attachment" className="max-w-[200px] sm:max-w-[260px] rounded-lg mb-2 border border-white/10" />
+                    )}
 
                     {editingMsgId === msg.id ? (
                       <div className="flex flex-col gap-1.5 mt-1" onClick={(e) => e.stopPropagation()}>
@@ -1085,6 +1102,15 @@ const GhostChatOverlay = ({ ghostChat, socket, onClose }) => {
           </div>
         )}
 
+        {/* Image Staged Preview */}
+        {imageData && (
+          <div className="mb-2 flex items-center gap-2 bg-violet-500/20 border border-violet-500/30 rounded-xl px-2.5 py-1.5 w-fit">
+            <img src={imageData} alt="attachment" className="h-8 w-12 object-cover rounded border border-white/20" />
+            <span className="text-xs text-violet-200">Image attached</span>
+            <button onClick={() => setImageData(null)} className="text-white/60 hover:text-white ml-1 text-xs p-1">✕</button>
+          </div>
+        )}
+
         {/* Quick Tools Drawer (collapsible or contextual) */}
         <AnimatePresence>
           {showTools && (
@@ -1119,6 +1145,13 @@ const GhostChatOverlay = ({ ghostChat, socket, onClose }) => {
                 <Icon path={ICONS.timer} className="h-3.5 w-3.5" />
                 <span>{selfDestructTimer > 0 ? `⏳ ${selfDestructTimer}s` : 'Timer: OFF'}</span>
               </button>
+
+              {/* Image Upload */}
+              <label className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-medium bg-white/5 border border-white/10 text-white/60 hover:text-white transition-all flex-shrink-0 cursor-pointer">
+                <Icon path={ICONS.image} className="h-3.5 w-3.5" />
+                <span>Image</span>
+                <input type="file" accept="image/*" onChange={(e) => { handleImageUpload(e); setShowTools(false); }} className="hidden" />
+              </label>
 
               {/* Drawing */}
               {ENABLE_DRAWING && (
@@ -1156,7 +1189,7 @@ const GhostChatOverlay = ({ ghostChat, socket, onClose }) => {
           <button
             type="button"
             onClick={() => setShowTools(prev => !prev)}
-            className={`h-10 w-10 sm:h-11 sm:w-11 flex-shrink-0 rounded-xl sm:rounded-2xl border transition-all flex items-center justify-center active:scale-90 ${showTools || burnAfterReading || selfDestructTimer > 0 || drawingData
+            className={`h-10 w-10 sm:h-11 sm:w-11 flex-shrink-0 rounded-xl sm:rounded-2xl border transition-all flex items-center justify-center active:scale-90 ${showTools || burnAfterReading || selfDestructTimer > 0 || drawingData || imageData
                 ? 'bg-violet-500/20 border-violet-500/40 text-violet-300'
                 : 'bg-white/5 border-white/10 text-white/50 hover:text-white/80'
               }`}
@@ -1217,8 +1250,8 @@ const GhostChatOverlay = ({ ghostChat, socket, onClose }) => {
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.9 }}
             onClick={() => handleSend()}
-            disabled={!input.trim() && !drawingData}
-            className={`h-10 w-10 sm:h-11 sm:w-11 flex-shrink-0 rounded-xl sm:rounded-2xl bg-gradient-to-br from-violet-500 to-indigo-600 text-white shadow-lg backdrop-blur-sm flex items-center justify-center transition-all ${!input.trim() && !drawingData ? 'opacity-40 cursor-not-allowed' : 'hover:opacity-90 active:scale-95'
+            disabled={!input.trim() && !drawingData && !imageData}
+            className={`h-10 w-10 sm:h-11 sm:w-11 flex-shrink-0 rounded-xl sm:rounded-2xl bg-gradient-to-br from-violet-500 to-indigo-600 text-white shadow-lg backdrop-blur-sm flex items-center justify-center transition-all ${!input.trim() && !drawingData && !imageData ? 'opacity-40 cursor-not-allowed' : 'hover:opacity-90 active:scale-95'
               }`}
             aria-label="Send message"
           >
