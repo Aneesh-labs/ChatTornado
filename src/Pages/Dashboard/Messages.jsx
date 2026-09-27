@@ -134,6 +134,8 @@ const Messages = () => {
     const [aiMode, setAiMode] = useState(() => {
         return isAdminUnlocked() ? "ADMIN" : "DEFAULT";
     });
+    const [isReloading, setIsReloading] = useState(false);
+    const [isRefreshingSidebar, setIsRefreshingSidebar] = useState(false);
 
     useEffect(() => {
         const handleAdminUnlock = () => {
@@ -591,6 +593,55 @@ const Messages = () => {
         sessionStorage.setItem("messagesToday", String(todayCount));
         window.dispatchEvent(new Event("sessionStorageUpdate"));
     }, [messages]);
+
+    const reloadMessages = useCallback(async (showFeedback = true) => {
+        if (!selectedUser?.id) return;
+        if (!validateToken()) return;
+        if (showFeedback) setIsReloading(true);
+        try {
+            const res = await API.get(`/messages/${selectedUser.id}`, { params: { token } });
+            setMessages(res.data || []);
+            requestAnimationFrame(() => scrollToBottom("smooth"));
+            setUnreadCounts((prev) => ({ ...prev, [selectedUser.id]: 0 }));
+        } catch (err) {
+            console.error("Failed to reload chat messages:", err);
+            if (err.response?.status === 401) {
+                setSecurityStatus("SESSION_EXPIRED");
+            }
+        } finally {
+            if (showFeedback) {
+                setTimeout(() => {
+                    setIsReloading(false);
+                }, 400);
+            }
+        }
+    }, [selectedUser, token, validateToken, scrollToBottom]);
+
+    const refreshSidebar = useCallback(async () => {
+        if (!validateToken()) return;
+        setIsRefreshingSidebar(true);
+        try {
+            const [resGlobal, resActive, resStatuses] = await Promise.all([
+                API.get("/users", { params: { token } }),
+                API.get("/connections/active", { params: { token } }),
+                API.get("/connections/all", { params: { token } }),
+            ]);
+            const freshUsers = resGlobal.data || [];
+            const active = resActive.data || [];
+            setUsers(freshUsers);
+            setActiveUsers(active);
+            setConnectionStatuses(resStatuses.data || {});
+        } catch (err) {
+            console.error("Failed to refresh sidebar conversations:", err);
+            if (err.response?.status === 401) {
+                setSecurityStatus("SESSION_EXPIRED");
+            }
+        } finally {
+            setTimeout(() => {
+                setIsRefreshingSidebar(false);
+            }, 400);
+        }
+    }, [token, validateToken]);
 
     /* ── User Fetching ────────────────────────────────────────────────────── */
     useEffect(() => {
@@ -1341,6 +1392,8 @@ const Messages = () => {
                                     onOpenSearch={handleOpenSearch}
                                     onOpenSettings={handleOpenSettings}
                                     onOpenInfoPanel={() => setRightPanelOpen(true)}
+                                    onRefresh={refreshSidebar}
+                                    isRefreshing={isRefreshingSidebar}
                                     myUserId={myUserId.current}
                                 />
                             </motion.div>
@@ -1379,6 +1432,8 @@ const Messages = () => {
                                 onStartGhostChat={startGhostChat}
                                 onDelete={deleteMessage}
                                 onDeleteSelected={deleteSelectedMessages}
+                                onReloadChat={reloadMessages}
+                                isReloading={isReloading}
                                 aiMode={aiMode}
                                 setAiMode={setAiMode}
                                 socket={socketRef.current}

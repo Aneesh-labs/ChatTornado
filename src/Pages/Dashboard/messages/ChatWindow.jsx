@@ -37,6 +37,8 @@ const ChatWindow = React.memo(({
     socket,
     onDelete,
     onDeleteSelected,
+    onReloadChat,
+    isReloading,
     aiMode: propAiMode,
     setAiMode: propSetAiMode,
 }) => {
@@ -74,6 +76,8 @@ const ChatWindow = React.memo(({
                 onStartCall={onStartCall}
                 onStartGhostChat={onStartGhostChat}
                 onDeleteSelected={onDeleteSelected}
+                onReloadChat={onReloadChat}
+                isReloading={isReloading}
                 aiMode={aiMode}
                 setAiMode={setAiMode}
             />
