@@ -129,7 +129,7 @@ const API_URL =
 const SYSTEM_CONFIG = {
     BUILD_VERSION: "2.0.4-Premium-Flagship",
     REACT_VERSION: React.version,
-    DEFAULT_LATENCY_URL: `${API_URL}/verify`,
+    DEFAULT_LATENCY_URL: `${API_URL}/`,
     HEARTBEAT_INTERVAL: 12000,
     IDLE_TIMEOUT_MS: 180000, // 3 Minutes Easter Egg
     CINEMATIC_DURATION_MS: 22000,
