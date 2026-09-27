@@ -603,6 +603,17 @@ const ChatInput = React.memo(({ onSend, replyTo, onCancelReply, selectedUser, so
                     <button
                         type="button"
                         onClick={() => {
+                            setText("Search the web for ");
+                            textareaRef.current?.focus();
+                        }}
+                        className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-sky-500/10 hover:bg-sky-500/20 border border-sky-500/30 text-sky-300 font-medium transition-all hover:scale-105 active:scale-95 flex-shrink-0"
+                    >
+                        <span>🌐</span>
+                        <span>Search Web</span>
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => {
                             setText("Brainstorm 3 creative ideas for ");
                             textareaRef.current?.focus();
                         }}

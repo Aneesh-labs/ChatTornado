@@ -257,8 +257,29 @@ async def generate_ai_text(prompt: str, chat_history: List[dict], system_prompt:
                     )
                 )
                 if response and response.text:
-                    print(f"[AI_SERVICE] Gemini SDK {model_name} succeeded!", flush=True)
-                    return response.text.strip()
+                    result_text = response.text.strip()
+                    # Check for Google Search grounding metadata
+                    try:
+                        candidate = response.candidates[0] if response.candidates else None
+                        grounding_meta = getattr(candidate, "grounding_metadata", None)
+                        if grounding_meta:
+                            chunks = getattr(grounding_meta, "grounding_chunks", []) or []
+                            web_links = []
+                            for chunk in chunks:
+                                web = getattr(chunk, "web", None)
+                                if web:
+                                    uri = getattr(web, "uri", None)
+                                    title = getattr(web, "title", None) or uri
+                                    if uri:
+                                        web_links.append(f"• [{title}]({uri})")
+                            if web_links and "Sources" not in result_text:
+                                unique_links = list(dict.fromkeys(web_links))[:5]
+                                result_text += "\n\n**🌐 Sources & Web References:**\n" + "\n".join(unique_links)
+                    except Exception as meta_e:
+                        print(f"[AI_SERVICE] Grounding metadata parse note: {meta_e}", flush=True)
+
+                    print(f"[AI_SERVICE] Gemini SDK {model_name} succeeded with web search grounding!", flush=True)
+                    return result_text
             except Exception as e:
                 print(f"[AI_SERVICE] Gemini SDK model {model_name} failed: {e}", flush=True)
                 continue
@@ -304,7 +325,8 @@ async def generate_ai_text(prompt: str, chat_history: List[dict], system_prompt:
                         "parts": [{"text": system_prompt}]
                     },
                     "contents": rest_contents,
-                    "safetySettings": rest_safety
+                    "safetySettings": rest_safety,
+                    "tools": [{"google_search": {}}]
                 }
                 async with httpx.AsyncClient(timeout=30.0) as http_client:
                     r = await http_client.post(rest_url, json=payload)
@@ -312,8 +334,20 @@ async def generate_ai_text(prompt: str, chat_history: List[dict], system_prompt:
                     if "candidates" in res_data and res_data["candidates"]:
                         candidate_text = res_data["candidates"][0].get("content", {}).get("parts", [{}])[0].get("text", "")
                         if candidate_text:
+                            final_cand = candidate_text.strip()
+                            grounding_meta = res_data["candidates"][0].get("groundingMetadata")
+                            if grounding_meta and "groundingChunks" in grounding_meta:
+                                web_links = []
+                                for chunk in grounding_meta["groundingChunks"]:
+                                    web = chunk.get("web", {})
+                                    if web.get("uri"):
+                                        title = web.get("title") or web.get("uri")
+                                        web_links.append(f"• [{title}]({web['uri']})")
+                                if web_links and "Sources" not in final_cand:
+                                    unique_links = list(dict.fromkeys(web_links))[:5]
+                                    final_cand += "\n\n**🌐 Sources & Web References:**\n" + "\n".join(unique_links)
                             print(f"[AI_SERVICE] REST API {model_name} succeeded!", flush=True)
-                            return candidate_text.strip()
+                            return final_cand
                     elif "error" in res_data:
                         print(f"[AI_SERVICE] REST API {model_name} error: {res_data['error'].get('message')}", flush=True)
             except Exception as re_err:
@@ -323,6 +357,7 @@ async def generate_ai_text(prompt: str, chat_history: List[dict], system_prompt:
         print(f"[AI_SERVICE] REST client exception: {rest_exc}", flush=True)
 
     return "⚡ VORTEX-9 received your message, but the neural synthesis model returned no text. Please verify your GEMINI_API_KEY tier and quota."
+
 
 
 
