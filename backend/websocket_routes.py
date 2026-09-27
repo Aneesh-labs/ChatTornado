@@ -1,4 +1,5 @@
 from datetime import datetime
+import time
 import logging
 
 from fastapi import APIRouter, WebSocket
@@ -164,6 +165,7 @@ async def websocket_endpoint(websocket: WebSocket):
 
                 packet = {
                     "type": "ghost_message",
+                    "id": data.get("id") or int(time.time() * 1000),
                     "sender_id": user_id,
                     "receiver_id": receiver_id,
                     "message": message_text,
@@ -184,6 +186,56 @@ async def websocket_endpoint(websocket: WebSocket):
                     packet
                 )
 
+                continue
+
+            # ---------- Ghost Chat Reaction ----------
+            if data.get("type") == "ghost_reaction":
+                receiver_id = data.get("receiver_id")
+                msg_id = data.get("message_id")
+                emoji = data.get("emoji")
+
+                if isinstance(receiver_id, int) and ghost_manager.exists(user_id, receiver_id):
+                    await manager.send_personal_message(
+                        receiver_id,
+                        {
+                            "type": "ghost_reaction",
+                            "sender_id": user_id,
+                            "message_id": msg_id,
+                            "emoji": emoji,
+                        }
+                    )
+                continue
+
+            # ---------- Ghost Chat Burn / Destroy ----------
+            if data.get("type") == "ghost_burn":
+                receiver_id = data.get("receiver_id")
+                msg_id = data.get("message_id")
+
+                if isinstance(receiver_id, int) and ghost_manager.exists(user_id, receiver_id):
+                    await manager.send_personal_message(
+                        receiver_id,
+                        {
+                            "type": "ghost_burn",
+                            "sender_id": user_id,
+                            "message_id": msg_id,
+                        }
+                    )
+                continue
+
+            # ---------- Ghost Chat Delete Message ----------
+            if data.get("type") == "ghost_delete":
+                receiver_id = data.get("receiver_id")
+                msg_id = data.get("message_id")
+
+                if isinstance(receiver_id, int) and ghost_manager.exists(user_id, receiver_id):
+                    await manager.send_personal_message(
+                        receiver_id,
+                        {
+                            "type": "ghost_delete",
+                            "sender_id": user_id,
+                            "message_id": msg_id,
+                        }
+                    )
                 continue
 
             # ---------- Ghost Chat Typing ----------

@@ -267,22 +267,42 @@ const StickerPicker = ({ onSelect, onClose }) => {
 const DrawingPad = ({ onSave, onClose }) => {
   const canvasRef = useRef(null);
   const isDrawing = useRef(false);
+  const [selectedColor, setSelectedColor] = useState('#a78bfa');
+  const [brushSize, setBrushSize] = useState(3);
 
-  useEffect(() => {
+  const colors = ['#a78bfa', '#22d3ee', '#4ade80', '#f87171', '#fbbf24', '#ffffff'];
+
+  const initCanvas = useCallback(() => {
     const canvas = canvasRef.current;
+    if (!canvas) return;
     const ctx = canvas.getContext('2d');
-    ctx.fillStyle = '#111';
+    ctx.fillStyle = '#0c0d14';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.strokeStyle = '#a78bfa';
-    ctx.lineWidth = 3;
     ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
   }, []);
 
+  useEffect(() => {
+    initCanvas();
+  }, [initCanvas]);
+
+  const getPos = (e) => {
+    const canvas = canvasRef.current;
+    const rect = canvas.getBoundingClientRect();
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    return {
+      x: (clientX - rect.left) * scaleX,
+      y: (clientY - rect.top) * scaleY,
+    };
+  };
+
   const startDrawing = (e) => {
+    if (e.touches) e.preventDefault();
     isDrawing.current = true;
-    const rect = canvasRef.current.getBoundingClientRect();
-    const x = (e.clientX || e.touches[0].clientX) - rect.left;
-    const y = (e.clientY || e.touches[0].clientY) - rect.top;
+    const { x, y } = getPos(e);
     const ctx = canvasRef.current.getContext('2d');
     ctx.beginPath();
     ctx.moveTo(x, y);
@@ -290,15 +310,18 @@ const DrawingPad = ({ onSave, onClose }) => {
 
   const draw = (e) => {
     if (!isDrawing.current) return;
-    const rect = canvasRef.current.getBoundingClientRect();
-    const x = (e.clientX || e.touches[0].clientX) - rect.left;
-    const y = (e.clientY || e.touches[0].clientY) - rect.top;
+    if (e.touches) e.preventDefault();
+    const { x, y } = getPos(e);
     const ctx = canvasRef.current.getContext('2d');
+    ctx.strokeStyle = selectedColor;
+    ctx.lineWidth = brushSize;
     ctx.lineTo(x, y);
     ctx.stroke();
   };
 
-  const stopDrawing = () => { isDrawing.current = false; };
+  const stopDrawing = () => {
+    isDrawing.current = false;
+  };
 
   const save = () => {
     const dataUrl = canvasRef.current.toDataURL('image/png');
@@ -306,27 +329,80 @@ const DrawingPad = ({ onSave, onClose }) => {
   };
 
   return (
-    <div className="flex flex-col items-center gap-2">
-      <canvas
-        ref={canvasRef}
-        width={300}
-        height={200}
-        className="border border-white/20 rounded-lg touch-none"
-        onMouseDown={startDrawing}
-        onMouseMove={draw}
-        onMouseUp={stopDrawing}
-        onMouseLeave={stopDrawing}
-        onTouchStart={startDrawing}
-        onTouchMove={draw}
-        onTouchEnd={stopDrawing}
-      />
-      <div className="flex gap-2.5 mt-1">
-        <button type="button" onClick={save} className="px-4 py-2 bg-violet-600 hover:bg-violet-500 text-white rounded-xl text-xs font-semibold shadow-md active:scale-95 transition-all">
-          Attach Drawing
+    <div className="flex flex-col items-center gap-3 w-full">
+      {/* Palette & Brush Sizes */}
+      <div className="flex items-center justify-between w-full px-1">
+        {/* Colors */}
+        <div className="flex items-center gap-2">
+          {colors.map(c => (
+            <button
+              key={c}
+              type="button"
+              onClick={() => setSelectedColor(c)}
+              style={{ backgroundColor: c }}
+              className={`w-6 h-6 rounded-full transition-transform ${selectedColor === c ? 'scale-125 ring-2 ring-white shadow-md' : 'opacity-70 hover:opacity-100'}`}
+              title={c}
+            />
+          ))}
+        </div>
+
+        {/* Brush Size */}
+        <div className="flex items-center gap-1.5 bg-white/5 border border-white/10 rounded-lg px-2 py-1">
+          {[2, 4, 8].map(s => (
+            <button
+              key={s}
+              type="button"
+              onClick={() => setBrushSize(s)}
+              className={`text-[11px] px-1.5 py-0.5 rounded font-medium ${brushSize === s ? 'bg-violet-500 text-white' : 'text-white/50 hover:text-white'}`}
+            >
+              {s === 2 ? 'Thin' : s === 4 ? 'Med' : 'Thick'}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Canvas */}
+      <div className="relative rounded-xl overflow-hidden border border-white/20 shadow-inner w-full flex justify-center bg-[#0c0d14]">
+        <canvas
+          ref={canvasRef}
+          width={340}
+          height={220}
+          className="touch-none cursor-crosshair w-full max-w-[340px] h-[220px]"
+          onMouseDown={startDrawing}
+          onMouseMove={draw}
+          onMouseUp={stopDrawing}
+          onMouseLeave={stopDrawing}
+          onTouchStart={startDrawing}
+          onTouchMove={draw}
+          onTouchEnd={stopDrawing}
+        />
+      </div>
+
+      {/* Buttons */}
+      <div className="flex items-center justify-between w-full gap-2 mt-1">
+        <button
+          type="button"
+          onClick={initCanvas}
+          className="px-3 py-1.5 bg-white/5 hover:bg-white/10 text-white/60 hover:text-white rounded-xl text-xs font-medium border border-white/10 transition-all active:scale-95"
+        >
+          Clear
         </button>
-        <button type="button" onClick={onClose} className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white/80 rounded-xl text-xs font-medium active:scale-95 transition-all">
-          Cancel
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-3.5 py-1.5 bg-white/10 hover:bg-white/20 text-white/80 rounded-xl text-xs font-medium active:scale-95 transition-all"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={save}
+            className="px-4 py-1.5 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white rounded-xl text-xs font-semibold shadow-md active:scale-95 transition-all"
+          >
+            Attach Drawing
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -383,6 +459,7 @@ const GhostChatOverlay = ({ ghostChat, socket, onClose }) => {
   const [imageData, setImageData] = useState(null);
   const [showTools, setShowTools] = useState(false);
   const [activeMsgId, setActiveMsgId] = useState(null);
+  const [previewMedia, setPreviewMedia] = useState(null);
 
   // Refs
   const scrollRef = useRef(null);
@@ -408,8 +485,27 @@ const GhostChatOverlay = ({ ghostChat, socket, onClose }) => {
     setIsInvited(invited);
     setCurrentUser(user);
     setIsOpen(open);
-    setMessages(initialMessages);
     setTyping(initialTyping);
+
+    if (initialMessages && initialMessages.length > 0) {
+      setMessages(prev => {
+        const prevMap = new Map(prev.map(m => [String(m.id), m]));
+        initialMessages.forEach(im => {
+          const idStr = String(im.id);
+          if (prevMap.has(idStr)) {
+            const existing = prevMap.get(idStr);
+            prevMap.set(idStr, {
+              ...im,
+              ...existing,
+              reactions: { ...(im.reactions || {}), ...(existing.reactions || {}) }
+            });
+          } else {
+            prevMap.set(idStr, im);
+          }
+        });
+        return Array.from(prevMap.values());
+      });
+    }
   }, [connected, invited, user, open, initialMessages, initialTyping]);
 
   // --- Draft persistence ---
@@ -453,7 +549,13 @@ const GhostChatOverlay = ({ ghostChat, socket, onClose }) => {
   useEffect(() => {
     if (!isOpen) return;
     const handleKeyDown = (e) => {
-      if (e.key === "Escape") handleClose();
+      if (e.key === "Escape") {
+        if (previewMedia) {
+          setPreviewMedia(null);
+        } else {
+          handleClose();
+        }
+      }
       if ((e.ctrlKey || e.metaKey) && e.key === 'f') { e.preventDefault(); setShowSearch(!showSearch); }
       if (e.key === 'Tab' && aiSuggestions.length > 0) {
         e.preventDefault();
@@ -462,7 +564,7 @@ const GhostChatOverlay = ({ ghostChat, socket, onClose }) => {
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [isOpen, showSearch, aiSuggestions]);
+  }, [isOpen, showSearch, aiSuggestions, previewMedia]);
 
   // --- Ephemeral countdown ---
   useEffect(() => {
@@ -480,26 +582,44 @@ const GhostChatOverlay = ({ ghostChat, socket, onClose }) => {
     return () => clearInterval(interval);
   }, [isOpen]);
 
-  // --- Self-destruct timers (simplified) ---
+  // --- Unified Self-Destruct & Burn-on-Read Timers ---
   useEffect(() => {
-    const timers = messages.map(msg => {
-      if (msg.selfDestruct && msg.selfDestruct > 0) {
-        const interval = setInterval(() => {
-          setMessages(prev => prev.map(m => {
-            if (m.id === msg.id && m.selfDestruct > 0) {
-              const newTime = m.selfDestruct - 1;
-              if (newTime <= 0) return null;
-              return { ...m, selfDestruct: newTime };
+    const interval = setInterval(() => {
+      setMessages(prev => {
+        let changed = false;
+        const updated = prev.map(m => {
+          // 1. Self-destruct message timer
+          if (m.selfDestruct && m.selfDestruct > 0) {
+            changed = true;
+            const nextSec = m.selfDestruct - 1;
+            if (nextSec <= 0) return null;
+            return { ...m, selfDestruct: nextSec };
+          }
+          // 2. Active Burn-on-read countdown
+          if (m.burningCountdown && m.burningCountdown > 0) {
+            changed = true;
+            const nextBurn = m.burningCountdown - 1;
+            if (nextBurn <= 0) {
+              if (socket?.readyState === WebSocket.OPEN && currentUser?.id) {
+                socket.send(JSON.stringify({
+                  type: "ghost_burn",
+                  receiver_id: currentUser.id,
+                  message_id: m.id
+                }));
+              }
+              return null;
             }
-            return m;
-          }).filter(Boolean));
-        }, 1000);
-        return interval;
-      }
-      return null;
-    }).filter(Boolean);
-    return () => timers.forEach(clearInterval);
-  }, [messages]);
+            return { ...m, burningCountdown: nextBurn };
+          }
+          return m;
+        }).filter(Boolean);
+
+        return changed ? updated : prev;
+      });
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [socket, currentUser]);
 
   // --- Voice recognition ---
   useEffect(() => {
@@ -602,15 +722,17 @@ const GhostChatOverlay = ({ ghostChat, socket, onClose }) => {
     // Update sentiment
     if (ENABLE_MOOD_BG) setSentiment(getSentiment(text));
 
+    const msgId = Date.now();
     const newMsg = {
-      id: Date.now(),
+      id: msgId,
       text,
       senderId: myUserId.current,
-      timestamp: new Date().toLocaleTimeString(),
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       reactions: {},
       read: false,
       selfDestruct: selfDestructTimer > 0 ? selfDestructTimer : null,
       isBurn: burnAfterReading,
+      revealed: true, // Sender has already seen what they typed
       drawing: drawingData || null,
       image: imageData || null,
     };
@@ -618,7 +740,6 @@ const GhostChatOverlay = ({ ghostChat, socket, onClose }) => {
     setMessages(prev => [...prev, newMsg]);
     if (!firstMessageSent) {
       setFirstMessageSent(true);
-      // Confetti effect handled by a ref, but we’ll keep it simple
       if (scrollRef.current) {
         const container = scrollRef.current.closest('.fixed');
         if (container) fireConfetti(container);
@@ -632,6 +753,7 @@ const GhostChatOverlay = ({ ghostChat, socket, onClose }) => {
 
     socket.send(JSON.stringify({
       type: "ghost_message",
+      id: msgId,
       receiver_id: currentUser.id,
       message: text,
       selfDestruct: selfDestructTimer,
@@ -690,8 +812,6 @@ const GhostChatOverlay = ({ ghostChat, socket, onClose }) => {
       return;
     }
     socket.send(JSON.stringify({ type: "ghost_accept", receiver_id: currentUser.id }));
-    // Optionally, you can set connected true here for testing if server doesn't respond
-    // setIsConnected(true);
   }, [socket, currentUser]);
 
   // --- Close ---
@@ -708,22 +828,46 @@ const GhostChatOverlay = ({ ghostChat, socket, onClose }) => {
     onClose();
   }, [socket, currentUser, onClose]);
 
+  // --- Reveal Burn-on-Read Message ---
+  const handleRevealBurn = useCallback((msgId) => {
+    playSound('typing', muted);
+    setMessages(prev => prev.map(m => {
+      if (String(m.id) === String(msgId)) {
+        return {
+          ...m,
+          revealed: true,
+          burningCountdown: 5 // 5 seconds burn countdown
+        };
+      }
+      return m;
+    }));
+  }, [muted]);
+
   // --- Reactions ---
   const handleReaction = useCallback((msgId, emoji) => {
+    playSound('receive', muted);
     setMessages(prev => prev.map(m => {
-      if (m.id === msgId) {
-        const newReactions = { ...m.reactions };
+      if (String(m.id) === String(msgId)) {
+        const newReactions = { ...(m.reactions || {}) };
         newReactions[emoji] = (newReactions[emoji] || 0) + 1;
         return { ...m, reactions: newReactions };
       }
       return m;
     }));
-  }, []);
+    if (socket?.readyState === WebSocket.OPEN && currentUser?.id) {
+      socket.send(JSON.stringify({
+        type: "ghost_reaction",
+        receiver_id: currentUser.id,
+        message_id: msgId,
+        emoji
+      }));
+    }
+  }, [socket, currentUser, muted]);
 
   // --- Edit/Delete ---
   const handleEdit = useCallback((msgId, newText) => {
     setMessages(prev => prev.map(m => {
-      if (m.id === msgId && m.senderId === myUserId.current) {
+      if (String(m.id) === String(msgId) && String(m.senderId) === String(myUserId.current)) {
         return { ...m, text: newText };
       }
       return m;
@@ -731,8 +875,15 @@ const GhostChatOverlay = ({ ghostChat, socket, onClose }) => {
   }, []);
 
   const handleDelete = useCallback((msgId) => {
-    setMessages(prev => prev.filter(m => m.id !== msgId));
-  }, []);
+    setMessages(prev => prev.filter(m => String(m.id) !== String(msgId)));
+    if (socket?.readyState === WebSocket.OPEN && currentUser?.id) {
+      socket.send(JSON.stringify({
+        type: "ghost_delete",
+        receiver_id: currentUser.id,
+        message_id: msgId
+      }));
+    }
+  }, [socket, currentUser]);
 
   // --- Toggles ---
   const toggleBurn = useCallback(() => setBurnAfterReading(prev => !prev), []);
@@ -759,7 +910,7 @@ const GhostChatOverlay = ({ ghostChat, socket, onClose }) => {
   const receiverName = currentUser?.username || "Unknown";
   const isInvitePending = isInvited && !isConnected && messages.length === 0;
   const filteredMessages = searchQuery
-    ? messages.filter(m => m.text.toLowerCase().includes(searchQuery.toLowerCase()))
+    ? messages.filter(m => (m.text || '').toLowerCase().includes(searchQuery.toLowerCase()))
     : messages;
 
   const theme = ghostMode === 'friendly' ? 'violet' : 'red';
@@ -818,7 +969,7 @@ const GhostChatOverlay = ({ ghostChat, socket, onClose }) => {
             exit={{ y: -60 }}
             className="absolute top-0 left-0 right-0 z-30 bg-emerald-500/30 backdrop-blur-xl border-b border-emerald-500/30 py-1.5 text-center text-xs font-medium text-emerald-200"
           >
-            👻 Connected — Holographic link established
+            👻 Connected — Holographic quantum link established
           </motion.div>
         )}
       </AnimatePresence>
@@ -846,7 +997,7 @@ const GhostChatOverlay = ({ ghostChat, socket, onClose }) => {
               </h2>
               <span className="flex items-center gap-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 px-1.5 py-0.2 sm:px-2 sm:py-0.5 flex-shrink-0">
                 <Icon path={ICONS.shield} className="h-2 w-2 text-emerald-400" />
-                <span className="text-[8px] sm:text-[9px] font-semibold uppercase tracking-wider text-emerald-400">P2P</span>
+                <span className="text-[8px] sm:text-[9px] font-semibold uppercase tracking-wider text-emerald-400">RAM-ONLY P2P</span>
               </span>
             </div>
             <div className="flex items-center gap-1.5 text-[11px] text-white/40 truncate">
@@ -861,12 +1012,23 @@ const GhostChatOverlay = ({ ghostChat, socket, onClose }) => {
 
         <div className="flex items-center gap-1 sm:gap-1.5 flex-shrink-0">
           {/* Ephemeral countdown timer badge */}
-          <div className="flex items-center gap-1 rounded-full bg-white/5 border border-white/10 px-2 py-1 text-[10px] font-mono text-violet-300/90" title="Time remaining before link expires">
+          <div
+            className={`flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-mono transition-all ${
+              ephemeralCountdown < 60
+                ? 'bg-red-500/20 border-red-500/40 text-red-300 animate-pulse'
+                : 'bg-white/5 border-white/10 text-violet-300/90'
+            }`}
+            title="Session self-destruct timer"
+          >
             <Icon path={ICONS.timer} className="h-3 w-3 text-violet-400" />
             <span>{Math.floor(ephemeralCountdown / 60)}:{(ephemeralCountdown % 60).toString().padStart(2, '0')}</span>
           </div>
 
-          <button onClick={() => setShowSearch(!showSearch)} className="p-1.5 rounded-xl hover:bg-white/10 text-white/60 active:scale-95 transition-transform" title="Search messages">
+          <button
+            onClick={() => setShowSearch(!showSearch)}
+            className={`p-1.5 rounded-xl transition-all active:scale-95 ${showSearch ? 'bg-violet-500/30 text-violet-300 border border-violet-500/30' : 'hover:bg-white/10 text-white/60'}`}
+            title="Search ghost messages"
+          >
             <Icon path={ICONS.search} className="h-4 w-4" />
           </button>
           <button onClick={() => setMuted(!muted)} className="p-1.5 rounded-xl hover:bg-white/10 text-white/60 active:scale-95 transition-transform hidden sm:flex" title={muted ? "Unmute" : "Mute"}>
@@ -888,35 +1050,52 @@ const GhostChatOverlay = ({ ghostChat, socket, onClose }) => {
         </div>
       </motion.div>
 
-      {/* Search bar */}
+      {/* Search bar with match count & clear */}
       <AnimatePresence>
         {showSearch && (
           <motion.div
-            initial={{ height: 0 }}
-            animate={{ height: 'auto' }}
-            exit={{ height: 0 }}
-            className="px-4 py-2 border-b border-white/[0.06] bg-white/[0.02]"
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            className="px-4 py-2 border-b border-white/[0.06] bg-black/40 backdrop-blur-xl flex items-center gap-2"
           >
-            <input
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="🔍 Search ghost messages..."
-              className="w-full rounded-lg bg-white/5 border border-white/10 px-3 py-1.5 text-sm text-white/70 placeholder:text-white/20 outline-none"
-            />
+            <div className="relative flex-1">
+              <input
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="🔍 Search in this ghost session..."
+                className="w-full rounded-xl bg-white/5 border border-white/15 px-3 py-1.5 text-xs sm:text-sm text-white/90 placeholder:text-white/30 outline-none focus:border-violet-500/50"
+                autoFocus
+              />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-white/40 hover:text-white"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+            {searchQuery && (
+              <span className="text-[11px] text-violet-300/80 font-mono flex-shrink-0 bg-violet-500/10 px-2 py-1 rounded-lg border border-violet-500/20">
+                {filteredMessages.length} match{filteredMessages.length !== 1 ? 'es' : ''}
+              </span>
+            )}
           </motion.div>
         )}
       </AnimatePresence>
 
       {/* Subtitle */}
-      <div className="relative z-10 flex items-center justify-center gap-2 py-2.5">
-        <Icon path={ICONS.lock} className="h-3 w-3 text-white/15" />
-        <p className="text-[10px] font-medium tracking-wider text-white/20 uppercase">Ephemeral • Quantum • 2030</p>
+      <div className="relative z-10 flex items-center justify-center gap-2 py-2">
+        <Icon path={ICONS.lock} className="h-3 w-3 text-violet-400/40" />
+        <p className="text-[10px] font-medium tracking-wider text-white/25 uppercase">Zero Disk Logs • Pure RAM Transmission • Ephemeral</p>
       </div>
 
       {/* CHAT AREA */}
       <div
         ref={scrollRef}
-        className="relative z-10 flex-1 overflow-y-auto overscroll-y-contain scrollbar-thin scrollbar-thumb-white/5 scrollbar-track-transparent"
+        className="relative z-10 flex-1 overflow-y-auto overscroll-y-contain scrollbar-thin scrollbar-thumb-white/5 scrollbar-track-transparent px-2 sm:px-4"
       >
         {isInvitePending && (
           <motion.div
@@ -931,14 +1110,14 @@ const GhostChatOverlay = ({ ghostChat, socket, onClose }) => {
             >
               👻
             </motion.div>
-            <p className="text-sm text-white/50">{receiverName} invites you to a quantum chat</p>
+            <p className="text-sm text-white/50 text-center">{receiverName} invites you to an encrypted ghost session</p>
             <motion.button
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
               animate={{ boxShadow: ["0 0 0 0 rgba(139,92,246,0.4)", "0 0 0 15px rgba(139,92,246,0)"] }}
               transition={{ duration: 1.5, repeat: Infinity }}
               onClick={handleAcceptInvite}
-              className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-violet-500/40 to-indigo-500/30 px-6 py-3 text-sm font-semibold text-violet-200 backdrop-blur-sm"
+              className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-violet-500/50 to-indigo-500/40 border border-violet-400/30 px-6 py-3 text-sm font-semibold text-violet-100 shadow-xl backdrop-blur-md"
             >
               <Icon path={ICONS.check} className="h-4 w-4" />
               Enter the Hologram
@@ -949,96 +1128,159 @@ const GhostChatOverlay = ({ ghostChat, socket, onClose }) => {
         {!isInvitePending && filteredMessages.length === 0 && !isConnected && (
           <div className="flex h-full flex-col items-center justify-center gap-4 px-8">
             <div className="text-6xl opacity-10">👻</div>
-            <p className="text-sm text-white/20">Awaiting ghost connection...</p>
+            <p className="text-sm text-white/30 font-medium">Awaiting ghost connection...</p>
           </div>
         )}
 
-        <div className="pb-4 pt-2">
+        <div className="pb-4 pt-2 space-y-3">
           <AnimatePresence initial={false}>
             {filteredMessages.map((msg) => {
-              const isMe = msg.senderId === myUserId.current;
+              // Exact type-safe string comparison to guarantee distinct left/right alignment
+              const isMe = String(msg.senderId) === String(myUserId.current) || msg.senderId === 'me';
               const isActionVisible = (hoveredMsgId === msg.id) || (activeMsgId === msg.id);
+
+              // Burn on Read logic: if receiver hasn't revealed yet
+              const isUnrevealedBurn = msg.isBurn && !isMe && !msg.revealed;
+              const isBurningNow = msg.burningCountdown > 0;
 
               return (
                 <motion.div
                   key={msg.id}
                   initial={{ opacity: 0, y: 15, scale: 0.98 }}
                   animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, scale: 0.8 }}
+                  exit={{ opacity: 0, scale: 0.7, filter: "blur(8px)" }}
                   transition={{ type: "spring", stiffness: 400, damping: 25 }}
-                  className={`flex ${isMe ? "justify-end" : "justify-start"} px-3 sm:px-4 py-1.5 relative`}
+                  className={`flex flex-col ${isMe ? "items-end" : "items-start"} px-1 sm:px-2 relative`}
                   onMouseEnter={() => setHoveredMsgId(msg.id)}
                   onMouseLeave={() => setHoveredMsgId(null)}
                 >
+                  {/* Author Header Tag */}
+                  <div className={`flex items-center gap-1.5 mb-1 px-1 text-[10px] font-medium tracking-wide ${isMe ? "text-violet-300/70" : "text-cyan-300/70"}`}>
+                    <span>{isMe ? "You" : (receiverName || "Ghost Peer")}</span>
+                    <span className="text-white/20">•</span>
+                    <span className="text-white/30 font-mono">{msg.timestamp || "just now"}</span>
+                  </div>
+
                   <div
                     onClick={() => setActiveMsgId(prev => prev === msg.id ? null : msg.id)}
-                    className={`max-w-[85%] sm:max-w-[70%] rounded-2xl px-3.5 py-2 sm:px-4 sm:py-2.5 text-sm leading-relaxed shadow-lg backdrop-blur-md relative cursor-pointer select-text touch-manipulation transition-all
+                    className={`max-w-[88%] sm:max-w-[75%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed backdrop-blur-xl relative cursor-pointer select-text touch-manipulation transition-all
                       ${isMe
-                        ? `bg-gradient-to-br from-violet-600/30 to-indigo-600/20 text-white/90 rounded-br-sm border border-violet-500/20`
-                        : 'bg-white/5 text-white/80 rounded-bl-sm border border-white/10'
-                      } ${activeMsgId === msg.id ? 'ring-1 ring-violet-400/50' : ''}`}
+                        ? 'bg-gradient-to-br from-violet-600/35 via-indigo-600/25 to-purple-900/20 text-white border border-violet-500/30 rounded-br-xs shadow-[0_4px_25px_rgba(139,92,246,0.18)]'
+                        : 'bg-[#101322]/85 text-white/90 border border-cyan-500/25 rounded-bl-xs shadow-[0_4px_25px_rgba(34,211,238,0.10)]'
+                      } ${activeMsgId === msg.id ? 'ring-2 ring-violet-400/60' : ''} ${isBurningNow ? 'border-amber-500/80 shadow-[0_0_20px_rgba(245,158,11,0.4)]' : ''}`}
                   >
-                    {msg.drawing && (
-                      <img src={msg.drawing} alt="drawing" className="max-w-[200px] sm:max-w-[260px] rounded-lg mb-2 border border-white/10" />
-                    )}
-                    {msg.image && (
-                      <img src={msg.image} alt="attachment" className="max-w-[200px] sm:max-w-[260px] rounded-lg mb-2 border border-white/10" />
-                    )}
-
-                    {editingMsgId === msg.id ? (
-                      <div className="flex flex-col gap-1.5 mt-1" onClick={(e) => e.stopPropagation()}>
-                        <input
-                          value={editValue}
-                          onChange={(e) => setEditValue(e.target.value)}
-                          className="w-full bg-black/60 border border-violet-500/50 rounded-lg px-2.5 py-1.5 text-xs text-white outline-none focus:border-violet-400"
-                          autoFocus
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") {
-                              handleEdit(msg.id, editValue);
-                              setEditingMsgId(null);
-                            } else if (e.key === "Escape") {
-                              setEditingMsgId(null);
-                            }
-                          }}
-                        />
-                        <div className="flex justify-end gap-1.5">
-                          <button
-                            type="button"
-                            onClick={() => { handleEdit(msg.id, editValue); setEditingMsgId(null); }}
-                            className="px-2 py-0.5 bg-violet-500/40 text-violet-200 hover:bg-violet-500/60 rounded text-[11px] font-medium"
-                          >
-                            Save
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setEditingMsgId(null)}
-                            className="px-2 py-0.5 bg-white/10 text-white/60 hover:bg-white/20 rounded text-[11px]"
-                          >
-                            Cancel
-                          </button>
+                    {/* Burn-on-Read: Cover screen if unrevealed */}
+                    {isUnrevealedBurn ? (
+                      <div className="flex flex-col items-center gap-2 py-2 px-1 text-center" onClick={(e) => { e.stopPropagation(); handleRevealBurn(msg.id); }}>
+                        <div className="flex items-center gap-1.5 text-amber-300 font-semibold text-xs">
+                          <Icon path={ICONS.burn} className="h-4 w-4 animate-bounce text-amber-400" />
+                          <span>Secret Burn-on-Read Message</span>
                         </div>
+                        <p className="text-[11px] text-white/50">This message will self-destruct 5 seconds after you tap.</p>
+                        <button
+                          type="button"
+                          className="mt-1 px-3.5 py-1.5 bg-amber-500/30 hover:bg-amber-500/40 border border-amber-400/40 text-amber-200 rounded-xl text-xs font-semibold shadow-md active:scale-95 transition-all"
+                        >
+                          🔥 Tap to Reveal & Burn
+                        </button>
                       </div>
                     ) : (
-                      <p className="break-words whitespace-pre-wrap select-text">{msg.text}</p>
+                      <>
+                        {/* Drawing Attachment */}
+                        {msg.drawing && (
+                          <div className="relative group mb-2 overflow-hidden rounded-xl border border-white/15 bg-black/40">
+                            <img
+                              src={msg.drawing}
+                              alt="ghost sketch"
+                              className="max-w-[240px] sm:max-w-[300px] max-h-[200px] object-contain rounded-xl cursor-zoom-in transition-transform hover:scale-[1.02]"
+                              onClick={(e) => { e.stopPropagation(); setPreviewMedia(msg.drawing); }}
+                            />
+                            <div className="absolute top-1.5 right-1.5 bg-black/60 backdrop-blur-md rounded-md px-1.5 py-0.5 text-[9px] text-white/60">
+                              🔍 Click to zoom
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Image Attachment */}
+                        {msg.image && (
+                          <div className="relative group mb-2 overflow-hidden rounded-xl border border-white/15 bg-black/40">
+                            <img
+                              src={msg.image}
+                              alt="ghost attachment"
+                              className="max-w-[240px] sm:max-w-[300px] max-h-[220px] object-cover rounded-xl cursor-zoom-in transition-transform hover:scale-[1.02]"
+                              onClick={(e) => { e.stopPropagation(); setPreviewMedia(msg.image); }}
+                            />
+                            <div className="absolute top-1.5 right-1.5 bg-black/60 backdrop-blur-md rounded-md px-1.5 py-0.5 text-[9px] text-white/60">
+                              🔍 Click to zoom
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Message Text or Inline Edit */}
+                        {editingMsgId === msg.id ? (
+                          <div className="flex flex-col gap-1.5 mt-1" onClick={(e) => e.stopPropagation()}>
+                            <input
+                              value={editValue}
+                              onChange={(e) => setEditValue(e.target.value)}
+                              className="w-full bg-black/60 border border-violet-500/50 rounded-lg px-2.5 py-1.5 text-xs text-white outline-none focus:border-violet-400"
+                              autoFocus
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                  handleEdit(msg.id, editValue);
+                                  setEditingMsgId(null);
+                                } else if (e.key === "Escape") {
+                                  setEditingMsgId(null);
+                                }
+                              }}
+                            />
+                            <div className="flex justify-end gap-1.5">
+                              <button
+                                type="button"
+                                onClick={() => { handleEdit(msg.id, editValue); setEditingMsgId(null); }}
+                                className="px-2 py-0.5 bg-violet-500/40 text-violet-200 hover:bg-violet-500/60 rounded text-[11px] font-medium"
+                              >
+                                Save
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setEditingMsgId(null)}
+                                className="px-2 py-0.5 bg-white/10 text-white/60 hover:bg-white/20 rounded text-[11px]"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          msg.text && <p className="break-words whitespace-pre-wrap select-text">{msg.text}</p>
+                        )}
+                      </>
                     )}
 
-                    {/* Reactions display */}
+                    {/* Reactions Display */}
                     {Object.entries(msg.reactions || {}).length > 0 && (
-                      <div className="flex flex-wrap gap-1 mt-1.5 pt-1 border-t border-white/5">
+                      <div className="flex flex-wrap gap-1 mt-1.5 pt-1 border-t border-white/10">
                         {Object.entries(msg.reactions || {}).map(([emoji, count]) => (
-                          <span key={emoji} className="inline-flex items-center gap-0.5 bg-white/10 rounded-full px-1.5 py-0.5 text-[11px]">
+                          <span key={emoji} className="inline-flex items-center gap-1 bg-white/10 border border-white/10 rounded-full px-2 py-0.5 text-[11px] shadow-sm">
                             <span>{emoji}</span>
-                            {count > 1 && <span className="text-[9px] text-white/60 font-bold">{count}</span>}
+                            {count > 1 && <span className="text-[10px] text-white/70 font-bold">{count}</span>}
                           </span>
                         ))}
                       </div>
                     )}
 
-                    {/* Badges: Self-destruct & Burn */}
+                    {/* Live Badges: Self-destruct & Burn Status */}
                     {(msg.selfDestruct > 0 || msg.isBurn) && (
-                      <div className="flex items-center gap-1.5 mt-1 text-[10px] text-white/30">
-                        {msg.selfDestruct > 0 && <span>⏳ {msg.selfDestruct}s</span>}
-                        {msg.isBurn && <span className="text-amber-400/70">🔥 Burn on read</span>}
+                      <div className="flex items-center gap-2 mt-1.5 pt-1 border-t border-white/5 text-[10px]">
+                        {msg.selfDestruct > 0 && (
+                          <span className="flex items-center gap-1 font-mono text-violet-300/90 bg-violet-500/10 px-1.5 py-0.5 rounded border border-violet-500/20">
+                            ⏳ {msg.selfDestruct}s remaining
+                          </span>
+                        )}
+                        {msg.isBurn && (
+                          <span className={`flex items-center gap-1 font-semibold ${isBurningNow ? 'text-amber-400 animate-pulse' : 'text-amber-300/80'}`}>
+                            🔥 {isBurningNow ? `Disintegrating in ${msg.burningCountdown}s...` : isMe ? 'Burn on read (armed)' : 'Burn on read'}
+                          </span>
+                        )}
                       </div>
                     )}
 
@@ -1048,19 +1290,20 @@ const GhostChatOverlay = ({ ghostChat, socket, onClose }) => {
                         initial={{ opacity: 0, scale: 0.9, y: 4 }}
                         animate={{ opacity: 1, scale: 1, y: 0 }}
                         exit={{ opacity: 0, scale: 0.9 }}
-                        className={`absolute -top-8 ${isMe ? 'right-0' : 'left-0'} flex items-center gap-0.5 bg-black/80 backdrop-blur-xl px-2 py-1 rounded-xl border border-white/15 shadow-2xl z-30`}
+                        className={`absolute -top-9 ${isMe ? 'right-0' : 'left-0'} flex items-center gap-1 bg-[#151728]/95 backdrop-blur-2xl px-2.5 py-1 rounded-2xl border border-white/20 shadow-2xl z-30`}
                         onClick={(e) => e.stopPropagation()}
                       >
-                        <button type="button" onClick={() => { handleReaction(msg.id, '👻'); setActiveMsgId(null); }} className="p-1 text-sm hover:scale-125 transition-transform">👻</button>
-                        <button type="button" onClick={() => { handleReaction(msg.id, '💀'); setActiveMsgId(null); }} className="p-1 text-sm hover:scale-125 transition-transform">💀</button>
-                        <button type="button" onClick={() => { handleReaction(msg.id, '🔥'); setActiveMsgId(null); }} className="p-1 text-sm hover:scale-125 transition-transform">🔥</button>
-                        <button type="button" onClick={() => { handleReaction(msg.id, '❤️'); setActiveMsgId(null); }} className="p-1 text-sm hover:scale-125 transition-transform">❤️</button>
+                        <button type="button" onClick={() => { handleReaction(msg.id, '👻'); setActiveMsgId(null); }} className="p-1 text-sm hover:scale-130 transition-transform">👻</button>
+                        <button type="button" onClick={() => { handleReaction(msg.id, '💀'); setActiveMsgId(null); }} className="p-1 text-sm hover:scale-130 transition-transform">💀</button>
+                        <button type="button" onClick={() => { handleReaction(msg.id, '🔥'); setActiveMsgId(null); }} className="p-1 text-sm hover:scale-130 transition-transform">🔥</button>
+                        <button type="button" onClick={() => { handleReaction(msg.id, '❤️'); setActiveMsgId(null); }} className="p-1 text-sm hover:scale-130 transition-transform">❤️</button>
+                        <button type="button" onClick={() => { handleReaction(msg.id, '⚡'); setActiveMsgId(null); }} className="p-1 text-sm hover:scale-130 transition-transform">⚡</button>
                         {isMe && (
                           <>
-                            <div className="w-[1px] h-3 bg-white/20 mx-0.5" />
+                            <div className="w-[1px] h-3.5 bg-white/20 mx-0.5" />
                             <button
                               type="button"
-                              onClick={() => { setEditingMsgId(msg.id); setEditValue(msg.text); setActiveMsgId(null); }}
+                              onClick={() => { setEditingMsgId(msg.id); setEditValue(msg.text || ''); setActiveMsgId(null); }}
                               className="p-1 text-xs text-white/70 hover:text-white"
                               title="Edit message"
                             >
@@ -1095,61 +1338,61 @@ const GhostChatOverlay = ({ ghostChat, socket, onClose }) => {
       >
         {/* Drawing Staged Preview */}
         {drawingData && (
-          <div className="mb-2 flex items-center gap-2 bg-violet-500/20 border border-violet-500/30 rounded-xl px-2.5 py-1.5 w-fit">
-            <img src={drawingData} alt="drawing" className="h-8 w-12 object-cover rounded border border-white/20" />
-            <span className="text-xs text-violet-200">Drawing attached</span>
-            <button onClick={() => setDrawingData(null)} className="text-white/60 hover:text-white ml-1 text-xs p-1">✕</button>
+          <div className="mb-2 flex items-center gap-2 bg-violet-500/20 border border-violet-500/30 rounded-xl px-2.5 py-1.5 w-fit shadow-md">
+            <img src={drawingData} alt="drawing" className="h-9 w-14 object-cover rounded-lg border border-white/20 bg-black/40" />
+            <span className="text-xs text-violet-200 font-medium">Drawing attached</span>
+            <button onClick={() => setDrawingData(null)} className="text-white/60 hover:text-white ml-1 text-xs p-1" title="Remove drawing">✕</button>
           </div>
         )}
 
         {/* Image Staged Preview */}
         {imageData && (
-          <div className="mb-2 flex items-center gap-2 bg-violet-500/20 border border-violet-500/30 rounded-xl px-2.5 py-1.5 w-fit">
-            <img src={imageData} alt="attachment" className="h-8 w-12 object-cover rounded border border-white/20" />
-            <span className="text-xs text-violet-200">Image attached</span>
-            <button onClick={() => setImageData(null)} className="text-white/60 hover:text-white ml-1 text-xs p-1">✕</button>
+          <div className="mb-2 flex items-center gap-2 bg-violet-500/20 border border-violet-500/30 rounded-xl px-2.5 py-1.5 w-fit shadow-md">
+            <img src={imageData} alt="attachment" className="h-9 w-14 object-cover rounded-lg border border-white/20 bg-black/40" />
+            <span className="text-xs text-violet-200 font-medium">Image attached</span>
+            <button onClick={() => setImageData(null)} className="text-white/60 hover:text-white ml-1 text-xs p-1" title="Remove image">✕</button>
           </div>
         )}
 
-        {/* Quick Tools Drawer (collapsible or contextual) */}
+        {/* Quick Tools Drawer */}
         <AnimatePresence>
           {showTools && (
             <motion.div
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: "auto" }}
               exit={{ opacity: 0, height: 0 }}
-              className="overflow-x-auto scrollbar-none pb-2 mb-1 flex items-center gap-1.5 touch-manipulation"
+              className="overflow-x-auto scrollbar-none pb-2 mb-1.5 flex items-center gap-2 touch-manipulation"
             >
               {/* Burn toggle */}
               <button
                 type="button"
                 onClick={toggleBurn}
-                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-medium transition-all flex-shrink-0 ${burnAfterReading
-                    ? 'bg-amber-500/20 border border-amber-500/40 text-amber-300 shadow-sm'
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium transition-all flex-shrink-0 ${burnAfterReading
+                    ? 'bg-amber-500/25 border border-amber-500/50 text-amber-300 shadow-[0_0_12px_rgba(245,158,11,0.3)]'
                     : 'bg-white/5 border border-white/10 text-white/60 hover:text-white'
                   }`}
               >
-                <Icon path={ICONS.burn} className="h-3.5 w-3.5" />
-                <span>Burn on Read {burnAfterReading ? '✓' : ''}</span>
+                <Icon path={ICONS.burn} className="h-3.5 w-3.5 text-amber-400" />
+                <span>Burn on Read {burnAfterReading ? '✓ (ON)' : '(OFF)'}</span>
               </button>
 
               {/* Self destruct timer toggle */}
               <button
                 type="button"
-                onClick={() => setSelfDestructTimer(prev => prev === 0 ? 10 : prev === 10 ? 30 : 0)}
-                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-medium transition-all flex-shrink-0 ${selfDestructTimer > 0
-                    ? 'bg-red-500/20 border border-red-500/40 text-red-300 shadow-sm'
+                onClick={() => setSelfDestructTimer(prev => prev === 0 ? 5 : prev === 5 ? 10 : prev === 10 ? 30 : 0)}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium transition-all flex-shrink-0 ${selfDestructTimer > 0
+                    ? 'bg-red-500/25 border border-red-500/50 text-red-300 shadow-[0_0_12px_rgba(239,68,68,0.3)]'
                     : 'bg-white/5 border border-white/10 text-white/60 hover:text-white'
                   }`}
               >
-                <Icon path={ICONS.timer} className="h-3.5 w-3.5" />
-                <span>{selfDestructTimer > 0 ? `⏳ ${selfDestructTimer}s` : 'Timer: OFF'}</span>
+                <Icon path={ICONS.timer} className="h-3.5 w-3.5 text-red-400" />
+                <span>{selfDestructTimer > 0 ? `⏳ ${selfDestructTimer}s Self-Destruct` : 'Timer: OFF'}</span>
               </button>
 
               {/* Image Upload */}
-              <label className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-medium bg-white/5 border border-white/10 text-white/60 hover:text-white transition-all flex-shrink-0 cursor-pointer">
-                <Icon path={ICONS.image} className="h-3.5 w-3.5" />
-                <span>Image</span>
+              <label className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium bg-white/5 border border-white/10 text-white/60 hover:text-white transition-all flex-shrink-0 cursor-pointer hover:bg-white/10">
+                <Icon path={ICONS.image} className="h-3.5 w-3.5 text-violet-400" />
+                <span>Attach Image</span>
                 <input type="file" accept="image/*" onChange={(e) => { handleImageUpload(e); setShowTools(false); }} className="hidden" />
               </label>
 
@@ -1158,10 +1401,10 @@ const GhostChatOverlay = ({ ghostChat, socket, onClose }) => {
                 <button
                   type="button"
                   onClick={() => { setShowDrawing(true); setShowTools(false); }}
-                  className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-medium bg-white/5 border border-white/10 text-white/60 hover:text-white transition-all flex-shrink-0"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium bg-white/5 border border-white/10 text-white/60 hover:text-white transition-all flex-shrink-0 hover:bg-white/10"
                 >
-                  <Icon path={ICONS.draw} className="h-3.5 w-3.5" />
-                  <span>Draw</span>
+                  <Icon path={ICONS.draw} className="h-3.5 w-3.5 text-emerald-400" />
+                  <span>Draw Sketch</span>
                 </button>
               )}
 
@@ -1170,13 +1413,13 @@ const GhostChatOverlay = ({ ghostChat, socket, onClose }) => {
                 <button
                   type="button"
                   onClick={toggleRecording}
-                  className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-medium transition-all flex-shrink-0 ${isRecording
-                      ? 'bg-red-500/20 border border-red-500/40 text-red-300 animate-pulse'
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium transition-all flex-shrink-0 ${isRecording
+                      ? 'bg-red-500/25 border border-red-500/50 text-red-300 animate-pulse'
                       : 'bg-white/5 border border-white/10 text-white/60 hover:text-white'
                     }`}
                 >
-                  <Icon path={ICONS.mic} className="h-3.5 w-3.5" />
-                  <span>{isRecording ? 'Listening...' : 'Voice'}</span>
+                  <Icon path={ICONS.mic} className="h-3.5 w-3.5 text-pink-400" />
+                  <span>{isRecording ? 'Listening...' : 'Voice Dictate'}</span>
                 </button>
               )}
             </motion.div>
@@ -1190,7 +1433,7 @@ const GhostChatOverlay = ({ ghostChat, socket, onClose }) => {
             type="button"
             onClick={() => setShowTools(prev => !prev)}
             className={`h-10 w-10 sm:h-11 sm:w-11 flex-shrink-0 rounded-xl sm:rounded-2xl border transition-all flex items-center justify-center active:scale-90 ${showTools || burnAfterReading || selfDestructTimer > 0 || drawingData || imageData
-                ? 'bg-violet-500/20 border-violet-500/40 text-violet-300'
+                ? 'bg-violet-500/25 border-violet-500/50 text-violet-300 shadow-[0_0_15px_rgba(139,92,246,0.3)]'
                 : 'bg-white/5 border-white/10 text-white/50 hover:text-white/80'
               }`}
             title="Ghost Chat Tools"
@@ -1226,8 +1469,8 @@ const GhostChatOverlay = ({ ghostChat, socket, onClose }) => {
               placeholder={isRecording ? "Listening..." : "Message in the quantum void..."}
               disabled={!isConnected || isInvitePending}
               rows={1}
-              className="w-full resize-none rounded-xl sm:rounded-2xl border border-white/10 bg-white/[0.05] px-3 py-2.5 sm:py-3 text-sm text-white/90 placeholder:text-white/30 outline-none transition focus:border-violet-500/50 focus:bg-white/[0.08] disabled:opacity-40"
-              style={{ minHeight: "40px", maxHeight: "110px" }}
+              className="w-full resize-none rounded-xl sm:rounded-2xl border border-white/10 bg-white/[0.05] px-3.5 py-2.5 sm:py-3 text-sm text-white/90 placeholder:text-white/30 outline-none transition focus:border-violet-500/50 focus:bg-white/[0.08] disabled:opacity-40"
+              style={{ minHeight: "42px", maxHeight: "110px" }}
             />
             {/* AI Suggestions Chips */}
             {aiSuggestions.length > 0 && (
@@ -1236,7 +1479,7 @@ const GhostChatOverlay = ({ ghostChat, socket, onClose }) => {
                   <button
                     key={i}
                     onClick={() => { setInput(s); inputRef.current?.focus(); }}
-                    className="text-[10px] bg-violet-500/30 border border-violet-500/40 text-violet-200 px-2 py-0.5 rounded-full hover:bg-violet-500/40 transition"
+                    className="text-[10px] bg-violet-500/30 border border-violet-500/40 text-violet-200 px-2 py-0.5 rounded-full hover:bg-violet-500/40 transition shadow-sm"
                   >
                     🤖 {s}
                   </button>
@@ -1263,12 +1506,42 @@ const GhostChatOverlay = ({ ghostChat, socket, onClose }) => {
       {/* Drawing Modal */}
       {showDrawing && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
-          <div className="bg-[#12121e] p-4 rounded-2xl border border-white/15 shadow-2xl max-w-sm w-full flex flex-col items-center">
-            <h3 className="text-xs font-semibold text-white/70 mb-3 uppercase tracking-wider">Draw Ghost Sketch</h3>
+          <div className="bg-[#121424] p-5 rounded-2xl border border-white/20 shadow-2xl max-w-md w-full flex flex-col items-center">
+            <h3 className="text-xs font-semibold text-white/80 mb-3 uppercase tracking-wider flex items-center gap-1.5">
+              <span>🎨</span> Draw Ghost Sketch
+            </h3>
             <DrawingPad onSave={handleDrawingSave} onClose={() => setShowDrawing(false)} />
           </div>
         </div>
       )}
+
+      {/* Full-Screen Zoom Media Lightbox */}
+      <AnimatePresence>
+        {previewMedia && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[120] bg-black/90 backdrop-blur-xl flex flex-col items-center justify-center p-4 cursor-zoom-out"
+            onClick={() => setPreviewMedia(null)}
+          >
+            <div className="relative max-w-3xl max-h-[85vh] flex items-center justify-center" onClick={(e) => e.stopPropagation()}>
+              <img
+                src={previewMedia}
+                alt="Zoomed attachment"
+                className="max-w-full max-h-[80vh] rounded-2xl border border-white/20 shadow-2xl object-contain"
+              />
+              <button
+                type="button"
+                onClick={() => setPreviewMedia(null)}
+                className="absolute -top-10 right-0 p-1 text-white/70 hover:text-white bg-white/10 rounded-full h-8 w-8 flex items-center justify-center text-sm font-bold backdrop-blur-md"
+              >
+                ✕
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Sticker Picker */}
       <AnimatePresence>

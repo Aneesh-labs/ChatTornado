@@ -741,19 +741,53 @@ const Messages = () => {
                     }
 
                     if (packet.type === "ghost_message") {
+                        const newMsgId = packet.id || generateSecureId();
+                        setGhostChat(prev => {
+                            const exists = prev.messages.some(m => String(m.id) === String(newMsgId));
+                            if (exists) return prev;
+                            return {
+                                ...prev,
+                                messages: [
+                                    ...prev.messages,
+                                    {
+                                        id: newMsgId,
+                                        text: packet.message || "",
+                                        senderId: packet.sender_id,
+                                        selfDestruct: packet.selfDestruct ? Number(packet.selfDestruct) : null,
+                                        isBurn: Boolean(packet.burn),
+                                        drawing: packet.drawing || null,
+                                        image: packet.image || null,
+                                        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                                        reactions: {},
+                                        read: false,
+                                    },
+                                ],
+                            };
+                        });
 
+                        return;
+                    }
+
+                    if (packet.type === "ghost_reaction") {
                         setGhostChat(prev => ({
                             ...prev,
-                            messages: [
-                                ...prev.messages,
-                                {
-                                    id: generateSecureId(),
-                                    text: packet.message,
-                                    senderId: packet.sender_id,
-                                },
-                            ],
+                            messages: prev.messages.map(m => {
+                                if (String(m.id) === String(packet.message_id)) {
+                                    const nextReactions = { ...m.reactions };
+                                    nextReactions[packet.emoji] = (nextReactions[packet.emoji] || 0) + 1;
+                                    return { ...m, reactions: nextReactions };
+                                }
+                                return m;
+                            }),
                         }));
+                        return;
+                    }
 
+                    if (packet.type === "ghost_burn" || packet.type === "ghost_delete") {
+                        setGhostChat(prev => ({
+                            ...prev,
+                            messages: prev.messages.filter(m => String(m.id) !== String(packet.message_id)),
+                        }));
                         return;
                     }
 
