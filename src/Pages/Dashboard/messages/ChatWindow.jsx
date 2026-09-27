@@ -41,6 +41,7 @@ const ChatWindow = React.memo(({
     isReloading,
     aiMode: propAiMode,
     setAiMode: propSetAiMode,
+    onGameMove,
 }) => {
     const [localAiMode, setLocalAiMode] = useState(() => {
         return isAdminUnlocked() ? "ADMIN" : "DEFAULT";
@@ -99,6 +100,7 @@ const ChatWindow = React.memo(({
                 isMobile={isMobile}
                 socket={socket}
                 onSend={sendMessage}
+                onGameMove={onGameMove}
             />
             <ScrollBar show={showScrollBtn} currentTheme={currentTheme} scrollToBottom={scrollToBottom} isMobile={isMobile} />
             {!selectionMode && (

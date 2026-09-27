@@ -1,6 +1,7 @@
 from datetime import datetime
 import time
 import re
+import json
 import asyncio
 import logging
 
@@ -451,6 +452,61 @@ async def websocket_endpoint(websocket: WebSocket):
                             "message_id": message_id,
                             "sender_id": user_id
                         })
+                continue
+
+            # ==========================
+            # In-Chat Game Real-Time Move
+            # ==========================
+            if data.get("type") == "game_move":
+                message_id = data.get("message_id")
+                receiver_id = data.get("receiver_id")
+                game_id = data.get("game_id")
+                game_data = data.get("game_data")
+
+                if receiver_id is None or not game_data or not isinstance(game_data, dict):
+                    continue
+
+                try:
+                    receiver_id = int(receiver_id)
+                except (ValueError, TypeError):
+                    continue
+
+                # Persist updated game state into existing message row in DB
+                if message_id:
+                    try:
+                        msg_row = db.query(Message).filter(Message.id == message_id).first()
+                        if msg_row:
+                            # Special handling for RPS simultaneous choices merge:
+                            if game_data.get("game") == "rps" and msg_row.message and msg_row.message.startswith("🎮 GAME:"):
+                                try:
+                                    raw_existing = msg_row.message.replace("🎮 GAME:", "").strip()
+                                    existing_payload = json.loads(raw_existing)
+                                    existing_choices = existing_payload.get("choices") or {}
+                                    incoming_choices = game_data.get("choices") or {}
+                                    merged_choices = {**existing_choices, **incoming_choices}
+                                    game_data["choices"] = merged_choices
+                                    if len(merged_choices) >= 2:
+                                        game_data["status"] = "revealed"
+                                except Exception as parse_err:
+                                    logger.warning("RPS choice merge error: %s", parse_err)
+
+                            msg_row.message = "🎮 GAME:" + json.dumps(game_data)
+                            db.commit()
+                    except Exception as db_err:
+                        logger.error("Failed to persist game move in DB: %s", db_err)
+                        db.rollback()
+
+                # Broadcast game_update to recipient
+                packet = {
+                    "type": "game_update",
+                    "message_id": message_id,
+                    "game_id": game_id,
+                    "game_data": game_data,
+                    "sender_id": user_id,
+                    "receiver_id": receiver_id
+                }
+
+                await manager.send_personal_message(receiver_id, packet)
                 continue
 
             # ==========================

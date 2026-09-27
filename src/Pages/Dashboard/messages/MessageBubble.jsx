@@ -683,6 +683,7 @@ const MessageBubble = React.memo(({
     selected,
     isMobile = false,
     onSend,
+    onGameMove,
 }) => {
     const theme = useTheme();
     const myId = getMyUserId();
@@ -794,10 +795,22 @@ const MessageBubble = React.memo(({
             return (
                 <InChatGameBoard
                     gameData={parsedGame}
+                    messageId={msg.id}
                     myUserId={myId}
                     senderId={msg.sender_id}
+                    receiverId={msg.receiver_id}
                     onUpdateGame={(updatedGame) => {
-                        onSend?.("🎮 GAME:" + JSON.stringify(updatedGame));
+                        if (onGameMove) {
+                            onGameMove(msg.id, updatedGame);
+                        } else if (socket && socket.readyState === 1) { // 1 = WebSocket.OPEN
+                            socket.send(JSON.stringify({
+                                type: "game_move",
+                                message_id: msg.id,
+                                receiver_id: isMe ? msg.receiver_id : msg.sender_id,
+                                game_id: updatedGame?.id,
+                                game_data: updatedGame
+                            }));
+                        }
                     }}
                 />
             );

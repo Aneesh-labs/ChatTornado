@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import PropTypes from "prop-types";
 import { motion, AnimatePresence } from "framer-motion";
 import { soundEngine } from "../../../utils/soundEffects";
@@ -71,11 +71,26 @@ const checkConnect4Winner = (board) => {
     return null;
 };
 
-export default function InChatGameBoard({ gameData, myUserId, senderId, onUpdateGame }) {
+export default function InChatGameBoard({ gameData, messageId, myUserId, senderId, receiverId, onUpdateGame }) {
     const [localGame, setLocalGame] = useState(gameData);
+    const isMovingRef = useRef(false);
 
     useEffect(() => {
-        setLocalGame(gameData);
+        if (!gameData) return;
+        if (gameData.game === "rps") {
+            setLocalGame((prev) => {
+                const mergedChoices = { ...(prev?.choices || {}), ...(gameData.choices || {}) };
+                const isComplete = Object.keys(mergedChoices).length >= 2;
+                return {
+                    ...gameData,
+                    choices: mergedChoices,
+                    status: isComplete ? "revealed" : (gameData.status || "waiting"),
+                };
+            });
+        } else {
+            setLocalGame(gameData);
+        }
+        isMovingRef.current = false;
     }, [gameData]);
 
     if (!localGame) return null;
@@ -95,12 +110,15 @@ export default function InChatGameBoard({ gameData, myUserId, senderId, onUpdate
         const isMyTurn = (turn === "X" && isMeSender) || (turn === "O" && !isMeSender);
 
         const handleCellClick = (idx) => {
-            if (board[idx] !== null || winner || !isMyTurn) {
+            if (board[idx] !== null || winner || !isMyTurn || isMovingRef.current) {
                 if (!isMyTurn && !winner) {
                     soundEngine.play("boing");
                 }
                 return;
             }
+
+            isMovingRef.current = true;
+            setTimeout(() => { isMovingRef.current = false; }, 300);
 
             soundEngine.play("coin");
             const newBoard = [...board];
@@ -120,6 +138,7 @@ export default function InChatGameBoard({ gameData, myUserId, senderId, onUpdate
                 turn: nextTurn,
                 winner: winCheck?.winner || null,
                 moves: (localGame.moves || 0) + 1,
+                lastMoveBy: myUserId,
             };
 
             setLocalGame(updatedGame);
@@ -216,7 +235,7 @@ export default function InChatGameBoard({ gameData, myUserId, senderId, onUpdate
     // ==========================================
     if (localGame.game === "rps") {
         const choices = localGame.choices || {};
-        const myChoice = choices[myUserId];
+        const myChoice = choices[myUserId] || choices[String(myUserId)];
         const otherUserId = Object.keys(choices).find(k => String(k) !== String(myUserId));
         const otherChoice = otherUserId ? choices[otherUserId] : null;
         const bothChose = Object.keys(choices).length >= 2;
@@ -234,10 +253,12 @@ export default function InChatGameBoard({ gameData, myUserId, senderId, onUpdate
         };
 
         const handlePickRPS = (choice) => {
-            if (myChoice) return;
+            if (myChoice || isMovingRef.current) return;
+            isMovingRef.current = true;
+            setTimeout(() => { isMovingRef.current = false; }, 300);
             soundEngine.play("laser");
 
-            const updatedChoices = { ...choices, [myUserId]: choice };
+            const updatedChoices = { ...choices, [String(myUserId)]: choice };
             const isComplete = Object.keys(updatedChoices).length >= 2;
 
             if (isComplete) {
@@ -356,10 +377,12 @@ export default function InChatGameBoard({ gameData, myUserId, senderId, onUpdate
         const isMyTurn = (turn === "🔴" && isMeSender) || (turn === "🟡" && !isMeSender);
 
         const handleDropColumn = (col) => {
-            if (winner || !isMyTurn) {
+            if (winner || !isMyTurn || isMovingRef.current) {
                 if (!isMyTurn && !winner) soundEngine.play("boing");
                 return;
             }
+            isMovingRef.current = true;
+            setTimeout(() => { isMovingRef.current = false; }, 350);
 
             // Find lowest available row in column
             let targetRow = -1;
@@ -498,7 +521,7 @@ export default function InChatGameBoard({ gameData, myUserId, senderId, onUpdate
         const { board, matched, pendingFlipped, winner } = localGame;
 
         const handleCardClick = (idx) => {
-            if (winner || matched.includes(idx) || pendingFlipped.includes(idx)) return;
+            if (winner || matched.includes(idx) || pendingFlipped.includes(idx) || isMovingRef.current) return;
             
             soundEngine.play("coin");
             let newPending = [...pendingFlipped];
@@ -520,6 +543,17 @@ export default function InChatGameBoard({ gameData, myUserId, senderId, onUpdate
                     soundEngine.play("win");
                 } else {
                     soundEngine.play("boing");
+                    isMovingRef.current = true;
+                    setTimeout(() => {
+                        const resetPending = {
+                            ...localGame,
+                            pendingFlipped: [],
+                            matched: newMatched
+                        };
+                        setLocalGame(resetPending);
+                        onUpdateGame?.(resetPending);
+                        isMovingRef.current = false;
+                    }, 800);
                 }
             }
 

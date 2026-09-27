@@ -984,6 +984,21 @@ const Messages = () => {
                         }));
                         return;
                     }
+                    if (packet.type === "game_update" || packet.type === "game_move") {
+                        const incomingGame = packet.game_data;
+                        if (incomingGame) {
+                            setMessages((prev) => prev.map((m) => {
+                                if (m.id === packet.message_id || (packet.game_id && typeof m.message === "string" && m.message.includes(`"id":"${packet.game_id}"`))) {
+                                    return {
+                                        ...m,
+                                        message: "🎮 GAME:" + JSON.stringify(incomingGame)
+                                    };
+                                }
+                                return m;
+                            }));
+                        }
+                        return;
+                    }
                     if (packet.type === "reaction") {
                         setMessages((prev) => prev.map((m) => {
                             if (m.id !== packet.message_id) return m;
@@ -1223,6 +1238,37 @@ const Messages = () => {
         }
     }, [selectedUser, token]);
 
+    const handleGameMove = useCallback((messageId, updatedGame) => {
+        if (!messageId || !updatedGame) return;
+
+        // 1. Optimistically update local message in state in-place
+        setMessages((prev) => prev.map((m) => {
+            if (m.id === messageId || (updatedGame?.id && typeof m.message === "string" && m.message.includes(`"id":"${updatedGame.id}"`))) {
+                return {
+                    ...m,
+                    message: "🎮 GAME:" + JSON.stringify(updatedGame)
+                };
+            }
+            return m;
+        }));
+
+        // 2. Transmit real-time move over WebSocket
+        const targetUserId = selectedUserRef.current?.id || selectedUser?.id;
+        if (socketRef.current?.readyState === WebSocket.OPEN && targetUserId) {
+            try {
+                socketRef.current.send(JSON.stringify({
+                    type: "game_move",
+                    message_id: messageId,
+                    receiver_id: targetUserId,
+                    game_id: updatedGame?.id,
+                    game_data: updatedGame
+                }));
+            } catch (err) {
+                console.warn("Failed to transmit game move over WebSocket:", err);
+            }
+        }
+    }, [selectedUser]);
+
     const togglePin = useCallback((userId) => {
         setPinnedChats((prev) => {
             const next = new Set(prev);
@@ -1438,6 +1484,7 @@ const Messages = () => {
                                 setAiMode={setAiMode}
                                 socket={socketRef.current}
                                 isMobile={isMobile}
+                                onGameMove={handleGameMove}
                             />
                         ) : (
                             <EmptyState onOpenSearch={handleOpenSearch} />
