@@ -233,11 +233,12 @@ async def generate_ai_text(prompt: str, chat_history: List[dict], system_prompt:
         ]
 
         models_to_try = [
+            "gemini-3.8-flash",
+            "gemini-3.5-flash-lite",
+            "gemini-3.5-flash",
+            "gemini-3.1-pro-preview",
             "gemini-2.5-flash",
             "gemini-2.0-flash",
-            "gemini-1.5-flash",
-            "gemini-1.5-pro",
-            "gemini-2.0-flash-lite"
         ]
 
         for model_name in models_to_try:
@@ -313,11 +314,12 @@ async def generate_ai_text(prompt: str, chat_history: List[dict], system_prompt:
         ]
 
         for model_name in [
+            "gemini-3.8-flash",
+            "gemini-3.5-flash-lite",
+            "gemini-3.5-flash",
+            "gemini-3.1-pro-preview",
             "gemini-2.5-flash",
             "gemini-2.0-flash",
-            "gemini-1.5-flash",
-            "gemini-1.5-pro",
-            "gemini-2.0-flash-lite"
         ]:
             for use_search in [True, False]:
                 try:
