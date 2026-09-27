@@ -1000,28 +1000,18 @@ const Messages = () => {
             sender_id: myUserId.current,
             receiver_id: selectedUser.id,
             message: validation.text,
-                  ai_mode: aiMode,
             created_at: new Date().toISOString(),
             is_locked: options.shield_mode === 'timelock',
             ...options
         };
-        setMessages((prev) => {
-            console.log("OPTIMISTIC ADD");
-            console.trace();
-            return [...prev, optimisticMessage];
-        });
-        console.log("========== FRONTEND SENDING ==========")
-        console.log("temp_id:", temp_id)
-        console.log("message:", validation.text)
-        console.log("options:", options)
-        console.log("====================================")
+        setMessages((prev) => [...prev, optimisticMessage]);
 
         try {
             socketRef.current.send(JSON.stringify({
                 temp_id,
                 receiver_id: selectedUser.id,
                 message: validation.text,
-                  ai_mode: aiMode,
+                ai_mode: options.ai_mode || aiMode,
                 ...options
             }));
         } catch {

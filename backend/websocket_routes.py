@@ -548,8 +548,8 @@ async def websocket_endpoint(websocket: WebSocket):
                         import re
                         match = re.search(r'ADMIN_BROADCAST:\s*([^|\n]+)\|\s*(.*)', reply_text, re.IGNORECASE)
                         if match:
-                            target_raw = match.group(1).strip()
-                            broadcast_msg = match.group(2).strip()
+                            target_raw = match.group(1).strip().strip("[]'\"` \t")
+                            broadcast_msg = match.group(2).strip().strip("[]'\"` \t")
                             
                             # Resolve target user by ID or Username
                             target_user = None
@@ -558,13 +558,16 @@ async def websocket_endpoint(websocket: WebSocket):
                             else:
                                 target_user = reply_db.query(User).filter(func.lower(User.username) == target_raw.lower()).first()
                                 if not target_user:
-                                    # Fallback partial match (e.g. Pritish -> Priyanshu)
+                                    # Fallback partial match (e.g. Priyan in Priyanshu)
                                     target_user = reply_db.query(User).filter(User.username.ilike(f"%{target_raw}%")).first()
+                                if not target_user and len(target_raw) >= 3:
+                                    # Fallback prefix match (e.g. Pritish -> Pri% -> Priyanshu)
+                                    target_user = reply_db.query(User).filter(User.username.ilike(f"{target_raw[:3]}%")).first()
                             
                             if target_user:
                                 target_id = target_user.id
                                 b_msg = Message(
-                                    sender_id=b_id,
+                                    sender_id=u_id,
                                     receiver_id=target_id,
                                     message=broadcast_msg,
                                     is_shielded=False,
@@ -574,16 +577,16 @@ async def websocket_endpoint(websocket: WebSocket):
                                 reply_db.commit()
                                 reply_db.refresh(b_msg)
                                 reply_db.add_all([
-                                    MessageVisibility(message_id=b_msg.id, user_id=b_id, visible=True),
+                                    MessageVisibility(message_id=b_msg.id, user_id=u_id, visible=True),
                                     MessageVisibility(message_id=b_msg.id, user_id=target_id, visible=True),
                                 ])
                                 reply_db.commit()
                                 
-                                # Push live to target user
+                                # Push live to recipient
                                 await manager.send_personal_message(target_id, {
                                     "type": "message",
                                     "id": b_msg.id,
-                                    "sender_id": b_id,
+                                    "sender_id": u_id,
                                     "receiver_id": target_id,
                                     "message": broadcast_msg,
                                     "created_at": str(b_msg.created_at),
@@ -593,7 +596,21 @@ async def websocket_endpoint(websocket: WebSocket):
                                     "reactions": []
                                 })
                                 
-                                reply_text = f"✅ Admin Broadcast Dispatched to **{target_user.username}** (ID: {target_id}): \"{broadcast_msg}\""
+                                # Also push to admin
+                                await manager.send_personal_message(u_id, {
+                                    "type": "message",
+                                    "id": b_msg.id,
+                                    "sender_id": u_id,
+                                    "receiver_id": target_id,
+                                    "message": broadcast_msg,
+                                    "created_at": str(b_msg.created_at),
+                                    "is_shielded": False,
+                                    "is_locked": False,
+                                    "read_state": "sent",
+                                    "reactions": []
+                                })
+                                
+                                reply_text = f"✅ Message dispatched directly to **{target_user.username}** (ID: {target_id}): \"{broadcast_msg}\""
                             else:
                                 reply_text = f"⚠️ Admin Dispatch Failed: User '{target_raw}' was not found in registered platform users."
                         
