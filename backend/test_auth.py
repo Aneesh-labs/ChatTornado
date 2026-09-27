@@ -44,7 +44,7 @@ def get_user_by_username(username):
 def create_unverified_user(username="testuser", email="test@example.com"):
     response = client.post(
         "/signup",
-        data={"username": username, "email": email, "password": "strongpassword123!"}
+        json={"username": username, "email": email, "password": "strongpassword123!"}
     )
     return response
 
@@ -151,8 +151,8 @@ def test_resend_invalidates_old_and_rate_limit(mock_email_service):
 
 def test_delete_chat_conversation(mock_email_service):
     # Setup two users
-    client.post("/signup", data={"username": "user_a", "email": "a@example.com", "password": "Password123!"})
-    client.post("/signup", data={"username": "user_b", "email": "b@example.com", "password": "Password123!"})
+    client.post("/signup", json={"username": "user_a", "email": "a@example.com", "password": "Password123!"})
+    client.post("/signup", json={"username": "user_b", "email": "b@example.com", "password": "Password123!"})
     
     # Verify both users
     db = TestingSessionLocal()
@@ -190,7 +190,7 @@ def test_delete_chat_conversation(mock_email_service):
 
 def test_delete_account_permanently(mock_email_service):
     # Setup user
-    client.post("/signup", data={"username": "doomed_user", "email": "doomed@example.com", "password": "Password123!"})
+    client.post("/signup", json={"username": "doomed_user", "email": "doomed@example.com", "password": "Password123!"})
     db = TestingSessionLocal()
     user = db.query(models.User).filter_by(username="doomed_user").first()
     user.email_verified = True
@@ -210,7 +210,7 @@ def test_delete_account_permanently(mock_email_service):
     db.close()
     
     # Verify that the same email can immediately be used to register a new account!
-    new_signup = client.post("/signup", data={"username": "doomed_user", "email": "doomed@example.com", "password": "NewPassword123!"})
+    new_signup = client.post("/signup", json={"username": "doomed_user", "email": "doomed@example.com", "password": "NewPassword123!"})
     assert new_signup.status_code == 200
 
 

@@ -3,7 +3,8 @@ import re
 import uuid
 import base64
 import logging
-from datetime import datetime, timezone
+import mimetypes
+from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from typing import Optional, Tuple, List, Dict, Any
 
@@ -209,7 +210,6 @@ async def generate_ai_text(prompt: str, chat_history: List[dict], system_prompt:
                 search_sources.append(f"• [{it['title']}]({it['url']})")
 
     # Image extraction logic
-    import re
     from google import genai
     from google.genai import types
 
@@ -222,7 +222,6 @@ async def generate_ai_text(prompt: str, chat_history: List[dict], system_prompt:
         rel_path = match.group(1)
         full_path = upload_base / rel_path
         if full_path.exists():
-            import mimetypes
             mime, _ = mimetypes.guess_type(str(full_path))
             mime = mime or "image/png"
             with open(full_path, "rb") as f:

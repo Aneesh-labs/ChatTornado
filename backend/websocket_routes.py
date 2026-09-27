@@ -1,11 +1,13 @@
 from datetime import datetime
 import time
+import re
+import asyncio
 import logging
 
 from fastapi import APIRouter, WebSocket
 from starlette.websockets import WebSocketDisconnect
 from sqlalchemy.orm import Session
-from sqlalchemy import func
+from sqlalchemy import func, or_, and_
 
 from auth import decode_token
 from database import SessionLocal
@@ -600,8 +602,6 @@ async def websocket_endpoint(websocket: WebSocket):
             from ai_service import get_or_create_bot_user, process_user_message_to_bot
             bot = get_or_create_bot_user(db)
             if bot and receiver_id == bot.id:
-                import asyncio
-
                 async def handle_bot_reply(u_id: int, b_id: int, prompt_text: str):
                     await manager.send_personal_message(u_id, {
                         "type": "typing_start",
@@ -612,7 +612,6 @@ async def websocket_endpoint(websocket: WebSocket):
                         print(f"[BOT_HANDLER] Starting reply generation for user {u_id} (Mode: {ai_mode}): {prompt_text}", flush=True)
 
                         # DUAL-LAYER: 1. Direct prompt interception for Admin mode
-                        import re
                         direct_dispatched = False
                         reply_text = None  # will be set if we short-circuit
 
@@ -807,7 +806,6 @@ async def websocket_endpoint(websocket: WebSocket):
                             print(f"[BOT_HANDLER] Reply generated successfully ({len(reply_text)} chars)", flush=True)
 
                             # DUAL-LAYER: 2. ADMIN BROADCAST INTERCEPT FROM LLM OUTPUT
-                            import re
                             match = re.search(r'ADMIN_BROADCAST:\s*([^|\n]+)\|\s*(.*)', reply_text, re.IGNORECASE)
                             if match:
                                 target_raw = match.group(1).strip().strip("[]'\"` \t")
