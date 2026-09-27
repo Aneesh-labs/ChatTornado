@@ -130,7 +130,22 @@ const Messages = () => {
     const [call, setCall] = useState(null);
     const [isMuted, setIsMuted] = useState(false);
     const [isCameraOff, setIsCameraOff] = useState(false);
-    const [aiMode, setAiMode] = useState("SERIOUS");
+    const [aiMode, setAiMode] = useState(() => {
+        try {
+            return sessionStorage.getItem("vortex_admin_unlocked") === "true" ? "ADMIN" : "DEFAULT";
+        } catch {
+            return "DEFAULT";
+        }
+    });
+
+    useEffect(() => {
+        const handleAdminUnlock = () => {
+            setAiMode("ADMIN");
+            setCallNotice("👑 Executive Admin Mode Activated: VORTEX-9 elevated permissions enabled.");
+        };
+        window.addEventListener("vortex_admin_activated", handleAdminUnlock);
+        return () => window.removeEventListener("vortex_admin_activated", handleAdminUnlock);
+    }, []);
     const [ghostChat, setGhostChat] = useState({
         open: false,
         connected: false,

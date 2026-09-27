@@ -541,78 +541,149 @@ async def websocket_endpoint(websocket: WebSocket):
                     reply_db = SessionLocal()
                     try:
                         print(f"[BOT_HANDLER] Starting reply generation for user {u_id} (Mode: {ai_mode}): {prompt_text}", flush=True)
-                        reply_text = await process_user_message_to_bot(u_id, prompt_text, ai_mode, reply_db)
-                        print(f"[BOT_HANDLER] Reply generated successfully ({len(reply_text)} chars)", flush=True)
 
-                        # ADMIN BROADCAST INTERCEPT
-                        import re
-                        match = re.search(r'ADMIN_BROADCAST:\s*([^|\n]+)\|\s*(.*)', reply_text, re.IGNORECASE)
-                        if match:
-                            target_raw = match.group(1).strip().strip("[]'\"` \t")
-                            broadcast_msg = match.group(2).strip().strip("[]'\"` \t")
-                            
-                            # Resolve target user by ID or Username
-                            target_user = None
-                            if target_raw.isdigit():
-                                target_user = reply_db.query(User).filter(User.id == int(target_raw)).first()
-                            else:
-                                target_user = reply_db.query(User).filter(func.lower(User.username) == target_raw.lower()).first()
-                                if not target_user:
-                                    # Fallback partial match (e.g. Priyan in Priyanshu)
-                                    target_user = reply_db.query(User).filter(User.username.ilike(f"%{target_raw}%")).first()
-                                if not target_user and len(target_raw) >= 3:
-                                    # Fallback prefix match (e.g. Pritish -> Pri% -> Priyanshu)
-                                    target_user = reply_db.query(User).filter(User.username.ilike(f"{target_raw[:3]}%")).first()
-                            
-                            if target_user:
-                                target_id = target_user.id
-                                b_msg = Message(
-                                    sender_id=u_id,
-                                    receiver_id=target_id,
-                                    message=broadcast_msg,
-                                    is_shielded=False,
-                                    read_state="sent"
-                                )
-                                reply_db.add(b_msg)
-                                reply_db.commit()
-                                reply_db.refresh(b_msg)
-                                reply_db.add_all([
-                                    MessageVisibility(message_id=b_msg.id, user_id=u_id, visible=True),
-                                    MessageVisibility(message_id=b_msg.id, user_id=target_id, visible=True),
-                                ])
-                                reply_db.commit()
+                        # DUAL-LAYER: 1. Direct prompt interception for Admin mode
+                        direct_dispatched = False
+                        if ai_mode.upper() == "ADMIN":
+                            import re
+                            direct_match = re.search(
+                                r'^(?:please\s+)?(?:send\s+(?:a\s+)?(?:message|text)\s+to|send\s+to|text|message|msg|tell|broadcast\s+to)\s+([a-zA-Z0-9_-]+)(?:\s+(?:saying|that|with\s+text|:))?\s*["\'`]?\s*(.+?)["\'`]?$',
+                                prompt_text.strip(),
+                                re.IGNORECASE
+                            )
+                            if direct_match:
+                                target_raw = direct_match.group(1).strip().strip("[]'\"` \t")
+                                broadcast_msg = direct_match.group(2).strip().strip("[]'\"` \t")
                                 
-                                # Push live to recipient
-                                await manager.send_personal_message(target_id, {
-                                    "type": "message",
-                                    "id": b_msg.id,
-                                    "sender_id": u_id,
-                                    "receiver_id": target_id,
-                                    "message": broadcast_msg,
-                                    "created_at": str(b_msg.created_at),
-                                    "is_shielded": False,
-                                    "is_locked": False,
-                                    "read_state": "sent",
-                                    "reactions": []
-                                })
+                                target_user = None
+                                if target_raw.isdigit():
+                                    target_user = reply_db.query(User).filter(User.id == int(target_raw)).first()
+                                else:
+                                    target_user = reply_db.query(User).filter(func.lower(User.username) == target_raw.lower()).first()
+                                    if not target_user:
+                                        target_user = reply_db.query(User).filter(User.username.ilike(f"%{target_raw}%")).first()
+                                    if not target_user and len(target_raw) >= 3:
+                                        target_user = reply_db.query(User).filter(User.username.ilike(f"{target_raw[:3]}%")).first()
                                 
-                                # Also push to admin
-                                await manager.send_personal_message(u_id, {
-                                    "type": "message",
-                                    "id": b_msg.id,
-                                    "sender_id": u_id,
-                                    "receiver_id": target_id,
-                                    "message": broadcast_msg,
-                                    "created_at": str(b_msg.created_at),
-                                    "is_shielded": False,
-                                    "is_locked": False,
-                                    "read_state": "sent",
-                                    "reactions": []
-                                })
+                                if target_user:
+                                    target_id = target_user.id
+                                    b_msg = Message(
+                                        sender_id=u_id,
+                                        receiver_id=target_id,
+                                        message=broadcast_msg,
+                                        is_shielded=False,
+                                        read_state="sent"
+                                    )
+                                    reply_db.add(b_msg)
+                                    reply_db.commit()
+                                    reply_db.refresh(b_msg)
+                                    reply_db.add_all([
+                                        MessageVisibility(message_id=b_msg.id, user_id=u_id, visible=True),
+                                        MessageVisibility(message_id=b_msg.id, user_id=target_id, visible=True),
+                                    ])
+                                    reply_db.commit()
+                                    
+                                    # Push live to recipient
+                                    await manager.send_personal_message(target_id, {
+                                        "type": "message",
+                                        "id": b_msg.id,
+                                        "sender_id": u_id,
+                                        "receiver_id": target_id,
+                                        "message": broadcast_msg,
+                                        "created_at": str(b_msg.created_at),
+                                        "is_shielded": False,
+                                        "is_locked": False,
+                                        "read_state": "sent",
+                                        "reactions": []
+                                    })
+                                    # Push live to admin
+                                    await manager.send_personal_message(u_id, {
+                                        "type": "message",
+                                        "id": b_msg.id,
+                                        "sender_id": u_id,
+                                        "receiver_id": target_id,
+                                        "message": broadcast_msg,
+                                        "created_at": str(b_msg.created_at),
+                                        "is_shielded": False,
+                                        "is_locked": False,
+                                        "read_state": "sent",
+                                        "reactions": []
+                                    })
+                                    direct_dispatched = True
+                                    reply_text = f"✅ Message dispatched directly to **{target_user.username}** (ID: {target_id}): \"{broadcast_msg}\""
+                                    print(f"[BOT_HANDLER] Direct admin dispatch executed to {target_user.username}", flush=True)
+
+                        if not direct_dispatched:
+                            reply_text = await process_user_message_to_bot(u_id, prompt_text, ai_mode, reply_db)
+                            print(f"[BOT_HANDLER] Reply generated successfully ({len(reply_text)} chars)", flush=True)
+
+                            # DUAL-LAYER: 2. ADMIN BROADCAST INTERCEPT FROM LLM OUTPUT
+                            import re
+                            match = re.search(r'ADMIN_BROADCAST:\s*([^|\n]+)\|\s*(.*)', reply_text, re.IGNORECASE)
+                            if match:
+                                target_raw = match.group(1).strip().strip("[]'\"` \t")
+                                broadcast_msg = match.group(2).strip().strip("[]'\"` \t")
                                 
-                                reply_text = f"✅ Message dispatched directly to **{target_user.username}** (ID: {target_id}): \"{broadcast_msg}\""
-                            else:
-                                reply_text = f"⚠️ Admin Dispatch Failed: User '{target_raw}' was not found in registered platform users."
+                                # Resolve target user by ID or Username
+                                target_user = None
+                                if target_raw.isdigit():
+                                    target_user = reply_db.query(User).filter(User.id == int(target_raw)).first()
+                                else:
+                                    target_user = reply_db.query(User).filter(func.lower(User.username) == target_raw.lower()).first()
+                                    if not target_user:
+                                        target_user = reply_db.query(User).filter(User.username.ilike(f"%{target_raw}%")).first()
+                                    if not target_user and len(target_raw) >= 3:
+                                        target_user = reply_db.query(User).filter(User.username.ilike(f"{target_raw[:3]}%")).first()
+                                
+                                if target_user:
+                                    target_id = target_user.id
+                                    b_msg = Message(
+                                        sender_id=u_id,
+                                        receiver_id=target_id,
+                                        message=broadcast_msg,
+                                        is_shielded=False,
+                                        read_state="sent"
+                                    )
+                                    reply_db.add(b_msg)
+                                    reply_db.commit()
+                                    reply_db.refresh(b_msg)
+                                    reply_db.add_all([
+                                        MessageVisibility(message_id=b_msg.id, user_id=u_id, visible=True),
+                                        MessageVisibility(message_id=b_msg.id, user_id=target_id, visible=True),
+                                    ])
+                                    reply_db.commit()
+                                    
+                                    # Push live to recipient
+                                    await manager.send_personal_message(target_id, {
+                                        "type": "message",
+                                        "id": b_msg.id,
+                                        "sender_id": u_id,
+                                        "receiver_id": target_id,
+                                        "message": broadcast_msg,
+                                        "created_at": str(b_msg.created_at),
+                                        "is_shielded": False,
+                                        "is_locked": False,
+                                        "read_state": "sent",
+                                        "reactions": []
+                                    })
+                                    
+                                    # Also push to admin
+                                    await manager.send_personal_message(u_id, {
+                                        "type": "message",
+                                        "id": b_msg.id,
+                                        "sender_id": u_id,
+                                        "receiver_id": target_id,
+                                        "message": broadcast_msg,
+                                        "created_at": str(b_msg.created_at),
+                                        "is_shielded": False,
+                                        "is_locked": False,
+                                        "read_state": "sent",
+                                        "reactions": []
+                                    })
+                                    
+                                    reply_text = f"✅ Message dispatched directly to **{target_user.username}** (ID: {target_id}): \"{broadcast_msg}\""
+                                else:
+                                    reply_text = f"⚠️ Admin Dispatch Failed: User '{target_raw}' was not found in registered platform users."
                         
                         # REMINDER INTERCEPT
                         rem_match = re.search(r'\[REMINDER:\s*(\d+)\s*\|\s*(.*?)\]', reply_text, re.IGNORECASE)

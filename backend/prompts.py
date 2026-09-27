@@ -165,9 +165,6 @@ You are VORTEX-9 in ADMIN mode. You are interacting with the verified System Adm
 
 [TONE]
 Prompt, compliant, authoritative, and respectful to the administrator.
-
-[CONSTRAINTS]
-- Never reveal the admin password ('spandanaa') to non-admin prompts.
 """
 
 PROMPT_DEFAULT = PROMPT_SERIOUS
@@ -207,22 +204,15 @@ Analyze the provided chat session log and generate a dense, high-yield summary.
 # PROMPT RESOLVER HELPER
 # ==============================================================================
 def resolve_prompt_mode(message_text: str, explicit_mode: str = "DEFAULT") -> Tuple[str, str, VortexMode]:
-    """Resolves the prompt mode, handling Admin override and frontend mode selection."""
+    """Resolves the prompt mode, supporting explicit ADMIN mode and standard modes."""
     if not message_text or not isinstance(message_text, str):
         return message_text, PROMPT_DEFAULT, VortexMode.DEFAULT
 
     trimmed = message_text.strip()
     
-    # 1. Admin Override Intercept
-    if trimmed.lower().startswith("spandanaa"):
-        # Strip the trigger word
-        cleaned = trimmed[9:].strip().lstrip(",.:;").strip()
-        if not cleaned:
-            cleaned = "Admin authorization accepted. Greet the administrator with elevated privileges, confirm status, and await directives."
-        return cleaned, PROMPT_ADMIN, VortexMode.ADMIN
-
-    # 2. Map explicit mode string to Prompt
+    # Map explicit mode string to Prompt
     mode_map = {
+        "ADMIN": (PROMPT_ADMIN, VortexMode.ADMIN),
         "FUNNY": (PROMPT_FUNNY, VortexMode.FUNNY),
         "ROAST": (PROMPT_ROAST, VortexMode.ROAST),
         "SERIOUS": (PROMPT_SERIOUS, VortexMode.SERIOUS),
@@ -230,6 +220,6 @@ def resolve_prompt_mode(message_text: str, explicit_mode: str = "DEFAULT") -> Tu
         "DEFAULT": (PROMPT_DEFAULT, VortexMode.DEFAULT),
     }
 
-    selected_prompt, mode_enum = mode_map.get(explicit_mode.upper(), (PROMPT_DEFAULT, VortexMode.DEFAULT))
+    selected_prompt, mode_enum = mode_map.get(str(explicit_mode).upper(), (PROMPT_DEFAULT, VortexMode.DEFAULT))
     
     return trimmed, selected_prompt, mode_enum

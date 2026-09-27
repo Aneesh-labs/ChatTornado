@@ -36,8 +36,18 @@ const ChatWindow = React.memo(({
     socket,
     onDelete,
     onDeleteSelected,
+    aiMode: propAiMode,
+    setAiMode: propSetAiMode,
 }) => {
-    const [aiMode, setAiMode] = useState("DEFAULT");
+    const [localAiMode, setLocalAiMode] = useState(() => {
+        try {
+            return sessionStorage.getItem("vortex_admin_unlocked") === "true" ? "ADMIN" : "DEFAULT";
+        } catch {
+            return "DEFAULT";
+        }
+    });
+    const aiMode = propAiMode !== undefined ? propAiMode : localAiMode;
+    const setAiMode = propSetAiMode || setLocalAiMode;
 
     const handleTogglePanel = () => {
         setRightPanelOpen((prev) => !prev);

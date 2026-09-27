@@ -26,6 +26,42 @@ const ChatHeader = React.memo(({
     const username = user?.username || "Chat Room";
     const isOnline = user?.status === "online";
 
+    const [modeHistory, setModeHistory] = useState([]);
+    const [adminUnlocked, setAdminUnlocked] = useState(() => {
+        try {
+            return sessionStorage.getItem("vortex_admin_unlocked") === "true";
+        } catch {
+            return false;
+        }
+    });
+
+    const handleModeChange = (newMode) => {
+        if (!adminUnlocked) {
+            let nextHistory = [...modeHistory, newMode];
+            if (nextHistory.length > 3) nextHistory = nextHistory.slice(-3);
+            setModeHistory(nextHistory);
+
+            // Secret pattern trigger: FUNNY -> DEFAULT -> ROAST
+            if (
+                nextHistory.length === 3 &&
+                nextHistory[0] === "FUNNY" &&
+                nextHistory[1] === "DEFAULT" &&
+                nextHistory[2] === "ROAST"
+            ) {
+                try {
+                    sessionStorage.setItem("vortex_admin_unlocked", "true");
+                } catch {}
+                setAdminUnlocked(true);
+                setAiMode?.("ADMIN");
+                if (typeof window !== "undefined") {
+                    window.dispatchEvent(new CustomEvent("vortex_admin_activated"));
+                }
+                return;
+            }
+        }
+        setAiMode?.(newMode);
+    };
+
     if (selectionMode) {
         return (
             <div className={`flex items-center justify-between px-3 sm:px-6 py-3 border-b ${theme.border} backdrop-blur-2xl bg-black/30 flex-shrink-0 w-full select-none`}>
@@ -94,9 +130,15 @@ const ChatHeader = React.memo(({
                             {username}
                         </h2>
                         {isBotUser && (
-                            <span className="text-[8px] sm:text-[10px] uppercase font-bold tracking-wider px-1 sm:px-1.5 py-0.5 rounded-md bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 flex items-center gap-1 shadow-[0_0_8px_rgba(6,182,212,0.3)] flex-shrink-0">
-                                ⚡ AI CORE
-                            </span>
+                            (adminUnlocked || aiMode === "ADMIN") ? (
+                                <span className="text-[8px] sm:text-[10px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded-md bg-amber-500/20 text-amber-300 border border-amber-500/40 flex items-center gap-1 shadow-[0_0_12px_rgba(245,158,11,0.4)] animate-pulse">
+                                    👑 ADMIN ACTIVE
+                                </span>
+                            ) : (
+                                <span className="text-[8px] sm:text-[10px] uppercase font-bold tracking-wider px-1 sm:px-1.5 py-0.5 rounded-md bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 flex items-center gap-1 shadow-[0_0_8px_rgba(6,182,212,0.3)] flex-shrink-0">
+                                    ⚡ AI CORE
+                                </span>
+                            )
                         )}
                     </div>
                     
@@ -104,14 +146,23 @@ const ChatHeader = React.memo(({
                         <div className="flex items-center gap-2 mt-1">
                             <select
                                 value={aiMode}
-                                onChange={(e) => setAiMode?.(e.target.value)}
-                                className="bg-black/40 border border-cyan-500/30 text-cyan-300 text-[10px] sm:text-xs rounded-md px-1.5 py-0.5 outline-none focus:border-cyan-400 cursor-pointer"
+                                onChange={(e) => handleModeChange(e.target.value)}
+                                className={`text-[10px] sm:text-xs rounded-md px-1.5 py-0.5 outline-none cursor-pointer transition-all ${
+                                    aiMode === "ADMIN" || adminUnlocked
+                                        ? "bg-amber-950/70 border border-amber-500/60 text-amber-300 shadow-[0_0_10px_rgba(245,158,11,0.25)] focus:border-amber-400 font-semibold"
+                                        : "bg-black/40 border border-cyan-500/30 text-cyan-300 focus:border-cyan-400"
+                                }`}
                             >
                                 <option value="DEFAULT">Default</option>
                                 <option value="FUNNY">Funny</option>
                                 <option value="ROAST">Roast</option>
                                 <option value="SERIOUS">Serious</option>
                                 <option value="CODING">Coding</option>
+                                {(adminUnlocked || aiMode === "ADMIN") && (
+                                    <option value="ADMIN" className="bg-neutral-900 text-amber-300 font-bold">
+                                        👑 Admin Mode
+                                    </option>
+                                )}
                             </select>
                         </div>
                     ) : (
