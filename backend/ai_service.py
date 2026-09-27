@@ -233,56 +233,59 @@ async def generate_ai_text(prompt: str, chat_history: List[dict], system_prompt:
         ]
 
         models_to_try = [
-            "gemini-3.6-flash",
-            "gemini-3.7-flash",
-            "gemini-3.8-flash",
-            "gemini-3.5-flash",
-            "gemini-flash-latest",
-            "gemini-3.1-pro-preview",
-            "gemini-2.5-flash"
+            "gemini-2.5-flash",
+            "gemini-2.0-flash",
+            "gemini-1.5-flash",
+            "gemini-1.5-pro",
+            "gemini-2.0-flash-lite"
         ]
 
         for model_name in models_to_try:
-            try:
-                print(f"[AI_SERVICE] Calling Gemini SDK with {model_name}...", flush=True)
-                response = client.models.generate_content(
-                    model=model_name,
-                    contents=contents,
-                    config=types.GenerateContentConfig(
+            # Try with Google Search tool first, fallback to standard generation if needed
+            for use_search in [True, False]:
+                try:
+                    print(f"[AI_SERVICE] Calling Gemini SDK {model_name} (search={use_search})...", flush=True)
+                    gen_config = types.GenerateContentConfig(
                         system_instruction=system_prompt,
                         temperature=0.75,
                         max_output_tokens=1024,
                         safety_settings=safety_settings,
-                        tools=[{"google_search": {}}]  # Enable native Google Search Grounding!
                     )
-                )
-                if response and response.text:
-                    result_text = response.text.strip()
-                    # Check for Google Search grounding metadata
-                    try:
-                        candidate = response.candidates[0] if response.candidates else None
-                        grounding_meta = getattr(candidate, "grounding_metadata", None)
-                        if grounding_meta:
-                            chunks = getattr(grounding_meta, "grounding_chunks", []) or []
-                            web_links = []
-                            for chunk in chunks:
-                                web = getattr(chunk, "web", None)
-                                if web:
-                                    uri = getattr(web, "uri", None)
-                                    title = getattr(web, "title", None) or uri
-                                    if uri:
-                                        web_links.append(f"• [{title}]({uri})")
-                            if web_links and "Sources" not in result_text:
-                                unique_links = list(dict.fromkeys(web_links))[:5]
-                                result_text += "\n\n**🌐 Sources & Web References:**\n" + "\n".join(unique_links)
-                    except Exception as meta_e:
-                        print(f"[AI_SERVICE] Grounding metadata parse note: {meta_e}", flush=True)
+                    if use_search:
+                        gen_config.tools = [{"google_search": {}}]
 
-                    print(f"[AI_SERVICE] Gemini SDK {model_name} succeeded with web search grounding!", flush=True)
-                    return result_text
-            except Exception as e:
-                print(f"[AI_SERVICE] Gemini SDK model {model_name} failed: {e}", flush=True)
-                continue
+                    response = client.models.generate_content(
+                        model=model_name,
+                        contents=contents,
+                        config=gen_config
+                    )
+                    if response and response.text:
+                        result_text = response.text.strip()
+                        # Check for Google Search grounding metadata
+                        try:
+                            candidate = response.candidates[0] if response.candidates else None
+                            grounding_meta = getattr(candidate, "grounding_metadata", None)
+                            if grounding_meta:
+                                chunks = getattr(grounding_meta, "grounding_chunks", []) or []
+                                web_links = []
+                                for chunk in chunks:
+                                    web = getattr(chunk, "web", None)
+                                    if web:
+                                        uri = getattr(web, "uri", None)
+                                        title = getattr(web, "title", None) or uri
+                                        if uri:
+                                            web_links.append(f"• [{title}]({uri})")
+                                if web_links and "Sources" not in result_text:
+                                    unique_links = list(dict.fromkeys(web_links))[:5]
+                                    result_text += "\n\n**🌐 Sources & Web References:**\n" + "\n".join(unique_links)
+                        except Exception as meta_e:
+                            print(f"[AI_SERVICE] Grounding metadata parse note: {meta_e}", flush=True)
+
+                        print(f"[AI_SERVICE] Gemini SDK {model_name} succeeded (search={use_search})!", flush=True)
+                        return result_text
+                except Exception as e:
+                    print(f"[AI_SERVICE] Gemini SDK {model_name} (search={use_search}) failed: {e}", flush=True)
+                    continue
 
     except Exception as exc:
         print(f"[AI_SERVICE] Gemini SDK exception: {exc}", flush=True)
@@ -310,49 +313,51 @@ async def generate_ai_text(prompt: str, chat_history: List[dict], system_prompt:
         ]
 
         for model_name in [
-            "gemini-3.6-flash",
-            "gemini-3.7-flash",
-            "gemini-3.8-flash",
-            "gemini-3.5-flash",
-            "gemini-flash-latest",
-            "gemini-3.1-pro-preview"
+            "gemini-2.5-flash",
+            "gemini-2.0-flash",
+            "gemini-1.5-flash",
+            "gemini-1.5-pro",
+            "gemini-2.0-flash-lite"
         ]:
-            try:
-                print(f"[AI_SERVICE] Trying REST API with {model_name}...", flush=True)
-                rest_url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={api_key}"
-                payload = {
-                    "system_instruction": {
-                        "parts": [{"text": system_prompt}]
-                    },
-                    "contents": rest_contents,
-                    "safetySettings": rest_safety,
-                    "tools": [{"google_search": {}}]
-                }
-                async with httpx.AsyncClient(timeout=30.0) as http_client:
-                    r = await http_client.post(rest_url, json=payload)
-                    res_data = r.json()
-                    if "candidates" in res_data and res_data["candidates"]:
-                        candidate_text = res_data["candidates"][0].get("content", {}).get("parts", [{}])[0].get("text", "")
-                        if candidate_text:
-                            final_cand = candidate_text.strip()
-                            grounding_meta = res_data["candidates"][0].get("groundingMetadata")
-                            if grounding_meta and "groundingChunks" in grounding_meta:
-                                web_links = []
-                                for chunk in grounding_meta["groundingChunks"]:
-                                    web = chunk.get("web", {})
-                                    if web.get("uri"):
-                                        title = web.get("title") or web.get("uri")
-                                        web_links.append(f"• [{title}]({web['uri']})")
-                                if web_links and "Sources" not in final_cand:
-                                    unique_links = list(dict.fromkeys(web_links))[:5]
-                                    final_cand += "\n\n**🌐 Sources & Web References:**\n" + "\n".join(unique_links)
-                            print(f"[AI_SERVICE] REST API {model_name} succeeded!", flush=True)
-                            return final_cand
-                    elif "error" in res_data:
-                        print(f"[AI_SERVICE] REST API {model_name} error: {res_data['error'].get('message')}", flush=True)
-            except Exception as re_err:
-                print(f"[AI_SERVICE] REST API {model_name} failed: {re_err}", flush=True)
-                continue
+            for use_search in [True, False]:
+                try:
+                    print(f"[AI_SERVICE] Trying REST API with {model_name} (search={use_search})...", flush=True)
+                    rest_url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={api_key}"
+                    payload = {
+                        "system_instruction": {
+                            "parts": [{"text": system_prompt}]
+                        },
+                        "contents": rest_contents,
+                        "safetySettings": rest_safety,
+                    }
+                    if use_search:
+                        payload["tools"] = [{"google_search": {}}]
+
+                    async with httpx.AsyncClient(timeout=30.0) as http_client:
+                        r = await http_client.post(rest_url, json=payload)
+                        res_data = r.json()
+                        if "candidates" in res_data and res_data["candidates"]:
+                            candidate_text = res_data["candidates"][0].get("content", {}).get("parts", [{}])[0].get("text", "")
+                            if candidate_text:
+                                final_cand = candidate_text.strip()
+                                grounding_meta = res_data["candidates"][0].get("groundingMetadata")
+                                if grounding_meta and "groundingChunks" in grounding_meta:
+                                    web_links = []
+                                    for chunk in grounding_meta["groundingChunks"]:
+                                        web = chunk.get("web", {})
+                                        if web.get("uri"):
+                                            title = web.get("title") or web.get("uri")
+                                            web_links.append(f"• [{title}]({web['uri']})")
+                                    if web_links and "Sources" not in final_cand:
+                                        unique_links = list(dict.fromkeys(web_links))[:5]
+                                        final_cand += "\n\n**🌐 Sources & Web References:**\n" + "\n".join(unique_links)
+                                print(f"[AI_SERVICE] REST API {model_name} succeeded (search={use_search})!", flush=True)
+                                return final_cand
+                        elif "error" in res_data:
+                            print(f"[AI_SERVICE] REST API {model_name} error: {res_data['error'].get('message')}", flush=True)
+                except Exception as re_err:
+                    print(f"[AI_SERVICE] REST API {model_name} failed: {re_err}", flush=True)
+                    continue
     except Exception as rest_exc:
         print(f"[AI_SERVICE] REST client exception: {rest_exc}", flush=True)
 
