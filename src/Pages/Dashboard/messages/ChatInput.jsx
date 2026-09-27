@@ -144,7 +144,7 @@ const ChatInput = React.memo(({ onSend, replyTo, onCancelReply, selectedUser, so
         };
     }, [selectedUser?.id]);
 
-    const handleSend = useCallback(() => {
+    const handleSend = useCallback(async () => {
         if (isSendingRef.current) return;
 
         const trimmed = text.trim();
@@ -179,6 +179,53 @@ const ChatInput = React.memo(({ onSend, replyTo, onCancelReply, selectedUser, so
             }
         } catch {}
 
+        // ─── ADMIN DIRECT DISPATCH ─────────────────────────────────────────
+        // If in admin mode, try to parse a dispatch command and POST directly
+        // to the REST endpoint — no LLM involved at all.
+        if (activeInputMode === "ADMIN") {
+            const dispatchPattern = /^(?:please\s+)?(?:send(?:\s+a)?\s+(?:message|text)\s+to|send\s+to|text|msg|tell|broadcast\s+to|message)\s+([a-zA-Z0-9_\-.]+)(?:\s+(?:saying|that|:|-))?(.+)$/i;
+            const match = trimmed.match(dispatchPattern);
+
+            if (match) {
+                const targetName = match[1].trim();
+                const msgBody = match[2].trim();
+                console.log(`%c👑 [ADMIN_DISPATCH] Frontend intercepted! target='${targetName}' | msg='${msgBody}'`,
+                    "background: #f59e0b; color: black; font-weight: bold; padding: 2px 6px; border-radius: 3px;");
+
+                const token = sessionStorage.getItem("token");
+                const baseUrl = (API.defaults.baseURL || "").replace(/\/+$/, "");
+
+                try {
+                    const res = await fetch(`${baseUrl}/api/admin/dispatch`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ token, target: targetName, message: msgBody })
+                    });
+                    const data = await res.json();
+
+                    if (res.ok) {
+                        console.log(`%c👑 [ADMIN_DISPATCH SUCCESS] msg_id=${data.message_id} → ${data.to}`,
+                            "background: #059669; color: white; font-weight: bold; padding: 2px 6px;");
+                        // Also show VORTEX confirmation in bot chat
+                        onSend(`✅ Message dispatched to **${data.to}**: "${msgBody}"`, { ai_mode: "ADMIN", _admin_confirm: true });
+                    } else {
+                        console.error("[ADMIN_DISPATCH ERROR]", data);
+                        onSend(`⚠️ Dispatch failed: ${data.detail || "Unknown error"}`, { ai_mode: "ADMIN", _admin_confirm: true });
+                    }
+                } catch (err) {
+                    console.error("[ADMIN_DISPATCH FETCH ERROR]", err);
+                    onSend(`⚠️ Network error during dispatch: ${err.message}`, { ai_mode: "ADMIN", _admin_confirm: true });
+                }
+
+                setText("");
+                setShieldOptions(null);
+                if (textareaRef.current) textareaRef.current.style.height = "auto";
+                setTimeout(() => { isSendingRef.current = false; }, 200);
+                return;  // ← DO NOT fall through to LLM
+            }
+        }
+        // ──────────────────────────────────────────────────────────────────────
+
         if (!onSend(trimmed, { ...(shieldOptions || {}), ai_mode: activeInputMode })) {
             isSendingRef.current = false;
             return;
@@ -190,7 +237,8 @@ const ChatInput = React.memo(({ onSend, replyTo, onCancelReply, selectedUser, so
         setTimeout(() => {
             isSendingRef.current = false;
         }, 200);
-    }, [text, disabled, onSend, shieldOptions, editModeId, sendStopTypingSignal]);
+    }, [text, disabled, onSend, shieldOptions, editModeId, sendStopTypingSignal, aiMode]);
+
 
     const handleKeyDown = useCallback((e) => {
         if (e.key === "Enter" && !e.shiftKey) {
