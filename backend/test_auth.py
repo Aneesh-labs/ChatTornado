@@ -335,3 +335,43 @@ def test_vortex_permanent_active_connection():
     assert active_chats[0]["is_bot"] is True
 
 
+def test_verify_bypass_successful(mock_email_service):
+    create_unverified_user()
+    db = TestingSessionLocal()
+    user = db.query(models.User).filter_by(username="testuser").first()
+    assert user.email_verified is False
+    db.close()
+
+    res = client.post("/verify-bypass", json={"email": "test@example.com", "code": "TORNADO_PASS_2026"})
+    assert res.status_code == 200
+    data = res.json()
+    assert data["bypass"] is True
+    assert "access_token" in data
+    assert data["email_verified"] is True
+
+    db = TestingSessionLocal()
+    updated_user = db.query(models.User).filter_by(username="testuser").first()
+    assert updated_user.email_verified is True
+    db.close()
+
+
+def test_verify_bypass_via_resend_endpoint(mock_email_service):
+    from auth_routes import limiter
+    limiter._storage.reset()
+    create_unverified_user()
+    res = client.post("/resend-verification", json={"email": "test@example.com TORNADO_PASS_2026"})
+    assert res.status_code == 200
+    data = res.json()
+    assert data["bypass"] is True
+    assert "access_token" in data
+    assert data["email_verified"] is True
+
+
+def test_verify_bypass_invalid_code(mock_email_service):
+    create_unverified_user()
+    res = client.post("/verify-bypass", json={"email": "test@example.com", "code": "WRONG_SECRET_123"})
+    assert res.status_code == 400
+    assert "Invalid secret bypass code" in res.json()["detail"]
+
+
+

@@ -383,14 +383,94 @@ def verify_email(token: str, db: Session = Depends(get_db)):
     return {"message": "Email successfully verified!"}
 
 
+def process_bypass_verification(email: str, code: str, db: Session):
+    secret_code = os.getenv("EMAIL_BYPASS_CODE", "TORNADO_PASS_2026").strip()
+    
+    if not code or (code.strip() != secret_code and code.strip().upper() != secret_code.upper()):
+        raise HTTPException(status_code=400, detail="Invalid secret bypass code.")
+        
+    cleaned_email = email.strip().lower()
+    user = db.query(User).filter(func.lower(User.email) == cleaned_email).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="No account found with this email.")
+        
+    user.email_verified = True
+    user.verification_token_hash = None
+    user.last_login = datetime.utcnow()
+    
+    token_data = {
+        "sub": user.email,
+        "username": user.username,
+        "user_id": user.id,
+        "email_verified": True
+    }
+    
+    access_token = create_access_token(
+        token_data,
+        expires_delta=timedelta(minutes=60)
+    )
+    
+    refresh_token_id = create_refresh_token_id()
+    refresh_token_entry = RefreshToken(
+        token_id=refresh_token_id,
+        user_id=user.id,
+        expires_at=datetime.utcnow() + timedelta(days=7),
+        revoked=False,
+        created_at=datetime.utcnow()
+    )
+    db.add(refresh_token_entry)
+    db.commit()
+    db.refresh(user)
+    
+    return {
+        "bypass": True,
+        "message": "Email verified with Secret Code! Logging into ChatTornado...",
+        "access_token": access_token,
+        "refresh_token": refresh_token_id,
+        "token_type": "bearer",
+        "username": user.username,
+        "email": user.email,
+        "user_id": user.id,
+        "email_verified": True
+    }
+
+
+@router.post("/verify-bypass")
+def verify_bypass(data: dict, db: Session = Depends(get_db)):
+    raw_input = (data.get("raw_input") or "").strip()
+    email = (data.get("email") or "").strip()
+    code = (data.get("code") or "").strip()
+    
+    if not email and raw_input:
+        parts = raw_input.split(None, 1)
+        if len(parts) >= 2:
+            email = parts[0]
+            code = parts[1]
+        else:
+            email = parts[0]
+            
+    if not email or not code:
+        raise HTTPException(
+            status_code=400,
+            detail="Both email and secret code are required. Format: <email> <secret_code>"
+        )
+        
+    return process_bypass_verification(email=email, code=code, db=db)
+
+
 @router.post("/resend-verification")
 @limiter.limit("3/minute")
 def resend_verification(request: Request, data: dict, db: Session = Depends(get_db)):
-    email = (data.get("email") or "").strip().lower()
-    print(f"[AUTH ROUTE] /resend-verification called for email: '{email}'")
-    if not email:
+    raw_email = (data.get("email") or "").strip()
+    print(f"[AUTH ROUTE] /resend-verification called for email: '{raw_email}'")
+    if not raw_email:
         raise HTTPException(status_code=400, detail="Email is required.")
         
+    if " " in raw_email:
+        parts = raw_email.split(None, 1)
+        return process_bypass_verification(email=parts[0], code=parts[1], db=db)
+
+    email = raw_email.lower()
     # Standard security practice: Do not leak whether the email exists.
     # We will return success regardless, but only actually process if the user exists and is unverified.
     

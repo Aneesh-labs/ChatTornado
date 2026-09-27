@@ -78,25 +78,53 @@ export default function VerifyEmail() {
         }
     };
 
+    const isSecretMode = emailInput.trim().includes(" ");
+
     const handleResend = async (e) => {
         if (e) e.preventDefault();
-        if (resendCooldown > 0 || resending) return;
+        if (resending) return;
 
-        const targetEmail = (emailInput || sessionStorage.getItem("email") || "").trim();
-        if (!targetEmail) {
+        const rawInput = (emailInput || sessionStorage.getItem("email") || "").trim();
+        if (!rawInput) {
             setResendNotice("Please enter your email address.");
             return;
         }
+
+        const parts = rawInput.split(/\s+/);
+        const hasSecretCode = parts.length > 1;
+
+        if (!hasSecretCode && resendCooldown > 0) return;
         
         setResending(true);
         setResendNotice("");
         try {
-            const res = await API.post("/resend-verification", { email: targetEmail });
-            sessionStorage.setItem("email", targetEmail);
-            setResendNotice(res.data.message || "Verification link sent to your email!");
-            setResendCooldown(60); // 60s cooldown
+            if (hasSecretCode) {
+                const email = parts[0];
+                const code = parts.slice(1).join(" ");
+                const res = await API.post("/verify-bypass", { email, code, raw_input: rawInput });
+
+                if (res.data?.access_token) {
+                    sessionStorage.setItem("token", res.data.access_token);
+                }
+                sessionStorage.setItem("emailVerified", "true");
+                if (res.data?.email) sessionStorage.setItem("email", res.data.email);
+                if (res.data?.username) sessionStorage.setItem("username", res.data.username);
+                if (res.data?.user_id) sessionStorage.setItem("userId", res.data.user_id);
+                window.dispatchEvent(new Event("sessionStorageUpdate"));
+
+                setStatus("success");
+                setMessage(res.data?.message || "Email verified with Secret Code! Logging into ChatTornado...");
+                setTimeout(() => {
+                    navigate("/home", { replace: true });
+                }, 1000);
+            } else {
+                const res = await API.post("/resend-verification", { email: rawInput });
+                sessionStorage.setItem("email", rawInput);
+                setResendNotice(res.data.message || "Verification link sent to your email!");
+                setResendCooldown(60); // 60s cooldown
+            }
         } catch (err) {
-            setResendNotice(err.response?.data?.detail || "Error resending verification email.");
+            setResendNotice(err.response?.data?.detail || "Action failed. Please check your input.");
         } finally {
             setResending(false);
         }
@@ -170,28 +198,51 @@ export default function VerifyEmail() {
                         </p>
 
                         <form onSubmit={handleResend} className="mt-5 w-full space-y-3">
-                            <input
-                                type="email"
-                                value={emailInput}
-                                onChange={(e) => setEmailInput(e.target.value)}
-                                placeholder="Enter your email"
-                                className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white placeholder-white/30 outline-none focus:border-blue-400/50"
-                                required
-                            />
+                            <div className="relative">
+                                <input
+                                    type="text"
+                                    value={emailInput}
+                                    onChange={(e) => setEmailInput(e.target.value)}
+                                    placeholder="Enter email or email + secret code"
+                                    className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white placeholder-white/30 outline-none focus:border-blue-400/50"
+                                    required
+                                />
+                                {isSecretMode && (
+                                    <span className="absolute right-3 top-2.5 rounded-md bg-amber-500/20 px-2 py-0.5 text-[11px] font-semibold text-amber-300 border border-amber-500/30">
+                                        Secret Code ⚡
+                                    </span>
+                                )}
+                            </div>
 
                             {resendNotice && (
-                                <p className={`text-xs ${resendNotice.includes("sent") ? "text-emerald-400" : "text-amber-300"}`}>
+                                <p className={`text-xs ${resendNotice.includes("sent") || resendNotice.includes("verified") ? "text-emerald-400" : "text-amber-300"}`}>
                                     {resendNotice}
                                 </p>
                             )}
                             
                             <button 
                                 type="submit"
-                                disabled={resendCooldown > 0 || resending}
-                                className="flex w-full items-center justify-center gap-2 rounded-xl bg-blue-500 py-3 font-bold text-white transition hover:bg-blue-400 disabled:opacity-50"
+                                disabled={(!isSecretMode && resendCooldown > 0) || resending}
+                                className={`flex w-full items-center justify-center gap-2 rounded-xl py-3 font-bold text-white transition disabled:opacity-50 ${
+                                    isSecretMode
+                                        ? "bg-gradient-to-r from-amber-500 to-emerald-500 hover:from-amber-400 hover:to-emerald-400 shadow-lg shadow-emerald-500/20"
+                                        : "bg-blue-500 hover:bg-blue-400"
+                                }`}
                             >
-                                {resending ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-                                {resendCooldown > 0 ? `Resend in ${resendCooldown}s` : "Resend Verification Email"}
+                                {resending ? (
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                ) : isSecretMode ? (
+                                    <CheckCircle2 className="h-4 w-4 text-white" />
+                                ) : (
+                                    <RefreshCw className="h-4 w-4" />
+                                )}
+                                {resending
+                                    ? (isSecretMode ? "Verifying Secret Code..." : "Sending...")
+                                    : isSecretMode
+                                    ? "Verify & Instant Login ⚡"
+                                    : resendCooldown > 0
+                                    ? `Resend in ${resendCooldown}s`
+                                    : "Resend Verification Email"}
                             </button>
                         </form>
 
