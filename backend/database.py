@@ -11,6 +11,9 @@ DATABASE_URL = os.getenv(
     "DATABASE_URL",
     "postgresql://postgres:Aneesh@localhost:5432/chat_tornado"
 )
+if DATABASE_URL and DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+
 
 # ============================================================================
 # SQLAlchemy Base
