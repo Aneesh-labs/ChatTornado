@@ -7,6 +7,7 @@ import { requestP2PDownload } from "../../../Services/p2p";
 import API from "../../../Services/API";
 import CyberShieldVault from "./CyberShieldVault";
 import { soundEngine } from "../../../utils/soundEffects";
+import { speechService } from "../../../utils/speechService";
 import InChatGameBoard from "./InChatGameBoard";
 import MathFormattedText from "./MathFormattedText";
 
@@ -688,7 +689,20 @@ const MessageBubble = React.memo(({
     const [hover, setHover] = useState(false);
     const [lightboxImage, setLightboxImage] = useState(null);
     const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+    const [isSpeaking, setIsSpeaking] = useState(() => speechService.isSpeaking(msg.id));
     const longPressTimer = useRef(null);
+
+    useEffect(() => {
+        const unsubscribe = speechService.subscribe((activeId) => {
+            setIsSpeaking(activeId === msg.id);
+        });
+        return () => unsubscribe();
+    }, [msg.id]);
+
+    const handleToggleSpeak = useCallback((e) => {
+        e?.stopPropagation?.();
+        speechService.speakMessage(msg.id, msg.message);
+    }, [msg.id, msg.message]);
 
     // Cyber Shield state
     const [unlockedPayload, setUnlockedPayload] = useState(null);
@@ -921,6 +935,38 @@ const MessageBubble = React.memo(({
                                 <div className="w-[1px] h-3.5 bg-white/10 mx-1" role="separator" />
                                 <motion.button
                                     type="button"
+                                    whileHover={{ scale: 1.15 }}
+                                    whileTap={{ scale: 0.9 }}
+                                    onClick={handleToggleSpeak}
+                                    className={`text-[11px] px-1.5 py-0.5 rounded-md transition-all font-medium flex items-center gap-1 ${
+                                        isSpeaking 
+                                            ? "text-cyan-300 bg-cyan-500/20 shadow-[0_0_8px_rgba(6,182,212,0.4)]" 
+                                            : "text-white/50 hover:text-white/90 hover:bg-white/[0.08]"
+                                    }`}
+                                    aria-label={isSpeaking ? "Stop reading message" : "Read message out loud"}
+                                    title={isSpeaking ? "Stop reading" : "Read out loud"}
+                                >
+                                    {isSpeaking ? (
+                                        <>
+                                            <span className="flex items-center gap-0.5">
+                                                <span className="w-1 h-2 bg-cyan-400 rounded-full animate-[bounce_0.6s_infinite_100ms]" />
+                                                <span className="w-1 h-3 bg-cyan-300 rounded-full animate-[bounce_0.6s_infinite_200ms]" />
+                                                <span className="w-1 h-1.5 bg-cyan-400 rounded-full animate-[bounce_0.6s_infinite_300ms]" />
+                                            </span>
+                                            <span>Stop</span>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+                                            </svg>
+                                            <span>Read</span>
+                                        </>
+                                    )}
+                                </motion.button>
+                                <div className="w-[1px] h-3.5 bg-white/10 mx-1" role="separator" />
+                                <motion.button
+                                    type="button"
                                     whileHover={{ scale: 1.1 }}
                                     whileTap={{ scale: 0.9 }}
                                     onClick={() => onReply?.(msg)}
@@ -953,6 +999,7 @@ const MessageBubble = React.memo(({
                             ${!isGame && (isMe ? "rounded-br-md" : "rounded-bl-md")}
                             transition-all duration-100 touch-manipulation
                             ${selected ? "ring-2 ring-violet-400/80 border-transparent shadow-lg" : "shadow-sm"}
+                            ${isSpeaking ? "ring-2 ring-cyan-400/70 shadow-[0_0_15px_rgba(6,182,212,0.35)]" : ""}
                         `}
                     >
                         {msg.is_shielded ? (
@@ -968,6 +1015,31 @@ const MessageBubble = React.memo(({
                             </CyberShieldVault>
                         ) : (
                             renderMessageContent()
+                        )}
+
+                        {/* Speaking Active Soundwave Banner */}
+                        {isSpeaking && (
+                            <motion.button
+                                type="button"
+                                initial={{ opacity: 0, height: 0 }}
+                                animate={{ opacity: 1, height: "auto" }}
+                                exit={{ opacity: 0, height: 0 }}
+                                onClick={handleToggleSpeak}
+                                title="Click or tap to stop reading"
+                                className="w-full mt-1.5 px-2 py-1 rounded-lg bg-cyan-500/15 border border-cyan-500/30 flex items-center justify-between text-[9px] sm:text-[10px] text-cyan-300 font-semibold cursor-pointer hover:bg-cyan-500/25 transition-colors select-none shadow-[0_0_8px_rgba(6,182,212,0.2)]"
+                            >
+                                <span className="flex items-center gap-1.5">
+                                    <span className="flex items-center gap-0.5">
+                                        <span className="w-1 h-2 bg-cyan-400 rounded-full animate-[bounce_0.6s_infinite_100ms]" />
+                                        <span className="w-1 h-3 bg-cyan-300 rounded-full animate-[bounce_0.6s_infinite_200ms]" />
+                                        <span className="w-1 h-1.5 bg-cyan-400 rounded-full animate-[bounce_0.6s_infinite_300ms]" />
+                                    </span>
+                                    <span>Reading aloud...</span>
+                                </span>
+                                <span className="text-[8px] uppercase tracking-wider text-cyan-300 bg-cyan-950/80 px-1.5 py-0.5 rounded border border-cyan-500/40">
+                                    Tap to stop ⏹
+                                </span>
+                            </motion.button>
                         )}
 
                         {/* Timestamp */}

@@ -2,11 +2,13 @@ import React from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import PropTypes from "prop-types";
 import { useTheme } from "./constants";
+import { speechService } from "../../../utils/speechService";
 
 const QUICK_REACTIONS = ["👍", "❤️", "😂", "😮", "😢", "🔥"];
 
 const MobileMessageActions = React.memo(({ open, msg, isMe, onClose, onReaction, onReply, onSelect, onDelete }) => {
     const theme = useTheme();
+    const isSpeaking = msg ? speechService.isSpeaking(msg.id) : false;
 
     return (
         <AnimatePresence>
@@ -50,6 +52,24 @@ const MobileMessageActions = React.memo(({ open, msg, isMe, onClose, onReaction,
                         </div>
 
                         <div className="border-t border-white/[0.06] px-2 py-2 space-y-0.5 max-h-[40vh] overflow-y-auto">
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    speechService.speakMessage(msg.id, msg.message);
+                                    onClose?.();
+                                }}
+                                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left text-sm transition-colors touch-manipulation ${
+                                    isSpeaking
+                                        ? "text-cyan-300 bg-cyan-500/10 hover:bg-cyan-500/20"
+                                        : "text-white/80 hover:bg-white/[0.04] active:bg-white/[0.06]"
+                                }`}
+                            >
+                                <span className="text-base">{isSpeaking ? "⏹️" : "🔊"}</span>
+                                <span className="font-medium">
+                                    {isSpeaking ? "Stop reading out loud" : "Read out loud"}
+                                </span>
+                            </button>
+
                             <button
                                 type="button"
                                 onClick={() => { 
