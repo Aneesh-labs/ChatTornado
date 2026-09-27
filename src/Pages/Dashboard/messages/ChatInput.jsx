@@ -179,21 +179,130 @@ const ChatInput = React.memo(({ onSend, replyTo, onCancelReply, selectedUser, so
             }
         } catch {}
 
-        // ─── ADMIN DIRECT DISPATCH ─────────────────────────────────────────
-        // If in admin mode, try to parse a dispatch command and POST directly
+        // ─── ADMIN DIRECT DISPATCH & DELETION ──────────────────────────────
+        // If in admin mode, try to parse a dispatch or delete command and POST directly
         // to the REST endpoint — no LLM involved at all.
         if (activeInputMode === "ADMIN") {
+            const deleteIdPattern = /^(?:please\s+)?(?:delete|remove|erase)\s+(?:message|msg)?\s*#?(\d+)$/i;
+            const deleteAllPattern = /^(?:please\s+)?(?:delete|remove|erase|clear|wipe)\s+(?:all\s+)?messages?\s+(?:with|to|from|for)\s+([a-zA-Z0-9_\-.]+)$/i;
+            const deleteLastPattern = /^(?:please\s+)?(?:delete|remove|erase)\s+(?:the\s+)?last\s+(?:message|msg|text)(?:\s+(?:with|to|from|for)\s+([a-zA-Z0-9_\-.]+))?$/i;
+            const deleteTextPattern = /^(?:please\s+)?(?:delete|remove|erase)\s+(?:message|msg|text)\s+(?:saying|containing|with text)\s+["'`]?(.+?)["'`]?$/i;
             const dispatchPattern = /^(?:please\s+)?(?:send(?:\s+a)?\s+(?:message|text)\s+to|send\s+to|text|msg|tell|broadcast\s+to|message)\s+([a-zA-Z0-9_\-.]+)(?:\s+(?:saying|that|:|-))?(.+)$/i;
-            const match = trimmed.match(dispatchPattern);
 
+            const token = sessionStorage.getItem("token");
+            const baseUrl = (API.defaults.baseURL || "").replace(/\/+$/, "");
+
+            // 1. DELETE BY ID
+            const delIdMatch = trimmed.match(deleteIdPattern);
+            if (delIdMatch) {
+                const messageId = parseInt(delIdMatch[1], 10);
+                try {
+                    const res = await fetch(`${baseUrl}/api/admin/delete`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ token, message_id: messageId, mode: "id" })
+                    });
+                    const data = await res.json();
+                    if (res.ok) {
+                        onSend(`🗑️ **Deleted message #${messageId}** (${data.target || "User"}): "${data.preview || ''}"`, { ai_mode: "ADMIN", _admin_confirm: true });
+                    } else {
+                        onSend(`⚠️ Delete failed: ${data.detail || "Unknown error"}`, { ai_mode: "ADMIN", _admin_confirm: true });
+                    }
+                } catch (err) {
+                    onSend(`⚠️ Delete error: ${err.message}`, { ai_mode: "ADMIN", _admin_confirm: true });
+                }
+                setText("");
+                setShieldOptions(null);
+                if (textareaRef.current) textareaRef.current.style.height = "auto";
+                setTimeout(() => { isSendingRef.current = false; }, 200);
+                return;
+            }
+
+            // 2. DELETE ALL MESSAGES WITH USER
+            const delAllMatch = trimmed.match(deleteAllPattern);
+            if (delAllMatch) {
+                const targetName = delAllMatch[1].trim();
+                try {
+                    const res = await fetch(`${baseUrl}/api/admin/delete`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ token, target: targetName, mode: "all" })
+                    });
+                    const data = await res.json();
+                    if (res.ok) {
+                        onSend(`🗑️ **Deleted all ${data.deleted_count} messages** with **${targetName}**.`, { ai_mode: "ADMIN", _admin_confirm: true });
+                    } else {
+                        onSend(`⚠️ Delete failed: ${data.detail || "Unknown error"}`, { ai_mode: "ADMIN", _admin_confirm: true });
+                    }
+                } catch (err) {
+                    onSend(`⚠️ Delete error: ${err.message}`, { ai_mode: "ADMIN", _admin_confirm: true });
+                }
+                setText("");
+                setShieldOptions(null);
+                if (textareaRef.current) textareaRef.current.style.height = "auto";
+                setTimeout(() => { isSendingRef.current = false; }, 200);
+                return;
+            }
+
+            // 3. DELETE LAST MESSAGE (TO USER OR GLOBALLY)
+            const delLastMatch = trimmed.match(deleteLastPattern);
+            if (delLastMatch) {
+                const targetName = delLastMatch[1] ? delLastMatch[1].trim() : null;
+                try {
+                    const res = await fetch(`${baseUrl}/api/admin/delete`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ token, target: targetName, mode: "last" })
+                    });
+                    const data = await res.json();
+                    if (res.ok) {
+                        onSend(`🗑️ **Deleted last message #${data.message_id}** with **${data.target || 'User'}**: "${data.preview || ''}"`, { ai_mode: "ADMIN", _admin_confirm: true });
+                    } else {
+                        onSend(`⚠️ Delete failed: ${data.detail || "Unknown error"}`, { ai_mode: "ADMIN", _admin_confirm: true });
+                    }
+                } catch (err) {
+                    onSend(`⚠️ Delete error: ${err.message}`, { ai_mode: "ADMIN", _admin_confirm: true });
+                }
+                setText("");
+                setShieldOptions(null);
+                if (textareaRef.current) textareaRef.current.style.height = "auto";
+                setTimeout(() => { isSendingRef.current = false; }, 200);
+                return;
+            }
+
+            // 4. DELETE BY TEXT CONTENT
+            const delTextMatch = trimmed.match(deleteTextPattern);
+            if (delTextMatch) {
+                const queryText = delTextMatch[1].trim();
+                try {
+                    const res = await fetch(`${baseUrl}/api/admin/delete`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ token, text_query: queryText, mode: "text" })
+                    });
+                    const data = await res.json();
+                    if (res.ok) {
+                        onSend(`🗑️ **Deleted matching message #${data.message_id}** with **${data.target || 'User'}**: "${data.preview || ''}"`, { ai_mode: "ADMIN", _admin_confirm: true });
+                    } else {
+                        onSend(`⚠️ Delete failed: ${data.detail || "Unknown error"}`, { ai_mode: "ADMIN", _admin_confirm: true });
+                    }
+                } catch (err) {
+                    onSend(`⚠️ Delete error: ${err.message}`, { ai_mode: "ADMIN", _admin_confirm: true });
+                }
+                setText("");
+                setShieldOptions(null);
+                if (textareaRef.current) textareaRef.current.style.height = "auto";
+                setTimeout(() => { isSendingRef.current = false; }, 200);
+                return;
+            }
+
+            // 5. DISPATCH MESSAGE
+            const match = trimmed.match(dispatchPattern);
             if (match) {
                 const targetName = match[1].trim();
                 const msgBody = match[2].trim();
                 console.log(`%c👑 [ADMIN_DISPATCH] Frontend intercepted! target='${targetName}' | msg='${msgBody}'`,
                     "background: #f59e0b; color: black; font-weight: bold; padding: 2px 6px; border-radius: 3px;");
-
-                const token = sessionStorage.getItem("token");
-                const baseUrl = (API.defaults.baseURL || "").replace(/\/+$/, "");
 
                 try {
                     const res = await fetch(`${baseUrl}/api/admin/dispatch`, {
@@ -206,7 +315,6 @@ const ChatInput = React.memo(({ onSend, replyTo, onCancelReply, selectedUser, so
                     if (res.ok) {
                         console.log(`%c👑 [ADMIN_DISPATCH SUCCESS] msg_id=${data.message_id} → ${data.to}`,
                             "background: #059669; color: white; font-weight: bold; padding: 2px 6px;");
-                        // Also show VORTEX confirmation in bot chat
                         onSend(`✅ Message dispatched to **${data.to}**: "${msgBody}"`, { ai_mode: "ADMIN", _admin_confirm: true });
                     } else {
                         console.error("[ADMIN_DISPATCH ERROR]", data);

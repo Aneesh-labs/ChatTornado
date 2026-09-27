@@ -552,22 +552,105 @@ async def websocket_endpoint(websocket: WebSocket):
 
                             # 1A. Capability inquiry check
                             if re.search(
-                                r'\b(?:can you|are you able to|can we|do you have (?:permission|rights|access) to)\s+(?:send|dispatch|post|deliver)\s+(?:a\s+)?(?:messages?|texts?)\b',
+                                r'\b(?:can you|are you able to|can we|do you have (?:permission|rights|access) to)\s+(?:send|dispatch|post|deliver|delete|remove|erase|wipe)\s+(?:a\s+)?(?:messages?|texts?)\b',
                                 prompt_text, re.IGNORECASE
                             ):
                                 reply_text = (
-                                    "👑 **Yes, Administrator!** In Admin Mode, I have elevated dispatch authority and write permission "
-                                    "to send messages across ChatTornado.\n\n"
-                                    "Simply instruct me:\n"
+                                    "👑 **Yes, Administrator!** In Admin Mode, I have elevated dispatch and deletion authority across ChatTornado.\n\n"
+                                    "**Dispatch Commands:**\n"
                                     "• `text <username> <message>`\n"
-                                    "• `send a message to <username> saying <message>`\n"
+                                    "• `send to <username> <message>`\n"
                                     "• `tell <username> <message>`\n\n"
-                                    "I will immediately deliver the message to their conversation."
+                                    "**Deletion Commands:**\n"
+                                    "• `delete last message to <username>`\n"
+                                    "• `delete message <id>`\n"
+                                    "• `delete all messages with <username>`\n"
+                                    "• `delete last message`"
                                 )
                                 direct_dispatched = True
                                 print(f"👑 [ADMIN_CAPABILITY] Answered capability inquiry for Admin {u_id}", flush=True)
 
-                            # 1B. Direct dispatch command
+                            # 1B. Direct delete command
+                            if not direct_dispatched:
+                                del_id_match = re.search(r'^(?:please\s+)?(?:delete|remove|erase)\s+(?:message|msg)?\s*#?(\d+)$', prompt_text.strip(), re.IGNORECASE)
+                                del_all_match = re.search(r'^(?:please\s+)?(?:delete|remove|erase|clear|wipe)\s+(?:all\s+)?messages?\s+(?:with|to|from|for)\s+([a-zA-Z0-9_\-.]+)$', prompt_text.strip(), re.IGNORECASE)
+                                del_last_match = re.search(r'^(?:please\s+)?(?:delete|remove|erase)\s+(?:the\s+)?last\s+(?:message|msg|text)(?:\s+(?:with|to|from|for)\s+([a-zA-Z0-9_\-.]+))?$', prompt_text.strip(), re.IGNORECASE)
+
+                                if del_id_match:
+                                    target_msg_id = int(del_id_match.group(1))
+                                    msg = reply_db.query(Message).filter(Message.id == target_msg_id).first()
+                                    if msg:
+                                        reply_db.query(MessageVisibility).filter(MessageVisibility.message_id == target_msg_id).update({"visible": False}, synchronize_session=False)
+                                        reply_db.commit()
+                                        del_pkt = {"type": "delete_message", "message_id": target_msg_id}
+                                        await manager.send_personal_message(msg.sender_id, del_pkt)
+                                        await manager.send_personal_message(msg.receiver_id, del_pkt)
+                                        direct_dispatched = True
+                                        reply_text = f"🗑️ **Deleted message #{target_msg_id}**: \"{msg.message}\""
+                                    else:
+                                        direct_dispatched = True
+                                        reply_text = f"⚠️ Message ID #{target_msg_id} not found."
+
+                                elif del_all_match:
+                                    raw_u = del_all_match.group(1).strip()
+                                    t_user = reply_db.query(User).filter(func.lower(User.username) == raw_u.lower()).first()
+                                    if not t_user:
+                                        t_user = reply_db.query(User).filter(User.username.ilike(f"%{raw_u}%")).first()
+                                    if t_user:
+                                        msgs = reply_db.query(Message).filter(
+                                            or_(
+                                                and_(Message.sender_id == u_id, Message.receiver_id == t_user.id),
+                                                and_(Message.sender_id == t_user.id, Message.receiver_id == u_id)
+                                            )
+                                        ).all()
+                                        for m in msgs:
+                                            reply_db.query(MessageVisibility).filter(MessageVisibility.message_id == m.id).update({"visible": False}, synchronize_session=False)
+                                            del_pkt = {"type": "delete_message", "message_id": m.id}
+                                            await manager.send_personal_message(m.sender_id, del_pkt)
+                                            await manager.send_personal_message(m.receiver_id, del_pkt)
+                                        reply_db.commit()
+                                        direct_dispatched = True
+                                        reply_text = f"🗑️ **Deleted all {len(msgs)} messages** in conversation with **{t_user.username}**."
+                                    else:
+                                        direct_dispatched = True
+                                        reply_text = f"⚠️ User '{raw_u}' not found."
+
+                                elif del_last_match:
+                                    raw_u = del_last_match.group(1)
+                                    t_user = None
+                                    if raw_u:
+                                        raw_u = raw_u.strip()
+                                        t_user = reply_db.query(User).filter(func.lower(User.username) == raw_u.lower()).first()
+                                        if not t_user:
+                                            t_user = reply_db.query(User).filter(User.username.ilike(f"%{raw_u}%")).first()
+
+                                    q = reply_db.query(Message)
+                                    if t_user:
+                                        q = q.filter(
+                                            or_(
+                                                and_(Message.sender_id == u_id, Message.receiver_id == t_user.id),
+                                                and_(Message.sender_id == t_user.id, Message.receiver_id == u_id)
+                                            )
+                                        )
+                                    else:
+                                        q = q.filter(Message.sender_id == u_id)
+
+                                    last_m = q.order_by(Message.id.desc()).first()
+                                    if last_m:
+                                        reply_db.query(MessageVisibility).filter(MessageVisibility.message_id == last_m.id).update({"visible": False}, synchronize_session=False)
+                                        reply_db.commit()
+                                        del_pkt = {"type": "delete_message", "message_id": last_m.id}
+                                        await manager.send_personal_message(last_m.sender_id, del_pkt)
+                                        await manager.send_personal_message(last_m.receiver_id, del_pkt)
+                                        other_u = reply_db.query(User).filter(User.id == (last_m.receiver_id if last_m.sender_id == u_id else last_m.sender_id)).first()
+                                        other_name = other_u.username if other_u else "User"
+                                        direct_dispatched = True
+                                        reply_text = f"🗑️ **Deleted last message #{last_m.id}** with **{other_name}**: \"{last_m.message}\""
+                                    else:
+                                        direct_dispatched = True
+                                        reply_text = f"⚠️ No recent messages found to delete."
+
+                            # 1C. Direct dispatch command
                             if not direct_dispatched:
                                 direct_match = re.search(
                                     r'^(?:please\s+)?'
@@ -648,6 +731,7 @@ async def websocket_endpoint(websocket: WebSocket):
                                         direct_dispatched = True
                                         reply_text = f"⚠️ Admin Dispatch Failed: No user matching '{target_raw}' was found in the platform registry."
                                         print(f"⚠️ [ADMIN_DIRECT] No user found for target='{target_raw}'", flush=True)
+
 
                         if not direct_dispatched:
                             reply_text = await process_user_message_to_bot(u_id, prompt_text, ai_mode, reply_db)
