@@ -129,6 +129,39 @@ def is_image_request(text: str) -> Tuple[bool, str]:
     return False, cleaned
 
 
+from datetime import datetime, timezone, timedelta
+
+async def fetch_live_web_search(query: str) -> List[Dict[str, str]]:
+    """Live web search extraction using DuckDuckGo."""
+    import httpx
+    import urllib.parse
+    results = []
+    try:
+        data = urllib.parse.urlencode({'q': query}).encode('utf-8')
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        }
+        async with httpx.AsyncClient(timeout=8.0, follow_redirects=True) as http_c:
+            resp = await http_c.post('https://html.duckduckgo.com/html/', content=data, headers=headers)
+            if resp.status_code == 200:
+                html = resp.text
+                titles = re.findall(r'<a[^>]+class="result__a"[^>]+href="([^"]+)"[^>]*>(.*?)</a>', html, re.DOTALL)
+                snippets = re.findall(r'<a[^>]+class="result__snippet"[^>]*>(.*?)</a>', html, re.DOTALL)
+                for i in range(min(len(titles), len(snippets), 5)):
+                    raw_url, title_raw = titles[i]
+                    actual_url = raw_url
+                    if "uddg=" in raw_url:
+                        u_m = re.search(r'uddg=([^&]+)', raw_url)
+                        if u_m:
+                            actual_url = urllib.parse.unquote(u_m.group(1))
+                    title = re.sub(r'<[^>]+>', '', title_raw).strip()
+                    snippet = re.sub(r'<[^>]+>', '', snippets[i]).strip()
+                    results.append({"title": title, "url": actual_url, "snippet": snippet})
+    except Exception as e:
+        print(f"[AI_SERVICE] Live web search error: {e}", flush=True)
+    return results
+
+
 async def generate_ai_text(prompt: str, chat_history: List[dict], system_prompt: str = PROMPT_DEFAULT) -> str:
     """Generate conversational response using Gemini API with SDK and REST fallback."""
     api_key = os.getenv("GEMINI_API_KEY")
@@ -140,6 +173,40 @@ async def generate_ai_text(prompt: str, chat_history: List[dict], system_prompt:
         )
 
     clean_prompt = prompt.strip()
+
+    # 1. Exact Live Real-Time System Clock Injection
+    now_utc = datetime.now(timezone.utc)
+    now_ist = now_utc + timedelta(hours=5, minutes=30)
+    clock_instruction = (
+        f"\n\n[REAL-TIME LIVE SYSTEM CLOCK - MANDATORY GROUND TRUTH]\n"
+        f"- Current Coordinated Universal Time (UTC): {now_utc.strftime('%A, %B %d, %Y, %I:%M:%S %p UTC')}\n"
+        f"- Current Indian Standard Time (IST): {now_ist.strftime('%A, %B %d, %Y, %I:%M:%S %p IST')}\n"
+        f"- When asked for the current time, date, today's time in India, or timezone conversions, you MUST reference this exact live clock time. Never guess, hallucinate, or refer to an outdated date."
+    )
+    system_prompt = system_prompt + clock_instruction
+
+    # 2. Live Web Search Query Interception
+    search_query = None
+    search_patterns = [
+        r'^(?:please\s+)?(?:search\s+(?:the\s+)?web\s+for|search\s+for|look\s+up|google)\s+(.+)$',
+        r'^/search\s+(.+)$',
+        r'^/web\s+(.+)$',
+    ]
+    for pat in search_patterns:
+        m = re.search(pat, clean_prompt, re.IGNORECASE)
+        if m:
+            search_query = m.group(1).strip().rstrip(".!?")
+            break
+
+    search_sources = []
+    if search_query:
+        print(f"[AI_SERVICE] Executing live web search for query: '{search_query}'", flush=True)
+        web_items = await fetch_live_web_search(search_query)
+        if web_items:
+            search_context = "\n".join([f"- **{it['title']}**: {it['snippet']} (URL: {it['url']})" for it in web_items])
+            clean_prompt = f"[LIVE WEB SEARCH RESULTS FOR: '{search_query}']\n{search_context}\n\n[USER INSTRUCTION]\n{clean_prompt}"
+            for it in web_items[:4]:
+                search_sources.append(f"• [{it['title']}]({it['url']})")
 
     # Image extraction logic
     import re
@@ -162,8 +229,8 @@ async def generate_ai_text(prompt: str, chat_history: List[dict], system_prompt:
                 image_parts.append(
                     types.Part.from_bytes(data=f.read(), mime_type=mime)
                 )
-            # Remove the URL from the prompt so we don't confuse the model
             clean_prompt = clean_prompt.replace(match.group(0), "[Image Attached]")
+
 
     # Strategy 1: Google GenAI SDK
     try:
@@ -294,6 +361,9 @@ async def generate_ai_text(prompt: str, chat_history: List[dict], system_prompt:
                         except Exception as meta_e:
                             print(f"[AI_SERVICE] Grounding metadata parse note: {meta_e}", flush=True)
 
+                        if search_sources and "Sources" not in result_text:
+                            result_text += "\n\n**🌐 Web Sources & References:**\n" + "\n".join(search_sources)
+
                         print(f"[AI_SERVICE] Gemini SDK {model_name} succeeded (search={use_search})!", flush=True)
                         return result_text
                 except Exception as e:
@@ -365,6 +435,8 @@ async def generate_ai_text(prompt: str, chat_history: List[dict], system_prompt:
                                     if web_links and "Sources" not in final_cand:
                                         unique_links = list(dict.fromkeys(web_links))[:5]
                                         final_cand += "\n\n**🌐 Sources & Web References:**\n" + "\n".join(unique_links)
+                                if search_sources and "Sources" not in final_cand:
+                                    final_cand += "\n\n**🌐 Web Sources & References:**\n" + "\n".join(search_sources)
                                 print(f"[AI_SERVICE] REST API {model_name} succeeded (search={use_search})!", flush=True)
                                 return final_cand
                         elif "error" in res_data:
