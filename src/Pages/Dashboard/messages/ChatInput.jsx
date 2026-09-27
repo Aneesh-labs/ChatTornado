@@ -8,6 +8,7 @@ import { Shield, X, Gamepad2, Volume2, Mic, MicOff, MoreVertical } from "lucide-
 import CyberShieldModal from "./CyberShieldModal";
 import InChatGameModal from "./InChatGameModal";
 import SoundboardModal from "./SoundboardModal";
+import { isAdminUnlocked, touchAdminSession } from "../../../utils/adminSession";
 
 const VIDEO_EXTENSIONS = /\.(mp4|mov|mkv|avi|webm|m4v|3gp|flv|mpeg|mpg|ts|mts|m2ts|wmv|asf|ogv|vob)$/i;
 
@@ -16,6 +17,7 @@ const ChatInput = React.memo(({ onSend, replyTo, onCancelReply, selectedUser, so
     const baseUrl = (API.defaults.baseURL || "").replace(/\/+$/, "");
     const [text, setText] = useState("");
     const [isTyping, setIsTyping] = useState(false);
+    const isTypingRef = useRef(false);
     const textareaRef = useRef(null);
     const typingTimeoutRef = useRef(null);
     const fileInputRef = useRef(null);
@@ -129,20 +131,22 @@ const ChatInput = React.memo(({ onSend, replyTo, onCancelReply, selectedUser, so
     }, [isListening, text]);
 
     const sendStopTypingSignal = useCallback(() => {
-        if (!isTyping) return;
+        if (!isTypingRef.current) return;
+        isTypingRef.current = false;
         setIsTyping(false);
         if (socket?.readyState === WebSocket.OPEN && selectedUser?.id) {
             socket.send(JSON.stringify({ type: "typing_stop", receiver_id: selectedUser.id }));
         }
-    }, [isTyping, socket, selectedUser?.id]);
+    }, [socket, selectedUser?.id]);
 
     useEffect(() => {
         return () => {
             if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+            sendStopTypingSignal();
             stopRecording(false);
             recognitionRef.current?.stop();
         };
-    }, [selectedUser?.id]);
+    }, [selectedUser?.id, sendStopTypingSignal]);
 
     const handleSend = useCallback(async () => {
         if (isSendingRef.current) return;
@@ -173,11 +177,12 @@ const ChatInput = React.memo(({ onSend, replyTo, onCancelReply, selectedUser, so
         }
 
         let activeInputMode = aiMode;
-        try {
-            if (sessionStorage.getItem("vortex_admin_unlocked") === "true") {
-                activeInputMode = "ADMIN";
-            }
-        } catch {}
+        if (isAdminUnlocked()) {
+            activeInputMode = "ADMIN";
+            touchAdminSession();
+        } else if (activeInputMode === "ADMIN") {
+            activeInputMode = "DEFAULT";
+        }
 
         // ─── ADMIN DIRECT DISPATCH & DELETION ──────────────────────────────
         // If in admin mode, try to parse a dispatch or delete command and POST directly
@@ -368,12 +373,15 @@ const ChatInput = React.memo(({ onSend, replyTo, onCancelReply, selectedUser, so
             if (!val.trim()) {
                 sendStopTypingSignal();
             } else {
-                if (!isTyping) {
+                if (!isTypingRef.current) {
+                    isTypingRef.current = true;
                     setIsTyping(true);
                     socket.send(JSON.stringify({ type: "typing_start", receiver_id: selectedUser.id }));
                 }
                 if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
-                typingTimeoutRef.current = setTimeout(() => sendStopTypingSignal(), 2500);
+                typingTimeoutRef.current = setTimeout(() => {
+                    sendStopTypingSignal();
+                }, 2500);
             }
         }
     };

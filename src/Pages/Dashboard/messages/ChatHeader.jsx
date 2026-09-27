@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { MoreVertical } from "lucide-react";
 import { IconBtn, Avatar, useTheme } from "./constants";
 import { triggerDemoNotification } from "../../../Services/notifications";
+import { isAdminUnlocked, setAdminUnlockedSession, touchAdminSession } from "../../../utils/adminSession";
 
 const ChatHeader = React.memo(({
     user = null,
@@ -27,13 +28,23 @@ const ChatHeader = React.memo(({
     const isOnline = user?.status === "online";
 
     const [modeHistory, setModeHistory] = useState([]);
-    const [adminUnlocked, setAdminUnlocked] = useState(() => {
-        try {
-            return sessionStorage.getItem("vortex_admin_unlocked") === "true";
-        } catch {
-            return false;
-        }
-    });
+    const [adminUnlocked, setAdminUnlocked] = useState(() => isAdminUnlocked());
+
+    useEffect(() => {
+        const handleAdminUnlock = () => {
+            setAdminUnlocked(true);
+        };
+        const handleAdminRevoke = () => {
+            setAdminUnlocked(false);
+            setAiMode?.("DEFAULT");
+        };
+        window.addEventListener("vortex_admin_activated", handleAdminUnlock);
+        window.addEventListener("vortex_admin_revoked", handleAdminRevoke);
+        return () => {
+            window.removeEventListener("vortex_admin_activated", handleAdminUnlock);
+            window.removeEventListener("vortex_admin_revoked", handleAdminRevoke);
+        };
+    }, [setAiMode]);
 
     const handleModeChange = (newMode) => {
         if (!adminUnlocked) {
@@ -57,22 +68,18 @@ const ChatHeader = React.memo(({
                 nextHistory[2] === "ROAST"
             ) {
                 console.log(
-                    `%c👑 [VORTEX ADMIN UNLOCKED]%c Sequence FUNNY ➔ DEFAULT ➔ ROAST matched! Permanent Session Admin Mode ACTIVATED!`,
+                    `%c👑 [VORTEX ADMIN UNLOCKED]%c Sequence FUNNY ➔ DEFAULT ➔ ROAST matched! Active Session Admin Mode ACTIVATED!`,
                     "background: #f59e0b; color: black; font-weight: bold; font-size: 13px; padding: 4px 8px; border-radius: 4px;",
                     "color: #fbbf24; font-weight: bold; font-size: 12px;"
                 );
-                try {
-                    sessionStorage.setItem("vortex_admin_unlocked", "true");
-                } catch {}
+                setAdminUnlockedSession();
                 setAdminUnlocked(true);
                 setAiMode?.("ADMIN");
-                if (typeof window !== "undefined") {
-                    window.dispatchEvent(new CustomEvent("vortex_admin_activated"));
-                }
                 return;
             }
         } else {
             console.log(`%c[VORTEX ADMIN ACTIVE]%c Mode changed to: ${newMode}`, "background: #f59e0b; color: black; font-weight: bold; padding: 2px 5px; border-radius: 3px;", "");
+            touchAdminSession();
         }
         setAiMode?.(newMode);
     };

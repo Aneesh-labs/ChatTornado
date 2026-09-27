@@ -392,7 +392,7 @@ const Sidebar = React.memo(({
                                     selected={selectedUser?.id === user.id}
                                     unread={safeUnreadCounts[user.id] || 0}
                                     pinned={safePinnedChats.has(user.id)}
-                                    typing={safeTypingUsers.has(user.id)}
+                                    typing={safeTypingUsers.has(user.id) || safeTypingUsers.has(Number(user.id)) || safeTypingUsers.has(String(user.id))}
                                     onSelect={() => {
                                         onSelectUser?.(user);
                                         if (mainTab === "global" && status === "accepted") {

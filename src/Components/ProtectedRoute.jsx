@@ -2,6 +2,8 @@ import { useEffect, useState } from "react"
 import { Navigate } from "react-router-dom"
 import API from "../Services/API"
 
+import { clearAdminSession } from "../utils/adminSession"
+
 export default function ProtectedRoute({ children }) {
 
     const [loading, setLoading] = useState(true)
@@ -12,6 +14,7 @@ export default function ProtectedRoute({ children }) {
         const token = sessionStorage.getItem("token")
 
         if (!token) {
+            clearAdminSession();
             setLoading(false)
             return
         }
@@ -29,8 +32,8 @@ export default function ProtectedRoute({ children }) {
                 setAuthorized(true)
             })
             .catch(() => {
-                sessionStorage.removeItem("token")
-                sessionStorage.removeItem("emailVerified")
+                clearAdminSession();
+                sessionStorage.clear();
                 setAuthorized(false)
             })
             .finally(() => {

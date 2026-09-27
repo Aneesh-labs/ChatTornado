@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Bell, LogOut, Palette, Radio, ShieldCheck, SlidersHorizontal, Users, Trash2, AlertTriangle, Loader2 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import API from "../../Services/API";
+import { clearAdminSession } from "../../utils/adminSession";
 
 export default function Settings() {
     const navigate = useNavigate();
@@ -36,8 +37,8 @@ export default function Settings() {
     };
 
     const handleLogout = () => {
-        sessionStorage.removeItem("token");
-        sessionStorage.removeItem("username");
+        clearAdminSession();
+        sessionStorage.clear();
         window.dispatchEvent(new Event("sessionStorageUpdate"));
         navigate("/", { replace: true });
     };
@@ -48,6 +49,7 @@ export default function Settings() {
         try {
             const token = sessionStorage.getItem("token");
             await API.delete("/user/account", { params: { token } });
+            clearAdminSession();
             sessionStorage.clear();
             window.dispatchEvent(new Event("sessionStorageUpdate"));
             navigate("/", { replace: true });

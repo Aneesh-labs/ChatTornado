@@ -168,7 +168,7 @@ const ChatMessages = React.memo(({
                     })}
                 </AnimatePresence>
                 <AnimatePresence>
-                    {enrichedSelected?.id && typingUsers?.has?.(enrichedSelected.id) && (
+                    {enrichedSelected?.id && (typingUsers?.has?.(enrichedSelected.id) || typingUsers?.has?.(Number(enrichedSelected.id)) || typingUsers?.has?.(String(enrichedSelected.id))) && (
                         <TypingIndicator user={enrichedSelected} />
                     )}
                 </AnimatePresence>

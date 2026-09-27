@@ -4,6 +4,7 @@ import ChatHeader from "./ChatHeader";
 import ChatMessages from "./ChatMessages";
 import ChatInput from "./ChatInput";
 import ScrollBar from "./ScrollBar";
+import { isAdminUnlocked } from "../../../utils/adminSession";
 
 const ChatWindow = React.memo(({
     enrichedSelected,
@@ -40,11 +41,7 @@ const ChatWindow = React.memo(({
     setAiMode: propSetAiMode,
 }) => {
     const [localAiMode, setLocalAiMode] = useState(() => {
-        try {
-            return sessionStorage.getItem("vortex_admin_unlocked") === "true" ? "ADMIN" : "DEFAULT";
-        } catch {
-            return "DEFAULT";
-        }
+        return isAdminUnlocked() ? "ADMIN" : "DEFAULT";
     });
     const aiMode = propAiMode !== undefined ? propAiMode : localAiMode;
     const setAiMode = propSetAiMode || setLocalAiMode;

@@ -18,8 +18,13 @@ class ConnectionManager:
     ) -> None:
         await websocket.accept()
 
-        self.active_connections[user_id] = websocket
-        self.online_users.add(user_id)
+        try:
+            uid = int(user_id)
+        except (ValueError, TypeError):
+            uid = user_id
+
+        self.active_connections[uid] = websocket
+        self.online_users.add(uid)
         
         # Start broadcaster if not already running (simplified for 1 worker)
         if not hasattr(self, "_broadcaster_task"):
@@ -72,8 +77,14 @@ class ConnectionManager:
         self,
         user_id: int
     ) -> None:
-        self.active_connections.pop(user_id, None)
-        self.online_users.discard(user_id)
+        try:
+            uid = int(user_id)
+        except (ValueError, TypeError):
+            uid = user_id
+        self.active_connections.pop(uid, None)
+        self.active_connections.pop(str(uid), None)
+        self.online_users.discard(uid)
+        self.online_users.discard(str(uid))
 
 
     async def get_online_users(self) -> list[int]:

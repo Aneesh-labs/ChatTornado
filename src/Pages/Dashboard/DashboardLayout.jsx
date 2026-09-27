@@ -21,14 +21,16 @@ const navItems = [
     { to: "/settings", label: "Settings", icon: Settings },
 ];
 
+import { clearAdminSession } from "../../utils/adminSession";
+
 export default function DashboardLayout() {
     const navigate = useNavigate();
     const username = useMemo(() => sessionStorage.getItem("username") || "Member", []);
     const initial = username.trim().charAt(0).toUpperCase() || "M";
 
     const handleLogout = () => {
-        sessionStorage.removeItem("token");
-        sessionStorage.removeItem("username");
+        clearAdminSession();
+        sessionStorage.clear();
         window.dispatchEvent(new Event("sessionStorageUpdate"));
         navigate("/", { replace: true });
     };

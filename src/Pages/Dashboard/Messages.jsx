@@ -11,6 +11,7 @@ import API from "../../Services/API";
 import { createWebSocket } from "../../Services/WebSocket";
 import { handleP2PSignal } from "../../Services/p2p";
 import { requestNotificationPermission, showMessageNotification } from "../../Services/notifications";
+import { isAdminUnlocked, touchAdminSession } from "../../utils/adminSession";
 
 import {
     AnimatePresence,
@@ -131,11 +132,7 @@ const Messages = () => {
     const [isMuted, setIsMuted] = useState(false);
     const [isCameraOff, setIsCameraOff] = useState(false);
     const [aiMode, setAiMode] = useState(() => {
-        try {
-            return sessionStorage.getItem("vortex_admin_unlocked") === "true" ? "ADMIN" : "DEFAULT";
-        } catch {
-            return "DEFAULT";
-        }
+        return isAdminUnlocked() ? "ADMIN" : "DEFAULT";
     });
 
     useEffect(() => {
@@ -143,8 +140,15 @@ const Messages = () => {
             setAiMode("ADMIN");
             setCallNotice("👑 Executive Admin Mode Activated: VORTEX-9 elevated permissions enabled.");
         };
+        const handleAdminRevoke = () => {
+            setAiMode("DEFAULT");
+        };
         window.addEventListener("vortex_admin_activated", handleAdminUnlock);
-        return () => window.removeEventListener("vortex_admin_activated", handleAdminUnlock);
+        window.addEventListener("vortex_admin_revoked", handleAdminRevoke);
+        return () => {
+            window.removeEventListener("vortex_admin_activated", handleAdminUnlock);
+            window.removeEventListener("vortex_admin_revoked", handleAdminRevoke);
+        };
     }, []);
     const [ghostChat, setGhostChat] = useState({
         open: false,
@@ -195,21 +199,29 @@ const Messages = () => {
     }, []);
 
     /* ── Derived Data (DEFINED BEFORE CALLBACKS THAT USE THEM) ────────────── */
+    const isUserOnline = useCallback((u) => {
+        if (!u) return false;
+        if (u.is_bot || u.username === "VORTEX-9" || (u.username && u.username.toUpperCase().includes("VORTEX"))) {
+            return true;
+        }
+        return onlineUserIds.has(u.id) || onlineUserIds.has(Number(u.id)) || onlineUserIds.has(String(u.id));
+    }, [onlineUserIds]);
+
     const enrichedUsers = useMemo(() => {
         return users.map((u) => ({
             ...u,
             avatar: u.avatar || avatarFor(u.id),
-            status: (u.is_bot || u.username === "VORTEX-9" || onlineUserIds.has(u.id)) ? "online" : "offline",
+            status: isUserOnline(u) ? "online" : "offline",
         }));
-    }, [users, onlineUserIds]);
+    }, [users, isUserOnline]);
 
     const enrichedActiveUsers = useMemo(() => {
         return activeUsers.map((u) => ({
             ...u,
             avatar: u.avatar || avatarFor(u.id),
-            status: (u.is_bot || u.username === "VORTEX-9" || onlineUserIds.has(u.id)) ? "online" : "offline",
+            status: isUserOnline(u) ? "online" : "offline",
         }));
-    }, [activeUsers, onlineUserIds]);
+    }, [activeUsers, isUserOnline]);
 
 
     const enrichedSelected = useMemo(() => {
@@ -804,7 +816,14 @@ const Messages = () => {
                     }
 
                     if (packet.type === "online_users") {
-                        setOnlineUserIds(new Set(packet.users || []));
+                        const rawUsers = packet.users || [];
+                        const idSet = new Set();
+                        rawUsers.forEach((id) => {
+                            const num = Number(id);
+                            if (!isNaN(num)) idSet.add(num);
+                            idSet.add(String(id));
+                        });
+                        setOnlineUserIds(idSet);
                         return;
                     }
                     if (packet.type === "chat_cleared") {
@@ -817,23 +836,34 @@ const Messages = () => {
                         callSignalRef.current?.(packet);
                         return;
                     }
-                    if (packet.type === "typing_start") {
-                        const sid = packet.sender_id;
-                        setTypingUsers((prev) => new Set(prev).add(sid));
+                    if (packet.type === "typing_start" || packet.type === "typing") {
+                        const sid = Number(packet.sender_id);
+                        const strId = String(packet.sender_id);
+                        setTypingUsers((prev) => {
+                            const next = new Set(prev);
+                            if (!isNaN(sid)) next.add(sid);
+                            next.add(strId);
+                            return next;
+                        });
                         if (typingTimeouts.current[sid]) clearTimeout(typingTimeouts.current[sid]);
                         typingTimeouts.current[sid] = setTimeout(() => {
                             setTypingUsers((prev) => {
                                 const next = new Set(prev);
-                                next.delete(sid);
+                                if (!isNaN(sid)) next.delete(sid);
+                                next.delete(strId);
                                 return next;
                             });
-                        }, 3000);
+                        }, 3500);
                         return;
                     }
-                    if (packet.type === "typing_stop") {
+                    if (packet.type === "typing_stop" || packet.type === "stop_typing") {
+                        const sid = Number(packet.sender_id);
+                        const strId = String(packet.sender_id);
+                        if (typingTimeouts.current[sid]) clearTimeout(typingTimeouts.current[sid]);
                         setTypingUsers((prev) => {
                             const next = new Set(prev);
-                            next.delete(packet.sender_id);
+                            if (!isNaN(sid)) next.delete(sid);
+                            next.delete(strId);
                             return next;
                         });
                         return;
@@ -1022,11 +1052,12 @@ const Messages = () => {
         setMessages((prev) => [...prev, optimisticMessage]);
 
         let activeAiMode = options.ai_mode || aiMode;
-        try {
-            if (sessionStorage.getItem("vortex_admin_unlocked") === "true") {
-                activeAiMode = "ADMIN";
-            }
-        } catch {}
+        if (isAdminUnlocked()) {
+            activeAiMode = "ADMIN";
+            touchAdminSession();
+        } else if (activeAiMode === "ADMIN") {
+            activeAiMode = "DEFAULT";
+        }
 
         const outgoingPayload = {
             temp_id,

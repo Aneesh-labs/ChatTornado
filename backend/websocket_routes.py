@@ -34,7 +34,7 @@ async def websocket_endpoint(websocket: WebSocket):
         await websocket.close(code=1008, reason="Email not verified")
         return
 
-    user_id = payload["user_id"]
+    user_id = int(payload["user_id"])
 
     await manager.connect(user_id, websocket)
     logger.info("WebSocket connected: user=%s", user_id)
@@ -50,6 +50,10 @@ async def websocket_endpoint(websocket: WebSocket):
             data = await websocket.receive_json()
 
             if not isinstance(data, dict):
+                continue
+
+            if data.get("type") == "ping":
+                await websocket.send_json({"type": "pong"})
                 continue
 
             # WebRTC signaling is deliberately relayed only to the named peer.
@@ -264,16 +268,21 @@ async def websocket_endpoint(websocket: WebSocket):
             # Typing Indicator
             # ==========================
 
-            if data.get("type") in {"typing_start", "typing_stop"}:
+            if data.get("type") in {"typing_start", "typing_stop", "typing", "stop_typing"}:
 
                 receiver_id = data.get("receiver_id")
 
                 if receiver_id is not None:
+                    try:
+                        r_id = int(receiver_id)
+                    except (ValueError, TypeError):
+                        r_id = receiver_id
 
+                    norm_type = "typing_start" if data["type"] in {"typing_start", "typing"} else "typing_stop"
                     await manager.send_personal_message(
-                        receiver_id,
+                        r_id,
                         {
-                            "type": data["type"],
+                            "type": norm_type,
                             "sender_id": user_id
                         }
                     )
