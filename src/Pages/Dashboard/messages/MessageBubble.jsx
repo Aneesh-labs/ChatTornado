@@ -693,6 +693,53 @@ const MessageBubble = React.memo(({
     const [isSpeaking, setIsSpeaking] = useState(() => speechService.isSpeaking(msg.id));
     const longPressTimer = useRef(null);
 
+    // ── ChatGPT-style typewriter ──────────────────────────────────────────────
+    // Only fires for bot messages (VORTEX-9). Historical messages show instantly.
+    const isBotMsg = msg.sender_id === 1 || msg.sender?.is_bot || msg.sender?.username?.toLowerCase?.() === "vortex9";
+    const [typedText, setTypedText] = useState(() => {
+        // Historical (already arrived, not streaming) → show immediately
+        if (isBotMsg && msg.message && !msg.is_streaming) return msg.message;
+        return null;
+    });
+    const typewriterRef = useRef(null);
+    const prevStreamingRef = useRef(msg.is_streaming);
+
+    useEffect(() => {
+        if (!isBotMsg) return;
+        const wasStreaming = prevStreamingRef.current;
+        const justFinished = wasStreaming && !msg.is_streaming;
+        prevStreamingRef.current = msg.is_streaming;
+        if (!justFinished) return;
+
+        const fullText = msg.message || "";
+        if (!fullText) return;
+        if (typewriterRef.current) clearInterval(typewriterRef.current);
+        setTypedText("");
+
+        let idx = 0;
+        const CHAR_DELAY = 18; // ms — slow & steady
+        typewriterRef.current = setInterval(() => {
+            idx++;
+            setTypedText(fullText.slice(0, idx));
+            if (idx >= fullText.length) {
+                clearInterval(typewriterRef.current);
+                typewriterRef.current = null;
+            }
+        }, CHAR_DELAY);
+
+        return () => { if (typewriterRef.current) clearInterval(typewriterRef.current); };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [msg.is_streaming]);
+
+    // Sync if message changes after typing finished (edits / page reload)
+    useEffect(() => {
+        if (!isBotMsg) return;
+        if (!msg.is_streaming && typedText !== null && typewriterRef.current === null && typedText !== msg.message) {
+            setTypedText(msg.message || "");
+        }
+    }, [msg.message, msg.is_streaming, isBotMsg, typedText]);
+    // ─────────────────────────────────────────────────────────────────────────
+
     useEffect(() => {
         const unsubscribe = speechService.subscribe((activeId) => {
             setIsSpeaking(activeId === msg.id);
@@ -959,15 +1006,42 @@ const MessageBubble = React.memo(({
                 <FileLink key={`${msg.id}-file-${idx}`} url={url} />
             ))}
 
-            {/* Math & text formatting */}
+            {/* Math & text formatting — with ChatGPT-style typewriter */}
             {!hasImages && !hasVideos && !hasAudio && !hasFiles && !isP2P && (actualMessage || msg.is_streaming) && (
                 <div className="relative">
-                    {actualMessage ? (
-                        <MathFormattedText text={actualMessage} className="text-[13px] sm:text-[15px] leading-relaxed text-white/90 selection:bg-white/20" onOpenLightbox={setLightboxImage} />
-                    ) : null}
-                    {msg.is_streaming && (
-                        <span className="inline-block w-2 h-4 ml-1 bg-cyan-400 rounded-sm animate-pulse align-middle" />
+                    {/* ── STREAMING: show thinking dots while waiting for full response ── */}
+                    {isBotMsg && msg.is_streaming && (
+                        <span className="inline-flex items-center gap-1 py-0.5">
+                            <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-bounce [animation-delay:0ms]" />
+                            <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-bounce [animation-delay:150ms]" />
+                            <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-bounce [animation-delay:300ms]" />
+                        </span>
                     )}
+
+                    {/* ── TYPEWRITER: render typedText after streaming finishes ── */}
+                    {isBotMsg && !msg.is_streaming && typedText !== null && (
+                        <>
+                            <MathFormattedText
+                                text={typedText}
+                                className="text-[13px] sm:text-[15px] leading-relaxed text-white/90 selection:bg-white/20"
+                                onOpenLightbox={setLightboxImage}
+                            />
+                            {/* Blinking cursor while still typing */}
+                            {typewriterRef.current !== null && (
+                                <span className="inline-block w-[2px] h-[1em] ml-0.5 bg-cyan-400 align-middle animate-[blink_0.8s_step-start_infinite]" />
+                            )}
+                        </>
+                    )}
+
+                    {/* ── NON-BOT messages: render normally ── */}
+                    {!isBotMsg && actualMessage && (
+                        <MathFormattedText
+                            text={actualMessage}
+                            className="text-[13px] sm:text-[15px] leading-relaxed text-white/90 selection:bg-white/20"
+                            onOpenLightbox={setLightboxImage}
+                        />
+                    )}
+
                     {translatedText && (
                         <div className="mt-2 pt-2 border-t border-white/10 text-xs text-white/90">
                             <div className="text-[10px] text-emerald-300 font-bold mb-1 flex items-center gap-1">

@@ -1,5 +1,14 @@
 @import "tailwindcss";
 
+@theme {
+    --animate-blink: blink 0.8s step-start infinite;
+
+    @keyframes blink {
+        0%, 100% { opacity: 1; }
+        50%       { opacity: 0; }
+    }
+}
+
 @layer utilities {
     .custom-scrollbar::-webkit-scrollbar {
         width: 4px;
