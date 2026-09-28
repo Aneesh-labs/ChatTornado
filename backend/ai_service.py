@@ -37,6 +37,14 @@ BOT_AVATAR = "https://api.dicebear.com/7.x/bottts/svg?seed=VORTEX9&backgroundCol
 # Default fallback prompt alias
 VORTEX_SYSTEM_PROMPT = PROMPT_DEFAULT
 
+# Active high-performance Gemini models with robust fallback
+RECOMMENDED_GEMINI_MODELS = [
+    "gemini-3.5-flash",
+    "gemini-3.5-flash-lite",
+    "gemini-3.1-flash-lite",
+    "gemini-3.8-flash",
+]
+
 
 def get_or_create_bot_user(db: Session) -> User:
     """Ensure the VORTEX-9 bot user exists permanently in the database."""
@@ -318,14 +326,7 @@ async def generate_ai_text(prompt: str, chat_history: List[dict], system_prompt:
             ),
         ]
 
-        models_to_try = [
-            "gemini-3.8-flash",
-            "gemini-3.5-flash-lite",
-            "gemini-3.5-flash",
-            "gemini-3.1-pro-preview",
-            "gemini-2.5-flash",
-            "gemini-2.0-flash",
-        ]
+        models_to_try = list(RECOMMENDED_GEMINI_MODELS)
 
         # Dynamic model discovery to guarantee availability
         try:
@@ -821,17 +822,20 @@ Format ONLY as clean bullet points starting with '• '. Keep it concise, observ
     api_key = os.getenv("GEMINI_API_KEY")
     persona_summary = ""
     if api_key:
-        try:
-            from google import genai
-            client = genai.Client(api_key=api_key)
-            response = client.models.generate_content(
-                model="gemini-2.5-flash",
-                contents=profiler_prompt
-            )
-            if response and response.text:
-                persona_summary = response.text.strip()
-        except Exception as e:
-            logger.warning("Gemini personalization generation error: %s", e)
+        from google import genai
+        client = genai.Client(api_key=api_key)
+        for m_name in RECOMMENDED_GEMINI_MODELS:
+            try:
+                response = client.models.generate_content(
+                    model=m_name,
+                    contents=profiler_prompt
+                )
+                if response and response.text:
+                    persona_summary = response.text.strip()
+                    break
+            except Exception as e:
+                logger.warning("Gemini personalization error with model %s: %s", m_name, e)
+                continue
 
     if not persona_summary:
         persona_summary = (
@@ -977,12 +981,7 @@ async def generate_ai_text_stream(
         types.SafetySetting(category=types.HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold=types.HarmBlockThreshold.BLOCK_NONE),
     ]
 
-    models_to_try = [
-        "gemini-2.5-flash",
-        "gemini-2.0-flash",
-        "gemini-3.5-flash",
-        "gemini-3.1-pro-preview",
-    ]
+    models_to_try = list(RECOMMENDED_GEMINI_MODELS)
 
     client = genai.Client(api_key=api_key)
     full_accumulated_text = ""
@@ -1083,22 +1082,25 @@ async def ai_polish_text(text: str, tone: str = "professional") -> str:
         "casual": "Warm, relaxed, friendly, authentic, and modern chat vibe.",
         "roast": "Biting, razor-sharp witty roast, humorous sarcasm, but clever.",
         "concise": "Ultra-short, direct, no fluff, to the point.",
-        "flirty": "Playful, charming, charismatic, witty with subtle flirtatious energy."
+        "flirty": "Playful, charming, charismatic, witty with subtle flirtatious energy.",
+        "clean": "Clean dictation: fix stuttering, typing quirks, trailing commas, informal rambling, and transcription errors into clear natural text."
     }
     tone_desc = tones.get(tone.lower(), tones["professional"])
     prompt = f"Rewrite the following draft message with this tone ({tone_desc}). Output ONLY the rewritten message text without preamble, quotes, or explanations:\n\n{text}"
 
-    try:
-        from google import genai
-        client = genai.Client(api_key=api_key)
-        res = client.models.generate_content(
-            model="gemini-2.5-flash",
-            contents=prompt
-        )
-        if res and res.text:
-            return res.text.strip().strip('"').strip("'")
-    except Exception as e:
-        logger.warning("ai_polish_text error: %s", e)
+    for model_name in RECOMMENDED_GEMINI_MODELS:
+        try:
+            from google import genai
+            client = genai.Client(api_key=api_key)
+            res = client.models.generate_content(
+                model=model_name,
+                contents=prompt
+            )
+            if res and res.text:
+                return res.text.strip().strip('"').strip("'")
+        except Exception as e:
+            logger.warning("ai_polish_text model %s error: %s", model_name, e)
+            continue
     return text
 
 
@@ -1110,17 +1112,19 @@ async def ai_translate_text(text: str, target_language: str = "English") -> str:
 
     prompt = f"Translate the following chat message into {target_language}. Preserve formatting, emojis, and casual chat nuance. Output ONLY the translated text without extra explanation:\n\n{text}"
 
-    try:
-        from google import genai
-        client = genai.Client(api_key=api_key)
-        res = client.models.generate_content(
-            model="gemini-2.5-flash",
-            contents=prompt
-        )
-        if res and res.text:
-            return res.text.strip().strip('"').strip("'")
-    except Exception as e:
-        logger.warning("ai_translate_text error: %s", e)
+    for model_name in RECOMMENDED_GEMINI_MODELS:
+        try:
+            from google import genai
+            client = genai.Client(api_key=api_key)
+            res = client.models.generate_content(
+                model=model_name,
+                contents=prompt
+            )
+            if res and res.text:
+                return res.text.strip().strip('"').strip("'")
+        except Exception as e:
+            logger.warning("ai_translate_text model %s error: %s", model_name, e)
+            continue
     return text
 
 
@@ -1137,22 +1141,24 @@ async def ai_smart_replies(context_list: List[str]) -> List[str]:
 Suggest exactly 3 short, natural, relevant quick responses the user might want to tap next (2 to 5 words each).
 Format as JSON array of 3 strings: ["Reply 1", "Reply 2", "Reply 3"]. Output JSON only."""
 
-    try:
-        import json
-        from google import genai
-        client = genai.Client(api_key=api_key)
-        res = client.models.generate_content(
-            model="gemini-2.5-flash",
-            contents=prompt
-        )
-        if res and res.text:
-            cleaned = res.text.strip()
-            if cleaned.startswith("```"):
-                cleaned = re.sub(r"^```(?:json)?|```$", "", cleaned, flags=re.MULTILINE).strip()
-            arr = json.loads(cleaned)
-            if isinstance(arr, list) and len(arr) > 0:
-                return [str(x) for x in arr[:3]]
-    except Exception as e:
-        logger.warning("ai_smart_replies error: %s", e)
+    for model_name in RECOMMENDED_GEMINI_MODELS:
+        try:
+            import json
+            from google import genai
+            client = genai.Client(api_key=api_key)
+            res = client.models.generate_content(
+                model=model_name,
+                contents=prompt
+            )
+            if res and res.text:
+                cleaned = res.text.strip()
+                if cleaned.startswith("```"):
+                    cleaned = re.sub(r"^```(?:json)?|```$", "", cleaned, flags=re.MULTILINE).strip()
+                arr = json.loads(cleaned)
+                if isinstance(arr, list) and len(arr) > 0:
+                    return [str(x) for x in arr[:3]]
+        except Exception as e:
+            logger.warning("ai_smart_replies model %s error: %s", model_name, e)
+            continue
     return ["Sounds great!", "Tell me more", "Got it!"]
 

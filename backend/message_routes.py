@@ -1,5 +1,6 @@
 from datetime import datetime, timezone
-from fastapi import APIRouter, Depends, HTTPException
+from typing import Optional
+from fastapi import APIRouter, Depends, HTTPException, Query, Header
 from sqlalchemy.orm import Session
 from sqlalchemy import or_, and_
 
@@ -501,13 +502,19 @@ async def edit_message(
 
 class AICleanupRequest(BaseModel):
     text: str
+    token: Optional[str] = None
 
 @router.post("/ai_cleanup")
 async def ai_cleanup(
     data: AICleanupRequest,
-    token: str
+    token: Optional[str] = Query(None),
+    authorization: Optional[str] = Header(None)
 ):
-    payload = decode_token(token)
+    auth_token = token or data.token
+    if not auth_token and authorization:
+        auth_token = authorization.replace("Bearer ", "").strip()
+
+    payload = decode_token(auth_token)
     if not payload:
         raise HTTPException(status_code=401, detail="Invalid token.")
 
@@ -518,13 +525,19 @@ async def ai_cleanup(
 
 class AISummarizeRequest(BaseModel):
     chat_text: str
+    token: Optional[str] = None
 
 @router.post("/ai_summarize")
 async def ai_summarize(
     data: AISummarizeRequest,
-    token: str
+    token: Optional[str] = Query(None),
+    authorization: Optional[str] = Header(None)
 ):
-    payload = decode_token(token)
+    auth_token = token or data.token
+    if not auth_token and authorization:
+        auth_token = authorization.replace("Bearer ", "").strip()
+
+    payload = decode_token(auth_token)
     if not payload:
         raise HTTPException(status_code=401, detail="Invalid token.")
 

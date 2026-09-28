@@ -39,21 +39,9 @@ const ChatInput = React.memo(({ onSend, replyTo, onCancelReply, selectedUser, so
         setShowToneMenu(false);
         const token = sessionStorage.getItem("token");
         try {
-            if (toneKey === "clean") {
-                const res = await fetch(API.defaults.baseURL + "/ai_cleanup", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
-                    body: JSON.stringify({ text, token })
-                });
-                const data = await res.json();
-                if (data.success && data.cleaned_text) {
-                    setText(data.cleaned_text);
-                }
-            } else {
-                const res = await API.post("/api/ai/polish", { text, tone: toneKey }, { params: { token } });
-                if (res.data?.status === "success" && res.data.polished) {
-                    setText(res.data.polished);
-                }
+            const res = await API.post("/api/ai/polish", { text, tone: toneKey }, { params: { token } });
+            if (res.data?.status === "success" && res.data.polished) {
+                setText(res.data.polished);
             }
         } catch (err) {
             console.warn("AI polish failed:", err);
