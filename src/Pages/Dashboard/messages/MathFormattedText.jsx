@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo, useEffect, useRef } from "react";
+import React, { useState, useCallback, useMemo, useRef } from "react";
 import katex from "katex";
 import "katex/dist/katex.min.css";
 import { marked } from "marked";
@@ -6,7 +6,7 @@ import DOMPurify from "dompurify";
 import { motion, AnimatePresence } from "framer-motion";
 
 /**
- * Helper to escape HTML characters
+ * Escape HTML special characters
  */
 const escapeHtml = (str) => {
     if (!str || typeof str !== "string") return "";
@@ -19,7 +19,7 @@ const escapeHtml = (str) => {
 };
 
 /**
- * Downloads a file from a URL
+ * Downloads a file or image from a URL
  */
 const triggerDownload = async (url, filename) => {
     try {
@@ -34,7 +34,7 @@ const triggerDownload = async (url, filename) => {
             return;
         }
         const resp = await fetch(url, { mode: "cors" });
-        if (!resp.ok) throw new Error("Network fetch failed");
+        if (!resp.ok) throw new Error("Fetch failed");
         const blob = await resp.blob();
         const objUrl = URL.createObjectURL(blob);
         const a = document.createElement("a");
@@ -50,147 +50,7 @@ const triggerDownload = async (url, filename) => {
 };
 
 /**
- * Configures Marked with a rich custom renderer for tables, code blocks, images, and lists
- */
-const configureMarked = () => {
-    const renderer = new marked.Renderer();
-
-    // 1. Table Container & Styling
-    renderer.table = function ({ header, rows }) {
-        return `
-<div class="overflow-x-auto my-3 rounded-xl border border-white/15 bg-white/[0.04] shadow-lg max-w-full">
-  <table class="min-w-full text-left text-xs sm:text-sm border-collapse divide-y divide-white/10">
-    <thead>${header}</thead>
-    <tbody class="divide-y divide-white/5">${rows}</tbody>
-  </table>
-</div>`;
-    };
-
-    renderer.tablerow = function ({ text }) {
-        return `<tr class="hover:bg-white/[0.06] transition-colors odd:bg-transparent even:bg-white/[0.02]">${text}</tr>`;
-    };
-
-    renderer.tablecell = function ({ text, header, align }) {
-        const alignClass = align === "center" ? "text-center" : align === "right" ? "text-right" : "text-left";
-        if (header) {
-            return `<th class="px-3.5 py-2.5 bg-white/10 font-bold uppercase tracking-wider text-cyan-300 border-b border-white/15 ${alignClass}">${text}</th>`;
-        }
-        return `<td class="px-3.5 py-2 border-b border-white/5 text-white/90 ${alignClass}">${text}</td>`;
-    };
-
-    // 2. Code Block with Syntax Header & Copy Button
-    renderer.code = function ({ text, lang }) {
-        const language = (lang || "").trim().toLowerCase();
-        const encoded = encodeURIComponent(text);
-        return `
-<div class="chat-code-card my-3 rounded-xl border border-white/10 bg-[#0d1117] shadow-xl overflow-hidden text-xs sm:text-sm font-mono">
-  <div class="flex items-center justify-between px-3.5 py-1.5 bg-white/[0.05] border-b border-white/10 text-white/70 select-none">
-    <span class="text-[11px] font-bold uppercase tracking-wider text-cyan-400">${language || "code"}</span>
-    <button type="button" class="chat-copy-code-btn flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-medium text-white/80 hover:text-white bg-white/5 hover:bg-white/10 transition-colors cursor-pointer" data-code="${encoded}">
-      <svg class="w-3.5 h-3.5 text-cyan-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
-      <span>Copy code</span>
-    </button>
-  </div>
-  <pre class="p-3.5 overflow-x-auto text-emerald-300 leading-relaxed font-mono"><code>${escapeHtml(text)}</code></pre>
-</div>`;
-    };
-
-    // 3. Inline Code
-    renderer.codespan = function ({ text }) {
-        return `<code class="px-1.5 py-0.5 rounded bg-white/10 text-cyan-300 font-mono text-[12px] sm:text-[13px] border border-white/10 select-text">${text}</code>`;
-    };
-
-    // 4. Interactive Image Preview Card (Web Images & AI Generated Images)
-    renderer.image = function ({ href, title, text }) {
-        const isAi = href.includes("/uploads/ai/") || (text && text.toLowerCase().includes("generated"));
-        const altText = text || title || "";
-        return `
-<div class="image-preview-card group relative my-3 max-w-lg rounded-2xl overflow-hidden border border-white/15 bg-black/40 shadow-xl">
-  <div class="relative cursor-pointer overflow-hidden bg-black/20" data-action="zoom" data-src="${href}" data-alt="${escapeHtml(altText)}">
-    <img src="${href}" alt="${escapeHtml(altText)}" loading="lazy" class="w-full max-h-[380px] object-contain rounded-t-xl transition-transform duration-300 group-hover:scale-[1.01]" />
-    <div class="absolute top-2.5 left-2.5 flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold tracking-wide backdrop-blur-md ${isAi ? 'bg-fuchsia-600/80 text-white border border-fuchsia-400/40 shadow-lg shadow-fuchsia-900/50' : 'bg-cyan-600/80 text-white border border-cyan-400/40 shadow-lg shadow-cyan-900/50'}">
-      <span>${isAi ? '🎨 AI Generated' : '🌐 Web Image'}</span>
-    </div>
-    <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2.5 pointer-events-auto">
-      <button type="button" class="px-3 py-1.5 rounded-xl bg-white/20 hover:bg-white/30 text-white text-xs font-bold backdrop-blur-md flex items-center gap-1.5 transition-all shadow-lg cursor-pointer" data-action="zoom" data-src="${href}">
-        🔍 Zoom
-      </button>
-      <button type="button" class="px-3 py-1.5 rounded-xl bg-white/20 hover:bg-white/30 text-white text-xs font-bold backdrop-blur-md flex items-center gap-1.5 transition-all shadow-lg cursor-pointer" data-action="download" data-src="${href}">
-        ⬇ Download
-      </button>
-    </div>
-  </div>
-  ${altText ? `<div class="px-3.5 py-2 text-xs text-white/70 bg-white/[0.03] border-t border-white/10 italic flex items-center gap-1.5"><span class="text-white/40">💬</span><span class="truncate">${escapeHtml(altText)}</span></div>` : ''}
-</div>`;
-    };
-
-    // 5. Links (open in new tab with styling and icon)
-    renderer.link = function ({ href, title, text }) {
-        const titleAttr = title ? ` title="${escapeHtml(title)}"` : "";
-        return `<a href="${href}" target="_blank" rel="noopener noreferrer"${titleAttr} class="text-cyan-400 hover:text-cyan-300 underline underline-offset-2 transition-colors font-medium inline-flex items-center gap-0.5">${text} <span class="text-[10px] opacity-75 font-normal">↗</span></a>`;
-    };
-
-    // 6. Blockquotes
-    renderer.blockquote = function ({ text }) {
-        return `<blockquote class="border-l-4 border-cyan-400/80 pl-3.5 py-1.5 my-2.5 bg-white/[0.04] rounded-r-xl text-white/85 italic">${text}</blockquote>`;
-    };
-
-    // 7. Lists & Numbers
-    renderer.list = function ({ ordered, start, items }) {
-        if (ordered) {
-            const startAttr = start && start !== 1 ? ` start="${start}"` : "";
-            return `<ol class="list-decimal pl-5 my-2 space-y-1 text-white/90 leading-relaxed"${startAttr}>${items}</ol>`;
-        }
-        return `<ul class="list-disc pl-5 my-2 space-y-1 text-white/90 leading-relaxed">${items}</ul>`;
-    };
-
-    renderer.listitem = function ({ text, task, checked }) {
-        if (task) {
-            return `
-<li class="flex items-start gap-2 list-none -ml-4 my-1">
-  <input type="checkbox" disabled ${checked ? "checked" : ""} class="mt-1 rounded accent-cyan-400 cursor-default" />
-  <span class="${checked ? "line-through text-white/50" : "text-white/90"}">${text}</span>
-</li>`;
-        }
-        return `<li class="my-0.5">${text}</li>`;
-    };
-
-    // 8. Headings
-    renderer.heading = function ({ text, depth }) {
-        switch (depth) {
-            case 1:
-                return `<h1 class="text-lg sm:text-xl font-black text-white mt-4 mb-2 pb-1 border-b border-white/15 flex items-center gap-2">${text}</h1>`;
-            case 2:
-                return `<h2 class="text-base sm:text-lg font-bold text-white/95 mt-3 mb-1.5 flex items-center gap-1.5">${text}</h2>`;
-            case 3:
-                return `<h3 class="text-sm sm:text-base font-semibold text-white/90 mt-2 mb-1">${text}</h3>`;
-            default:
-                return `<h4 class="text-xs sm:text-sm font-semibold text-white/85 mt-1.5 mb-0.5">${text}</h4>`;
-        }
-    };
-
-    // 9. Horizontal Rule
-    renderer.hr = function () {
-        return `<hr class="my-3.5 border-t border-white/15"/>`;
-    };
-
-    // 10. Paragraph
-    renderer.paragraph = function ({ text }) {
-        return `<p class="my-1.5 leading-relaxed text-white/90 break-words">${text}</p>`;
-    };
-
-    marked.setOptions({
-        gfm: true,
-        breaks: true,
-        renderer: renderer,
-    });
-};
-
-// Initialize marked once
-configureMarked();
-
-/**
- * Pre-extracts LaTeX formulas and replaces them with safe tokens
+ * Protects LaTeX math before markdown parsing
  */
 const protectMath = (text) => {
     if (!text || typeof text !== "string") return { processed: "", mathMap: {} };
@@ -198,13 +58,13 @@ const protectMath = (text) => {
     const mathMap = {};
     let counter = 0;
 
-    // 1. Standalone image URL detection (turn lines with raw image URLs into markdown image)
+    // 1. Auto-convert standalone image URLs on their own lines into markdown images
     let processed = text.replace(
         /(?:^|\n)(https?:\/\/[^\s<>"']+\.(?:png|jpg|jpeg|gif|webp|svg)(?:\?[^\s<>"']*)?|\/uploads\/[^\s<>"']+\.(?:png|jpg|jpeg|gif|webp|svg)(?:\?[^\s<>"']*)?)(?=$|\n)/gi,
         (match, url) => `\n![Image](${url.trim()})\n`
     );
 
-    // 2. Block math patterns: $$...$$, \[...\], \begin{env}...\end{env}
+    // 2. Block math patterns: $$...$$, \[...\], \begin{...}...\end{...}
     const blockMathRegex = /(\$\$[\s\S]*?\$\$|\\\[[\s\S]*?\\\]|\\begin\{(equation|align|gather|matrix|pmatrix|bmatrix|Bmatrix|vmatrix|Vmatrix|cases)\*?\}[\s\S]*?\\end\{\2\*?\})/g;
 
     processed = processed.replace(blockMathRegex, (match) => {
@@ -219,7 +79,7 @@ const protectMath = (text) => {
         return token;
     });
 
-    // 3. Inline math patterns: \(...\), $...$ (strict currency protection)
+    // 3. Inline math patterns: \(...\), $...$
     const inlineParenRegex = /\\\([\s\S]*?\\\)/g;
     processed = processed.replace(inlineParenRegex, (match) => {
         const token = `@@KATEX_INLINE_${counter++}@@`;
@@ -271,6 +131,90 @@ const restoreMath = (html, mathMap) => {
 };
 
 /**
+ * Post-processes HTML from marked: wraps tables, enhances code blocks, images, links
+ */
+const postProcessHtml = (html) => {
+    if (!html) return "";
+
+    // 1. Wrap tables in responsive scroll container with sleek styling
+    let res = html.replace(
+        /<table>/g,
+        '<div class="chat-table-wrapper my-3 overflow-x-auto rounded-xl border border-white/15 bg-white/[0.04] shadow-lg max-w-full"><table class="chat-table min-w-full text-left text-xs sm:text-sm border-collapse divide-y divide-white/10">'
+    );
+    res = res.replace(/<\/table>/g, "</table></div>");
+
+    // 2. Enhance code blocks with top bar, language badge, and copy button
+    res = res.replace(
+        /<pre><code(?: class="language-([a-zA-Z0-9_\-+]+)")?>([\s\S]*?)<\/code><\/pre>/g,
+        (match, lang, code) => {
+            const displayLang = (lang || "code").toLowerCase();
+            // Decode entities to get raw code for clipboard
+            const rawCode = code
+                .replace(/&amp;/g, "&")
+                .replace(/&lt;/g, "<")
+                .replace(/&gt;/g, ">")
+                .replace(/&quot;/g, '"')
+                .replace(/&#039;/g, "'");
+            const encoded = encodeURIComponent(rawCode);
+
+            return `
+<div class="chat-code-card my-3 rounded-xl border border-white/10 bg-[#0d1117] shadow-xl overflow-hidden text-xs sm:text-sm font-mono">
+  <div class="flex items-center justify-between px-3.5 py-1.5 bg-white/[0.05] border-b border-white/10 text-white/70 select-none">
+    <span class="text-[11px] font-bold uppercase tracking-wider text-cyan-400">${displayLang}</span>
+    <button type="button" class="chat-copy-code-btn flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-medium text-white/80 hover:text-white bg-white/5 hover:bg-white/10 transition-colors cursor-pointer" data-code="${encoded}">
+      <svg class="w-3.5 h-3.5 text-cyan-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
+      <span>Copy code</span>
+    </button>
+  </div>
+  <pre class="p-3.5 overflow-x-auto text-emerald-300 leading-relaxed font-mono"><code>${code}</code></pre>
+</div>`;
+        }
+    );
+
+    // 3. Enhance standalone <img> tags into interactive Image Preview Cards
+    res = res.replace(
+        /<img src="([^"]+)" alt="([^"]*)"(?:\s*\/)?>/g,
+        (match, src, alt) => {
+            const isAi = src.includes("/uploads/ai/") || (alt && alt.toLowerCase().includes("generated"));
+            return `
+<div class="image-preview-card group relative my-3 max-w-lg rounded-2xl overflow-hidden border border-white/15 bg-black/40 shadow-xl">
+  <div class="relative cursor-pointer overflow-hidden bg-black/20" data-action="zoom" data-src="${src}" data-alt="${escapeHtml(alt)}">
+    <img src="${src}" alt="${escapeHtml(alt)}" loading="lazy" class="w-full max-h-[380px] object-contain rounded-t-xl transition-transform duration-300 group-hover:scale-[1.01]" />
+    <div class="absolute top-2.5 left-2.5 flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold tracking-wide backdrop-blur-md ${isAi ? 'bg-fuchsia-600/80 text-white border border-fuchsia-400/40 shadow-lg shadow-fuchsia-900/50' : 'bg-cyan-600/80 text-white border border-cyan-400/40 shadow-lg shadow-cyan-900/50'}">
+      <span>${isAi ? '🎨 AI Generated' : '🌐 Web Image'}</span>
+    </div>
+    <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2.5 pointer-events-auto">
+      <button type="button" class="px-3 py-1.5 rounded-xl bg-white/20 hover:bg-white/30 text-white text-xs font-bold backdrop-blur-md flex items-center gap-1.5 transition-all shadow-lg cursor-pointer" data-action="zoom" data-src="${src}">
+        🔍 Zoom
+      </button>
+      <button type="button" class="px-3 py-1.5 rounded-xl bg-white/20 hover:bg-white/30 text-white text-xs font-bold backdrop-blur-md flex items-center gap-1.5 transition-all shadow-lg cursor-pointer" data-action="download" data-src="${src}">
+        ⬇ Download
+      </button>
+    </div>
+  </div>
+  ${alt ? `<div class="px-3.5 py-2 text-xs text-white/70 bg-white/[0.03] border-t border-white/10 italic flex items-center gap-1.5"><span class="text-white/40">💬</span><span class="truncate">${escapeHtml(alt)}</span></div>` : ''}
+</div>`;
+        }
+    );
+
+    // 4. Ensure links open safely in new tab with arrow icon
+    res = res.replace(
+        /<a href="([^"]+)">([\s\S]*?)<\/a>/g,
+        '<a href="$1" target="_blank" rel="noopener noreferrer" class="text-cyan-400 hover:text-cyan-300 underline underline-offset-2 transition-colors font-medium inline-flex items-center gap-0.5">$2 <span class="text-[10px] opacity-75 font-normal">↗</span></a>'
+    );
+
+    return res;
+};
+
+/**
+ * Configure marked defaults once
+ */
+marked.setOptions({
+    gfm: true,
+    breaks: true,
+});
+
+/**
  * Master Rich Content & Math Renderer
  */
 const MathFormattedText = React.memo(({ text, className = "", onOpenLightbox }) => {
@@ -284,7 +228,7 @@ const MathFormattedText = React.memo(({ text, className = "", onOpenLightbox }) 
         // 1. Protect Math & pre-process images
         const { processed, mathMap } = protectMath(text);
 
-        // 2. Parse Markdown
+        // 2. Parse Markdown with marked
         let rawHtml = "";
         try {
             rawHtml = marked.parse(processed);
@@ -292,13 +236,16 @@ const MathFormattedText = React.memo(({ text, className = "", onOpenLightbox }) 
             rawHtml = escapeHtml(processed);
         }
 
-        // 3. Restore Math
-        const withMath = restoreMath(rawHtml, mathMap);
+        // 3. Post-process tables, code blocks, images, links
+        const enrichedHtml = postProcessHtml(rawHtml);
 
-        // 4. Sanitize with DOMPurify
+        // 4. Restore Math
+        const withMath = restoreMath(enrichedHtml, mathMap);
+
+        // 5. Sanitize with DOMPurify
         const clean = DOMPurify.sanitize(withMath, {
-            ADD_ATTR: ["target", "rel", "data-action", "data-src", "data-alt", "data-code", "loading"],
-            ADD_TAGS: ["svg", "path", "button"],
+            ADD_ATTR: ["target", "rel", "data-action", "data-src", "data-alt", "data-code", "loading", "align"],
+            ADD_TAGS: ["svg", "path", "button", "table", "thead", "tbody", "tr", "th", "td"],
         });
 
         return clean;
@@ -358,6 +305,98 @@ const MathFormattedText = React.memo(({ text, className = "", onOpenLightbox }) 
 
     return (
         <>
+            <style>{`
+                /* Scoped markdown styling for chat bubbles */
+                .chat-rich-content {
+                    word-break: break-word;
+                }
+                .chat-rich-content table {
+                    width: 100%;
+                    border-collapse: collapse;
+                }
+                .chat-rich-content th {
+                    background-color: rgba(255, 255, 255, 0.1);
+                    color: #67e8f9;
+                    font-weight: 700;
+                    font-size: 0.75rem;
+                    text-transform: uppercase;
+                    letter-spacing: 0.05em;
+                    padding: 0.625rem 0.875rem;
+                    border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+                }
+                .chat-rich-content td {
+                    padding: 0.5rem 0.875rem;
+                    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+                    color: rgba(255, 255, 255, 0.9);
+                }
+                .chat-rich-content tr:nth-child(even) {
+                    background-color: rgba(255, 255, 255, 0.02);
+                }
+                .chat-rich-content tr:hover {
+                    background-color: rgba(255, 255, 255, 0.05);
+                }
+                .chat-rich-content ul {
+                    list-style-type: disc;
+                    padding-left: 1.25rem;
+                    margin: 0.5rem 0;
+                }
+                .chat-rich-content ol {
+                    list-style-type: decimal;
+                    padding-left: 1.25rem;
+                    margin: 0.5rem 0;
+                }
+                .chat-rich-content li {
+                    margin: 0.25rem 0;
+                    line-height: 1.6;
+                }
+                .chat-rich-content h1 {
+                    font-size: 1.2rem;
+                    font-weight: 800;
+                    margin-top: 1rem;
+                    margin-bottom: 0.5rem;
+                    padding-bottom: 0.25rem;
+                    border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+                    color: #ffffff;
+                }
+                .chat-rich-content h2 {
+                    font-size: 1.05rem;
+                    font-weight: 700;
+                    margin-top: 0.85rem;
+                    margin-bottom: 0.4rem;
+                    color: rgba(255, 255, 255, 0.95);
+                }
+                .chat-rich-content h3 {
+                    font-size: 0.95rem;
+                    font-weight: 600;
+                    margin-top: 0.75rem;
+                    margin-bottom: 0.3rem;
+                    color: rgba(255, 255, 255, 0.9);
+                }
+                .chat-rich-content blockquote {
+                    border-left: 4px solid #22d3ee;
+                    padding-left: 0.85rem;
+                    margin: 0.65rem 0;
+                    background: rgba(255, 255, 255, 0.03);
+                    border-radius: 0 0.5rem 0.5rem 0;
+                    font-style: italic;
+                    color: rgba(255, 255, 255, 0.85);
+                }
+                .chat-rich-content code:not(pre code) {
+                    background: rgba(255, 255, 255, 0.1);
+                    color: #67e8f9;
+                    font-family: monospace;
+                    font-size: 0.85em;
+                    padding: 0.15rem 0.4rem;
+                    border-radius: 0.25rem;
+                    border: 1px solid rgba(255, 255, 255, 0.1);
+                }
+                .chat-rich-content hr {
+                    border: 0;
+                    border-top: 1px solid rgba(255, 255, 255, 0.15);
+                    margin: 1rem 0;
+                }
+            `}</style>
+
             <div
                 ref={containerRef}
                 onClick={handleContainerClick}
@@ -385,14 +424,14 @@ const MathFormattedText = React.memo(({ text, className = "", onOpenLightbox }) 
                                 <button
                                     type="button"
                                     onClick={() => triggerDownload(localLightboxImg)}
-                                    className="px-3.5 py-1.5 rounded-full bg-white/20 hover:bg-white/30 text-white text-xs font-bold backdrop-blur-md transition-colors"
+                                    className="px-3.5 py-1.5 rounded-full bg-white/20 hover:bg-white/30 text-white text-xs font-bold backdrop-blur-md transition-colors cursor-pointer"
                                 >
                                     ⬇ Download
                                 </button>
                                 <button
                                     type="button"
                                     onClick={() => setLocalLightboxImg(null)}
-                                    className="h-8 w-8 rounded-full bg-white/20 hover:bg-white/30 text-white flex items-center justify-center text-sm font-bold backdrop-blur-md transition-colors"
+                                    className="h-8 w-8 rounded-full bg-white/20 hover:bg-white/30 text-white flex items-center justify-center text-sm font-bold backdrop-blur-md transition-colors cursor-pointer"
                                 >
                                     ✕
                                 </button>
