@@ -1,9 +1,11 @@
 import os
 import re
+import json
 import uuid
 import base64
 import logging
 import mimetypes
+import httpx
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from typing import Optional, Tuple, List, Dict, Any
@@ -272,13 +274,189 @@ async def extract_multimodal_image_parts(prompt_text: str) -> Tuple[str, List[An
     return clean_text, image_parts
 
 
+# ============================================================================
+# OPENROUTER INTEGRATION (Specialized Coding & Reasoning Models)
+# ============================================================================
+
+OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions"
+DEFAULT_OPENROUTER_CODING_MODEL = "deepseek/deepseek-r1"
+OPENROUTER_CODING_MODELS = [
+    "deepseek/deepseek-r1",
+    "anthropic/claude-3.7-sonnet",
+    "qwen/qwen-2.5-coder-32b-instruct",
+    "deepseek/deepseek-chat",
+    "openai/gpt-4o",
+]
+
+def is_openrouter_model(model_name: Optional[str]) -> bool:
+    if not model_name:
+        return False
+    return "/" in model_name or any(k in model_name.lower() for k in ["deepseek", "claude", "qwen", "openai", "openrouter"])
+
+async def generate_openrouter_text_stream(
+    prompt: str,
+    chat_history: List[dict],
+    system_prompt: str,
+    on_chunk: Optional[Any] = None,
+    preferred_model: Optional[str] = None
+) -> Optional[str]:
+    """Generates streaming code/text responses via OpenRouter API with fallback models."""
+    api_key = os.getenv("OPENROUTER_API_KEY")
+    if not api_key:
+        return None
+
+    target_models = []
+    if preferred_model and is_openrouter_model(preferred_model):
+        target_models.append(preferred_model)
+    for m in OPENROUTER_CODING_MODELS:
+        if m not in target_models:
+            target_models.append(m)
+
+    headers = {
+        "Authorization": f"Bearer {api_key.strip()}",
+        "HTTP-Referer": "https://chattornado.vercel.app",
+        "X-Title": "ChatTornado AI",
+        "Content-Type": "application/json",
+    }
+
+    messages = [{"role": "system", "content": system_prompt}]
+    for h in chat_history[-10:]:
+        role = "user" if h.get("role") == "user" or h.get("is_user") else "assistant"
+        text = (h.get("text") or "").strip()
+        if text:
+            messages.append({"role": role, "content": text})
+    messages.append({"role": "user", "content": prompt.strip()})
+
+    for model_name in target_models:
+        try:
+            logger.info("Connecting to OpenRouter stream with model: %s", model_name)
+            payload = {
+                "model": model_name,
+                "messages": messages,
+                "temperature": 0.2,
+                "stream": True,
+            }
+            accumulated_text = ""
+            async with httpx.AsyncClient(timeout=45.0) as client:
+                async with client.stream("POST", OPENROUTER_API_URL, json=payload, headers=headers) as resp:
+                    if resp.status_code != 200:
+                        err_bytes = await resp.aread()
+                        logger.warning("OpenRouter %s HTTP %s: %s", model_name, resp.status_code, err_bytes[:200])
+                        continue
+
+                    async for line in resp.aiter_lines():
+                        if not line:
+                            continue
+                        line_str = line.strip()
+                        if line_str.startswith("data: "):
+                            data_chunk = line_str[6:].strip()
+                            if data_chunk == "[DONE]":
+                                break
+                            try:
+                                chunk_json = json.loads(data_chunk)
+                                choices = chunk_json.get("choices", [])
+                                if choices:
+                                    delta = choices[0].get("delta", {})
+                                    content = delta.get("content") or ""
+                                    if not content and delta.get("reasoning"):
+                                        content = delta.get("reasoning")
+                                    if content:
+                                        accumulated_text += content
+                                        if on_chunk:
+                                            await on_chunk(content)
+                            except Exception:
+                                continue
+
+            if accumulated_text.strip():
+                logger.info("OpenRouter stream completed using %s (%d chars)", model_name, len(accumulated_text))
+                return accumulated_text
+        except Exception as e:
+            logger.warning("OpenRouter %s stream exception: %s", model_name, e)
+            continue
+
+    return None
+
+async def generate_openrouter_text(
+    prompt: str,
+    chat_history: List[dict],
+    system_prompt: str,
+    preferred_model: Optional[str] = None
+) -> Optional[str]:
+    """Generates non-streaming code/text responses via OpenRouter API with fallback models."""
+    api_key = os.getenv("OPENROUTER_API_KEY")
+    if not api_key:
+        return None
+
+    target_models = []
+    if preferred_model and is_openrouter_model(preferred_model):
+        target_models.append(preferred_model)
+    for m in OPENROUTER_CODING_MODELS:
+        if m not in target_models:
+            target_models.append(m)
+
+    headers = {
+        "Authorization": f"Bearer {api_key.strip()}",
+        "HTTP-Referer": "https://chattornado.vercel.app",
+        "X-Title": "ChatTornado AI",
+        "Content-Type": "application/json",
+    }
+
+    messages = [{"role": "system", "content": system_prompt}]
+    for h in chat_history[-10:]:
+        role = "user" if h.get("role") == "user" or h.get("is_user") else "assistant"
+        text = (h.get("text") or "").strip()
+        if text:
+            messages.append({"role": role, "content": text})
+    messages.append({"role": "user", "content": prompt.strip()})
+
+    for model_name in target_models:
+        try:
+            payload = {
+                "model": model_name,
+                "messages": messages,
+                "temperature": 0.2,
+                "stream": False,
+            }
+            async with httpx.AsyncClient(timeout=45.0) as client:
+                resp = await client.post(OPENROUTER_API_URL, json=payload, headers=headers)
+                if resp.status_code == 200:
+                    data = resp.json()
+                    choices = data.get("choices", [])
+                    if choices:
+                        msg = choices[0].get("message", {})
+                        content = msg.get("content") or ""
+                        if content.strip():
+                            logger.info("OpenRouter non-stream completed using %s (%d chars)", model_name, len(content))
+                            return content
+        except Exception as e:
+            logger.warning("OpenRouter %s non-stream exception: %s", model_name, e)
+            continue
+
+    return None
+
+
 async def generate_ai_text(
     prompt: str,
     chat_history: List[dict],
     system_prompt: str = PROMPT_DEFAULT,
     preferred_model: Optional[str] = None
 ) -> str:
-    """Generate conversational response using Gemini API with SDK and REST fallback."""
+    """Generate conversational response using OpenRouter (for coding/custom models) or Gemini API with SDK and REST fallback."""
+    clean_prompt = prompt.strip()
+
+    # 0. Check OpenRouter delegation for coding mode or explicit OpenRouter models
+    is_or = is_openrouter_model(preferred_model)
+    is_coding = "CODING" in system_prompt
+    if (is_or or is_coding) and os.getenv("OPENROUTER_API_KEY"):
+        or_res = await generate_openrouter_text(
+            prompt=clean_prompt,
+            chat_history=chat_history,
+            system_prompt=system_prompt,
+            preferred_model=preferred_model
+        )
+        if or_res:
+            return or_res
+
     api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
         print("[AI_SERVICE] No GEMINI_API_KEY set!", flush=True)
@@ -967,7 +1145,23 @@ async def generate_ai_text_stream(
     db: Optional[Session] = None,
     preferred_model: Optional[str] = None
 ) -> str:
-    """Generate conversational response using Gemini API with real-time token streaming and Google Search grounding."""
+    """Generate conversational response using OpenRouter (for coding/custom models) or Gemini API with real-time token streaming and Google Search grounding."""
+    clean_prompt = prompt.strip()
+
+    # 0. Check OpenRouter delegation for coding mode or explicit OpenRouter models
+    is_or = is_openrouter_model(preferred_model)
+    is_coding = "CODING" in system_prompt
+    if (is_or or is_coding) and os.getenv("OPENROUTER_API_KEY"):
+        or_res = await generate_openrouter_text_stream(
+            prompt=clean_prompt,
+            chat_history=chat_history,
+            system_prompt=system_prompt,
+            on_chunk=on_chunk,
+            preferred_model=preferred_model
+        )
+        if or_res:
+            return or_res
+
     api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
         fallback = "⚡ **VORTEX-9 Neural Link Offline**\n\nGemini API key is not configured. Please add `GEMINI_API_KEY` to backend `.env`."

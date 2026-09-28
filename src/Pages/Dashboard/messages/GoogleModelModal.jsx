@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from "react";
 import PropTypes from "prop-types";
 import { motion, AnimatePresence } from "framer-motion";
-import { Cpu, CheckCircle2, Zap, Brain, Shield, Sparkles, X } from "lucide-react";
+import { Cpu, CheckCircle2, Zap, Brain, Shield, Sparkles, X, Code2, Globe } from "lucide-react";
 import { soundEngine } from "../../../utils/soundEffects";
 
 export const GOOGLE_MODELS = [
     {
         id: "gemini-3.5-flash",
         name: "Gemini 3.5 Flash",
+        provider: "Google",
         version: "v3.5",
         tag: "Default • Smart & Fast",
         badge: "Recommended",
@@ -23,6 +24,7 @@ export const GOOGLE_MODELS = [
     {
         id: "gemini-3.5-flash-lite",
         name: "Gemini 3.5 Flash Lite",
+        provider: "Google",
         version: "v3.5 Lite",
         tag: "Instant Token Streaming",
         badge: "Lowest Latency",
@@ -38,6 +40,7 @@ export const GOOGLE_MODELS = [
     {
         id: "gemini-3.1-pro-preview",
         name: "Gemini 3.1 Pro",
+        provider: "Google",
         version: "v3.1 Pro",
         tag: "Deep Reasoning & Architecture",
         badge: "Deep Reasoning",
@@ -53,6 +56,7 @@ export const GOOGLE_MODELS = [
     {
         id: "gemini-2.5-flash",
         name: "Gemini 2.5 Flash",
+        provider: "Google",
         version: "v2.5",
         tag: "Battle-Tested Production",
         badge: "Ultra-Stable",
@@ -67,6 +71,75 @@ export const GOOGLE_MODELS = [
     },
 ];
 
+export const OPENROUTER_MODELS = [
+    {
+        id: "deepseek/deepseek-r1",
+        name: "DeepSeek R1",
+        provider: "OpenRouter",
+        version: "Reasoning SOTA",
+        tag: "Premier Algorithmic & Math Thinking",
+        badge: "Top Coding SOTA",
+        badgeStyle: "bg-blue-500/20 text-blue-300 border-blue-500/40 shadow-[0_0_10px_rgba(59,130,246,0.3)]",
+        icon: Brain,
+        iconColor: "text-blue-400",
+        iconBg: "bg-blue-500/10 border-blue-500/30",
+        description: "Frontier open reasoning model with deep verification. Unrivaled for algorithmic complexity, hard coding challenges, and system architecture.",
+        speed: "0.8s (Moderate)",
+        intelligence: "Maximum",
+        context: "128K Tokens",
+    },
+    {
+        id: "anthropic/claude-3.7-sonnet",
+        name: "Claude 3.7 Sonnet",
+        provider: "OpenRouter",
+        version: "Hybrid Reasoning",
+        tag: "Full-Stack & Frontend Excellence",
+        badge: "Best Full-Stack",
+        badgeStyle: "bg-orange-500/20 text-orange-300 border-orange-500/40 shadow-[0_0_10px_rgba(249,115,22,0.3)]",
+        icon: Zap,
+        iconColor: "text-orange-400",
+        iconBg: "bg-orange-500/10 border-orange-500/30",
+        description: "World-class coding powerhouse. Renowned for zero-error frontend implementations, clean code refactoring, and nuanced software engineering.",
+        speed: "0.5s (Fast)",
+        intelligence: "Maximum",
+        context: "200K Tokens",
+    },
+    {
+        id: "qwen/qwen-2.5-coder-32b-instruct",
+        name: "Qwen 2.5 Coder 32B",
+        provider: "OpenRouter",
+        version: "Coder 32B",
+        tag: "Specialized Polyglot Coding",
+        badge: "Code Specialist",
+        badgeStyle: "bg-emerald-500/20 text-emerald-300 border-emerald-500/40 shadow-[0_0_10px_rgba(16,185,129,0.3)]",
+        icon: Code2,
+        iconColor: "text-emerald-400",
+        iconBg: "bg-emerald-500/10 border-emerald-500/30",
+        description: "Dedicated coding model fine-tuned across 90+ programming languages, frameworks, complex Bash scripting, and SQL optimization.",
+        speed: "0.25s (Very Fast)",
+        intelligence: "Very High",
+        context: "128K Tokens",
+    },
+    {
+        id: "deepseek/deepseek-chat",
+        name: "DeepSeek V3",
+        provider: "OpenRouter",
+        version: "V3 MoE",
+        tag: "High-Speed General & Code Synthesis",
+        badge: "Fast & Economical",
+        badgeStyle: "bg-indigo-500/20 text-indigo-300 border-indigo-500/40 shadow-[0_0_10px_rgba(99,102,241,0.3)]",
+        icon: Sparkles,
+        iconColor: "text-indigo-400",
+        iconBg: "bg-indigo-500/10 border-indigo-500/30",
+        description: "High-speed 671B MoE architecture delivering sharp code explanations, rapid prototyping, and balanced developer assistance.",
+        speed: "0.2s (Ultra-fast)",
+        intelligence: "High",
+        context: "64K Tokens",
+    },
+];
+
+export const ALL_MODELS = [...GOOGLE_MODELS, ...OPENROUTER_MODELS];
+
 export const STORAGE_KEY_GOOGLE_MODEL = "vortex_selected_google_model";
 
 export const getSelectedGoogleModel = () => {
@@ -76,12 +149,19 @@ export const getSelectedGoogleModel = () => {
 
 export default function GoogleModelModal({ isOpen, onClose }) {
     const [selectedModel, setSelectedModel] = useState(getSelectedGoogleModel);
+    const [activeTab, setActiveTab] = useState("google");
     const [savedNotification, setSavedNotification] = useState(false);
 
     useEffect(() => {
         if (isOpen) {
-            setSelectedModel(getSelectedGoogleModel());
+            const current = getSelectedGoogleModel();
+            setSelectedModel(current);
             setSavedNotification(false);
+            if (OPENROUTER_MODELS.some((m) => m.id === current)) {
+                setActiveTab("openrouter");
+            } else {
+                setActiveTab("google");
+            }
         }
     }, [isOpen]);
 
@@ -102,6 +182,8 @@ export default function GoogleModelModal({ isOpen, onClose }) {
 
     if (!isOpen) return null;
 
+    const displayModels = activeTab === "openrouter" ? OPENROUTER_MODELS : GOOGLE_MODELS;
+
     return (
         <AnimatePresence>
             <motion.div
@@ -121,7 +203,7 @@ export default function GoogleModelModal({ isOpen, onClose }) {
                     style={{ boxShadow: "0 0 50px rgba(6,182,212,0.18)" }}
                 >
                     {/* Header */}
-                    <div className="flex items-start justify-between pb-4 border-b border-white/10 mb-4">
+                    <div className="flex items-start justify-between pb-3 border-b border-white/10 mb-3">
                         <div className="flex items-center gap-3">
                             <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-tr from-cyan-500 via-indigo-500 to-purple-600 p-[1px] shadow-lg">
                                 <div className="flex h-full w-full items-center justify-center rounded-2xl bg-[#090d18]">
@@ -130,12 +212,12 @@ export default function GoogleModelModal({ isOpen, onClose }) {
                             </div>
                             <div>
                                 <h3 className="text-base sm:text-lg font-bold text-white flex items-center gap-2">
-                                    Google Gemini Engine
+                                    AI Neural Engine
                                     <span className="text-[10px] font-mono uppercase px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/40">
-                                        Multi-Model
+                                        Multi-Provider
                                     </span>
                                 </h3>
-                                <p className="text-xs text-white/60">Choose which neural intelligence powers your VORTEX-9 conversation</p>
+                                <p className="text-xs text-white/60">Choose the foundation model powering VORTEX-9</p>
                             </div>
                         </div>
                         <button
@@ -147,9 +229,40 @@ export default function GoogleModelModal({ isOpen, onClose }) {
                         </button>
                     </div>
 
+                    {/* Provider Tabs */}
+                    <div className="flex items-center gap-1.5 p-1 bg-black/40 rounded-xl border border-white/10 mb-3.5">
+                        <button
+                            type="button"
+                            onClick={() => { setActiveTab("google"); soundEngine?.play?.("click"); }}
+                            className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                                activeTab === "google"
+                                    ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-sm"
+                                    : "text-white/60 hover:text-white hover:bg-white/5"
+                            }`}
+                        >
+                            <Globe className="w-3.5 h-3.5 text-cyan-400" />
+                            <span>Google Gemini</span>
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => { setActiveTab("openrouter"); soundEngine?.play?.("click"); }}
+                            className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                                activeTab === "openrouter"
+                                    ? "bg-purple-500/20 text-purple-300 border border-purple-500/40 shadow-sm"
+                                    : "text-white/60 hover:text-white hover:bg-white/5"
+                            }`}
+                        >
+                            <Code2 className="w-3.5 h-3.5 text-purple-400" />
+                            <span>OpenRouter Coding</span>
+                            <span className="text-[9px] bg-purple-500/30 text-purple-200 px-1.5 py-0.2 rounded-md font-semibold">
+                                DeepSeek/Claude
+                            </span>
+                        </button>
+                    </div>
+
                     {/* Model Grid */}
-                    <div className="space-y-2.5 max-h-[58vh] overflow-y-auto pr-1">
-                        {GOOGLE_MODELS.map((model) => {
+                    <div className="space-y-2.5 max-h-[50vh] overflow-y-auto pr-1">
+                        {displayModels.map((model) => {
                             const isSelected = selectedModel === model.id;
                             const IconComponent = model.icon;
 
@@ -221,10 +334,18 @@ export default function GoogleModelModal({ isOpen, onClose }) {
                         })}
                     </div>
 
+                    {/* OpenRouter Configuration Tip */}
+                    {activeTab === "openrouter" && (
+                        <div className="mt-3 px-3 py-2 rounded-xl bg-purple-950/30 border border-purple-500/20 text-[11px] text-purple-200/90 flex items-center gap-2">
+                            <span className="text-amber-300 text-sm">💡</span>
+                            <span>Add <code>OPENROUTER_API_KEY</code> to <code>backend/.env</code> to unlock DeepSeek R1 & Claude 3.7 Sonnet streaming. Automatically used when CODING mode is selected!</span>
+                        </div>
+                    )}
+
                     {/* Footer */}
-                    <div className="mt-5 pt-3 border-t border-white/10 flex items-center justify-between gap-3">
+                    <div className="mt-4 pt-3 border-t border-white/10 flex items-center justify-between gap-3">
                         <div className="text-[11px] text-white/50">
-                            Automatic fallback guarantees 100% uptime
+                            Automatic fallback guarantees zero interruption
                         </div>
                         <div className="flex items-center gap-2">
                             <button
