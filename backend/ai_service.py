@@ -2,6 +2,7 @@ import os
 import re
 import json
 import uuid
+import time
 import base64
 import logging
 import mimetypes
@@ -275,23 +276,169 @@ async def extract_multimodal_image_parts(prompt_text: str) -> Tuple[str, List[An
 
 
 # ============================================================================
-# OPENROUTER INTEGRATION (Specialized Coding & Reasoning Models)
+# OPENROUTER INTEGRATION (Dynamic Multi-Model Catalog & Resilient Streaming)
 # ============================================================================
 
 OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions"
+OPENROUTER_MODELS_URL = "https://openrouter.ai/api/v1/models"
 DEFAULT_OPENROUTER_CODING_MODEL = "deepseek/deepseek-r1"
-OPENROUTER_CODING_MODELS = [
-    "deepseek/deepseek-r1",
-    "anthropic/claude-3.7-sonnet",
-    "qwen/qwen-2.5-coder-32b-instruct",
-    "deepseek/deepseek-chat",
-    "openai/gpt-4o",
+
+# In-memory TTL cache for OpenRouter dynamic catalog (1-hour cache)
+OPENROUTER_MODELS_CACHE: Dict[str, Any] = {
+    "models": [],
+    "last_fetched": 0,
+}
+CACHE_TTL_SECONDS = 3600
+
+FALLBACK_OPENROUTER_MODELS = [
+    {
+        "id": "deepseek/deepseek-r1",
+        "name": "DeepSeek R1",
+        "description": "Frontier open reasoning model with deep verification. SOTA for algorithmic complexity and mathematics.",
+        "context_length": 128000,
+        "pricing": {"prompt": "0.00000055", "completion": "0.00000219", "is_free": False},
+        "architecture": {"modality": "text->text", "tokenizer": "DeepSeek"}
+    },
+    {
+        "id": "anthropic/claude-3.7-sonnet",
+        "name": "Claude 3.7 Sonnet",
+        "description": "World-class hybrid reasoning model. SOTA for full-stack engineering, frontend UI, and complex code refactoring.",
+        "context_length": 200000,
+        "pricing": {"prompt": "0.000003", "completion": "0.000015", "is_free": False},
+        "architecture": {"modality": "text+image->text", "tokenizer": "Claude"}
+    },
+    {
+        "id": "qwen/qwen-2.5-coder-32b-instruct",
+        "name": "Qwen 2.5 Coder 32B Instruct",
+        "description": "Polyglot coding model fine-tuned across 90+ programming languages, Bash scripting, and SQL.",
+        "context_length": 128000,
+        "pricing": {"prompt": "0.00000007", "completion": "0.00000016", "is_free": False},
+        "architecture": {"modality": "text->text", "tokenizer": "Qwen"}
+    },
+    {
+        "id": "deepseek/deepseek-chat",
+        "name": "DeepSeek V3",
+        "description": "High-speed 671B MoE architecture delivering sharp code explanations and rapid prototyping.",
+        "context_length": 64000,
+        "pricing": {"prompt": "0.00000014", "completion": "0.00000028", "is_free": False},
+        "architecture": {"modality": "text->text", "tokenizer": "DeepSeek"}
+    },
+    {
+        "id": "openai/gpt-4o",
+        "name": "OpenAI GPT-4o",
+        "description": "Flagship multimodal intelligence from OpenAI with broad reasoning and coding capabilities.",
+        "context_length": 128000,
+        "pricing": {"prompt": "0.0000025", "completion": "0.00001", "is_free": False},
+        "architecture": {"modality": "text+image->text", "tokenizer": "GPT"}
+    },
+    {
+        "id": "meta-llama/llama-3.3-70b-instruct",
+        "name": "Llama 3.3 70B Instruct",
+        "description": "Meta's flagship open-weights model rivaling proprietary models at low latency.",
+        "context_length": 128000,
+        "pricing": {"prompt": "0.00000012", "completion": "0.0000003", "is_free": False},
+        "architecture": {"modality": "text->text", "tokenizer": "Llama"}
+    }
 ]
 
+async def fetch_openrouter_models(force_refresh: bool = False) -> List[Dict[str, Any]]:
+    """
+    Fetches the live available model catalog from OpenRouter (GET /api/v1/models) with in-memory caching.
+    Returns clean parsed list: {id, name, description, context_length, pricing, architecture}.
+    """
+    global OPENROUTER_MODELS_CACHE
+    now = time.time()
+
+    if not force_refresh and OPENROUTER_MODELS_CACHE["models"] and (now - OPENROUTER_MODELS_CACHE["last_fetched"] < CACHE_TTL_SECONDS):
+        return OPENROUTER_MODELS_CACHE["models"]
+
+    api_key = os.getenv("OPENROUTER_API_KEY", "")
+    headers = {
+        "HTTP-Referer": "https://chattornado.vercel.app",
+        "X-Title": "ChatTornado AI",
+    }
+    if api_key.strip():
+        headers["Authorization"] = f"Bearer {api_key.strip()}"
+
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            resp = await client.get(OPENROUTER_MODELS_URL, headers=headers)
+            if resp.status_code == 200:
+                raw_data = resp.json().get("data", [])
+                parsed_models: List[Dict[str, Any]] = []
+                for item in raw_data:
+                    m_id = item.get("id")
+                    if not m_id:
+                        continue
+                    pricing = item.get("pricing") or {}
+                    prompt_price = pricing.get("prompt", "0")
+                    completion_price = pricing.get("completion", "0")
+                    is_free = (
+                        (str(prompt_price) in ("0", "0.0", "0.000000") and str(completion_price) in ("0", "0.0", "0.000000"))
+                        or ":free" in m_id.lower()
+                    )
+                    arch = item.get("architecture") or {}
+                    parsed_models.append({
+                        "id": m_id,
+                        "name": item.get("name") or m_id,
+                        "description": item.get("description") or "",
+                        "context_length": item.get("context_length") or 0,
+                        "pricing": {
+                            "prompt": str(prompt_price),
+                            "completion": str(completion_price),
+                            "is_free": is_free
+                        },
+                        "architecture": {
+                            "modality": arch.get("modality", ""),
+                            "input_modalities": arch.get("input_modalities", []),
+                            "output_modalities": arch.get("output_modalities", []),
+                            "tokenizer": arch.get("tokenizer", "")
+                        }
+                    })
+
+                # Priority sorting: Premier coding/reasoning models first, then Free, then alphabetically
+                premier_order = [
+                    "deepseek/deepseek-r1",
+                    "anthropic/claude-3.7-sonnet",
+                    "anthropic/claude-3.5-sonnet",
+                    "qwen/qwen-2.5-coder-32b-instruct",
+                    "deepseek/deepseek-chat",
+                    "openai/gpt-4o",
+                    "meta-llama/llama-3.3-70b-instruct",
+                    "google/gemini-2.5-flash",
+                ]
+
+                def sort_key(model: Dict[str, Any]) -> tuple:
+                    m_id = model["id"].lower()
+                    for idx, target in enumerate(premier_order):
+                        if m_id == target.lower():
+                            return (0, idx, model["name"].lower())
+                    if model["pricing"]["is_free"]:
+                        return (1, 0, model["name"].lower())
+                    return (2, 0, model["name"].lower())
+
+                parsed_models.sort(key=sort_key)
+
+                OPENROUTER_MODELS_CACHE["models"] = parsed_models
+                OPENROUTER_MODELS_CACHE["last_fetched"] = now
+                logger.info("Successfully fetched and cached %d models from OpenRouter", len(parsed_models))
+                return parsed_models
+            else:
+                logger.warning("OpenRouter /models returned HTTP %s", resp.status_code)
+    except Exception as e:
+        logger.warning("Failed to fetch live OpenRouter models: %s", e)
+
+    # Return previous cache if available, else fallback list
+    if OPENROUTER_MODELS_CACHE["models"]:
+        return OPENROUTER_MODELS_CACHE["models"]
+    return FALLBACK_OPENROUTER_MODELS
+
 def is_openrouter_model(model_name: Optional[str]) -> bool:
+    """Returns True if the given model ID belongs to OpenRouter (slash-separated vendor/name or recognized slug)."""
     if not model_name:
         return False
-    return "/" in model_name or any(k in model_name.lower() for k in ["deepseek", "claude", "qwen", "openai", "openrouter"])
+    clean = model_name.strip().lower()
+    return "/" in clean or any(k in clean for k in ["deepseek", "claude", "qwen", "openai", "openrouter", "llama", "mistral"])
 
 async def generate_openrouter_text_stream(
     prompt: str,
@@ -300,15 +447,23 @@ async def generate_openrouter_text_stream(
     on_chunk: Optional[Any] = None,
     preferred_model: Optional[str] = None
 ) -> Optional[str]:
-    """Generates streaming code/text responses via OpenRouter API with fallback models."""
+    """Generates streaming code/text responses via OpenRouter API with dynamic model selection and resilient fallback."""
     api_key = os.getenv("OPENROUTER_API_KEY")
     if not api_key:
+        logger.warning("generate_openrouter_text_stream called but OPENROUTER_API_KEY is not configured.")
         return None
 
     target_models = []
     if preferred_model and is_openrouter_model(preferred_model):
         target_models.append(preferred_model)
-    for m in OPENROUTER_CODING_MODELS:
+
+    # Backup coding models in case the chosen model is temporarily rate limited
+    for m in [
+        DEFAULT_OPENROUTER_CODING_MODEL,
+        "anthropic/claude-3.7-sonnet",
+        "qwen/qwen-2.5-coder-32b-instruct",
+        "deepseek/deepseek-chat"
+    ]:
         if m not in target_models:
             target_models.append(m)
 
@@ -342,6 +497,11 @@ async def generate_openrouter_text_stream(
                     if resp.status_code != 200:
                         err_bytes = await resp.aread()
                         logger.warning("OpenRouter %s HTTP %s: %s", model_name, resp.status_code, err_bytes[:200])
+                        # If 401 Unauthorized, key is invalid across all OpenRouter models — fail fast to Gemini
+                        if resp.status_code == 401:
+                            logger.error("OpenRouter 401 Unauthorized: Invalid API key. Skipping remaining OpenRouter models.")
+                            break
+                        # For 429 or 5xx, try next model in target_models
                         continue
 
                     async for line in resp.aiter_lines():
@@ -382,15 +542,21 @@ async def generate_openrouter_text(
     system_prompt: str,
     preferred_model: Optional[str] = None
 ) -> Optional[str]:
-    """Generates non-streaming code/text responses via OpenRouter API with fallback models."""
+    """Generates non-streaming code/text responses via OpenRouter API with resilient fallback models."""
     api_key = os.getenv("OPENROUTER_API_KEY")
     if not api_key:
+        logger.warning("generate_openrouter_text called but OPENROUTER_API_KEY is not configured.")
         return None
 
     target_models = []
     if preferred_model and is_openrouter_model(preferred_model):
         target_models.append(preferred_model)
-    for m in OPENROUTER_CODING_MODELS:
+    for m in [
+        DEFAULT_OPENROUTER_CODING_MODEL,
+        "anthropic/claude-3.7-sonnet",
+        "qwen/qwen-2.5-coder-32b-instruct",
+        "deepseek/deepseek-chat"
+    ]:
         if m not in target_models:
             target_models.append(m)
 
@@ -428,6 +594,12 @@ async def generate_openrouter_text(
                         if content.strip():
                             logger.info("OpenRouter non-stream completed using %s (%d chars)", model_name, len(content))
                             return content
+                else:
+                    err_bytes = resp.content
+                    logger.warning("OpenRouter non-stream %s HTTP %s: %s", model_name, resp.status_code, err_bytes[:200])
+                    if resp.status_code == 401:
+                        logger.error("OpenRouter 401 Unauthorized. Skipping remaining OpenRouter models.")
+                        break
         except Exception as e:
             logger.warning("OpenRouter %s non-stream exception: %s", model_name, e)
             continue
@@ -447,15 +619,23 @@ async def generate_ai_text(
     # 0. Check OpenRouter delegation for coding mode or explicit OpenRouter models
     is_or = is_openrouter_model(preferred_model)
     is_coding = "CODING" in system_prompt
-    if (is_or or is_coding) and os.getenv("OPENROUTER_API_KEY"):
-        or_res = await generate_openrouter_text(
-            prompt=clean_prompt,
-            chat_history=chat_history,
-            system_prompt=system_prompt,
-            preferred_model=preferred_model
-        )
-        if or_res:
-            return or_res
+    if is_or or is_coding:
+        api_key = os.getenv("OPENROUTER_API_KEY")
+        if api_key:
+            or_res = await generate_openrouter_text(
+                prompt=clean_prompt,
+                chat_history=chat_history,
+                system_prompt=system_prompt,
+                preferred_model=preferred_model
+            )
+            if or_res:
+                return or_res
+            logger.info("OpenRouter response was empty or failed; seamlessly falling back to Gemini.")
+        else:
+            logger.warning(
+                "OpenRouter model '%s' requested but OPENROUTER_API_KEY is not set in backend/.env. Falling back seamlessly to Gemini.",
+                preferred_model
+            )
 
     api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
@@ -1151,16 +1331,24 @@ async def generate_ai_text_stream(
     # 0. Check OpenRouter delegation for coding mode or explicit OpenRouter models
     is_or = is_openrouter_model(preferred_model)
     is_coding = "CODING" in system_prompt
-    if (is_or or is_coding) and os.getenv("OPENROUTER_API_KEY"):
-        or_res = await generate_openrouter_text_stream(
-            prompt=clean_prompt,
-            chat_history=chat_history,
-            system_prompt=system_prompt,
-            on_chunk=on_chunk,
-            preferred_model=preferred_model
-        )
-        if or_res:
-            return or_res
+    if is_or or is_coding:
+        api_key = os.getenv("OPENROUTER_API_KEY")
+        if api_key:
+            or_res = await generate_openrouter_text_stream(
+                prompt=clean_prompt,
+                chat_history=chat_history,
+                system_prompt=system_prompt,
+                on_chunk=on_chunk,
+                preferred_model=preferred_model
+            )
+            if or_res:
+                return or_res
+            logger.info("OpenRouter stream was empty or failed; seamlessly falling back to Gemini.")
+        else:
+            logger.warning(
+                "OpenRouter model '%s' requested but OPENROUTER_API_KEY is not set in backend/.env. Falling back seamlessly to Gemini.",
+                preferred_model
+            )
 
     api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:

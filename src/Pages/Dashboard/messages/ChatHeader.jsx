@@ -267,7 +267,7 @@ const ChatHeader = React.memo(({
                                                 className="flex items-center gap-2 px-3 py-2 text-xs font-semibold text-cyan-300 hover:text-white hover:bg-cyan-500/10 rounded-lg text-left cursor-pointer transition-colors"
                                             >
                                                 <Cpu className="w-4 h-4 text-cyan-400" />
-                                                <span>Choose Google Model</span>
+                                                <span>AI Models (OpenRouter & Gemini)</span>
                                             </button>
                                         )}
                                         {onReloadChat && (
@@ -411,7 +411,7 @@ const ChatHeader = React.memo(({
                                                 className="flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-cyan-300 hover:text-white hover:bg-cyan-500/15 rounded-lg text-left cursor-pointer transition-colors"
                                             >
                                                 <Cpu className="w-4 h-4 text-cyan-400" />
-                                                <span>Choose Google Model</span>
+                                                <span>AI Models (OpenRouter & Gemini)</span>
                                             </button>
                                             <button 
                                                 onClick={() => { onStartCall?.("ai"); setShowMoreMenu(false); }} 

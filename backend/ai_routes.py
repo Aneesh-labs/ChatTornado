@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from typing import Optional, List, Dict, Any
 from pydantic import BaseModel
 
+import os
 from auth import decode_token
 from database import get_db
 from models import User
@@ -11,7 +12,8 @@ from ai_service import (
     get_user_persona,
     ai_polish_text,
     ai_translate_text,
-    ai_smart_replies
+    ai_smart_replies,
+    fetch_openrouter_models
 )
 
 router = APIRouter(prefix="/api/ai", tags=["AI & Personalization"])
@@ -124,3 +126,86 @@ async def smart_replies(
         "status": "success",
         "replies": replies
     }
+
+
+@router.get("/models/openrouter")
+async def get_openrouter_models(refresh: bool = False):
+    """
+    Fetch dynamically available models from OpenRouter (GET /api/v1/models) with caching.
+    Returns: { id, name, description, context_length, pricing, architecture, is_free }.
+    """
+    models = await fetch_openrouter_models(force_refresh=refresh)
+    has_key = bool(os.getenv("OPENROUTER_API_KEY", "").strip())
+    return {
+        "status": "success",
+        "provider": "openrouter",
+        "has_api_key": has_key,
+        "count": len(models),
+        "models": models
+    }
+
+
+@router.get("/models")
+async def get_all_ai_models(refresh: bool = False):
+    """
+    Fetch catalog of all available AI models across providers (Google Gemini & OpenRouter).
+    """
+    openrouter_models = await fetch_openrouter_models(force_refresh=refresh)
+    return {
+        "status": "success",
+        "providers": {
+            "google": {
+                "name": "Google Gemini",
+                "has_api_key": bool(os.getenv("GEMINI_API_KEY", "").strip()),
+                "models": [
+                    {
+                        "id": "gemini-3.5-flash",
+                        "name": "Gemini 3.5 Flash",
+                        "provider": "Google",
+                        "tag": "Default • Smart & Fast",
+                        "badge": "Recommended",
+                        "description": "Google's flagship multimodal model with integrated Google Search grounding and balanced conversational depth.",
+                        "context_length": 1000000,
+                        "pricing": {"is_free": True}
+                    },
+                    {
+                        "id": "gemini-3.5-flash-lite",
+                        "name": "Gemini 3.5 Flash Lite",
+                        "provider": "Google",
+                        "tag": "Instant Token Streaming",
+                        "badge": "Lowest Latency",
+                        "description": "Optimized for lightning-fast token generation and zero-lag dialogue.",
+                        "context_length": 1000000,
+                        "pricing": {"is_free": True}
+                    },
+                    {
+                        "id": "gemini-3.1-pro-preview",
+                        "name": "Gemini 3.1 Pro",
+                        "provider": "Google",
+                        "tag": "Deep Reasoning & Architecture",
+                        "badge": "Deep Reasoning",
+                        "description": "Google's most capable reasoning engine for intricate programming, mathematics, and structured payloads.",
+                        "context_length": 2000000,
+                        "pricing": {"is_free": True}
+                    },
+                    {
+                        "id": "gemini-2.5-flash",
+                        "name": "Gemini 2.5 Flash",
+                        "provider": "Google",
+                        "tag": "Battle-Tested Production",
+                        "badge": "Ultra-Stable",
+                        "description": "Proven long-running production standard known for robust consistency.",
+                        "context_length": 1000000,
+                        "pricing": {"is_free": True}
+                    }
+                ]
+            },
+            "openrouter": {
+                "name": "OpenRouter",
+                "has_api_key": bool(os.getenv("OPENROUTER_API_KEY", "").strip()),
+                "count": len(openrouter_models),
+                "models": openrouter_models
+            }
+        }
+    }
+
