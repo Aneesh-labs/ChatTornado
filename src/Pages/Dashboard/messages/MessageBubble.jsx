@@ -805,11 +805,29 @@ const MessageBubble = React.memo(({
         }
     }, [isGame, actualMessage]);
 
-    const imageUrls = !isP2P && !isGame && !isSound ? extractImageUrls(actualMessage) : [];
+    // Detect rich markdown or AI message
+    const isRichMarkdown = typeof actualMessage === "string" && (
+        actualMessage.includes("```") ||
+        actualMessage.includes("|") ||
+        actualMessage.includes("![") ||
+        actualMessage.includes("$$") ||
+        actualMessage.includes("\\[") ||
+        actualMessage.includes("\\begin") ||
+        actualMessage.startsWith("#") ||
+        actualMessage.includes("\n#") ||
+        actualMessage.includes("- [") ||
+        actualMessage.includes("`") ||
+        actualMessage.includes("\n") ||
+        Boolean(msg.is_streaming) ||
+        Boolean(msg.sender?.username?.toLowerCase?.() === "vortex9") ||
+        Boolean(msg.sender_id === 1)
+    );
+
+    const imageUrls = !isP2P && !isGame && !isSound && !isRichMarkdown ? extractImageUrls(actualMessage) : [];
     const videoUrls = !isP2P && !isGame && !isSound ? extractVideoUrls(actualMessage) : [];
     const audioUrls = !isP2P && !isGame && !isSound ? extractAudioUrls(actualMessage) : [];
-    const nonImageUrls = !isP2P && !isGame && !isSound ? extractNonImageUrls(actualMessage) : [];
-    const caption = !isP2P && !isGame && !isSound ? extractCaption(actualMessage) : "";
+    const nonImageUrls = !isP2P && !isGame && !isSound && !isRichMarkdown ? extractNonImageUrls(actualMessage) : [];
+    const caption = !isP2P && !isGame && !isSound && !isRichMarkdown ? extractCaption(actualMessage) : "";
     const hasImages = imageUrls.length > 0;
     const hasVideos = videoUrls.length > 0;
     const hasAudio = audioUrls.length > 0;
@@ -852,7 +870,7 @@ const MessageBubble = React.memo(({
                 {/* Caption text */}
                 {(hasImages || hasVideos || hasAudio || hasFiles) && caption && !isVoiceNote && (
                     <div className="mb-1">
-                        <MathFormattedText text={caption} className="text-[13px] sm:text-[15px] leading-relaxed text-white/90 selection:bg-white/20" />
+                        <MathFormattedText text={caption} className="text-[13px] sm:text-[15px] leading-relaxed text-white/90 selection:bg-white/20" onOpenLightbox={setLightboxImage} />
                     </div>
                 )}
             {/* Special voice note styling for caption */}
@@ -908,7 +926,7 @@ const MessageBubble = React.memo(({
             {!hasImages && !hasVideos && !hasAudio && !hasFiles && !isP2P && (actualMessage || msg.is_streaming) && (
                 <div className="relative">
                     {actualMessage ? (
-                        <MathFormattedText text={actualMessage} className="text-[13px] sm:text-[15px] leading-relaxed text-white/90 selection:bg-white/20" />
+                        <MathFormattedText text={actualMessage} className="text-[13px] sm:text-[15px] leading-relaxed text-white/90 selection:bg-white/20" onOpenLightbox={setLightboxImage} />
                     ) : null}
                     {msg.is_streaming && (
                         <span className="inline-block w-2 h-4 ml-1 bg-cyan-400 rounded-sm animate-pulse align-middle" />
@@ -918,7 +936,7 @@ const MessageBubble = React.memo(({
                             <div className="text-[10px] text-emerald-300 font-bold mb-1 flex items-center gap-1">
                                 <span>🌐 AI Translation:</span>
                             </div>
-                            <MathFormattedText text={translatedText} className="text-[13px] leading-relaxed text-emerald-100" />
+                            <MathFormattedText text={translatedText} className="text-[13px] leading-relaxed text-emerald-100" onOpenLightbox={setLightboxImage} />
                         </div>
                     )}
                 </div>

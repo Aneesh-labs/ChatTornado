@@ -1,100 +1,407 @@
-import React from "react";
+import React, { useState, useCallback, useMemo, useEffect, useRef } from "react";
 import katex from "katex";
 import "katex/dist/katex.min.css";
+import { marked } from "marked";
+import DOMPurify from "dompurify";
+import { motion, AnimatePresence } from "framer-motion";
 
 /**
- * Formats message text to render LaTeX math ($...$ and $$...$$)
+ * Helper to escape HTML characters
  */
-const MathFormattedText = React.memo(({ text, className = "" }) => {
-    if (!text || typeof text !== "string") return null;
+const escapeHtml = (str) => {
+    if (!str || typeof str !== "string") return "";
+    return str
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+};
 
-    const hasMath = text.includes("$");
-
-    if (!hasMath) {
-        return (
-            <span className={`whitespace-pre-wrap break-words ${className}`}>
-                {text}
-            </span>
-        );
+/**
+ * Downloads a file from a URL
+ */
+const triggerDownload = async (url, filename) => {
+    try {
+        if (!url) return;
+        if (url.startsWith("data:")) {
+            const link = document.createElement("a");
+            link.href = url;
+            link.download = filename || `vortex_${Date.now()}.png`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            return;
+        }
+        const resp = await fetch(url, { mode: "cors" });
+        if (!resp.ok) throw new Error("Network fetch failed");
+        const blob = await resp.blob();
+        const objUrl = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = objUrl;
+        a.download = filename || url.split("/").pop()?.split("?")[0] || `download_${Date.now()}`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(objUrl);
+    } catch {
+        window.open(url, "_blank");
     }
+};
 
-    // Split text by $$...$$ (block) and $...$ (inline)
-    const mathRegex = /(\$\$[\s\S]*?\$\$|\$(?!\s)[\s\S]*?(?<!\s)\$)/g;
-    const parts = [];
-    let lastIndex = 0;
-    let match;
+/**
+ * Configures Marked with a rich custom renderer for tables, code blocks, images, and lists
+ */
+const configureMarked = () => {
+    const renderer = new marked.Renderer();
 
-    while ((match = mathRegex.exec(text)) !== null) {
-        if (match.index > lastIndex) {
-            parts.push({
-                type: "text",
-                content: text.slice(lastIndex, match.index),
+    // 1. Table Container & Styling
+    renderer.table = function ({ header, rows }) {
+        return `
+<div class="overflow-x-auto my-3 rounded-xl border border-white/15 bg-white/[0.04] shadow-lg max-w-full">
+  <table class="min-w-full text-left text-xs sm:text-sm border-collapse divide-y divide-white/10">
+    <thead>${header}</thead>
+    <tbody class="divide-y divide-white/5">${rows}</tbody>
+  </table>
+</div>`;
+    };
+
+    renderer.tablerow = function ({ text }) {
+        return `<tr class="hover:bg-white/[0.06] transition-colors odd:bg-transparent even:bg-white/[0.02]">${text}</tr>`;
+    };
+
+    renderer.tablecell = function ({ text, header, align }) {
+        const alignClass = align === "center" ? "text-center" : align === "right" ? "text-right" : "text-left";
+        if (header) {
+            return `<th class="px-3.5 py-2.5 bg-white/10 font-bold uppercase tracking-wider text-cyan-300 border-b border-white/15 ${alignClass}">${text}</th>`;
+        }
+        return `<td class="px-3.5 py-2 border-b border-white/5 text-white/90 ${alignClass}">${text}</td>`;
+    };
+
+    // 2. Code Block with Syntax Header & Copy Button
+    renderer.code = function ({ text, lang }) {
+        const language = (lang || "").trim().toLowerCase();
+        const encoded = encodeURIComponent(text);
+        return `
+<div class="chat-code-card my-3 rounded-xl border border-white/10 bg-[#0d1117] shadow-xl overflow-hidden text-xs sm:text-sm font-mono">
+  <div class="flex items-center justify-between px-3.5 py-1.5 bg-white/[0.05] border-b border-white/10 text-white/70 select-none">
+    <span class="text-[11px] font-bold uppercase tracking-wider text-cyan-400">${language || "code"}</span>
+    <button type="button" class="chat-copy-code-btn flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-medium text-white/80 hover:text-white bg-white/5 hover:bg-white/10 transition-colors cursor-pointer" data-code="${encoded}">
+      <svg class="w-3.5 h-3.5 text-cyan-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
+      <span>Copy code</span>
+    </button>
+  </div>
+  <pre class="p-3.5 overflow-x-auto text-emerald-300 leading-relaxed font-mono"><code>${escapeHtml(text)}</code></pre>
+</div>`;
+    };
+
+    // 3. Inline Code
+    renderer.codespan = function ({ text }) {
+        return `<code class="px-1.5 py-0.5 rounded bg-white/10 text-cyan-300 font-mono text-[12px] sm:text-[13px] border border-white/10 select-text">${text}</code>`;
+    };
+
+    // 4. Interactive Image Preview Card (Web Images & AI Generated Images)
+    renderer.image = function ({ href, title, text }) {
+        const isAi = href.includes("/uploads/ai/") || (text && text.toLowerCase().includes("generated"));
+        const altText = text || title || "";
+        return `
+<div class="image-preview-card group relative my-3 max-w-lg rounded-2xl overflow-hidden border border-white/15 bg-black/40 shadow-xl">
+  <div class="relative cursor-pointer overflow-hidden bg-black/20" data-action="zoom" data-src="${href}" data-alt="${escapeHtml(altText)}">
+    <img src="${href}" alt="${escapeHtml(altText)}" loading="lazy" class="w-full max-h-[380px] object-contain rounded-t-xl transition-transform duration-300 group-hover:scale-[1.01]" />
+    <div class="absolute top-2.5 left-2.5 flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold tracking-wide backdrop-blur-md ${isAi ? 'bg-fuchsia-600/80 text-white border border-fuchsia-400/40 shadow-lg shadow-fuchsia-900/50' : 'bg-cyan-600/80 text-white border border-cyan-400/40 shadow-lg shadow-cyan-900/50'}">
+      <span>${isAi ? '🎨 AI Generated' : '🌐 Web Image'}</span>
+    </div>
+    <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2.5 pointer-events-auto">
+      <button type="button" class="px-3 py-1.5 rounded-xl bg-white/20 hover:bg-white/30 text-white text-xs font-bold backdrop-blur-md flex items-center gap-1.5 transition-all shadow-lg cursor-pointer" data-action="zoom" data-src="${href}">
+        🔍 Zoom
+      </button>
+      <button type="button" class="px-3 py-1.5 rounded-xl bg-white/20 hover:bg-white/30 text-white text-xs font-bold backdrop-blur-md flex items-center gap-1.5 transition-all shadow-lg cursor-pointer" data-action="download" data-src="${href}">
+        ⬇ Download
+      </button>
+    </div>
+  </div>
+  ${altText ? `<div class="px-3.5 py-2 text-xs text-white/70 bg-white/[0.03] border-t border-white/10 italic flex items-center gap-1.5"><span class="text-white/40">💬</span><span class="truncate">${escapeHtml(altText)}</span></div>` : ''}
+</div>`;
+    };
+
+    // 5. Links (open in new tab with styling and icon)
+    renderer.link = function ({ href, title, text }) {
+        const titleAttr = title ? ` title="${escapeHtml(title)}"` : "";
+        return `<a href="${href}" target="_blank" rel="noopener noreferrer"${titleAttr} class="text-cyan-400 hover:text-cyan-300 underline underline-offset-2 transition-colors font-medium inline-flex items-center gap-0.5">${text} <span class="text-[10px] opacity-75 font-normal">↗</span></a>`;
+    };
+
+    // 6. Blockquotes
+    renderer.blockquote = function ({ text }) {
+        return `<blockquote class="border-l-4 border-cyan-400/80 pl-3.5 py-1.5 my-2.5 bg-white/[0.04] rounded-r-xl text-white/85 italic">${text}</blockquote>`;
+    };
+
+    // 7. Lists & Numbers
+    renderer.list = function ({ ordered, start, items }) {
+        if (ordered) {
+            const startAttr = start && start !== 1 ? ` start="${start}"` : "";
+            return `<ol class="list-decimal pl-5 my-2 space-y-1 text-white/90 leading-relaxed"${startAttr}>${items}</ol>`;
+        }
+        return `<ul class="list-disc pl-5 my-2 space-y-1 text-white/90 leading-relaxed">${items}</ul>`;
+    };
+
+    renderer.listitem = function ({ text, task, checked }) {
+        if (task) {
+            return `
+<li class="flex items-start gap-2 list-none -ml-4 my-1">
+  <input type="checkbox" disabled ${checked ? "checked" : ""} class="mt-1 rounded accent-cyan-400 cursor-default" />
+  <span class="${checked ? "line-through text-white/50" : "text-white/90"}">${text}</span>
+</li>`;
+        }
+        return `<li class="my-0.5">${text}</li>`;
+    };
+
+    // 8. Headings
+    renderer.heading = function ({ text, depth }) {
+        switch (depth) {
+            case 1:
+                return `<h1 class="text-lg sm:text-xl font-black text-white mt-4 mb-2 pb-1 border-b border-white/15 flex items-center gap-2">${text}</h1>`;
+            case 2:
+                return `<h2 class="text-base sm:text-lg font-bold text-white/95 mt-3 mb-1.5 flex items-center gap-1.5">${text}</h2>`;
+            case 3:
+                return `<h3 class="text-sm sm:text-base font-semibold text-white/90 mt-2 mb-1">${text}</h3>`;
+            default:
+                return `<h4 class="text-xs sm:text-sm font-semibold text-white/85 mt-1.5 mb-0.5">${text}</h4>`;
+        }
+    };
+
+    // 9. Horizontal Rule
+    renderer.hr = function () {
+        return `<hr class="my-3.5 border-t border-white/15"/>`;
+    };
+
+    // 10. Paragraph
+    renderer.paragraph = function ({ text }) {
+        return `<p class="my-1.5 leading-relaxed text-white/90 break-words">${text}</p>`;
+    };
+
+    marked.setOptions({
+        gfm: true,
+        breaks: true,
+        renderer: renderer,
+    });
+};
+
+// Initialize marked once
+configureMarked();
+
+/**
+ * Pre-extracts LaTeX formulas and replaces them with safe tokens
+ */
+const protectMath = (text) => {
+    if (!text || typeof text !== "string") return { processed: "", mathMap: {} };
+
+    const mathMap = {};
+    let counter = 0;
+
+    // 1. Standalone image URL detection (turn lines with raw image URLs into markdown image)
+    let processed = text.replace(
+        /(?:^|\n)(https?:\/\/[^\s<>"']+\.(?:png|jpg|jpeg|gif|webp|svg)(?:\?[^\s<>"']*)?|\/uploads\/[^\s<>"']+\.(?:png|jpg|jpeg|gif|webp|svg)(?:\?[^\s<>"']*)?)(?=$|\n)/gi,
+        (match, url) => `\n![Image](${url.trim()})\n`
+    );
+
+    // 2. Block math patterns: $$...$$, \[...\], \begin{env}...\end{env}
+    const blockMathRegex = /(\$\$[\s\S]*?\$\$|\\\[[\s\S]*?\\\]|\\begin\{(equation|align|gather|matrix|pmatrix|bmatrix|Bmatrix|vmatrix|Vmatrix|cases)\*?\}[\s\S]*?\\end\{\2\*?\})/g;
+
+    processed = processed.replace(blockMathRegex, (match) => {
+        const token = `@@KATEX_BLOCK_${counter++}@@`;
+        let mathContent = match;
+        if (match.startsWith("$$") && match.endsWith("$$")) {
+            mathContent = match.slice(2, -2).trim();
+        } else if (match.startsWith("\\[") && match.endsWith("\\]")) {
+            mathContent = match.slice(2, -2).trim();
+        }
+        mathMap[token] = { raw: mathContent, displayMode: true };
+        return token;
+    });
+
+    // 3. Inline math patterns: \(...\), $...$ (strict currency protection)
+    const inlineParenRegex = /\\\([\s\S]*?\\\)/g;
+    processed = processed.replace(inlineParenRegex, (match) => {
+        const token = `@@KATEX_INLINE_${counter++}@@`;
+        const mathContent = match.slice(2, -2).trim();
+        mathMap[token] = { raw: mathContent, displayMode: false };
+        return token;
+    });
+
+    const inlineDollarRegex = /(?<!\\|\w|\$)\$(?!\s)([^\$\n]+?)(?<!\s)\$(?!\w|\$)/g;
+    processed = processed.replace(inlineDollarRegex, (match, formula) => {
+        const token = `@@KATEX_INLINE_${counter++}@@`;
+        mathMap[token] = { raw: formula.trim(), displayMode: false };
+        return token;
+    });
+
+    return { processed, mathMap };
+};
+
+/**
+ * Restores KaTeX formulas from saved tokens
+ */
+const restoreMath = (html, mathMap) => {
+    let result = html;
+    for (const [token, item] of Object.entries(mathMap)) {
+        try {
+            const katexHtml = katex.renderToString(item.raw, {
+                displayMode: item.displayMode,
+                throwOnError: false,
             });
-        }
-
-        const raw = match[0];
-        if (raw.startsWith("$$") && raw.endsWith("$$")) {
-            const math = raw.slice(2, -2).trim();
-            try {
-                const html = katex.renderToString(math, {
-                    displayMode: true,
-                    throwOnError: false,
-                });
-                parts.push({ type: "math-block", html, raw });
-            } catch {
-                parts.push({ type: "text", content: raw });
+            if (item.displayMode) {
+                result = result.replace(
+                    token,
+                    `<div class="katex-block-wrapper my-2.5 overflow-x-auto py-1 text-center max-w-full select-text">${katexHtml}</div>`
+                );
+            } else {
+                result = result.replace(
+                    token,
+                    `<span class="katex-inline-wrapper px-0.5 align-baseline select-text">${katexHtml}</span>`
+                );
             }
-        } else if (raw.startsWith("$") && raw.endsWith("$")) {
-            const math = raw.slice(1, -1).trim();
-            try {
-                const html = katex.renderToString(math, {
-                    displayMode: false,
-                    throwOnError: false,
-                });
-                parts.push({ type: "math-inline", html, raw });
-            } catch {
-                parts.push({ type: "text", content: raw });
-            }
+        } catch {
+            result = result.replace(
+                token,
+                `<span class="text-amber-400 font-mono text-xs">${escapeHtml(item.raw)}</span>`
+            );
         }
-
-        lastIndex = match.index + raw.length;
     }
+    return result;
+};
 
-    if (lastIndex < text.length) {
-        parts.push({
-            type: "text",
-            content: text.slice(lastIndex),
+/**
+ * Master Rich Content & Math Renderer
+ */
+const MathFormattedText = React.memo(({ text, className = "", onOpenLightbox }) => {
+    const containerRef = useRef(null);
+    const [localLightboxImg, setLocalLightboxImg] = useState(null);
+
+    // Compute parsed and sanitized HTML
+    const sanitizedHtml = useMemo(() => {
+        if (!text || typeof text !== "string") return "";
+
+        // 1. Protect Math & pre-process images
+        const { processed, mathMap } = protectMath(text);
+
+        // 2. Parse Markdown
+        let rawHtml = "";
+        try {
+            rawHtml = marked.parse(processed);
+        } catch {
+            rawHtml = escapeHtml(processed);
+        }
+
+        // 3. Restore Math
+        const withMath = restoreMath(rawHtml, mathMap);
+
+        // 4. Sanitize with DOMPurify
+        const clean = DOMPurify.sanitize(withMath, {
+            ADD_ATTR: ["target", "rel", "data-action", "data-src", "data-alt", "data-code", "loading"],
+            ADD_TAGS: ["svg", "path", "button"],
         });
-    }
+
+        return clean;
+    }, [text]);
+
+    // Handle delegated clicks inside rendered markdown
+    const handleContainerClick = useCallback((e) => {
+        // 1. Copy code button
+        const copyBtn = e.target.closest(".chat-copy-code-btn");
+        if (copyBtn) {
+            e.stopPropagation();
+            const codeEncoded = copyBtn.getAttribute("data-code");
+            if (codeEncoded) {
+                const rawCode = decodeURIComponent(codeEncoded);
+                navigator.clipboard.writeText(rawCode).then(() => {
+                    const span = copyBtn.querySelector("span");
+                    if (span) {
+                        const oldText = span.textContent;
+                        span.textContent = "Copied! ✓";
+                        copyBtn.classList.add("text-emerald-400");
+                        setTimeout(() => {
+                            span.textContent = oldText;
+                            copyBtn.classList.remove("text-emerald-400");
+                        }, 2000);
+                    }
+                });
+            }
+            return;
+        }
+
+        // 2. Zoom / Lightbox image
+        const zoomEl = e.target.closest("[data-action='zoom']");
+        if (zoomEl) {
+            e.stopPropagation();
+            const src = zoomEl.getAttribute("data-src");
+            if (src) {
+                if (onOpenLightbox) {
+                    onOpenLightbox(src);
+                } else {
+                    setLocalLightboxImg(src);
+                }
+            }
+            return;
+        }
+
+        // 3. Download image
+        const dlBtn = e.target.closest("[data-action='download']");
+        if (dlBtn) {
+            e.stopPropagation();
+            const src = dlBtn.getAttribute("data-src");
+            if (src) {
+                triggerDownload(src);
+            }
+            return;
+        }
+    }, [onOpenLightbox]);
 
     return (
-        <span className={`leading-relaxed break-words ${className}`}>
-            {parts.map((p, idx) => {
-                if (p.type === "math-block") {
-                    return (
-                        <span
-                            key={idx}
-                            className="block my-2 overflow-x-auto py-1 text-center select-text max-w-full"
-                            dangerouslySetInnerHTML={{ __html: p.html }}
-                        />
-                    );
-                }
-                if (p.type === "math-inline") {
-                    return (
-                        <span
-                            key={idx}
-                            className="inline-block px-0.5 align-baseline select-text"
-                            dangerouslySetInnerHTML={{ __html: p.html }}
-                        />
-                    );
-                }
-                return (
-                    <span key={idx} className="whitespace-pre-wrap">
-                        {p.content}
-                    </span>
-                );
-            })}
-        </span>
+        <>
+            <div
+                ref={containerRef}
+                onClick={handleContainerClick}
+                className={`chat-rich-content leading-relaxed break-words ${className}`}
+                dangerouslySetInnerHTML={{ __html: sanitizedHtml }}
+            />
+
+            {/* Local Lightbox fallback if parent didn't provide one */}
+            <AnimatePresence>
+                {localLightboxImg && (
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="fixed inset-0 z-[120] flex items-center justify-center bg-black/90 backdrop-blur-md p-4"
+                        onClick={() => setLocalLightboxImg(null)}
+                    >
+                        <div className="relative max-h-[90vh] max-w-[95vw]" onClick={(e) => e.stopPropagation()}>
+                            <img
+                                src={localLightboxImg}
+                                alt="Zoomed Preview"
+                                className="max-h-[85vh] max-w-full rounded-2xl shadow-2xl object-contain border border-white/10"
+                            />
+                            <div className="absolute top-3 right-3 flex items-center gap-2">
+                                <button
+                                    type="button"
+                                    onClick={() => triggerDownload(localLightboxImg)}
+                                    className="px-3.5 py-1.5 rounded-full bg-white/20 hover:bg-white/30 text-white text-xs font-bold backdrop-blur-md transition-colors"
+                                >
+                                    ⬇ Download
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setLocalLightboxImg(null)}
+                                    className="h-8 w-8 rounded-full bg-white/20 hover:bg-white/30 text-white flex items-center justify-center text-sm font-bold backdrop-blur-md transition-colors"
+                                >
+                                    ✕
+                                </button>
+                            </div>
+                        </div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+        </>
     );
 });
 

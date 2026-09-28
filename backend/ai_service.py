@@ -106,20 +106,40 @@ def is_image_request(text: str) -> Tuple[bool, str]:
     # Natural language phrasing
     triggers = [
         "generate an image of",
+        "generate an image for",
         "generate a picture of",
+        "generate a photo of",
+        "generate an art of",
+        "generate image of",
+        "generate image for",
+        "generate photo of",
         "create an image of",
+        "create an image for",
         "create a picture of",
+        "create a photo of",
+        "create image of",
+        "create image for",
         "draw an image of",
         "draw a picture of",
         "paint an image of",
-        "generate image of",
-        "create image of",
+        "render an image of",
+        "render a picture of",
         "make an image of",
+        "make an image for",
+        "make a picture of",
+        "can you generate an image of",
+        "can you create an image of",
+        "can you draw me",
+        "can you draw a",
+        "can you draw an",
+        "can you draw",
         "draw me a",
         "draw me an",
         "paint me a",
+        "paint me an",
         "draw ",
         "paint ",
+        "illustrate ",
     ]
     for trig in triggers:
         if lower.startswith(trig):
@@ -452,42 +472,25 @@ async def generate_ai_text(prompt: str, chat_history: List[dict], system_prompt:
 
 
 async def generate_ai_image(prompt: str) -> str:
-    """Generate image using Gemini/Imagen model and save locally or return data URI."""
+    """Generate image using Gemini/Imagen model with robust fallback, saved locally and returned as markdown."""
     api_key = os.getenv("GEMINI_API_KEY")
-    if not api_key:
-        return (
-            "⚡ **Image Core Offline**\n\n"
-            "Please configure `GEMINI_API_KEY` in your environment to enable visual synthesis."
-        )
-
     clean_prompt = prompt.strip()
     if not clean_prompt:
         clean_prompt = "Futuristic cybernetic tornado with neon data particles"
 
-    try:
-        from google import genai
-        from google.genai import types
+    upload_base = Path(os.getenv("UPLOAD_DIR", Path(__file__).parent / "uploads"))
+    ai_dir = upload_base / "ai"
+    ai_dir.mkdir(parents=True, exist_ok=True)
 
-        client = genai.Client(api_key=api_key)
+    image_bytes = None
+    mime_type = "image/png"
 
-        image_bytes = None
-        mime_type = "image/png"
-
-        # Strategy 1: Try gemini-3.1-flash-image
+    # Strategy 1: Imagen via Gemini Client if available
+    if api_key:
         try:
-            logger.info("Attempting image generation with gemini-3.1-flash-image: %s", clean_prompt)
-            interaction = client.interactions.create(
-                model="gemini-3.1-flash-image",
-                input=f"Generate an image of: {clean_prompt}",
-            )
-            if interaction and interaction.output_image:
-                image_bytes = base64.b64decode(interaction.output_image.data)
-                mime_type = getattr(interaction.output_image, "mime_type", "image/png")
-        except Exception as e1:
-            logger.warning("gemini-3.1-flash-image failed: %s. Trying imagen-3.0-generate-002...", e1)
-
-        # Strategy 2: Fallback to imagen-3.0-generate-002 / imagen-4.0-generate-001
-        if not image_bytes:
+            from google import genai
+            from google.genai import types
+            client = genai.Client(api_key=api_key)
             for imagen_model in ("imagen-3.0-generate-002", "imagen-4.0-generate-001"):
                 try:
                     logger.info("Attempting image generation with %s: %s", imagen_model, clean_prompt)
@@ -503,38 +506,49 @@ async def generate_ai_image(prompt: str) -> str:
                         image_bytes = result.generated_images[0].image.image_bytes
                         mime_type = "image/png"
                         break
-                except Exception as e2:
-                    logger.warning("Imagen model %s failed: %s", imagen_model, e2)
+                except Exception as e_img:
+                    logger.debug("Imagen model %s failed: %s", imagen_model, e_img)
+        except Exception as exc:
+            logger.debug("Gemini client imagen attempt error: %s", exc)
 
-        if not image_bytes:
-            return f"⚠️ **Visual Synthesis Failed**: Could not generate image for \"{clean_prompt}\". Please try a different prompt or verify your API key tier."
+    # Strategy 2: High-speed Generative Engine fallback (Pollinations Flux/Photorealistic)
+    if not image_bytes:
+        try:
+            import httpx
+            import urllib.parse
+            import random
+            encoded_prompt = urllib.parse.quote(clean_prompt)
+            seed = random.randint(1000, 999999)
+            poll_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=1024&height=1024&nologo=true&seed={seed}"
+            logger.info("Attempting visual synthesis with high-res generative fallback: %s", poll_url)
+            async with httpx.AsyncClient(timeout=35.0) as http_client:
+                resp = await http_client.get(poll_url)
+                if resp.status_code == 200 and len(resp.content) > 1000:
+                    image_bytes = resp.content
+                    mime_type = resp.headers.get("content-type", "image/jpeg")
+        except Exception as p_err:
+            logger.warning("Generative image fallback failed: %s", p_err)
 
-        # Save generated image to uploads/ai/
-        upload_base = Path(os.getenv("UPLOAD_DIR", Path(__file__).parent / "uploads"))
-        ai_dir = upload_base / "ai"
-        ai_dir.mkdir(parents=True, exist_ok=True)
+    if not image_bytes:
+        return f"⚠️ **Visual Synthesis Failed**: Could not generate image for \"{clean_prompt}\". Please try a different prompt."
 
-        ext = "png" if "png" in mime_type else "jpg"
-        file_name = f"vortex_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:8]}.{ext}"
-        target_path = ai_dir / file_name
+    ext = "png" if "png" in mime_type else "jpg"
+    file_name = f"vortex_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:8]}.{ext}"
+    target_path = ai_dir / file_name
 
-        with open(target_path, "wb") as f:
-            f.write(image_bytes)
-            f.flush()
-            try:
-                os.fsync(f.fileno())
-            except Exception:
-                pass
+    with open(target_path, "wb") as f:
+        f.write(image_bytes)
+        f.flush()
+        try:
+            os.fsync(f.fileno())
+        except Exception:
+            pass
 
-        logger.info("Saved AI generated image to %s (%d bytes)", target_path, len(image_bytes))
+    logger.info("Saved AI generated image to %s (%d bytes)", target_path, len(image_bytes))
 
-        # Relative path served via FastAPI /uploads/ai/...
-        image_rel_url = f"/uploads/ai/{file_name}"
-        return f"{image_rel_url}\n\n🎨 *Generated by VORTEX-9:* \"{clean_prompt}\""
-
-    except Exception as exc:
-        logger.exception("Error during AI image generation: %s", exc)
-        return f"⚠️ **Visual Core Anomaly**: {str(exc)}"
+    # Relative path served via FastAPI /uploads/ai/...
+    image_rel_url = f"/uploads/ai/{file_name}"
+    return f"![{clean_prompt}]({image_rel_url})\n\n🎨 *Generated by VORTEX-9:* \"{clean_prompt}\""
 
 
 def get_platform_db_context(db: Session, bot_id: int, is_admin: bool = False) -> str:
