@@ -180,6 +180,7 @@ const ChatHeader = React.memo(({
                                 }`}
                             >
                                 <option value="DEFAULT">Default</option>
+                                <option value="RESEARCH">Research 🔬</option>
                                 <option value="FUNNY">Funny</option>
                                 <option value="ROAST">Roast</option>
                                 <option value="SERIOUS">Serious</option>
@@ -189,6 +190,7 @@ const ChatHeader = React.memo(({
                                         👑 Admin Mode
                                     </option>
                                 )}
+
                             </select>
                             <button
                                 type="button"

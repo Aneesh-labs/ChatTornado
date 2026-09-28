@@ -657,8 +657,9 @@ async def websocket_endpoint(websocket: WebSocket):
             )
 
             # Check if receiver is VORTEX-9 bot
-            from ai_service import get_or_create_bot_user, process_user_message_to_bot, process_user_message_to_bot_stream
+            from ai_service import get_or_create_bot_user, process_user_message_to_bot, process_user_message_to_bot_stream, execute_deep_research
             bot = get_or_create_bot_user(db)
+
             if bot and receiver_id == bot.id:
                 async def handle_bot_reply(u_id: int, b_id: int, prompt_text: str):
                     await manager.send_personal_message(u_id, {
@@ -892,8 +893,24 @@ async def websocket_endpoint(websocket: WebSocket):
                                     "chunk": chunk_text
                                 })
 
-                            reply_text = await process_user_message_to_bot_stream(u_id, prompt_text, ai_mode, reply_db, on_chunk=on_stream_chunk)
+                            is_research = (
+                                str(ai_mode).upper() == "RESEARCH" or
+                                prompt_text.strip().lower().startswith("/research") or
+                                prompt_text.strip().lower().startswith("!research")
+                            )
+
+                            if is_research:
+                                reply_text = await execute_deep_research(
+                                    prompt_text,
+                                    on_step=on_stream_chunk,
+                                    on_chunk=on_stream_chunk,
+                                    user_id=u_id,
+                                    db=reply_db
+                                )
+                            else:
+                                reply_text = await process_user_message_to_bot_stream(u_id, prompt_text, ai_mode, reply_db, on_chunk=on_stream_chunk)
                             print(f"[BOT_HANDLER] Stream reply generated successfully ({len(reply_text)} chars)", flush=True)
+
 
                             # DUAL-LAYER: 2. ADMIN BROADCAST INTERCEPT FROM LLM OUTPUT
                             match = re.search(r'ADMIN_BROADCAST:\s*([^|\n]+)\|\s*(.*)', reply_text, re.IGNORECASE)

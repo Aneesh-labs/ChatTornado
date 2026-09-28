@@ -4,11 +4,12 @@ import { motion, AnimatePresence } from "framer-motion";
 import { IconBtn, useTheme } from "./constants";
 import API from "../../../Services/API";
 import { prepareP2PFile } from "../../../Services/p2p";
-import { Shield, X, Gamepad2, Volume2, Mic, MicOff, MoreVertical, Sparkles, Wand2, RefreshCw } from "lucide-react";
+import { Shield, X, Gamepad2, Volume2, Mic, MicOff, MoreVertical, Sparkles, Wand2, RefreshCw, ImageIcon, Eye, Cpu, Zap } from "lucide-react";
 import CyberShieldModal from "./CyberShieldModal";
 import InChatGameModal from "./InChatGameModal";
 import SoundboardModal from "./SoundboardModal";
 import { isAdminUnlocked, touchAdminSession } from "../../../utils/adminSession";
+import { processImageLocally } from "../../../utils/imageProcessor";
 
 const VIDEO_EXTENSIONS = /\.(mp4|mov|mkv|avi|webm|m4v|3gp|flv|mpeg|mpg|ts|mts|m2ts|wmv|asf|ogv|vob)$/i;
 
@@ -32,6 +33,10 @@ const ChatInput = React.memo(({ onSend, replyTo, onCancelReply, selectedUser, so
     const [soundboardModalOpen, setSoundboardModalOpen] = useState(false);
     const [showToneMenu, setShowToneMenu] = useState(false);
     const [isPolishing, setIsPolishing] = useState(false);
+    const [stagedImage, setStagedImage] = useState(null);
+    const [isDragging, setIsDragging] = useState(false);
+    const [isProcessingImage, setIsProcessingImage] = useState(false);
+
 
     const handlePolish = useCallback(async (toneKey) => {
         if (!text.trim() || isPolishing) return;
@@ -49,6 +54,78 @@ const ChatInput = React.memo(({ onSend, replyTo, onCancelReply, selectedUser, so
             setIsPolishing(false);
         }
     }, [text, isPolishing]);
+
+    const stageImageLocally = useCallback(async (file) => {
+        if (!file || !file.type?.startsWith("image/")) return;
+        setIsProcessingImage(true);
+        setUploadError("");
+        try {
+            const processed = await processImageLocally(file, {
+                maxDimension: 1600,
+                quality: 0.86,
+                format: "image/webp",
+            });
+            setStagedImage(processed);
+        } catch (err) {
+            console.warn("Local image processing fallback to raw file:", err);
+            const previewUrl = URL.createObjectURL(file);
+            setStagedImage({
+                file,
+                blob: file,
+                previewUrl,
+                originalSize: file.size,
+                processedSize: file.size,
+                savingsPercent: 0,
+                formattedOriginal: `${Math.round(file.size / 1024)} KB`,
+                formattedProcessed: `${Math.round(file.size / 1024)} KB`,
+                dimensions: { width: 0, height: 0 },
+                processingTimeMs: 0,
+            });
+        } finally {
+            setIsProcessingImage(false);
+        }
+    }, []);
+
+    const handlePaste = useCallback((e) => {
+        const items = e.clipboardData?.items;
+        if (!items) return;
+        for (let i = 0; i < items.length; i++) {
+            if (items[i].type && items[i].type.indexOf("image") !== -1) {
+                const file = items[i].getAsFile();
+                if (file) {
+                    e.preventDefault();
+                    stageImageLocally(file);
+                    break;
+                }
+            }
+        }
+    }, [stageImageLocally]);
+
+    const handleDragOver = useCallback((e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setIsDragging(true);
+    }, []);
+
+    const handleDragLeave = useCallback((e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setIsDragging(false);
+    }, []);
+
+    const handleDrop = useCallback((e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setIsDragging(false);
+        const files = e.dataTransfer?.files;
+        if (files && files.length > 0) {
+            const file = files[0];
+            if (file.type && file.type.startsWith("image/")) {
+                stageImageLocally(file);
+            }
+        }
+    }, [stageImageLocally]);
+
 
     // Audio recording state (Voice Notes)
     const [isRecording, setIsRecording] = useState(false);
@@ -171,7 +248,7 @@ const ChatInput = React.memo(({ onSend, replyTo, onCancelReply, selectedUser, so
         if (isSendingRef.current) return;
 
         const trimmed = text.trim();
-        if (!trimmed || disabled) return;
+        if ((!trimmed && !stagedImage) || disabled) return;
 
         isSendingRef.current = true;
 
@@ -204,9 +281,7 @@ const ChatInput = React.memo(({ onSend, replyTo, onCancelReply, selectedUser, so
         }
 
         // ─── ADMIN DIRECT DISPATCH & DELETION ──────────────────────────────
-        // If in admin mode, try to parse a dispatch or delete command and POST directly
-        // to the REST endpoint — no LLM involved at all.
-        if (activeInputMode === "ADMIN") {
+        if (activeInputMode === "ADMIN" && trimmed) {
             const deleteIdPattern = /^(?:please\s+)?(?:delete|remove|erase)\s+(?:message|msg)?\s*#?(\d+)$/i;
             const deleteAllPattern = /^(?:please\s+)?(?:delete|remove|erase|clear|wipe)\s+(?:all\s+)?messages?\s+(?:with|to|from|for)\s+([a-zA-Z0-9_\-.]+)$/i;
             const deleteLastPattern = /^(?:please\s+)?(?:delete|remove|erase)\s+(?:the\s+)?last\s+(?:message|msg|text)(?:\s+(?:with|to|from|for)\s+([a-zA-Z0-9_\-.]+))?$/i;
@@ -325,9 +400,6 @@ const ChatInput = React.memo(({ onSend, replyTo, onCancelReply, selectedUser, so
             if (match) {
                 const targetName = match[1].trim();
                 const msgBody = match[2].trim();
-                console.log(`%c👑 [ADMIN_DISPATCH] Frontend intercepted! target='${targetName}' | msg='${msgBody}'`,
-                    "background: #f59e0b; color: black; font-weight: bold; padding: 2px 6px; border-radius: 3px;");
-
                 try {
                     const res = await fetch(`${baseUrl}/api/admin/dispatch`, {
                         method: "POST",
@@ -337,15 +409,11 @@ const ChatInput = React.memo(({ onSend, replyTo, onCancelReply, selectedUser, so
                     const data = await res.json();
 
                     if (res.ok) {
-                        console.log(`%c👑 [ADMIN_DISPATCH SUCCESS] msg_id=${data.message_id} → ${data.to}`,
-                            "background: #059669; color: white; font-weight: bold; padding: 2px 6px;");
                         onSend(`✅ Message dispatched to **${data.to}**: "${msgBody}"`, { ai_mode: "ADMIN", _admin_confirm: true });
                     } else {
-                        console.error("[ADMIN_DISPATCH ERROR]", data);
                         onSend(`⚠️ Dispatch failed: ${data.detail || "Unknown error"}`, { ai_mode: "ADMIN", _admin_confirm: true });
                     }
                 } catch (err) {
-                    console.error("[ADMIN_DISPATCH FETCH ERROR]", err);
                     onSend(`⚠️ Network error during dispatch: ${err.message}`, { ai_mode: "ADMIN", _admin_confirm: true });
                 }
 
@@ -353,10 +421,46 @@ const ChatInput = React.memo(({ onSend, replyTo, onCancelReply, selectedUser, so
                 setShieldOptions(null);
                 if (textareaRef.current) textareaRef.current.style.height = "auto";
                 setTimeout(() => { isSendingRef.current = false; }, 200);
-                return;  // ← DO NOT fall through to LLM
+                return;
             }
         }
         // ──────────────────────────────────────────────────────────────────────
+
+        // If an image is staged for AI Vision / Upload:
+        if (stagedImage) {
+            setUploading(true);
+            try {
+                const body = new FormData();
+                body.append("file", stagedImage.file);
+                const response = await API.post(
+                    `/uploads?token=${encodeURIComponent(sessionStorage.getItem("token") || "")}`,
+                    body
+                );
+                const data = response.data;
+                const uploadRelPath = (data.original_url || data.url || "").replace(/^\//, "");
+                const fullUploadedUrl = `${baseUrl}/${uploadRelPath}`;
+
+                const promptWithImage = trimmed
+                    ? `${fullUploadedUrl}\n\n${trimmed}`
+                    : `${fullUploadedUrl}\n\nPlease analyze and explain this image in detail.`;
+
+                onSend(promptWithImage, { ...(shieldOptions || {}), ai_mode: activeInputMode });
+
+                setStagedImage(null);
+                setText("");
+                setShieldOptions(null);
+                if (textareaRef.current) textareaRef.current.style.height = "auto";
+                setTimeout(() => { isSendingRef.current = false; }, 200);
+                return;
+            } catch (err) {
+                console.error("Failed to upload staged image:", err);
+                setUploadError("Failed to upload image. Please try again.");
+                isSendingRef.current = false;
+                return;
+            } finally {
+                setUploading(false);
+            }
+        }
 
         if (!onSend(trimmed, { ...(shieldOptions || {}), ai_mode: activeInputMode })) {
             isSendingRef.current = false;
@@ -369,7 +473,8 @@ const ChatInput = React.memo(({ onSend, replyTo, onCancelReply, selectedUser, so
         setTimeout(() => {
             isSendingRef.current = false;
         }, 200);
-    }, [text, disabled, onSend, shieldOptions, editModeId, sendStopTypingSignal, aiMode]);
+    }, [text, disabled, onSend, shieldOptions, editModeId, sendStopTypingSignal, aiMode, stagedImage]);
+
 
 
     const handleKeyDown = useCallback((e) => {
@@ -405,7 +510,7 @@ const ChatInput = React.memo(({ onSend, replyTo, onCancelReply, selectedUser, so
         }
     };
 
-    const canSend = text.trim().length > 0;
+    const canSend = text.trim().length > 0 || Boolean(stagedImage);
 
     const startRecording = async () => {
         if (disabled || isSendingRef.current) return;
@@ -497,6 +602,14 @@ const ChatInput = React.memo(({ onSend, replyTo, onCancelReply, selectedUser, so
         event.target.value = "";
         if (!file || !selectedUser || disabled) return;
         setUploadError("");
+
+        // Check if image for AI Bot (VORTEX-9) -> Stage locally in RAM
+        const isBot = Boolean(selectedUser?.is_bot || selectedUser?.username === "VORTEX-9");
+        if (file.type?.startsWith("image/") && isBot) {
+            await stageImageLocally(file);
+            return;
+        }
+
         setUploading(true);
 
         try {
@@ -509,6 +622,7 @@ const ChatInput = React.memo(({ onSend, replyTo, onCancelReply, selectedUser, so
                 setShieldOptions(null);
                 return;
             }
+
 
             // 2. Videos: Use FastAPI FFmpeg transcoding & WebP thumbnail generation pipeline
             const body = new FormData();
@@ -541,7 +655,23 @@ const ChatInput = React.memo(({ onSend, replyTo, onCancelReply, selectedUser, so
     };
 
     return (
-        <div className={`px-2 sm:px-4 py-2 sm:py-3 border-t ${theme.border} bg-black/25 backdrop-blur-2xl flex-shrink-0 w-full select-none safe-area-bottom`}>
+        <div
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+            onPaste={handlePaste}
+            className={`px-2 sm:px-4 py-2 sm:py-3 border-t ${theme.border} bg-black/25 backdrop-blur-2xl flex-shrink-0 w-full select-none safe-area-bottom relative ${
+                isDragging ? "ring-2 ring-cyan-400 bg-cyan-950/30" : ""
+            }`}
+        >
+            {/* Drag & Drop Overlay */}
+            {isDragging && (
+                <div className="absolute inset-0 z-30 bg-cyan-950/80 backdrop-blur-md rounded-t-2xl flex items-center justify-center gap-2 border-2 border-dashed border-cyan-400 text-cyan-200 pointer-events-none">
+                    <ImageIcon className="w-6 h-6 animate-bounce text-cyan-400" />
+                    <span className="text-xs sm:text-sm font-bold">Drop image here for in-phone optimization & AI Vision analysis</span>
+                </div>
+            )}
+
             <AnimatePresence>
                 {replyTo && (
                     <motion.div
@@ -590,6 +720,115 @@ const ChatInput = React.memo(({ onSend, replyTo, onCancelReply, selectedUser, so
                 )}
             </AnimatePresence>
 
+            {/* ✅ STAGED IMAGE TRAY (In-Phone RAM Optimization + Vision Quick Chips) */}
+            <AnimatePresence>
+                {stagedImage && (
+                    <motion.div
+                        initial={{ opacity: 0, y: 8, height: 0 }}
+                        animate={{ opacity: 1, y: 0, height: "auto" }}
+                        exit={{ opacity: 0, y: 8, height: 0 }}
+                        className="mb-2 p-2 sm:p-2.5 rounded-2xl bg-gradient-to-r from-[#0b1329]/95 via-[#111936]/95 to-[#1a1438]/95 border border-cyan-500/40 shadow-xl backdrop-blur-2xl"
+                    >
+                        <div className="flex items-center justify-between gap-2 mb-2 pb-1.5 border-b border-white/10">
+                            <div className="flex items-center gap-2 min-w-0">
+                                <div className="relative group rounded-xl overflow-hidden border border-cyan-400/40 w-12 h-12 flex-shrink-0 bg-black/40">
+                                    <img
+                                        src={stagedImage.previewUrl}
+                                        alt="Staged for Vision"
+                                        className="w-full h-full object-cover"
+                                    />
+                                </div>
+                                <div className="min-w-0">
+                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                        <span className="text-xs font-bold text-cyan-300 flex items-center gap-1">
+                                            <Eye className="w-3.5 h-3.5 text-cyan-400" />
+                                            AI Vision Ready
+                                        </span>
+                                        <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 flex items-center gap-1">
+                                            <Cpu className="w-2.5 h-2.5" />
+                                            {stagedImage.savingsPercent > 0 ? `-${stagedImage.savingsPercent}% RAM Optimized` : "Locally Processed"}
+                                        </span>
+                                    </div>
+                                    <p className="text-[10px] text-white/50 font-mono mt-0.5 truncate">
+                                        {stagedImage.formattedOriginal} → {stagedImage.formattedProcessed} • {stagedImage.dimensions?.width || "Auto"}×{stagedImage.dimensions?.height || "Auto"}px ({stagedImage.processingTimeMs || 0}ms)
+                                    </p>
+                                </div>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    if (stagedImage.previewUrl) URL.revokeObjectURL(stagedImage.previewUrl);
+                                    setStagedImage(null);
+                                }}
+                                title="Remove staged image"
+                                className="p-1 rounded-lg text-white/40 hover:text-white hover:bg-white/10 transition-colors flex-shrink-0 cursor-pointer"
+                            >
+                                <X className="w-4 h-4" />
+                            </button>
+                        </div>
+
+                        {/* Quick Vision Action Chips */}
+                        <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 scrollbar-none text-[11px]">
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setText("Explain what is in this image in detail.");
+                                    textareaRef.current?.focus();
+                                }}
+                                className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-cyan-500/15 hover:bg-cyan-500/30 border border-cyan-500/30 text-cyan-200 transition-all active:scale-95 flex-shrink-0 cursor-pointer"
+                            >
+                                <span>🔍</span>
+                                <span>Explain Image</span>
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setText("Solve the math problem or equations shown in this photo step-by-step with LaTeX formatting.");
+                                    textareaRef.current?.focus();
+                                }}
+                                className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/30 border border-emerald-500/30 text-emerald-200 transition-all active:scale-95 flex-shrink-0 cursor-pointer"
+                            >
+                                <span>📐</span>
+                                <span>Solve Math</span>
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setText("Extract all text, lists, and tables from this image verbatim (OCR).");
+                                    textareaRef.current?.focus();
+                                }}
+                                className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-amber-500/15 hover:bg-amber-500/30 border border-amber-500/30 text-amber-200 transition-all active:scale-95 flex-shrink-0 cursor-pointer"
+                            >
+                                <span>📝</span>
+                                <span>Extract Text (OCR)</span>
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setText("Transcribe the code in this screenshot, identify any bugs or anti-patterns, and provide the corrected code.");
+                                    textareaRef.current?.focus();
+                                }}
+                                className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-violet-500/15 hover:bg-violet-500/30 border border-violet-500/30 text-violet-200 transition-all active:scale-95 flex-shrink-0 cursor-pointer"
+                            >
+                                <span>💻</span>
+                                <span>Analyze Code</span>
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setText("/research Conduct an in-depth scientific and technical deep dive into the subject shown in this image.");
+                                    textareaRef.current?.focus();
+                                }}
+                                className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-fuchsia-500/15 hover:bg-fuchsia-500/30 border border-fuchsia-500/30 text-fuchsia-200 transition-all active:scale-95 flex-shrink-0 cursor-pointer"
+                            >
+                                <span>🔬</span>
+                                <span>Deep Research</span>
+                            </button>
+                        </div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
             <AnimatePresence>
                 {isListening && (
                     <motion.div
@@ -616,6 +855,17 @@ const ChatInput = React.memo(({ onSend, replyTo, onCancelReply, selectedUser, so
 
             {Boolean(selectedUser?.is_bot || selectedUser?.username === "VORTEX-9") && !isRecording && (
                 <div className="flex items-center gap-1.5 overflow-x-auto pb-1.5 scrollbar-none mb-1 text-xs">
+                    <button
+                        type="button"
+                        onClick={() => {
+                            setText((prev) => prev.startsWith("/research ") ? prev : "/research ");
+                            textareaRef.current?.focus();
+                        }}
+                        className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-indigo-500/10 hover:bg-indigo-500/20 border border-indigo-500/30 text-indigo-300 font-medium transition-all hover:scale-105 active:scale-95 flex-shrink-0"
+                    >
+                        <span>🔬</span>
+                        <span>/research</span>
+                    </button>
                     <button
                         type="button"
                         onClick={() => {
@@ -673,6 +923,7 @@ const ChatInput = React.memo(({ onSend, replyTo, onCancelReply, selectedUser, so
                     </button>
                 </div>
             )}
+
 
             <div className="flex items-end gap-1.5 sm:gap-2 max-w-full">
 

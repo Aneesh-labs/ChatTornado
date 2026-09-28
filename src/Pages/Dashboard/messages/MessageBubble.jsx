@@ -805,6 +805,42 @@ const MessageBubble = React.memo(({
         }
     }, [isGame, actualMessage]);
 
+    const isResearchReport = useMemo(() => {
+        if (typeof actualMessage !== "string") return false;
+        return (
+            actualMessage.includes("Research Dossier") ||
+            actualMessage.includes("Step 1/3") ||
+            actualMessage.includes("Executive Summary & Core Thesis") ||
+            (actualMessage.includes("### 📌") && actualMessage.includes("### 📊"))
+        );
+    }, [actualMessage]);
+
+    const [copiedDossier, setCopiedDossier] = useState(false);
+
+    const handleExportMarkdown = useCallback((e) => {
+        e?.stopPropagation?.();
+        try {
+            const blob = new Blob([actualMessage], { type: "text/markdown;charset=utf-8" });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            link.href = url;
+            link.download = `VORTEX9_Research_Dossier_${Date.now()}.md`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+        } catch (err) {
+            console.error("Failed to export research report:", err);
+        }
+    }, [actualMessage]);
+
+    const handleCopyDossier = useCallback((e) => {
+        e?.stopPropagation?.();
+        navigator.clipboard?.writeText(actualMessage);
+        setCopiedDossier(true);
+        setTimeout(() => setCopiedDossier(false), 2000);
+    }, [actualMessage]);
+
     // Detect rich markdown or AI message
     const isRichMarkdown = typeof actualMessage === "string" && (
         actualMessage.includes("```") ||
@@ -828,6 +864,7 @@ const MessageBubble = React.memo(({
     const audioUrls = !isP2P && !isGame && !isSound ? extractAudioUrls(actualMessage) : [];
     const nonImageUrls = !isP2P && !isGame && !isSound && !isRichMarkdown ? extractNonImageUrls(actualMessage) : [];
     const caption = !isP2P && !isGame && !isSound && !isRichMarkdown ? extractCaption(actualMessage) : "";
+
     const hasImages = imageUrls.length > 0;
     const hasVideos = videoUrls.length > 0;
     const hasAudio = audioUrls.length > 0;
@@ -939,11 +976,40 @@ const MessageBubble = React.memo(({
                             <MathFormattedText text={translatedText} className="text-[13px] leading-relaxed text-emerald-100" onOpenLightbox={setLightboxImage} />
                         </div>
                     )}
+
+                    {/* ✅ RESEARCH DOSSIER EXPORT TOOLBAR */}
+                    {isResearchReport && !msg.is_streaming && (
+                        <div className="mt-3 pt-2 border-t border-cyan-500/20 flex items-center justify-between gap-2 flex-wrap text-xs">
+                            <div className="flex items-center gap-1.5 text-cyan-300 font-semibold text-[11px]">
+                                <span>🔬</span>
+                                <span>Deep Research Complete</span>
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                                <button
+                                    type="button"
+                                    onClick={handleCopyDossier}
+                                    className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white/[0.06] hover:bg-white/[0.12] text-white/80 hover:text-white transition-all text-[11px] font-medium active:scale-95 cursor-pointer"
+                                >
+                                    <span>{copiedDossier ? "✓" : "📋"}</span>
+                                    <span>{copiedDossier ? "Copied!" : "Copy Report"}</span>
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={handleExportMarkdown}
+                                    className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-gradient-to-r from-cyan-600/30 to-blue-600/30 hover:from-cyan-600/50 hover:to-blue-600/50 border border-cyan-400/30 text-cyan-200 transition-all text-[11px] font-semibold active:scale-95 cursor-pointer"
+                                >
+                                    <span>📥</span>
+                                    <span>Download .MD</span>
+                                </button>
+                            </div>
+                        </div>
+                    )}
                 </div>
             )}
         </>
     );
 };
+
 
     return (
         <>

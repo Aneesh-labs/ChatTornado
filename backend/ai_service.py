@@ -20,12 +20,14 @@ from prompts import (
     PROMPT_ROAST,
     PROMPT_SERIOUS,
     PROMPT_CODING,
+    PROMPT_RESEARCH,
     PROMPT_ADMIN,
     PROMPT_CLEANUP,
     PROMPT_SUMMARIZE,
     resolve_prompt_mode,
     VortexMode
 )
+
 from ai_cache import ai_cache, LocalMemoryManager
 
 logger = logging.getLogger("chat_tornado.ai_service")
@@ -191,6 +193,55 @@ async def fetch_live_web_search(query: str) -> List[Dict[str, str]]:
     return results
 
 
+async def extract_multimodal_image_parts(prompt_text: str) -> Tuple[str, List[Any]]:
+    """
+    Extracts images from local /uploads/, base64 data URIs, or full URLs,
+    converts them into Google GenAI binary types.Part objects, and returns cleaned prompt.
+    """
+    from google.genai import types
+    
+    clean_text = prompt_text
+    image_parts = []
+    upload_base = Path(os.getenv("UPLOAD_DIR", Path(__file__).parent / "uploads"))
+    
+    # 1. Base64 Data URIs: data:image/(png|jpeg|webp|gif);base64,...
+    b64_matches = list(re.finditer(r'data:image\/(png|jpeg|jpg|webp|gif);base64,([A-Za-z0-9+/=]+)', clean_text))
+    for m in b64_matches:
+        try:
+            mime = f"image/{m.group(1)}"
+            b64_str = m.group(2)
+            img_bytes = base64.b64decode(b64_str)
+            image_parts.append(types.Part.from_bytes(data=img_bytes, mime_type=mime))
+            clean_text = clean_text.replace(m.group(0), "")
+        except Exception as e:
+            logger.warning("Failed to decode base64 image: %s", e)
+
+    # 2. Local uploads: /uploads/... or http(s)://.../uploads/...
+    upload_matches = list(re.finditer(r'(?:https?:\/\/[^\s<>"\'\)]+)?\/uploads\/([^\s<>"\'\)]+\.(?:png|jpg|jpeg|gif|webp))', clean_text, re.IGNORECASE))
+    for match in upload_matches:
+        try:
+            rel_path = match.group(1)
+            full_path = upload_base / rel_path
+            if full_path.exists():
+                mime, _ = mimetypes.guess_type(str(full_path))
+                mime = mime or "image/png"
+                with open(full_path, "rb") as f:
+                    image_parts.append(types.Part.from_bytes(data=f.read(), mime_type=mime))
+                clean_text = clean_text.replace(match.group(0), "")
+        except Exception as e:
+            logger.warning("Failed to read local image %s: %s", match.group(0), e)
+
+    # 3. Clean up artifact strings
+    clean_text = re.sub(r'\[Image Attached\]', '', clean_text)
+    clean_text = re.sub(r'📎\s*[^\n]+\n?', '', clean_text)
+    clean_text = clean_text.strip()
+    
+    if not clean_text and image_parts:
+        clean_text = "Please examine and provide a thorough, detailed analysis of this image."
+        
+    return clean_text, image_parts
+
+
 async def generate_ai_text(prompt: str, chat_history: List[dict], system_prompt: str = PROMPT_DEFAULT) -> str:
     """Generate conversational response using Gemini API with SDK and REST fallback."""
     api_key = os.getenv("GEMINI_API_KEY")
@@ -241,22 +292,8 @@ async def generate_ai_text(prompt: str, chat_history: List[dict], system_prompt:
     from google import genai
     from google.genai import types
 
-    image_parts = []
-    # Match /uploads/ followed by anything ending in image extensions
-    upload_matches = re.finditer(r'/uploads/([^\s]+\.(?:png|jpg|jpeg|gif|webp))', clean_prompt, re.IGNORECASE)
-    upload_base = Path(os.getenv("UPLOAD_DIR", Path(__file__).parent / "uploads"))
-    
-    for match in upload_matches:
-        rel_path = match.group(1)
-        full_path = upload_base / rel_path
-        if full_path.exists():
-            mime, _ = mimetypes.guess_type(str(full_path))
-            mime = mime or "image/png"
-            with open(full_path, "rb") as f:
-                image_parts.append(
-                    types.Part.from_bytes(data=f.read(), mime_type=mime)
-                )
-            clean_prompt = clean_prompt.replace(match.group(0), "[Image Attached]")
+    clean_prompt, image_parts = await extract_multimodal_image_parts(clean_prompt)
+
 
 
     # Strategy 1: Google GenAI SDK
@@ -916,24 +953,12 @@ async def generate_ai_text_stream(
         except Exception as pe:
             logger.warning("Failed to load user persona: %s", pe)
 
-    # 3. Handle image extraction from upload URLs
+    # 3. Handle image extraction from local uploads, base64, and URLs
     from google import genai
     from google.genai import types
 
-    image_parts = []
-    upload_matches = re.finditer(r'/uploads/([^\s]+\.(?:png|jpg|jpeg|gif|webp))', clean_prompt, re.IGNORECASE)
-    upload_base = Path(os.getenv("UPLOAD_DIR", Path(__file__).parent / "uploads"))
-    for match in upload_matches:
-        rel_path = match.group(1)
-        full_path = upload_base / rel_path
-        if full_path.exists():
-            mime, _ = mimetypes.guess_type(str(full_path))
-            mime = mime or "image/png"
-            with open(full_path, "rb") as f:
-                image_parts.append(
-                    types.Part.from_bytes(data=f.read(), mime_type=mime)
-                )
-            clean_prompt = clean_prompt.replace(match.group(0), "[Image Attached]")
+    clean_prompt, image_parts = await extract_multimodal_image_parts(clean_prompt)
+
 
     # 4. Build alternating history
     filtered = []
@@ -1161,4 +1186,167 @@ Format as JSON array of 3 strings: ["Reply 1", "Reply 2", "Reply 3"]. Output JSO
             logger.warning("ai_smart_replies model %s error: %s", model_name, e)
             continue
     return ["Sounds great!", "Tell me more", "Got it!"]
+
+
+# ============================================================================
+# AUTONOMOUS DEEP RESEARCH ENGINE (Multi-Step Synthesis)
+# ============================================================================
+
+async def execute_deep_research(
+    query: str,
+    on_step: Optional[Any] = None,
+    on_chunk: Optional[Any] = None,
+    user_id: Optional[int] = None,
+    db: Optional[Session] = None
+) -> str:
+    """
+    Autonomous Deep Research Multi-Step Engine:
+    1. Query Decomposition: Breaks complex research topics into 3 targeted analytical sub-queries.
+    2. Parallel Grounded Web Search: Gathers fresh live web documents and empirical points.
+    3. Multi-Dimensional Evidence Synthesis: Streams a publication-grade research dossier.
+    """
+    api_key = os.getenv("GEMINI_API_KEY")
+    if not api_key:
+        msg = "⚡ **Deep Research Engine Offline**: GEMINI_API_KEY is not configured."
+        if on_chunk:
+            await on_chunk(msg)
+        return msg
+
+    clean_query = query.strip()
+    for prefix in ("/research", "!research", "research:"):
+        if clean_query.lower().startswith(prefix):
+            clean_query = clean_query[len(prefix):].strip()
+
+    if not clean_query:
+        clean_query = "State-of-the-art developments in modern computing and AI"
+
+    from google import genai
+    from google.genai import types
+    import asyncio
+    import json
+
+    client = genai.Client(api_key=api_key)
+
+    # Step 1: Decomposition
+    step_msg_1 = f"🔬 **Step 1/3: Formulating research thesis & sub-queries for:** *\"{clean_query}\"*\n\n"
+    if on_step:
+        await on_step(step_msg_1)
+    elif on_chunk:
+        await on_chunk(step_msg_1)
+
+    sub_queries = [clean_query]
+    try:
+        decomp_prompt = f"""You are a senior scientific research director.
+Given this research topic: "{clean_query}"
+Generate exactly 3 specific, diverse, highly targeted web search queries to gather comprehensive data, benchmarks, and latest findings across different dimensions.
+Output strictly a JSON array of 3 strings: ["query1", "query2", "query3"]. Output JSON only."""
+
+        decomp_res = client.models.generate_content(
+            model="gemini-3.5-flash",
+            contents=decomp_prompt
+        )
+        if decomp_res and decomp_res.text:
+            cleaned_json = decomp_res.text.strip()
+            if cleaned_json.startswith("```"):
+                cleaned_json = re.sub(r"^```(?:json)?|```$", "", cleaned_json, flags=re.MULTILINE).strip()
+            parsed = json.loads(cleaned_json)
+            if isinstance(parsed, list) and len(parsed) >= 2:
+                sub_queries = [str(x) for x in parsed[:3]]
+    except Exception as e:
+        logger.warning("Query decomposition error: %s", e)
+        sub_queries = [clean_query, f"{clean_query} latest developments", f"{clean_query} analysis comparison"]
+
+    # Step 2: Parallel Grounded Search
+    step_msg_2 = "🌐 **Step 2/3: Gathering real-time intelligence & cross-referencing sources:**\n"
+    for sq in sub_queries:
+        step_msg_2 += f"- 🔍 *Searching:* `{sq}`\n"
+    step_msg_2 += "\n"
+    if on_step:
+        await on_step(step_msg_2)
+    elif on_chunk:
+        await on_chunk(step_msg_2)
+
+    search_tasks = [fetch_live_web_search(sq) for sq in sub_queries]
+    search_results_lists = await asyncio.gather(*search_tasks, return_exceptions=True)
+
+    all_web_items = []
+    seen_urls = set()
+    for res_list in search_results_lists:
+        if isinstance(res_list, list):
+            for item in res_list:
+                url = item.get("url", "")
+                if url and url not in seen_urls:
+                    seen_urls.add(url)
+                    all_web_items.append(item)
+
+    # Step 3: Synthesis Dossier Generation
+    step_msg_3 = f"📑 **Step 3/3: Synthesizing publication-grade research dossier ({len(all_web_items)} sources indexed)...**\n\n---\n\n"
+    if on_step:
+        await on_step(step_msg_3)
+    elif on_chunk:
+        await on_chunk(step_msg_3)
+
+    context_lines = []
+    citation_lines = []
+    for it in all_web_items[:12]:
+        context_lines.append(f"- **{it['title']}** (URL: {it['url']}): {it['snippet']}")
+        citation_lines.append(f"• [{it['title']}]({it['url']})")
+
+    research_context = "\n".join(context_lines) if context_lines else "Foundational domain knowledge base."
+
+    research_prompt = f"""[GROUNDED LIVE RESEARCH CONTEXT]
+{research_context}
+
+[USER RESEARCH DIRECTIVE]
+Please conduct an exhaustive, publication-grade deep research study on:
+"{clean_query}"
+
+Synthesize all relevant findings, empirical comparisons, mathematical models (if applicable), and strategic recommendations adhering strictly to the Deep Research Report structure with Markdown tables and clear sections."""
+
+    full_report = step_msg_1 + step_msg_2 + step_msg_3
+
+    synthesis_accumulated = ""
+    try:
+        gen_config = types.GenerateContentConfig(
+            system_instruction=PROMPT_RESEARCH,
+            temperature=0.6,
+            max_output_tokens=4096,
+        )
+        async for chunk in client.aio.models.generate_content_stream(
+            model="gemini-3.5-flash",
+            contents=[types.Content(role="user", parts=[types.Part.from_text(text=research_prompt)])],
+            config=gen_config
+        ):
+            c_text = chunk.text or ""
+            if c_text:
+                synthesis_accumulated += c_text
+                if on_chunk:
+                    await on_chunk(c_text)
+    except Exception as e:
+        logger.error("Deep research synthesis streaming error: %s", e)
+        try:
+            fallback = client.models.generate_content(
+                model="gemini-3.5-flash",
+                contents=research_prompt,
+                config=types.GenerateContentConfig(system_instruction=PROMPT_RESEARCH)
+            )
+            if fallback and fallback.text:
+                synthesis_accumulated = fallback.text.strip()
+                if on_chunk:
+                    await on_chunk(synthesis_accumulated)
+        except Exception as e2:
+            synthesis_accumulated = f"⚠️ Deep Research synthesis failed: {e2}"
+            if on_chunk:
+                await on_chunk(synthesis_accumulated)
+
+    if citation_lines and "Sources" not in synthesis_accumulated:
+        unique_citations = list(dict.fromkeys(citation_lines))[:8]
+        sources_block = "\n\n### 🌐 Verified Web Sources & Citations\n" + "\n".join(unique_citations)
+        synthesis_accumulated += sources_block
+        if on_chunk:
+            await on_chunk(sources_block)
+
+    full_report += synthesis_accumulated
+    return full_report
+
 
