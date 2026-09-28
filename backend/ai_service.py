@@ -385,7 +385,7 @@ async def generate_ai_text(prompt: str, chat_history: List[dict], system_prompt:
                     gen_config = types.GenerateContentConfig(
                         system_instruction=system_prompt,
                         temperature=0.75,
-                        max_output_tokens=1024,
+                        max_output_tokens=8192,
                         safety_settings=safety_settings,
                     )
                     if use_search:
@@ -470,6 +470,10 @@ async def generate_ai_text(prompt: str, chat_history: List[dict], system_prompt:
                         },
                         "contents": rest_contents,
                         "safetySettings": rest_safety,
+                        "generationConfig": {
+                            "temperature": 0.75,
+                            "maxOutputTokens": 8192
+                        }
                     }
                     if use_search:
                         payload["tools"] = [{"google_search": {}}]
@@ -1017,7 +1021,7 @@ async def generate_ai_text_stream(
             gen_config = types.GenerateContentConfig(
                 system_instruction=system_prompt,
                 temperature=0.75,
-                max_output_tokens=2048,
+                max_output_tokens=8192,
                 safety_settings=safety_settings,
                 tools=[{"google_search": {}}]
             )
@@ -1065,7 +1069,7 @@ async def generate_ai_text_stream(
                 gen_config_notools = types.GenerateContentConfig(
                     system_instruction=system_prompt,
                     temperature=0.75,
-                    max_output_tokens=2048,
+                    max_output_tokens=8192,
                     safety_settings=safety_settings
                 )
                 full_accumulated_text = ""
@@ -1310,7 +1314,7 @@ Synthesize all relevant findings, empirical comparisons, mathematical models (if
         gen_config = types.GenerateContentConfig(
             system_instruction=PROMPT_RESEARCH,
             temperature=0.6,
-            max_output_tokens=4096,
+            max_output_tokens=8192,
         )
         async for chunk in client.aio.models.generate_content_stream(
             model="gemini-3.5-flash",

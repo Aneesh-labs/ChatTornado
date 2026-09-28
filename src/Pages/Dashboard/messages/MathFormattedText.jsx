@@ -390,6 +390,16 @@ const MathFormattedText = React.memo(({ text, className = "", onOpenLightbox }) 
                     border-radius: 0.25rem;
                     border: 1px solid rgba(255, 255, 255, 0.1);
                 }
+                .chat-rich-content pre {
+                    white-space: pre;
+                    word-break: normal;
+                    tab-size: 4;
+                    max-width: 100%;
+                }
+                .chat-rich-content pre code {
+                    white-space: pre;
+                    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+                }
                 .chat-rich-content hr {
                     border: 0;
                     border-top: 1px solid rgba(255, 255, 255, 0.15);

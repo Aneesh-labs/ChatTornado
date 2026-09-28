@@ -1035,7 +1035,7 @@ const MessageBubble = React.memo(({
                     </div>
                 )}
 
-                <div className={`min-w-0 w-full max-w-[90%] sm:max-w-[85%] lg:max-w-[420px] flex flex-col ${isMe ? "items-end" : "items-start"} relative`}>
+                <div className={`min-w-0 w-full ${isRichMarkdown || isGame || isResearchReport ? "max-w-[96%] sm:max-w-[92%] lg:max-w-[780px] xl:max-w-[860px]" : "max-w-[90%] sm:max-w-[85%] lg:max-w-[560px]"} flex flex-col ${isMe ? "items-end" : "items-start"} relative`}>
                     {/* Reply preview */}
                     {msg.reply_to && (
                         <div
