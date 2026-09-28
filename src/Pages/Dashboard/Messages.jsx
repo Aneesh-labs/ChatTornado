@@ -1213,11 +1213,14 @@ const Messages = () => {
             activeAiMode = "DEFAULT";
         }
 
+        const activeAiModel = options.ai_model || (typeof window !== "undefined" ? localStorage.getItem("vortex_selected_google_model") : null) || "gemini-3.5-flash";
+
         const outgoingPayload = {
             temp_id,
             receiver_id: selectedUser.id,
             message: validation.text,
             ai_mode: activeAiMode,
+            ai_model: activeAiModel,
             ...options
         };
 

@@ -500,7 +500,8 @@ const ChatInput = React.memo(({ onSend, replyTo, onCancelReply, selectedUser, so
             return;
         }
 
-        if (!onSend(trimmed, { ...(shieldOptions || {}), ai_mode: activeInputMode })) {
+        const activeAiModel = (typeof window !== "undefined" ? localStorage.getItem("vortex_selected_google_model") : null) || "gemini-3.5-flash";
+        if (!onSend(trimmed, { ...(shieldOptions || {}), ai_mode: activeInputMode, ai_model: activeAiModel })) {
             isSendingRef.current = false;
             return;
         }

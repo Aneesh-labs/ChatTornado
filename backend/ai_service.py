@@ -272,7 +272,12 @@ async def extract_multimodal_image_parts(prompt_text: str) -> Tuple[str, List[An
     return clean_text, image_parts
 
 
-async def generate_ai_text(prompt: str, chat_history: List[dict], system_prompt: str = PROMPT_DEFAULT) -> str:
+async def generate_ai_text(
+    prompt: str,
+    chat_history: List[dict],
+    system_prompt: str = PROMPT_DEFAULT,
+    preferred_model: Optional[str] = None
+) -> str:
     """Generate conversational response using Gemini API with SDK and REST fallback."""
     api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
@@ -394,6 +399,8 @@ async def generate_ai_text(prompt: str, chat_history: List[dict], system_prompt:
         ]
 
         models_to_try = list(RECOMMENDED_GEMINI_MODELS)
+        if preferred_model:
+            models_to_try = [preferred_model] + [m for m in models_to_try if m != preferred_model]
 
         # Dynamic model discovery to guarantee availability
         try:
@@ -655,7 +662,13 @@ def get_platform_db_context(db: Session, bot_id: int, is_admin: bool = False) ->
         return ""
 
 
-async def process_user_message_to_bot(user_id: int, message_text: str, ai_mode: str, db: Session) -> str:
+async def process_user_message_to_bot(
+    user_id: int,
+    message_text: str,
+    ai_mode: str,
+    db: Session,
+    ai_model: Optional[str] = None
+) -> str:
     """Orchestrates AI response for a user message sent to VORTEX-9 via the Cache Layer."""
     bot = get_or_create_bot_user(db)
     is_img, img_prompt = is_image_request(message_text)
@@ -697,7 +710,7 @@ async def process_user_message_to_bot(user_id: int, message_text: str, ai_mode: 
         local_history = []
 
     # 4. AI generates raw response with the selected mode's system prompt and database state
-    raw_response = await generate_ai_text(cleaned_prompt, local_history, system_prompt=dynamic_system_prompt)
+    raw_response = await generate_ai_text(cleaned_prompt, local_history, system_prompt=dynamic_system_prompt, preferred_model=ai_model)
 
     # 5. Cache receives answer, records into local editable memory, and delivers finalized output
     output_text = ai_cache.commit_turn(user_id, message_text, raw_response, mode=mode)
@@ -709,7 +722,8 @@ async def process_user_message_to_bot_stream(
     message_text: str,
     ai_mode: str,
     db: Session,
-    on_chunk: Optional[Any] = None
+    on_chunk: Optional[Any] = None,
+    ai_model: Optional[str] = None
 ) -> str:
     """Orchestrates AI response for a user message sent to VORTEX-9 with real-time streaming and personalization."""
     bot = get_or_create_bot_user(db)
@@ -756,7 +770,8 @@ async def process_user_message_to_bot_stream(
         system_prompt=dynamic_system_prompt,
         on_chunk=on_chunk,
         user_id=user_id,
-        db=db
+        db=db,
+        preferred_model=ai_model
     )
 
     output_text = ai_cache.commit_turn(user_id, message_text, raw_response, mode=mode)
@@ -949,7 +964,8 @@ async def generate_ai_text_stream(
     system_prompt: str = PROMPT_DEFAULT,
     on_chunk: Optional[Any] = None,
     user_id: Optional[int] = None,
-    db: Optional[Session] = None
+    db: Optional[Session] = None,
+    preferred_model: Optional[str] = None
 ) -> str:
     """Generate conversational response using Gemini API with real-time token streaming and Google Search grounding."""
     api_key = os.getenv("GEMINI_API_KEY")
@@ -1042,6 +1058,8 @@ async def generate_ai_text_stream(
     ]
 
     models_to_try = list(RECOMMENDED_GEMINI_MODELS)
+    if preferred_model:
+        models_to_try = [preferred_model] + [m for m in models_to_try if m != preferred_model]
 
     has_images = len(image_parts) > 0
     client = genai.Client(api_key=api_key)
@@ -1105,7 +1123,7 @@ async def generate_ai_text_stream(
                 continue
 
     # Fallback to non-streaming generate_ai_text if all streams fail
-    fallback_res = await generate_ai_text(prompt, chat_history, system_prompt)
+    fallback_res = await generate_ai_text(prompt, chat_history, system_prompt, preferred_model=preferred_model)
     if on_chunk:
         await on_chunk(fallback_res)
     return fallback_res

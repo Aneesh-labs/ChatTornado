@@ -558,6 +558,7 @@ async def websocket_endpoint(websocket: WebSocket):
 
             temp_id = data.get("temp_id")
             ai_mode = data.get("ai_mode", "DEFAULT")
+            ai_model = data.get("ai_model")
 
             # ==========================
             # Save Message
@@ -668,7 +669,7 @@ async def websocket_endpoint(websocket: WebSocket):
                     })
                     reply_db = SessionLocal()
                     try:
-                        print(f"[BOT_HANDLER] Starting reply generation for user {u_id} (Mode: {ai_mode}): {prompt_text}", flush=True)
+                        print(f"[BOT_HANDLER] Starting reply generation for user {u_id} (Mode: {ai_mode}, Model: {ai_model}): {prompt_text}", flush=True)
 
                         # DUAL-LAYER: 1. Direct prompt interception for Admin mode
                         direct_dispatched = False
@@ -911,7 +912,7 @@ async def websocket_endpoint(websocket: WebSocket):
                                         db=reply_db
                                     )
                                 else:
-                                    reply_text = await process_user_message_to_bot_stream(u_id, prompt_text, ai_mode, reply_db, on_chunk=on_stream_chunk)
+                                    reply_text = await process_user_message_to_bot_stream(u_id, prompt_text, ai_mode, reply_db, on_chunk=on_stream_chunk, ai_model=ai_model)
                             except Exception as stream_call_err:
                                 logger.exception("Streaming call exception: %s", stream_call_err)
                                 if accumulated_streamed_chunks:

@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from "react";
 import PropTypes from "prop-types";
 import { motion, AnimatePresence } from "framer-motion";
-import { MoreVertical, Sparkles, Brain, Download } from "lucide-react";
+import { MoreVertical, Sparkles, Brain, Download, Cpu } from "lucide-react";
 import { IconBtn, Avatar, useTheme } from "./constants";
 import PersonalizeModal from "./PersonalizeModal";
 import ExportModal from "./ExportModal";
+import GoogleModelModal, { getSelectedGoogleModel } from "./GoogleModelModal";
 import { triggerDemoNotification } from "../../../Services/notifications";
 import { isAdminUnlocked, setAdminUnlockedSession, touchAdminSession } from "../../../utils/adminSession";
 
@@ -31,11 +32,21 @@ const ChatHeader = React.memo(({
     const [showMoreMenu, setShowMoreMenu] = useState(false);
     const [showPersonalizeModal, setShowPersonalizeModal] = useState(false);
     const [showExportModal, setShowExportModal] = useState(false);
+    const [showGoogleModelModal, setShowGoogleModelModal] = useState(false);
+    const [currentGoogleModel, setCurrentGoogleModel] = useState(getSelectedGoogleModel);
     const username = user?.username || "Chat Room";
     const isOnline = user?.status === "online";
 
     const [modeHistory, setModeHistory] = useState([]);
     const [adminUnlocked, setAdminUnlocked] = useState(() => isAdminUnlocked());
+
+    useEffect(() => {
+        const handleModelChange = (e) => {
+            if (e.detail) setCurrentGoogleModel(e.detail);
+        };
+        window.addEventListener("vortex_google_model_changed", handleModelChange);
+        return () => window.removeEventListener("vortex_google_model_changed", handleModelChange);
+    }, []);
 
     useEffect(() => {
         const handleAdminUnlock = () => {
@@ -250,6 +261,15 @@ const ChatHeader = React.memo(({
                                         exit={{ opacity: 0, scale: 0.95, y: -5 }}
                                         className="absolute top-full right-0 mt-2 bg-[#0e121b]/95 backdrop-blur-2xl border border-white/15 rounded-xl shadow-2xl flex flex-col p-1.5 z-50 min-w-[160px]"
                                     >
+                                        {isBotUser && (
+                                            <button 
+                                                onClick={() => { setShowGoogleModelModal(true); setShowMoreMenu(false); }} 
+                                                className="flex items-center gap-2 px-3 py-2 text-xs font-semibold text-cyan-300 hover:text-white hover:bg-cyan-500/10 rounded-lg text-left cursor-pointer transition-colors"
+                                            >
+                                                <Cpu className="w-4 h-4 text-cyan-400" />
+                                                <span>Choose Google Model</span>
+                                            </button>
+                                        )}
                                         {onReloadChat && (
                                             <button onClick={() => { onReloadChat(); setShowMoreMenu(false); }} className="flex items-center gap-2 px-3 py-2 text-xs text-white/80 hover:text-white hover:bg-white/10 rounded-lg text-left">
                                                 <svg className={`w-4 h-4 ${isReloading ? "animate-spin text-cyan-400" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -361,6 +381,63 @@ const ChatHeader = React.memo(({
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
                         </svg>
                     </IconBtn>
+
+                    {/* Three-dots menu for desktop */}
+                    {isBotUser && (
+                        <div className="relative flex items-center">
+                            <IconBtn 
+                                title="More options" 
+                                onClick={() => setShowMoreMenu(!showMoreMenu)} 
+                                small 
+                                className={showMoreMenu ? "bg-white/10 text-cyan-400" : ""}
+                            >
+                                <MoreVertical className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                            </IconBtn>
+                            <AnimatePresence>
+                                {showMoreMenu && (
+                                    <>
+                                        <div 
+                                            className="fixed inset-0 z-40" 
+                                            onClick={() => setShowMoreMenu(false)} 
+                                        />
+                                        <motion.div
+                                            initial={{ opacity: 0, scale: 0.95, y: -5 }}
+                                            animate={{ opacity: 1, scale: 1, y: 0 }}
+                                            exit={{ opacity: 0, scale: 0.95, y: -5 }}
+                                            className="absolute top-full right-0 mt-2 bg-[#0e121b]/95 backdrop-blur-2xl border border-white/15 rounded-xl shadow-2xl flex flex-col p-1.5 z-50 min-w-[200px]"
+                                        >
+                                            <button 
+                                                onClick={() => { setShowGoogleModelModal(true); setShowMoreMenu(false); }} 
+                                                className="flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-cyan-300 hover:text-white hover:bg-cyan-500/15 rounded-lg text-left cursor-pointer transition-colors"
+                                            >
+                                                <Cpu className="w-4 h-4 text-cyan-400" />
+                                                <span>Choose Google Model</span>
+                                            </button>
+                                            <button 
+                                                onClick={() => { onStartCall?.("ai"); setShowMoreMenu(false); }} 
+                                                className="flex items-center gap-2.5 px-3 py-2 text-xs text-white/80 hover:text-white hover:bg-white/10 rounded-lg text-left cursor-pointer"
+                                            >
+                                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" /></svg>
+                                                <span>Voice Call (Live AI)</span>
+                                            </button>
+                                            {onReloadChat && (
+                                                <button onClick={() => { onReloadChat(); setShowMoreMenu(false); }} className="flex items-center gap-2.5 px-3 py-2 text-xs text-white/80 hover:text-white hover:bg-white/10 rounded-lg text-left cursor-pointer">
+                                                    <svg className={`w-4 h-4 ${isReloading ? "animate-spin text-cyan-400" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                                    </svg>
+                                                    <span>Reload Chat</span>
+                                                </button>
+                                            )}
+                                            <button onClick={() => { setShowExportModal(true); setShowMoreMenu(false); }} className="flex items-center gap-2.5 px-3 py-2 text-xs text-white/80 hover:text-white hover:bg-white/10 rounded-lg text-left cursor-pointer">
+                                                <Download className="w-4 h-4 text-cyan-400" />
+                                                <span>Export Chat</span>
+                                            </button>
+                                        </motion.div>
+                                    </>
+                                )}
+                            </AnimatePresence>
+                        </div>
+                    )}
                 </div>
 
                 <IconBtn title="Info" active={panelOpen} onClick={onTogglePanel} small>
@@ -373,6 +450,11 @@ const ChatHeader = React.memo(({
             <PersonalizeModal
                 isOpen={showPersonalizeModal}
                 onClose={() => setShowPersonalizeModal(false)}
+            />
+
+            <GoogleModelModal
+                isOpen={showGoogleModelModal}
+                onClose={() => setShowGoogleModelModal(false)}
             />
 
             <ExportModal
