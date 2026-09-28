@@ -637,10 +637,73 @@ const ChatInput = React.memo(({ onSend, replyTo, onCancelReply, selectedUser, so
     };
 
     const handleAttachment = async (event) => {
-        const file = event.target.files?.[0];
+        const rawFiles = Array.from(event.target.files || []);
         event.target.value = "";
-        if (!file || !selectedUser || disabled) return;
+        if (rawFiles.length === 0 || !selectedUser || disabled) return;
         setUploadError("");
+
+        const MAX_IMAGES_BATCH = 5;
+        const MAX_IMAGE_BYTES = 100 * 1024 * 1024; // 100 MB
+
+        // Are these all images?
+        const isAllImages = rawFiles.every((f) => f.type?.startsWith("image/"));
+
+        if (isAllImages && rawFiles.length > 1) {
+            // Multi-image batch validation
+            if (rawFiles.length > MAX_IMAGES_BATCH) {
+                setUploadError(`Maximum ${MAX_IMAGES_BATCH} images allowed per batch. You selected ${rawFiles.length}.`);
+                return;
+            }
+
+            for (const f of rawFiles) {
+                if (f.size > MAX_IMAGE_BYTES) {
+                    setUploadError(`"${f.name}" exceeds the maximum 100 MB per-image limit.`);
+                    return;
+                }
+            }
+
+            setUploading(true);
+            try {
+                const body = new FormData();
+                rawFiles.forEach((f) => body.append("files", f));
+
+                const token = sessionStorage.getItem("token") || "";
+                const response = await API.post(
+                    `/uploads/images?token=${encodeURIComponent(token)}`,
+                    body
+                );
+
+                const { successful, failed } = response.data;
+                if (failed && failed.length > 0) {
+                    const failNames = failed.map((f) => `${f.filename}: ${f.error}`).join(", ");
+                    setUploadError(`Some images failed: ${failNames}`);
+                }
+
+                if (successful && successful.length > 0) {
+                    for (const img of successful) {
+                        const relPath = (img.original_url || img.url || "").replace(/^\//, "");
+                        const fullUrl = `${baseUrl}/${relPath}`;
+                        onSend(fullUrl, { ...(shieldOptions || {}), ai_mode: aiMode });
+                    }
+                    setShieldOptions(null);
+                }
+            } catch (error) {
+                console.error("Batch image upload failed:", error);
+                setUploadError(error.response?.data?.detail || "Batch image upload failed. Please try again.");
+            } finally {
+                setUploading(false);
+            }
+            return;
+        }
+
+        const file = rawFiles[0];
+        if (!file) return;
+
+        // Check 100 MB limit for single image
+        if (file.type?.startsWith("image/") && file.size > MAX_IMAGE_BYTES) {
+            setUploadError(`"${file.name}" exceeds the maximum 100 MB limit.`);
+            return;
+        }
 
         // Check if image for AI Bot (VORTEX-9) -> Stage locally in RAM
         const isBot = Boolean(selectedUser?.is_bot || selectedUser?.username === "VORTEX-9");
@@ -660,7 +723,25 @@ const ChatInput = React.memo(({ onSend, replyTo, onCancelReply, selectedUser, so
         try {
             const isVideo = Boolean(file.type?.startsWith("video/") || VIDEO_EXTENSIONS.test(file.name || ""));
 
-            // 1. Heavy Photos & Documents: Use Pure P2P Zero-Server Transfer (IndexedDB)
+            // 1. Photos & Documents: If human user, upload to server
+            if (file.type?.startsWith("image/")) {
+                const body = new FormData();
+                body.append("files", file);
+                const response = await API.post(
+                    `/uploads/images?token=${encodeURIComponent(sessionStorage.getItem("token") || "")}`,
+                    body
+                );
+                const { successful } = response.data;
+                if (successful && successful[0]) {
+                    const relPath = (successful[0].original_url || successful[0].url || "").replace(/^\//, "");
+                    const fullUrl = `${baseUrl}/${relPath}`;
+                    onSend(fullUrl, { ...(shieldOptions || {}), ai_mode: aiMode });
+                    setShieldOptions(null);
+                }
+                return;
+            }
+
+            // 2. Heavy Documents: Use Pure P2P Zero-Server Transfer (IndexedDB)
             if (!isVideo) {
                 const p2pPayload = await prepareP2PFile(file, selectedUser.id, socket);
                 onSend(p2pPayload, { ...(shieldOptions || {}), ai_mode: aiMode });
@@ -668,8 +749,7 @@ const ChatInput = React.memo(({ onSend, replyTo, onCancelReply, selectedUser, so
                 return;
             }
 
-
-            // 2. Videos: Use FastAPI FFmpeg transcoding & WebP thumbnail generation pipeline
+            // 3. Videos: Use FastAPI FFmpeg transcoding & WebP thumbnail generation pipeline
             const body = new FormData();
             body.append("file", file);
 
@@ -1057,7 +1137,7 @@ const ChatInput = React.memo(({ onSend, replyTo, onCancelReply, selectedUser, so
                     </motion.div>
                 ) : (
                     <>
-                        <input ref={fileInputRef} type="file" className="hidden" accept="image/*,video/*,audio/*,.pdf,.csv,.tsv,.json,.txt,.md,.py,.js,.jsx,.ts,.tsx,.html,.css,.sql,.env,.yml,.yaml,.xml,.log,.rs,.go,.java,.c,.cpp,.h" onChange={handleAttachment} />
+                        <input ref={fileInputRef} type="file" multiple className="hidden" accept="image/*,video/*,audio/*,.pdf,.csv,.tsv,.json,.txt,.md,.py,.js,.jsx,.ts,.tsx,.html,.css,.sql,.env,.yml,.yaml,.xml,.log,.rs,.go,.java,.c,.cpp,.h" onChange={handleAttachment} />
 
                         <div className="flex gap-1 flex-shrink-0 items-center">
                             <IconBtn title="More options" onClick={() => setShowMoreOptions(!showMoreOptions)} small className={showMoreOptions ? "bg-white/10" : ""}>

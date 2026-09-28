@@ -10,6 +10,7 @@ class ConnectionManager:
         self.active_connections: dict[int, WebSocket] = {}
         self.online_users: set[int] = set()
         self.broadcasted_capsules: set[int] = set()
+        self.user_statuses: dict[int, dict] = {}
 
     async def connect(
         self,
@@ -72,6 +73,11 @@ class ConnectionManager:
                 if db:
                     db.close()
 
+    def set_user_status(self, user_id: int, status: str, custom_status: str = None):
+        self.user_statuses[int(user_id)] = {
+            "status": status,
+            "custom_status": custom_status
+        }
 
     def disconnect(
         self,
@@ -85,6 +91,24 @@ class ConnectionManager:
         self.active_connections.pop(str(uid), None)
         self.online_users.discard(uid)
         self.online_users.discard(str(uid))
+        self.user_statuses.pop(uid, None)
+
+        # Update offline in DB so user doesn't remain falsely marked online
+        db = None
+        try:
+            from datetime import datetime
+            from models import User
+            db = SessionLocal()
+            u = db.query(User).filter(User.id == uid).first()
+            if u:
+                u.status = "offline"
+                u.last_seen = datetime.utcnow()
+                db.commit()
+        except Exception:
+            pass
+        finally:
+            if db:
+                db.close()
 
 
     async def get_online_users(self) -> list[int]:
@@ -120,42 +144,121 @@ class ConnectionManager:
             return False
 
     async def broadcast_online_users(self) -> None:
-
         online_users = await self.get_online_users()
-
         dead_connections = []
 
+        db = None
+        blocked_pairs = set()
+        admin_ids = set()
+        try:
+            from models import UserBlock, User
+            db = SessionLocal()
+            blocks = db.query(UserBlock).all()
+            for b in blocks:
+                blocked_pairs.add((b.blocker_id, b.blocked_id))
+                blocked_pairs.add((b.blocked_id, b.blocker_id))
+            admins = db.query(User.id).filter(
+                (User.role == "SUPER_ADMIN") | (User.username == "BlackShadow-ChatTornado")
+            ).all()
+            admin_ids = {a[0] for a in admins}
+        except Exception:
+            pass
+        finally:
+            if db:
+                db.close()
+
         for user_id, websocket in list(self.active_connections.items()):
+            try:
+                uid = int(user_id)
+            except (ValueError, TypeError):
+                continue
+
+            is_recipient_admin = uid in admin_ids
+
+            # Filter out blocked users and invisible admins for this recipient
+            recipient_online_list = []
+            for other_id in online_users:
+                if other_id == uid:
+                    recipient_online_list.append(other_id)
+                    continue
+                # Hide admin from normal users
+                if other_id in admin_ids and not is_recipient_admin:
+                    continue
+                # Hide if blocked
+                if (uid, other_id) in blocked_pairs:
+                    continue
+                recipient_online_list.append(other_id)
 
             try:
-
                 await websocket.send_json(
                     {
                         "type": "online_users",
-                        "users": online_users
+                        "users": recipient_online_list,
+                        "statuses": self.user_statuses
                     }
                 )
-
             except (WebSocketDisconnect, RuntimeError):
                 dead_connections.append(user_id)
-
             except Exception:
                 dead_connections.append(user_id)
 
         for user_id in dead_connections:
             self.disconnect(user_id)
 
-        if dead_connections:
-            online_users = await self.get_online_users()
+    async def broadcast_user_status(self, user_id: int, status: str, custom_status: str = None, db=None) -> None:
+        self.set_user_status(user_id, status, custom_status)
+        
+        # Check blocks and admin role
+        blocked_users = set()
+        is_admin_user = False
+        close_db_here = False
+        if db is None:
+            db = SessionLocal()
+            close_db_here = True
+        try:
+            from models import UserBlock, User
+            blocks = db.query(UserBlock).filter(
+                (UserBlock.blocker_id == user_id) | (UserBlock.blocked_id == user_id)
+            ).all()
+            for b in blocks:
+                blocked_users.add(b.blocker_id if b.blocked_id == user_id else b.blocked_id)
+            
+            u = db.query(User).filter(User.id == user_id).first()
+            if u and (u.role == "SUPER_ADMIN" or u.username == "BlackShadow-ChatTornado"):
+                is_admin_user = True
+        except Exception:
+            pass
+        finally:
+            if close_db_here and db:
+                db.close()
 
-            for user_id in list(self.active_connections.keys()):
-                await self.send_personal_message(
-                    user_id,
-                    {
-                        "type": "online_users",
-                        "users": online_users
-                    }
-                )
+        packet = {
+            "type": "user_status_update",
+            "user_id": user_id,
+            "status": status,
+            "custom_status": custom_status
+        }
+
+        for target_id, ws in list(self.active_connections.items()):
+            try:
+                tid = int(target_id)
+            except (ValueError, TypeError):
+                continue
+
+            if tid == user_id:
+                await self.send_personal_message(tid, packet)
+                continue
+
+            # If user is admin and target is not, do not broadcast presence
+            if is_admin_user:
+                continue
+
+            # If target blocked user or vice versa, do not send presence update
+            if tid in blocked_users:
+                continue
+
+            await self.send_personal_message(tid, packet)
+
 
                 
 

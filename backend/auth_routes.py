@@ -18,7 +18,7 @@ from auth import (
     create_refresh_token_id
 )
 from database import get_db
-from models import User, RefreshToken
+from models import User, RefreshToken, LoginHistory
 from email_service import send_verification_email
 
 router = APIRouter()
@@ -129,21 +129,18 @@ def signup(
 @router.post("/login")
 def login(
     data: dict,
+    request: Request,
     db: Session = Depends(get_db)
 ):
     identifier = (data.get("email") or data.get("username") or "").strip()
     password = data.get("password")
+    client_ip = request.client.host if request.client else None
+    user_agent = request.headers.get("user-agent", "")[:250]
     
     if not identifier or not password:
         raise HTTPException(
             status_code=400,
             detail="Email and password fields are mandatory."
-        )
-    
-    if identifier.lower() == 'aneesh@secret.com':
-        raise HTTPException(
-            status_code=401,
-            detail="You are the admin! Try using aneesh@chat.com and 123456!"
         )
     
     # Find user by email or username (case-insensitive)
@@ -164,13 +161,65 @@ def login(
     
     # Verify password
     if not verify_password(password, user.password):
+        # Record failed login
+        try:
+            db.add(LoginHistory(
+                user_id=user.id,
+                ip_address=client_ip,
+                user_agent=user_agent,
+                status="failed",
+                created_at=datetime.utcnow()
+            ))
+            db.commit()
+        except Exception:
+            pass
         raise HTTPException(
             status_code=401,
             detail="Invalid credentials."
         )
-    
+
+    # Check account status (bans / restrictions)
+    now = datetime.utcnow()
+    if user.account_status == "permanently_blocked":
+        try:
+            db.add(LoginHistory(
+                user_id=user.id,
+                ip_address=client_ip,
+                user_agent=user_agent,
+                status="failed_blocked",
+                created_at=now
+            ))
+            db.commit()
+        except Exception:
+            pass
+        raise HTTPException(
+            status_code=403,
+            detail="Your account has been permanently suspended for violations of platform policies."
+        )
+
+    if user.account_status == "restricted":
+        if user.restricted_until and now >= user.restricted_until:
+            # Restriction expired
+            user.account_status = "active"
+            user.restricted_until = None
+            user.restriction_reason = None
+            db.commit()
+
     # Update last login
-    user.last_login = datetime.utcnow()
+    user.last_login = now
+    
+    # Record successful login in LoginHistory
+    try:
+        db.add(LoginHistory(
+            user_id=user.id,
+            ip_address=client_ip,
+            user_agent=user_agent,
+            status="success",
+            created_at=now
+        ))
+    except Exception:
+        pass
+
     db.commit()
     
     # Generate tokens
@@ -178,12 +227,13 @@ def login(
         "sub": user.email,
         "username": user.username,
         "user_id": user.id,
-        "email_verified": user.email_verified
+        "email_verified": user.email_verified,
+        "role": user.role
     }
     
     access_token = create_access_token(
         token_data,
-        expires_delta=timedelta(minutes=30)
+        expires_delta=timedelta(minutes=60)
     )
     
     # Generate refresh token
@@ -204,11 +254,16 @@ def login(
         "access_token": access_token,
         "refresh_token": refresh_token_id,
         "token_type": "bearer",
-        "expires_in": 900,
+        "expires_in": 3600,
         "username": user.username,
         "email": user.email,
         "user_id": user.id,
-        "email_verified": user.email_verified
+        "email_verified": user.email_verified,
+        "role": user.role,
+        "account_status": user.account_status,
+        "restricted_until": user.restricted_until.isoformat() if user.restricted_until else None,
+        "restriction_reason": user.restriction_reason,
+        "custom_status": user.custom_status
     }
 
 

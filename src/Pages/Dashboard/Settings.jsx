@@ -8,23 +8,54 @@ import { clearAdminSession } from "../../utils/adminSession";
 export default function Settings() {
     const navigate = useNavigate();
     const [pendingRequests, setPendingRequests] = useState([]);
+    const [blockedUsers, setBlockedUsers] = useState([]);
+    const [announcements, setAnnouncements] = useState([]);
     const [showDeleteModal, setShowDeleteModal] = useState(false);
     const [deleteConfirmText, setDeleteConfirmText] = useState("");
     const [isDeleting, setIsDeleting] = useState(false);
     const [deleteError, setDeleteError] = useState("");
 
+    const fetchSettingsData = async () => {
+        try {
+            const token = sessionStorage.getItem("token");
+            const [pendingRes, blocksRes, annRes] = await Promise.allSettled([
+                API.get("/connections/pending", { params: { token } }),
+                API.get("/api/blocks", { params: { token } }),
+                API.get("/api/announcements", { params: { token } }),
+            ]);
+            if (pendingRes.status === "fulfilled") setPendingRequests(pendingRes.value.data || []);
+            if (blocksRes.status === "fulfilled") setBlockedUsers(blocksRes.value.data || []);
+            if (annRes.status === "fulfilled") setAnnouncements(annRes.value.data || []);
+        } catch (err) {
+            console.error("Failed to fetch settings data", err);
+        }
+    };
+
     useEffect(() => {
-        const fetchPending = async () => {
-            try {
-                const token = sessionStorage.getItem("token");
-                const res = await API.get("/connections/pending", { params: { token } });
-                setPendingRequests(res.data || []);
-            } catch (err) {
-                console.error("Failed to fetch requests", err);
-            }
-        };
-        fetchPending();
+        fetchSettingsData();
     }, []);
+
+    const handleUnblock = async (userId) => {
+        try {
+            const token = sessionStorage.getItem("token");
+            await API.delete(`/api/blocks/${userId}`, { params: { token } });
+            setBlockedUsers((prev) => prev.filter((u) => u.id !== userId));
+        } catch (err) {
+            console.error("Failed to unblock user:", err);
+        }
+    };
+
+    const handleMarkAnnouncementRead = async (annId) => {
+        try {
+            const token = sessionStorage.getItem("token");
+            await API.post(`/api/announcements/${annId}/read`, {}, { params: { token } });
+            setAnnouncements((prev) =>
+                prev.map((a) => (a.id === annId ? { ...a, is_read: true } : a))
+            );
+        } catch (err) {
+            console.error("Failed to mark announcement as read:", err);
+        }
+    };
 
     const handleAction = async (id, action) => {
         try {
@@ -174,6 +205,114 @@ export default function Settings() {
                                                     Decline
                                                 </button>
                                             </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </motion.div>
+
+                        {/* Announcements Section */}
+                        <motion.div
+                            initial={{ opacity: 0, y: 14 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            className="rounded-lg border border-white/10 bg-[#0d1118]/82 p-5 backdrop-blur-xl mt-4"
+                        >
+                            <div className="flex items-center gap-4 mb-4">
+                                <div className="grid h-11 w-11 shrink-0 place-items-center rounded-lg bg-cyan-600 text-white">
+                                    <Radio className="h-5 w-5" />
+                                </div>
+                                <div>
+                                    <h2 className="text-lg font-black">Official Announcements</h2>
+                                    <p className="mt-1 text-sm text-white/48">Broadcasts from ChatTornado Administration.</p>
+                                </div>
+                                {announcements.filter((a) => !a.is_read).length > 0 && (
+                                    <div className="ml-auto bg-cyan-600 px-3 py-1 rounded-full text-xs font-bold">
+                                        {announcements.filter((a) => !a.is_read).length} Unread
+                                    </div>
+                                )}
+                            </div>
+
+                            {announcements.length === 0 ? (
+                                <div className="text-sm text-white/40 italic py-4">No active announcements.</div>
+                            ) : (
+                                <div className="grid gap-3">
+                                    {announcements.map((ann) => (
+                                        <div
+                                            key={ann.id}
+                                            className={`p-3.5 rounded-lg border transition-all ${
+                                                ann.is_read
+                                                    ? "border-white/5 bg-white/[0.02]"
+                                                    : "border-cyan-500/30 bg-cyan-950/20"
+                                            }`}
+                                        >
+                                            <div className="flex items-start justify-between gap-3">
+                                                <div>
+                                                    <div className="flex items-center gap-2">
+                                                        <h3 className="font-bold text-white text-sm">{ann.title}</h3>
+                                                        <span className="text-[10px] px-2 py-0.5 rounded bg-white/10 text-cyan-300 font-semibold uppercase">
+                                                            {ann.category}
+                                                        </span>
+                                                    </div>
+                                                    <p className="mt-1 text-xs text-white/70 leading-relaxed">{ann.content}</p>
+                                                    <p className="mt-2 text-[10px] text-white/30">
+                                                        Posted: {new Date(ann.created_at).toLocaleDateString()}
+                                                    </p>
+                                                </div>
+                                                {!ann.is_read && (
+                                                    <button
+                                                        onClick={() => handleMarkAnnouncementRead(ann.id)}
+                                                        className="px-2.5 py-1 rounded bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 text-xs font-semibold whitespace-nowrap transition-colors"
+                                                    >
+                                                        Mark as Read
+                                                    </button>
+                                                )}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </motion.div>
+
+                        {/* Blocked Users Section */}
+                        <motion.div
+                            initial={{ opacity: 0, y: 14 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            className="rounded-lg border border-white/10 bg-[#0d1118]/82 p-5 backdrop-blur-xl mt-4"
+                        >
+                            <div className="flex items-center gap-4 mb-4">
+                                <div className="grid h-11 w-11 shrink-0 place-items-center rounded-lg bg-rose-600 text-white">
+                                    <AlertTriangle className="h-5 w-5" />
+                                </div>
+                                <div>
+                                    <h2 className="text-lg font-black">Blocked Users</h2>
+                                    <p className="mt-1 text-sm text-white/48">Users who cannot send messages or call you.</p>
+                                </div>
+                                <div className="ml-auto bg-white/10 px-3 py-1 rounded-full text-xs font-bold text-white/60">
+                                    {blockedUsers.length} Blocked
+                                </div>
+                            </div>
+
+                            {blockedUsers.length === 0 ? (
+                                <div className="text-sm text-white/40 italic py-4">You have not blocked any users.</div>
+                            ) : (
+                                <div className="grid gap-2">
+                                    {blockedUsers.map((u) => (
+                                        <div
+                                            key={u.id}
+                                            className="flex items-center justify-between p-3 rounded-lg border border-white/5 bg-white/[0.02]"
+                                        >
+                                            <div className="flex items-center gap-2.5">
+                                                <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center font-bold text-xs text-white/80">
+                                                    {u.username?.charAt(0).toUpperCase()}
+                                                </div>
+                                                <span className="text-sm font-semibold text-white">@{u.username}</span>
+                                            </div>
+                                            <button
+                                                onClick={() => handleUnblock(u.id)}
+                                                className="px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white text-xs font-semibold transition-colors"
+                                            >
+                                                Unblock
+                                            </button>
                                         </div>
                                     ))}
                                 </div>

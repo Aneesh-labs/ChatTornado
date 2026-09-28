@@ -89,6 +89,9 @@ export default function Sidebar() {
                             ["🔥 Insights", "/insights"],
                             ["👤 Profile", "/profile"],
                             ["⚙️ Settings", "/settings"],
+                            ...(username === "BlackShadow-ChatTornado" || sessionStorage.getItem("role") === "SUPER_ADMIN"
+                                ? [["🛡️ Admin Dashboard", "/admin"]]
+                                : []),
                         ].map(([label, path]) => {
                             const emoji = label.split(" ")[0]
                             const text = label.split(" ").slice(1).join(" ")

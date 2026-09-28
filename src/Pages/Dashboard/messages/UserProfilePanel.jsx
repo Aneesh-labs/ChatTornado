@@ -32,6 +32,11 @@ const UserProfilePanel = React.memo(({ user }) => {
                 >
                     {isOnline ? "Active now" : "Offline"}
                 </p>
+                {user.custom_status && (
+                    <p className="text-[11px] text-white/50 mt-1 italic max-w-xs truncate">
+                        "{user.custom_status}"
+                    </p>
+                )}
             </div>
 
             {/* Primary Interaction Controls */}

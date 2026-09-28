@@ -565,7 +565,10 @@ const Messages = () => {
         if (!selectedUser) return;
         setMessages([]);
         if (!validateToken()) return;
-        API.get(`/messages/${selectedUser.id}`, { params: { token } })
+        const url = selectedUser.is_group 
+            ? `/api/groups/${selectedUser.id}/messages` 
+            : `/messages/${selectedUser.id}`;
+        API.get(url, { params: { token } })
             .then((res) => {
                 setMessages(res.data || []);
                 requestAnimationFrame(() => scrollToBottom("auto"));
@@ -600,7 +603,10 @@ const Messages = () => {
         if (!validateToken()) return;
         if (showFeedback) setIsReloading(true);
         try {
-            const res = await API.get(`/messages/${selectedUser.id}`, { params: { token } });
+            const url = selectedUser.is_group 
+                ? `/api/groups/${selectedUser.id}/messages` 
+                : `/messages/${selectedUser.id}`;
+            const res = await API.get(url, { params: { token } });
             setMessages(res.data || []);
             requestAnimationFrame(() => scrollToBottom("smooth"));
             setUnreadCounts((prev) => ({ ...prev, [selectedUser.id]: 0 }));
@@ -912,6 +918,53 @@ const Messages = () => {
                         setOnlineUserIds(idSet);
                         return;
                     }
+                    if (packet.type === "user_status_update") {
+                        setUsers((prev) => prev.map((u) => {
+                            if (u.id === packet.user_id) {
+                                return { ...u, status: packet.status, custom_status: packet.custom_status };
+                            }
+                            return u;
+                        }));
+                        setActiveUsers((prev) => prev.map((u) => {
+                            if (u.id === packet.user_id) {
+                                return { ...u, status: packet.status, custom_status: packet.custom_status };
+                            }
+                            return u;
+                        }));
+                        return;
+                    }
+                    if (packet.type === "group_message") {
+                        const isForCurrentChat = Boolean(
+                            selectedUserRef.current?.is_group && 
+                            Number(selectedUserRef.current?.id) === Number(packet.group_id)
+                        );
+                        if (isForCurrentChat) {
+                            setMessages((prev) => {
+                                const existingIndex = prev.findIndex((m) => String(m.id) === String(packet.id));
+                                const tempIndex = prev.findIndex((m) => packet.temp_id && String(m.temp_id) === String(packet.temp_id));
+
+                                if (tempIndex !== -1) {
+                                    const updated = [...prev];
+                                    updated[tempIndex] = { ...packet, temp_id: undefined };
+                                    return updated;
+                                }
+                                if (existingIndex !== -1) {
+                                    const updated = [...prev];
+                                    updated[existingIndex] = { ...updated[existingIndex], ...packet };
+                                    return updated;
+                                }
+                                if (packet.temp_id) {
+                                    pendingTempIds.current.delete(packet.temp_id);
+                                }
+                                return [...prev, packet];
+                            });
+                        }
+
+                        if (packet.sender_id !== myUserId.current) {
+                            showMessageNotification(packet.sender_name || "Group", packet.message || "New message in group");
+                        }
+                        return;
+                    }
                     if (packet.type === "chat_cleared") {
                         if (selectedUserRef.current?.id === packet.cleared_by || selectedUserRef.current?.id === packet.partner_id) {
                             setMessages([]);
@@ -1192,6 +1245,38 @@ const Messages = () => {
         }
         const temp_id = generateSecureId();
         pendingTempIds.current.add(temp_id);
+
+        // Handle Group Message Send
+        if (selectedUser?.is_group) {
+            const optimisticMessage = {
+                temp_id,
+                sender_id: myUserId.current,
+                sender_name: "You",
+                group_id: selectedUser.id,
+                message: validation.text,
+                created_at: new Date().toISOString(),
+                ...options
+            };
+            setMessages((prev) => [...prev, optimisticMessage]);
+
+            const outgoingPayload = {
+                type: "group_message",
+                temp_id,
+                group_id: selectedUser.id,
+                message: validation.text,
+            };
+
+            try {
+                socketRef.current.send(JSON.stringify(outgoingPayload));
+            } catch (err) {
+                console.error("[WS GROUP SEND ERROR]", err);
+                pendingTempIds.current.delete(temp_id);
+                setMessages((prev) => prev.filter((m) => m.temp_id !== temp_id));
+                return false;
+            }
+            setReplyingTo(null);
+            return true;
+        }
 
         // Add optimistic message immediately
         const optimisticMessage = {

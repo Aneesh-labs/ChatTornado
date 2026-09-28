@@ -1,7 +1,11 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import PropTypes from "prop-types";
-import { useTheme, Avatar, Badge, IconBtn } from "./constants";
+import { Users, Plus } from "lucide-react";
+import { useTheme, Avatar, Badge, IconBtn, StatusDot, USER_STATUSES } from "./constants";
+import API from "../../../Services/API";
+import CreateGroupModal from "./CreateGroupModal";
+import UserStatusModal from "./UserStatusModal";
 
 const FILTER_TABS = [
     ["all", "All"],
@@ -11,6 +15,7 @@ const FILTER_TABS = [
 
 const MAIN_TABS = [
     ["chats", "Chats"],
+    ["groups", "Groups"],
     ["global", "Global"],
 ];
 
@@ -194,6 +199,68 @@ ConversationCard.propTypes = {
 };
 
 ConversationCard.displayName = "ConversationCard";
+ 
+export const GroupCard = React.memo(({
+    group = {},
+    selected = false,
+    onSelect,
+}) => {
+    const theme = useTheme();
+
+    return (
+        <motion.div
+            layout
+            initial={{ opacity: 0, x: -10 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -10 }}
+            whileHover={{ x: 2 }}
+            onClick={onSelect}
+            role="button"
+            tabIndex={0}
+            aria-selected={selected}
+            className={`relative flex items-center gap-3 px-3 py-3 rounded-2xl transition-all duration-150 group outline-none focus-visible:ring-2 focus-visible:ring-violet-500/50 cursor-pointer active:scale-[0.99] touch-manipulation ${
+                selected
+                    ? `bg-gradient-to-r ${theme?.accent || "from-violet-600 to-indigo-600"} bg-opacity-20 border border-white/[0.12] shadow-lg`
+                    : `border border-transparent ${theme?.glassHover || "hover:bg-white/[0.02]"} hover:border-white/[0.06]`
+            }`}
+        >
+            {selected && (
+                <motion.div
+                    layoutId="selectedBar"
+                    className={`absolute left-0 top-1/4 bottom-1/4 w-0.5 rounded-full bg-gradient-to-b ${theme?.accent || "from-violet-500 to-indigo-500"}`}
+                />
+            )}
+
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-violet-600 to-indigo-600 flex items-center justify-center shadow-lg border border-white/10 flex-shrink-0">
+                <Users className="w-4 h-4 text-white" />
+            </div>
+
+            <div className="flex-1 min-w-0">
+                <div className="flex items-center justify-between gap-1 mb-0.5">
+                    <span className={`text-sm font-semibold truncate ${selected ? "text-white" : "text-white/80"}`}>
+                        {group?.name || "Group"}
+                    </span>
+                    <span className="text-[10px] text-white/40 flex-shrink-0 font-medium bg-white/[0.06] px-1.5 py-0.5 rounded-md">
+                        {group?.member_count || 1} {group?.member_count === 1 ? "member" : "members"}
+                    </span>
+                </div>
+                <div className="flex items-center justify-between text-xs text-white/30 truncate">
+                    <span className="truncate">
+                        {group?.last_message?.message || "No messages yet"}
+                    </span>
+                    {group?.my_role === "OWNER" && (
+                        <span className="text-[9px] text-amber-400 font-bold ml-1.5 flex-shrink-0">👑 OWNER</span>
+                    )}
+                    {group?.my_role === "ADMIN" && (
+                        <span className="text-[9px] text-cyan-400 font-bold ml-1.5 flex-shrink-0">🛡️ ADMIN</span>
+                    )}
+                </div>
+            </div>
+        </motion.div>
+    );
+});
+
+GroupCard.displayName = "GroupCard";
 
 const Sidebar = React.memo(({
     users = [],
@@ -217,6 +284,35 @@ const Sidebar = React.memo(({
     const theme = useTheme();
     const [filter, setFilter] = useState("all");
     const [mainTab, setMainTab] = useState("chats");
+    const [groups, setGroups] = useState([]);
+    const [showCreateGroupModal, setShowCreateGroupModal] = useState(false);
+    const [showStatusModal, setShowStatusModal] = useState(false);
+    const [currentStatus, setCurrentStatus] = useState(() => sessionStorage.getItem("user_status") || "online");
+    const [currentCustomStatus, setCurrentCustomStatus] = useState(() => sessionStorage.getItem("custom_status") || "");
+
+    useEffect(() => {
+        const handleStorageUpdate = () => {
+            setCurrentStatus(sessionStorage.getItem("user_status") || "online");
+            setCurrentCustomStatus(sessionStorage.getItem("custom_status") || "");
+        };
+        window.addEventListener("sessionStorageUpdate", handleStorageUpdate);
+        return () => window.removeEventListener("sessionStorageUpdate", handleStorageUpdate);
+    }, []);
+
+    const fetchGroups = useCallback(async () => {
+        try {
+            const token = sessionStorage.getItem("token");
+            if (!token) return;
+            const res = await API.get("/api/groups", { params: { token } });
+            setGroups(res.data || []);
+        } catch (err) {
+            console.warn("Failed to fetch groups", err);
+        }
+    }, []);
+
+    useEffect(() => {
+        fetchGroups();
+    }, [fetchGroups]);
 
     const safePinnedChats = pinnedChats instanceof Set ? pinnedChats : new Set();
     const safeTypingUsers = typingUsers instanceof Set ? typingUsers : new Set();
@@ -254,7 +350,6 @@ const Sidebar = React.memo(({
         return [...botList, ...pinnedList, ...unpinnedList];
     }, [users, activeUsers, mainTab, safePinnedChats, safeUnreadCounts, filter]);
 
-
     const totalUnread = useMemo(() => {
         return Object.values(safeUnreadCounts).reduce((acc, curr) => acc + (Number(curr) || 0), 0);
     }, [safeUnreadCounts]);
@@ -263,7 +358,11 @@ const Sidebar = React.memo(({
         return Array.isArray(users) ? users.find((u) => u?.id === myUserId) : null;
     }, [users, myUserId]);
 
-    const displayedCount = mainTab === "chats" ? (activeUsers?.length || 0) : (users?.length || 0);
+    const displayedCount = mainTab === "chats" 
+        ? (activeUsers?.length || 0) 
+        : mainTab === "groups" 
+            ? (groups?.length || 0) 
+            : (users?.length || 0);
 
     return (
         <div className={`w-full h-full flex flex-col relative ${theme?.sidebar || ""} border-r ${theme?.border || ""} backdrop-blur-2xl overflow-hidden`}>
@@ -278,14 +377,14 @@ const Sidebar = React.memo(({
                         </div>
                         <div>
                             <span className="text-sm font-bold text-white/90 tracking-tight block">Messages</span>
-                            <span className="text-[10px] text-white/30">{displayedCount} {mainTab === "chats" ? "active chats" : "users"}</span>
+                            <span className="text-[10px] text-white/30">{displayedCount} {mainTab === "chats" ? "active chats" : mainTab === "groups" ? "groups" : "users"}</span>
                         </div>
                         {totalUnread > 0 && <Badge count={totalUnread} />}
                     </div>
 
                     <div className="flex items-center gap-1">
                         {onRefresh && (
-                            <IconBtn onClick={onRefresh} title="Refresh conversations" small className={isRefreshing ? "text-cyan-400 bg-white/[0.08]" : ""}>
+                            <IconBtn onClick={() => { onRefresh(); fetchGroups(); }} title="Refresh conversations" small className={isRefreshing ? "text-cyan-400 bg-white/[0.08]" : ""}>
                                 <svg className={`w-4 h-4 transition-transform duration-500 ${isRefreshing ? "animate-spin text-cyan-400" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                                 </svg>
@@ -371,69 +470,158 @@ const Sidebar = React.memo(({
                 </div>
             )}
 
-            {/* Conversations List */}
-            <div className="flex-1 overflow-y-auto px-2 py-2 space-y-0.5 min-h-0 custom-scrollbar overscroll-contain">
-                <AnimatePresence mode="popLayout">
-                    {sortedUsers.length === 0 ? (
-                        <motion.div
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            exit={{ opacity: 0 }}
-                            className="flex flex-col items-center justify-center py-12 gap-3"
-                        >
-                            <div role="img" aria-label="Blank box visual illustration" className="text-3xl opacity-20">💬</div>
-                            <p className="text-xs text-white/20 text-center px-4">
-                                {mainTab === "chats"
-                                    ? (filter === "pinned" ? "No pinned chats yet" : filter === "unread" ? "All caught up!" : "No active chats yet. Connect in Global tab!")
-                                    : "No users found"}
-                            </p>
-                        </motion.div>
-                    ) : (
-                        sortedUsers.map((user) => {
-                            const connInfo = connectionStatuses && connectionStatuses[user.id];
-                            const status = connInfo?.status || null;
-                            const isSender = connInfo?.is_sender ?? true;
+            {/* Groups Tab or Conversations List */}
+            {mainTab === "groups" ? (
+                <div className="flex-1 overflow-y-auto px-2 py-2 space-y-1 min-h-0 custom-scrollbar overscroll-contain">
+                    <button
+                        type="button"
+                        onClick={() => setShowCreateGroupModal(true)}
+                        className="w-full py-2.5 px-3 rounded-2xl bg-gradient-to-r from-violet-600/30 to-indigo-600/30 hover:from-violet-600/50 hover:to-indigo-600/50 border border-violet-500/30 text-white text-xs font-semibold flex items-center justify-center gap-2 transition-all shadow-md active:scale-[0.98] mb-2"
+                    >
+                        <Plus className="w-4 h-4 text-violet-300" />
+                        <span>Create New Group</span>
+                    </button>
 
-                            return (
-                                <ConversationCard
-                                    key={user.id}
-                                    user={user}
-                                    selected={selectedUser?.id === user.id}
-                                    unread={safeUnreadCounts[user.id] || 0}
-                                    pinned={safePinnedChats.has(user.id)}
-                                    typing={safeTypingUsers.has(user.id) || safeTypingUsers.has(Number(user.id)) || safeTypingUsers.has(String(user.id))}
+                    <AnimatePresence mode="popLayout">
+                        {groups.length === 0 ? (
+                            <motion.div
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                exit={{ opacity: 0 }}
+                                className="flex flex-col items-center justify-center py-12 gap-3"
+                            >
+                                <div role="img" aria-label="Groups visual illustration" className="text-3xl opacity-20">👥</div>
+                                <p className="text-xs text-white/30 text-center px-4">
+                                    No groups yet. Click above to create one!
+                                </p>
+                            </motion.div>
+                        ) : (
+                            groups.map((group) => (
+                                <GroupCard
+                                    key={`group-${group.id}`}
+                                    group={group}
+                                    selected={selectedUser?.is_group && selectedUser?.id === group.id}
                                     onSelect={() => {
-                                        onSelectUser?.(user);
-                                        if (mainTab === "global" && status === "accepted") {
-                                            setMainTab("chats");
-                                        }
-                                    }}
-                                    onPin={() => onPinUser?.(user.id)}
-                                    isGlobal={mainTab === "global"}
-                                    connectionStatus={status}
-                                    isSender={isSender}
-                                    onRequestConnection={onRequestConnection}
-                                    onAcceptConnection={(userId) => {
-                                        onAcceptConnection?.(userId);
-                                        setMainTab("chats");
+                                        onSelectUser?.({
+                                            id: group.id,
+                                            username: group.name,
+                                            name: group.name,
+                                            is_group: true,
+                                            ...group
+                                        });
                                     }}
                                 />
-                            );
-                        })
-                    )}
-                </AnimatePresence>
-            </div>
+                            ))
+                        )}
+                    </AnimatePresence>
+                </div>
+            ) : (
+                <div className="flex-1 overflow-y-auto px-2 py-2 space-y-0.5 min-h-0 custom-scrollbar overscroll-contain">
+                    <AnimatePresence mode="popLayout">
+                        {sortedUsers.length === 0 ? (
+                            <motion.div
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                exit={{ opacity: 0 }}
+                                className="flex flex-col items-center justify-center py-12 gap-3"
+                            >
+                                <div role="img" aria-label="Blank box visual illustration" className="text-3xl opacity-20">💬</div>
+                                <p className="text-xs text-white/20 text-center px-4">
+                                    {mainTab === "chats"
+                                        ? (filter === "pinned" ? "No pinned chats yet" : filter === "unread" ? "All caught up!" : "No active chats yet. Connect in Global tab!")
+                                        : "No users found"}
+                                </p>
+                            </motion.div>
+                        ) : (
+                            sortedUsers.map((user) => {
+                                const connInfo = connectionStatuses && connectionStatuses[user.id];
+                                const status = connInfo?.status || null;
+                                const isSender = connInfo?.is_sender ?? true;
 
-            {/* Current user info */}
-            {myUser && (
-                <div className={`flex items-center gap-3 px-4 py-3 border-t ${theme?.border || ""} flex-shrink-0`}>
-                    <Avatar user={myUser} size="sm" showStatus={false} />
-                    <div className="flex-1 min-w-0">
-                        <p className="text-xs font-semibold text-white/70 truncate">{myUser.username}</p>
-                        <p className="text-[10px] text-white/25">You</p>
-                    </div>
+                                return (
+                                    <ConversationCard
+                                        key={user.id}
+                                        user={user}
+                                        selected={selectedUser?.id === user.id}
+                                        unread={safeUnreadCounts[user.id] || 0}
+                                        pinned={safePinnedChats.has(user.id)}
+                                        typing={safeTypingUsers.has(user.id) || safeTypingUsers.has(Number(user.id)) || safeTypingUsers.has(String(user.id))}
+                                        onSelect={() => {
+                                            onSelectUser?.(user);
+                                            if (mainTab === "global" && status === "accepted") {
+                                                setMainTab("chats");
+                                            }
+                                        }}
+                                        onPin={() => onPinUser?.(user.id)}
+                                        isGlobal={mainTab === "global"}
+                                        connectionStatus={status}
+                                        isSender={isSender}
+                                        onRequestConnection={onRequestConnection}
+                                        onAcceptConnection={(userId) => {
+                                            onAcceptConnection?.(userId);
+                                            setMainTab("chats");
+                                        }}
+                                    />
+                                );
+                            })
+                        )}
+                    </AnimatePresence>
                 </div>
             )}
+
+            {/* Current user info with status */}
+            {myUser && (
+                <button
+                    type="button"
+                    onClick={() => setShowStatusModal(true)}
+                    className={`flex items-center gap-3 px-4 py-3 border-t ${theme?.border || ""} flex-shrink-0 w-full text-left hover:bg-white/[0.04] transition-colors cursor-pointer group`}
+                    title="Change your online status & custom status"
+                >
+                    <div className="relative">
+                        <Avatar user={myUser} size="sm" showStatus={false} />
+                        <span className="absolute -bottom-0.5 -right-0.5">
+                            <StatusDot status={currentStatus} size="sm" />
+                        </span>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between gap-1">
+                            <p className="text-xs font-semibold text-white/80 group-hover:text-white truncate">{myUser.username}</p>
+                            <span className="text-[9px] text-white/40 capitalize font-medium">{USER_STATUSES[currentStatus]?.label || currentStatus}</span>
+                        </div>
+                        <p className="text-[10px] text-violet-400 truncate">
+                            {currentCustomStatus ? `"${currentCustomStatus}"` : "Set custom status…"}
+                        </p>
+                    </div>
+                </button>
+            )}
+
+            {/* Modals */}
+            <CreateGroupModal
+                isOpen={showCreateGroupModal}
+                onClose={() => setShowCreateGroupModal(false)}
+                availableUsers={users}
+                onGroupCreated={(newGroup) => {
+                    fetchGroups();
+                    onSelectUser?.({
+                        id: newGroup.id,
+                        username: newGroup.name,
+                        name: newGroup.name,
+                        is_group: true,
+                        ...newGroup
+                    });
+                }}
+            />
+
+            <UserStatusModal
+                isOpen={showStatusModal}
+                onClose={() => setShowStatusModal(false)}
+                currentStatus={currentStatus}
+                currentCustomStatus={currentCustomStatus}
+                onStatusUpdated={(updated) => {
+                    if (updated?.status) setCurrentStatus(updated.status);
+                    if (updated?.custom_status !== undefined) setCurrentCustomStatus(updated.custom_status || "");
+                }}
+            />
 
             {/* Floating search FAB — mobile only */}
             <button

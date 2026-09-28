@@ -1,10 +1,12 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import PropTypes from "prop-types";
 
 import UserProfilePanel from "./UserProfilePanel";
 import { useTheme, Section } from "./constants";
 import { useIsMobile } from "./useMediaQuery";
+import ReportUserModal from "./ReportUserModal";
+import API from "../../../Services/API";
 
 const TABS = [
     ["info", "Info"],
@@ -25,6 +27,40 @@ const DANGER_ITEMS = [
 
 const RightPanelContent = React.memo(({ user, messages, tab, setTab, totalMessagesCount, mediaMessages, theme, onClearChat }) => {
     const [showConfirmClear, setShowConfirmClear] = useState(false);
+    const [isBlocked, setIsBlocked] = useState(false);
+    const [showReportModal, setShowReportModal] = useState(false);
+
+    useEffect(() => {
+        if (!user?.id || user?.is_bot) return;
+        const checkBlock = async () => {
+            try {
+                const token = sessionStorage.getItem("token");
+                const res = await API.get(`/api/blocks/check/${user.id}`, { params: { token } });
+                setIsBlocked(Boolean(res.data?.i_blocked));
+            } catch (err) {
+                console.warn("Failed to check block status", err);
+            }
+        };
+        checkBlock();
+    }, [user?.id]);
+
+    const handleToggleBlock = async () => {
+        if (!user?.id) return;
+        const token = sessionStorage.getItem("token");
+        try {
+            if (isBlocked) {
+                await API.delete(`/api/blocks/${user.id}`, { params: { token } });
+                setIsBlocked(false);
+            } else {
+                if (confirm(`Block @${user.username}? They won't be able to message or call you.`)) {
+                    await API.post(`/api/blocks/${user.id}`, {}, { params: { token } });
+                    setIsBlocked(true);
+                }
+            }
+        } catch (err) {
+            console.error("Block action failed", err);
+        }
+    };
 
     return (
         <div className="flex flex-col h-full overflow-hidden w-full relative">
@@ -82,24 +118,45 @@ const RightPanelContent = React.memo(({ user, messages, tab, setTab, totalMessag
                             ))}
                         </Section>
 
-                        <Section title="Danger">
-                            {DANGER_ITEMS.map(({ icon, label, ariaLabel }) => (
-                                <motion.button
-                                    key={label}
-                                    type="button"
-                                    whileTap={{ scale: 0.98 }}
-                                    aria-label={ariaLabel}
-                                    onClick={() => {
-                                        if (label === "Clear chat") {
-                                            setShowConfirmClear(true);
-                                        }
-                                    }}
-                                    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-red-500/[0.07] active:bg-red-500/10 transition-all text-left touch-manipulation"
-                                >
-                                    <span role="img" aria-hidden="true" className="text-base flex-shrink-0">{icon}</span>
-                                    <span className="text-xs text-red-400/70 font-medium">{label}</span>
-                                </motion.button>
-                            ))}
+                        <Section title="Safety & Danger">
+                            {!user?.is_bot && (
+                                <>
+                                    <motion.button
+                                        type="button"
+                                        whileTap={{ scale: 0.98 }}
+                                        onClick={handleToggleBlock}
+                                        className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-red-500/[0.07] active:bg-red-500/10 transition-all text-left touch-manipulation"
+                                    >
+                                        <span role="img" aria-hidden="true" className="text-base flex-shrink-0">
+                                            {isBlocked ? "🔓" : "🚫"}
+                                        </span>
+                                        <span className={`text-xs font-medium ${isBlocked ? "text-emerald-400" : "text-red-400/80"}`}>
+                                            {isBlocked ? "Unblock user" : "Block user"}
+                                        </span>
+                                    </motion.button>
+
+                                    <motion.button
+                                        type="button"
+                                        whileTap={{ scale: 0.98 }}
+                                        onClick={() => setShowReportModal(true)}
+                                        className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-amber-500/[0.07] active:bg-amber-500/10 transition-all text-left touch-manipulation"
+                                    >
+                                        <span role="img" aria-hidden="true" className="text-base flex-shrink-0">🚩</span>
+                                        <span className="text-xs text-amber-300 font-medium">Report user to moderation</span>
+                                    </motion.button>
+                                </>
+                            )}
+
+                            <motion.button
+                                type="button"
+                                whileTap={{ scale: 0.98 }}
+                                aria-label="Clear chat"
+                                onClick={() => setShowConfirmClear(true)}
+                                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-red-500/[0.07] active:bg-red-500/10 transition-all text-left touch-manipulation"
+                            >
+                                <span role="img" aria-hidden="true" className="text-base flex-shrink-0">🗑</span>
+                                <span className="text-xs text-red-400/70 font-medium">Clear conversation history</span>
+                            </motion.button>
                         </Section>
                     </div>
                 )}
@@ -178,6 +235,12 @@ const RightPanelContent = React.memo(({ user, messages, tab, setTab, totalMessag
                     </div>
                 )}
             </AnimatePresence>
+
+            <ReportUserModal
+                isOpen={showReportModal}
+                onClose={() => setShowReportModal(false)}
+                targetUser={user}
+            />
         </div>
     );
 });

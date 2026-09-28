@@ -12,6 +12,7 @@ import Settings from "./Pages/Dashboard/Settings";
 import Insights from "./Pages/Dashboard/Insights";
 import Arcade from "./Pages/Dashboard/Arcade";
 import VerifyEmail from "./Pages/VerifyEmail";
+import AdminDashboard from "./Pages/Dashboard/AdminDashboard";
 
 export default function App() {
   return (
@@ -35,6 +36,7 @@ export default function App() {
         <Route path="insights" element={<Insights />} />
         <Route path="profile" element={<Profile />} />
         <Route path="settings" element={<Settings />} />
+        <Route path="admin" element={<AdminDashboard />} />
       </Route>
     </Routes>
   );

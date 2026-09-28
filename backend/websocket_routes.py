@@ -12,8 +12,9 @@ from sqlalchemy import func, or_, and_
 
 from auth import decode_token
 from database import SessionLocal
-from models import Message, MessageVisibility, MessageReaction, User
+from models import Message, MessageVisibility, MessageReaction, User, GroupMember
 from websocket_manager import manager, ghost_manager
+from block_routes import is_blocked_bidirectional
 
 router = APIRouter()
 logger = logging.getLogger("chat_tornado.websocket")
@@ -69,11 +70,86 @@ async def websocket_endpoint(websocket: WebSocket):
                     receiver_id = int(receiver_id)
                 except (ValueError, TypeError):
                     continue
+
+                # Block check: blocked users cannot call each other
+                if is_blocked_bidirectional(db, user_id, receiver_id):
+                    continue
+
                 if isinstance(signal, dict):
                     logger.info("WebRTC %s: %s -> %s", signal.get("type", "signal"), user_id, receiver_id)
                     await manager.send_personal_message(receiver_id, {
                         "type": "signal", "sender_id": user_id, "signal": signal,
                     })
+                continue
+
+            # ---------- Status Update Event ----------
+            if data.get("type") == "status_update":
+                new_status = str(data.get("status", "online")).lower().strip()
+                new_custom = data.get("custom_status")
+                if new_status in {"online", "away", "dnd", "offline"}:
+                    u = db.query(User).filter(User.id == user_id).first()
+                    if u:
+                        u.status = new_status
+                        u.custom_status = str(new_custom)[:100] if new_custom else None
+                        u.last_seen = datetime.utcnow()
+                        db.commit()
+                        await manager.broadcast_user_status(user_id, new_status, u.custom_status, db=db)
+                continue
+
+            # ---------- Group Message Event ----------
+            if data.get("type") == "group_message":
+                group_id = data.get("group_id")
+                msg_text = str(data.get("message", "")).strip()
+                if not group_id or not msg_text:
+                    continue
+                try:
+                    group_id = int(group_id)
+                except (ValueError, TypeError):
+                    continue
+
+                sender = db.query(User).filter(User.id == user_id).first()
+                now = datetime.utcnow()
+                if sender and sender.account_status == "restricted":
+                    if sender.restricted_until and now < sender.restricted_until:
+                        await manager.send_personal_message(user_id, {
+                            "type": "error",
+                            "message": "Your account is temporarily restricted from sending messages."
+                        })
+                        continue
+
+                # Check membership
+                member = db.query(GroupMember).filter(
+                    GroupMember.group_id == group_id,
+                    GroupMember.user_id == user_id
+                ).first()
+                if not member:
+                    continue
+
+                new_group_msg = Message(
+                    sender_id=user_id,
+                    receiver_id=None,
+                    group_id=group_id,
+                    message=msg_text,
+                    read_state="sent"
+                )
+                db.add(new_group_msg)
+                db.commit()
+                db.refresh(new_group_msg)
+
+                # Broadcast to all group members
+                all_members = db.query(GroupMember.user_id).filter(GroupMember.group_id == group_id).all()
+                group_packet = {
+                    "type": "group_message",
+                    "id": new_group_msg.id,
+                    "temp_id": data.get("temp_id"),
+                    "group_id": group_id,
+                    "sender_id": user_id,
+                    "sender_name": sender.username if sender else "Member",
+                    "message": msg_text,
+                    "created_at": str(new_group_msg.created_at)
+                }
+                for (m_uid,) in all_members:
+                    await manager.send_personal_message(m_uid, group_packet)
                 continue
 
             # ---------- Ghost Chat ----------
@@ -556,13 +632,39 @@ async def websocket_endpoint(websocket: WebSocket):
             if not message_text:
                 continue
 
-            temp_id = data.get("temp_id")
-            ai_mode = data.get("ai_mode", "DEFAULT")
-            ai_model = data.get("ai_model")
+            # ==========================
+            # Security & Moderation Checks
+            # ==========================
+
+            sender_user = db.query(User).filter(User.id == user_id).first()
+            now_dt = datetime.utcnow()
+            if sender_user and sender_user.account_status == "restricted":
+                if sender_user.restricted_until and now_dt < sender_user.restricted_until:
+                    await manager.send_personal_message(user_id, {
+                        "type": "error",
+                        "message": "Your account is temporarily restricted from sending messages."
+                    })
+                    continue
+                elif sender_user.restricted_until and now_dt >= sender_user.restricted_until:
+                    sender_user.account_status = "active"
+                    sender_user.restricted_until = None
+                    sender_user.restriction_reason = None
+                    db.commit()
+
+            if is_blocked_bidirectional(db, user_id, receiver_id):
+                await manager.send_personal_message(user_id, {
+                    "type": "error",
+                    "message": "Unable to send message. Interaction with this user is blocked."
+                })
+                continue
 
             # ==========================
             # Save Message
             # ==========================
+
+            temp_id = data.get("temp_id")
+            ai_mode = data.get("ai_mode", "DEFAULT")
+            ai_model = data.get("ai_model")
 
             is_shielded = bool(data.get("is_shielded", False))
             shield_mode = data.get("shield_mode")

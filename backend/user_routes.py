@@ -24,19 +24,34 @@ def get_users(
         )
 
     current_user_id = payload["user_id"]
+    current_user = db.query(User).filter(User.id == current_user_id).first()
+    is_admin = current_user and current_user.role == "SUPER_ADMIN"
 
-    users = (
-        db.query(User)
-        .filter(User.id != current_user_id, User.email != "vortex9@system.bot")
-        .order_by(User.username)
-        .all()
+    query = db.query(User).filter(
+        User.id != current_user_id,
+        User.email != "vortex9@system.bot"
     )
+
+    # Hide BlackShadow-ChatTornado and SUPER_ADMIN from regular users
+    if not is_admin:
+        query = query.filter(
+            User.username != "BlackShadow-ChatTornado",
+            User.role != "SUPER_ADMIN"
+        )
+
+    users = query.order_by(User.username).all()
+
+    # Determine live status
+    online_ids = set(manager.active_connections.keys())
 
     return [
         {
             "id": user.id,
             "username": user.username,
-            "email": user.email
+            "email": user.email,
+            "avatar_url": user.avatar_url,
+            "status": user.status if (user.id in online_ids or str(user.id) in online_ids) else "offline",
+            "custom_status": user.custom_status
         }
         for user in users
     ]
@@ -45,6 +60,7 @@ def get_users(
 @router.get("/user/{user_id}")
 def get_user(
     user_id: int,
+    token: str = "",
     db: Session = Depends(get_db)
 ):
     user = (
@@ -59,10 +75,22 @@ def get_user(
             detail="User not found."
         )
 
+    # Hide admin from normal user lookup
+    if user.username == "BlackShadow-ChatTornado" or user.role == "SUPER_ADMIN":
+        payload = decode_token(token) if token else None
+        if not payload or payload.get("user_id") != user.id:
+            caller = db.query(User).filter(User.id == payload.get("user_id")).first() if payload else None
+            if not caller or caller.role != "SUPER_ADMIN":
+                raise HTTPException(status_code=404, detail="User not found.")
+
+    online_ids = set(manager.active_connections.keys())
     return {
         "id": user.id,
         "username": user.username,
-        "email": user.email
+        "email": user.email,
+        "avatar_url": user.avatar_url,
+        "status": user.status if (user.id in online_ids or str(user.id) in online_ids) else "offline",
+        "custom_status": user.custom_status
     }
 
 
@@ -81,26 +109,39 @@ def search_users(
         )
 
     current_user_id = payload["user_id"]
+    current_user = db.query(User).filter(User.id == current_user_id).first()
+    is_admin = current_user and current_user.role == "SUPER_ADMIN"
 
-    users = (
+    query = (
         db.query(User)
         .filter(
             User.id != current_user_id,
+            User.email != "vortex9@system.bot",
             or_(
                 User.username.ilike(f"%{q}%"),
                 User.email.ilike(f"%{q}%")
             )
         )
-        .order_by(User.username)
-        .limit(20)
-        .all()
     )
 
+    # Hide BlackShadow-ChatTornado from regular searches
+    if not is_admin:
+        query = query.filter(
+            User.username != "BlackShadow-ChatTornado",
+            User.role != "SUPER_ADMIN"
+        )
+
+    users = query.order_by(User.username).limit(20).all()
+
+    online_ids = set(manager.active_connections.keys())
     return [
         {
             "id": user.id,
             "username": user.username,
-            "email": user.email
+            "email": user.email,
+            "avatar_url": user.avatar_url,
+            "status": user.status if (user.id in online_ids or str(user.id) in online_ids) else "offline",
+            "custom_status": user.custom_status
         }
         for user in users
     ]

@@ -119,6 +119,12 @@ async def email_verification_middleware(request, call_next):
 
 from admin_routes import router as admin_router
 from ai_routes import router as ai_router
+from block_routes import router as block_router
+from status_routes import router as status_router
+from group_routes import router as group_router
+from report_routes import router as report_router
+from announcement_routes import router as announcement_router
+from admin_dashboard_routes import router as admin_dashboard_router
 
 app.include_router(auth_router)
 app.include_router(user_router)
@@ -128,6 +134,12 @@ app.include_router(upload_router)
 app.include_router(connection_router)
 app.include_router(admin_router)
 app.include_router(ai_router)
+app.include_router(block_router)
+app.include_router(status_router)
+app.include_router(group_router)
+app.include_router(report_router)
+app.include_router(announcement_router)
+app.include_router(admin_dashboard_router)
 
 UPLOAD_DIR = Path(os.getenv("UPLOAD_DIR", Path(__file__).parent / "uploads"))
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)

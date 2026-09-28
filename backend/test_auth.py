@@ -32,6 +32,7 @@ def mock_email_service():
 
 @pytest.fixture(autouse=True)
 def setup_database():
+    app.dependency_overrides[get_db] = override_get_db
     Base.metadata.drop_all(bind=engine_test)
     Base.metadata.create_all(bind=engine_test)
 

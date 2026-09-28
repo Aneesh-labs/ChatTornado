@@ -5,6 +5,7 @@ import secrets
 import subprocess
 from pathlib import Path
 
+from typing import List
 from fastapi import APIRouter, File, HTTPException, UploadFile
 
 from auth import decode_token
@@ -17,7 +18,22 @@ register_heif_opener()
 router = APIRouter(prefix="/uploads", tags=["uploads"])
 
 MAX_UPLOAD_BYTES = 1024 * 1024 * 1024  # 1 GB
+MAX_IMAGE_BYTES = 100 * 1024 * 1024    # 100 MB per image (strictly enforced)
+MAX_IMAGES_PER_BATCH = 5               # Maximum 5 images per batch
 CHUNK_SIZE = 8 * 1024 * 1024           # 8 MB
+
+def validate_image_file_content(file_path: Path) -> bool:
+    """
+    Strict server-side validation.
+    Does not trust client-provided MIME type or extension.
+    Uses Pillow to verify the file is a genuine, uncorrupted image.
+    """
+    try:
+        with Image.open(file_path) as img:
+            img.verify()
+        return True
+    except Exception:
+        return False
 
 import shutil
 
@@ -420,6 +436,9 @@ async def upload_file(token: str, file: UploadFile = File(...)):
     original_path = upload_dir / filename
     total_size = 0
 
+    # Enforce 100 MB limit for images, 1 GB for other files
+    max_size_limit = MAX_IMAGE_BYTES if extension in IMAGE_EXTENSIONS else MAX_UPLOAD_BYTES
+
     # Streaming upload with size limit
     try:
         with open(original_path, "wb") as output:
@@ -428,13 +447,14 @@ async def upload_file(token: str, file: UploadFile = File(...)):
                 if not chunk:
                     break
                 total_size += len(chunk)
-                if total_size > MAX_UPLOAD_BYTES:
+                if total_size > max_size_limit:
                     output.close()
                     if original_path.exists():
                         original_path.unlink()
+                    limit_str = "100 MB" if extension in IMAGE_EXTENSIONS else "1 GB"
                     raise HTTPException(
                         status_code=413,
-                        detail="Files must be 1 GB or smaller"
+                        detail=f"Files must be {limit_str} or smaller"
                     )
                 output.write(chunk)
     except HTTPException:
@@ -454,6 +474,16 @@ async def upload_file(token: str, file: UploadFile = File(...)):
             status_code=400,
             detail="Uploaded file is empty"
         )
+
+    # Validate image file content server-side with Pillow
+    if extension in IMAGE_EXTENSIONS:
+        if not validate_image_file_content(original_path):
+            if original_path.exists():
+                original_path.unlink()
+            raise HTTPException(
+                status_code=400,
+                detail="File content failed server-side image verification. The file is corrupted or unsupported."
+            )
 
     # Determine final file, preview, thumbnail, etc.
     final_path = original_path
@@ -567,3 +597,112 @@ async def upload_file(token: str, file: UploadFile = File(...)):
     response["audio_codec"] = info.get("audio_codec") if is_video else None
     response["container"] = info.get("container") if is_video else None
     return response
+
+
+# ----------------------------------------------------------------------
+# Batch Image Upload Endpoint (Max 5 images, Max 100 MB per image)
+# ----------------------------------------------------------------------
+@router.post("/images")
+async def upload_images_batch(
+    token: str,
+    files: List[UploadFile] = File(...)
+):
+    if not decode_token(token):
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+    if not files:
+        raise HTTPException(status_code=400, detail="No image files provided.")
+
+    if len(files) > MAX_IMAGES_PER_BATCH:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Maximum {MAX_IMAGES_PER_BATCH} images allowed per batch. You provided {len(files)}."
+        )
+
+    upload_dir = Path(
+        os.getenv("UPLOAD_DIR", Path(__file__).parent / "uploads")
+    )
+    upload_dir.mkdir(parents=True, exist_ok=True)
+
+    successful = []
+    failed = []
+
+    for file in files:
+        orig_name = Path(file.filename or "image.jpg").name
+        ext = Path(orig_name).suffix.lower()
+
+        if ext not in IMAGE_EXTENSIONS:
+            failed.append({
+                "filename": orig_name,
+                "error": f"Unsupported format '{ext}'. Only image files are accepted."
+            })
+            continue
+
+        saved_name = f"{secrets.token_urlsafe(18)}{ext[:12]}"
+        dest_path = upload_dir / saved_name
+        current_size = 0
+        oversized = False
+
+        try:
+            with open(dest_path, "wb") as f_out:
+                while True:
+                    chunk = await file.read(CHUNK_SIZE)
+                    if not chunk:
+                        break
+                    current_size += len(chunk)
+                    if current_size > MAX_IMAGE_BYTES:
+                        oversized = True
+                        break
+                    f_out.write(chunk)
+
+            if oversized:
+                if dest_path.exists():
+                    dest_path.unlink()
+                failed.append({
+                    "filename": orig_name,
+                    "error": "Image exceeds 100 MB limit."
+                })
+                continue
+
+            if current_size == 0:
+                if dest_path.exists():
+                    dest_path.unlink()
+                failed.append({
+                    "filename": orig_name,
+                    "error": "Uploaded image file is empty."
+                })
+                continue
+
+            # Strict server-side content verification with Pillow
+            if not validate_image_file_content(dest_path):
+                if dest_path.exists():
+                    dest_path.unlink()
+                failed.append({
+                    "filename": orig_name,
+                    "error": "Content verification failed. File is not a valid image."
+                })
+                continue
+
+            # Valid image
+            final_url = f"/uploads/{saved_name}"
+            successful.append({
+                "filename": orig_name,
+                "url": final_url,
+                "size": current_size
+            })
+
+        except Exception as e:
+            if dest_path.exists():
+                dest_path.unlink()
+            failed.append({
+                "filename": orig_name,
+                "error": f"Upload processing error: {str(e)}"
+            })
+
+    return {
+        "total_requested": len(files),
+        "successful_count": len(successful),
+        "failed_count": len(failed),
+        "successful": successful,
+        "failed": failed
+    }

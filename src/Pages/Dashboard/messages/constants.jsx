@@ -182,12 +182,28 @@ export const Glass = React.memo(({ children, className = "", hover = false, onCl
 });
 Glass.displayName = "Glass";
 
+export const USER_STATUSES = {
+    online: { label: "Online", color: "bg-emerald-400", shadow: "shadow-emerald-400/50 shadow-sm", text: "text-emerald-400" },
+    away: { label: "Away", color: "bg-amber-400", shadow: "shadow-amber-400/50 shadow-sm", text: "text-amber-400" },
+    dnd: { label: "Do Not Disturb", color: "bg-rose-500", shadow: "shadow-rose-500/50 shadow-sm", text: "text-rose-400" },
+    offline: { label: "Offline", color: "bg-white/20", shadow: "", text: "text-white/30" },
+};
+
+export const REPORT_CATEGORIES = [
+    "Harassment",
+    "Spam",
+    "Hate Speech",
+    "Impersonation",
+    "Inappropriate Content",
+    "Other"
+];
+
 export const StatusDot = React.memo(({ status, size = "sm" }) => {
     const sz = size === "sm" ? "w-1.5 h-1.5 sm:w-2 sm:h-2" : size === "md" ? "w-2 h-2 sm:w-2.5 sm:h-2.5" : "w-2.5 h-2.5 sm:w-3 sm:h-3";
-    const color = status === "online" ? "bg-emerald-400 shadow-emerald-400/50 shadow-sm" : "bg-white/20";
+    const st = USER_STATUSES[status] || USER_STATUSES.offline;
     return (
         <span
-            className={`${sz} ${color} rounded-full flex-shrink-0 ${status === "online" ? "animate-[pulse_2.5s_ease-in-out_infinite]" : ""}`}
+            className={`${sz} ${st.color} ${st.shadow} rounded-full flex-shrink-0 ${status === "online" ? "animate-[pulse_2.5s_ease-in-out_infinite]" : ""}`}
         />
     );
 });
