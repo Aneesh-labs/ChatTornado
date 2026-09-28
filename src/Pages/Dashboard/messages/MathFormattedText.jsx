@@ -1,10 +1,11 @@
-import React, { useState, useCallback, useMemo, useRef } from "react";
+import React, { useState, useCallback, useMemo, useRef, useEffect } from "react";
 import katex from "katex";
 import "katex/dist/katex.min.css";
 import { marked } from "marked";
 import DOMPurify from "dompurify";
 import { motion, AnimatePresence } from "framer-motion";
 import ArtifactSandboxModal, { buildSandboxHtml } from "./ArtifactSandboxModal";
+import API from "../../../Services/API.js";
 
 /**
  * Escape HTML special characters
@@ -20,33 +21,49 @@ const escapeHtml = (str) => {
 };
 
 /**
+ * Resolves relative /uploads/... paths to the absolute backend API URL
+ */
+const resolveMediaUrl = (url) => {
+    if (!url || typeof url !== "string") return "";
+    if (url.startsWith("http://") || url.startsWith("https://") || url.startsWith("data:") || url.startsWith("blob:")) {
+        return url;
+    }
+    if (url.startsWith("/uploads/")) {
+        const apiBase = API?.defaults?.baseURL ? API.defaults.baseURL.replace(/\/+$/, "") : "";
+        return `${apiBase}${url}`;
+    }
+    return url;
+};
+
+/**
  * Downloads a file or image from a URL
  */
 const triggerDownload = async (url, filename) => {
     try {
         if (!url) return;
-        if (url.startsWith("data:")) {
+        const resolved = resolveMediaUrl(url);
+        if (resolved.startsWith("data:")) {
             const link = document.createElement("a");
-            link.href = url;
+            link.href = resolved;
             link.download = filename || `vortex_${Date.now()}.png`;
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
             return;
         }
-        const resp = await fetch(url, { mode: "cors" });
+        const resp = await fetch(resolved, { mode: "cors" });
         if (!resp.ok) throw new Error("Fetch failed");
         const blob = await resp.blob();
         const objUrl = URL.createObjectURL(blob);
         const a = document.createElement("a");
         a.href = objUrl;
-        a.download = filename || url.split("/").pop()?.split("?")[0] || `download_${Date.now()}`;
+        a.download = filename || resolved.split("/").pop()?.split("?")[0] || `download_${Date.now()}`;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(objUrl);
     } catch {
-        window.open(url, "_blank");
+        window.open(resolveMediaUrl(url), "_blank");
     }
 };
 
@@ -208,30 +225,40 @@ const postProcessHtml = (html) => {
     );
 
     // 3. Enhance standalone <img> tags into interactive Image Preview Cards
-    res = res.replace(
-        /<img src="([^"]+)" alt="([^"]*)"(?:\s*\/)?>/g,
-        (match, src, alt) => {
-            const isAi = src.includes("/uploads/ai/") || (alt && alt.toLowerCase().includes("generated"));
-            return `
+    res = res.replace(/<img\s+([^>]+)>/g, (match, attrs) => {
+        const srcMatch = attrs.match(/src="([^"]+)"/);
+        const altMatch = attrs.match(/alt="([^"]*)"/);
+        const rawSrc = srcMatch ? srcMatch[1] : "";
+        const rawAlt = altMatch ? altMatch[1] : "";
+        if (!rawSrc) return match;
+
+        const isAi = rawSrc.includes("/uploads/ai/") || (rawAlt && rawAlt.toLowerCase().includes("generated"));
+        const resolvedSrc = resolveMediaUrl(rawSrc);
+        const cleanPrompt = rawAlt || "";
+        const fallbackPollination = isAi
+            ? `https://image.pollinations.ai/prompt/${encodeURIComponent(cleanPrompt || "ai artwork")}?width=1024&height=1024&nologo=true`
+            : "";
+        const displayAlt = isAi ? "AI Generated Artwork" : (escapeHtml(cleanPrompt) || "Image");
+
+        return `
 <div class="image-preview-card group relative my-3 max-w-lg rounded-2xl overflow-hidden border border-white/15 bg-black/40 shadow-xl">
-  <div class="relative cursor-pointer overflow-hidden bg-black/20" data-action="zoom" data-src="${src}" data-alt="${escapeHtml(alt)}">
-    <img src="${src}" alt="${escapeHtml(alt)}" loading="lazy" class="w-full max-h-[380px] object-contain rounded-t-xl transition-transform duration-300 group-hover:scale-[1.01]" />
+  <div class="relative cursor-pointer overflow-hidden bg-black/20" data-action="zoom" data-src="${resolvedSrc}" data-alt="${escapeHtml(cleanPrompt)}">
+    <img src="${resolvedSrc}" alt="${displayAlt}" data-src="${resolvedSrc}" data-fallback="${fallbackPollination}" data-prompt="${escapeHtml(cleanPrompt)}" loading="lazy" class="w-full max-h-[380px] object-contain rounded-t-xl transition-transform duration-300 group-hover:scale-[1.01]" />
     <div class="absolute top-2.5 left-2.5 flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold tracking-wide backdrop-blur-md ${isAi ? 'bg-fuchsia-600/80 text-white border border-fuchsia-400/40 shadow-lg shadow-fuchsia-900/50' : 'bg-cyan-600/80 text-white border border-cyan-400/40 shadow-lg shadow-cyan-900/50'}">
       <span>${isAi ? '🎨 AI Generated' : '🌐 Web Image'}</span>
     </div>
     <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2.5 pointer-events-auto">
-      <button type="button" class="px-3 py-1.5 rounded-xl bg-white/20 hover:bg-white/30 text-white text-xs font-bold backdrop-blur-md flex items-center gap-1.5 transition-all shadow-lg cursor-pointer" data-action="zoom" data-src="${src}">
+      <button type="button" class="px-3 py-1.5 rounded-xl bg-white/20 hover:bg-white/30 text-white text-xs font-bold backdrop-blur-md flex items-center gap-1.5 transition-all shadow-lg cursor-pointer" data-action="zoom" data-src="${resolvedSrc}">
         🔍 Zoom
       </button>
-      <button type="button" class="px-3 py-1.5 rounded-xl bg-white/20 hover:bg-white/30 text-white text-xs font-bold backdrop-blur-md flex items-center gap-1.5 transition-all shadow-lg cursor-pointer" data-action="download" data-src="${src}">
+      <button type="button" class="px-3 py-1.5 rounded-xl bg-white/20 hover:bg-white/30 text-white text-xs font-bold backdrop-blur-md flex items-center gap-1.5 transition-all shadow-lg cursor-pointer" data-action="download" data-src="${resolvedSrc}">
         ⬇ Download
       </button>
     </div>
   </div>
-  ${alt ? `<div class="px-3.5 py-2 text-xs text-white/70 bg-white/[0.03] border-t border-white/10 italic flex items-center gap-1.5"><span class="text-white/40">💬</span><span class="truncate">${escapeHtml(alt)}</span></div>` : ''}
+  ${cleanPrompt ? `<div class="px-3.5 py-2 text-xs text-white/70 bg-white/[0.03] border-t border-white/10 italic flex items-center gap-1.5"><span class="text-white/40">💬</span><span class="truncate" title="${escapeHtml(cleanPrompt)}">${escapeHtml(cleanPrompt)}</span></div>` : ''}
 </div>`;
-        }
-    );
+    });
 
     // 4. Ensure links open safely in new tab with arrow icon
     res = res.replace(
@@ -282,7 +309,8 @@ const MathFormattedText = React.memo(({ text, className = "", onOpenLightbox }) 
         // 5. Sanitize with DOMPurify
         const clean = DOMPurify.sanitize(withMath, {
             ADD_ATTR: [
-                "target", "rel", "data-action", "data-src", "data-alt", "data-code",
+                "target", "rel", "data-action", "data-src", "data-alt", "data-prompt",
+                "data-fallback", "data-fallback-applied", "data-code",
                 "data-card-code", "data-card-lang", "loading", "align", "sandbox", "srcdoc"
             ],
             ADD_TAGS: ["svg", "path", "button", "table", "thead", "tbody", "tr", "th", "td", "iframe"],
@@ -290,6 +318,35 @@ const MathFormattedText = React.memo(({ text, className = "", onOpenLightbox }) 
 
         return clean;
     }, [text]);
+
+    // Resilient fallback handler for broken/ephemeral image loads (capture phase)
+    useEffect(() => {
+        const container = containerRef.current;
+        if (!container) return;
+
+        const handleImgError = (e) => {
+            const target = e.target;
+            if (target && target.tagName === "IMG") {
+                const fallback = target.getAttribute("data-fallback");
+                if (fallback && !target.dataset.fallbackApplied) {
+                    target.dataset.fallbackApplied = "true";
+                    target.src = fallback;
+                    const parentAction = target.closest("[data-action='zoom']");
+                    if (parentAction) {
+                        parentAction.setAttribute("data-src", fallback);
+                    }
+                    const parentCard = target.closest(".image-preview-card");
+                    if (parentCard) {
+                        const dlBtn = parentCard.querySelector("[data-action='download']");
+                        if (dlBtn) dlBtn.setAttribute("data-src", fallback);
+                    }
+                }
+            }
+        };
+
+        container.addEventListener("error", handleImgError, true);
+        return () => container.removeEventListener("error", handleImgError, true);
+    }, [sanitizedHtml]);
 
     // Handle delegated clicks inside rendered markdown
     const handleContainerClick = useCallback((e) => {
@@ -383,7 +440,8 @@ const MathFormattedText = React.memo(({ text, className = "", onOpenLightbox }) 
         const zoomEl = e.target.closest("[data-action='zoom']");
         if (zoomEl) {
             e.stopPropagation();
-            const src = zoomEl.getAttribute("data-src");
+            const activeImg = zoomEl.querySelector("img") || zoomEl.closest(".image-preview-card")?.querySelector("img");
+            const src = activeImg?.src || zoomEl.getAttribute("data-src");
             if (src) {
                 if (onOpenLightbox) {
                     onOpenLightbox(src);
@@ -398,7 +456,8 @@ const MathFormattedText = React.memo(({ text, className = "", onOpenLightbox }) 
         const dlBtn = e.target.closest("[data-action='download']");
         if (dlBtn) {
             e.stopPropagation();
-            const src = dlBtn.getAttribute("data-src");
+            const activeImg = dlBtn.closest(".image-preview-card")?.querySelector("img");
+            const src = activeImg?.src || dlBtn.getAttribute("data-src");
             if (src) {
                 triggerDownload(src);
             }
