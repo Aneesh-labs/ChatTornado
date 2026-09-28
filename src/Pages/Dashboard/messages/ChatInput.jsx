@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { IconBtn, useTheme } from "./constants";
 import API from "../../../Services/API";
 import { prepareP2PFile } from "../../../Services/p2p";
-import { Shield, X, Gamepad2, Volume2, Mic, MicOff, MoreVertical } from "lucide-react";
+import { Shield, X, Gamepad2, Volume2, Mic, MicOff, MoreVertical, Sparkles, Wand2, RefreshCw } from "lucide-react";
 import CyberShieldModal from "./CyberShieldModal";
 import InChatGameModal from "./InChatGameModal";
 import SoundboardModal from "./SoundboardModal";
@@ -30,6 +30,37 @@ const ChatInput = React.memo(({ onSend, replyTo, onCancelReply, selectedUser, so
     const [shieldOptions, setShieldOptions] = useState(null);
     const [gameModalOpen, setGameModalOpen] = useState(false);
     const [soundboardModalOpen, setSoundboardModalOpen] = useState(false);
+    const [showToneMenu, setShowToneMenu] = useState(false);
+    const [isPolishing, setIsPolishing] = useState(false);
+
+    const handlePolish = useCallback(async (toneKey) => {
+        if (!text.trim() || isPolishing) return;
+        setIsPolishing(true);
+        setShowToneMenu(false);
+        const token = sessionStorage.getItem("token");
+        try {
+            if (toneKey === "clean") {
+                const res = await fetch(API.defaults.baseURL + "/ai_cleanup", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+                    body: JSON.stringify({ text, token })
+                });
+                const data = await res.json();
+                if (data.success && data.cleaned_text) {
+                    setText(data.cleaned_text);
+                }
+            } else {
+                const res = await API.post("/api/ai/polish", { text, tone: toneKey }, { params: { token } });
+                if (res.data?.status === "success" && res.data.polished) {
+                    setText(res.data.polished);
+                }
+            }
+        } catch (err) {
+            console.warn("AI polish failed:", err);
+        } finally {
+            setIsPolishing(false);
+        }
+    }, [text, isPolishing]);
 
     // Audio recording state (Voice Notes)
     const [isRecording, setIsRecording] = useState(false);
@@ -740,28 +771,91 @@ const ChatInput = React.memo(({ onSend, replyTo, onCancelReply, selectedUser, so
                         </div>
 
                         <div className={`flex-1 flex items-end gap-1.5 ${theme.input} border rounded-2xl px-3 py-2 sm:py-2.5 focus-within:border-white/20 transition-all duration-200 min-w-0`}>
-                            {/* AI Clean Wand */}
-                            {text.length > 5 && (
-                                <button
-                                    type="button"
-                                    title="AI Clean / Summarize Text"
-                                    onClick={async (e) => {
-                                        e.preventDefault();
-                                        const token = sessionStorage.getItem("token");
-                                        const res = await fetch(API.defaults.baseURL + "/ai_cleanup", {
-                                            method: "POST",
-                                            headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
-                                            body: JSON.stringify({ text, token })
-                                        });
-                                        const data = await res.json();
-                                        if (data.success) {
-                                            setText(data.cleaned_text);
-                                        }
-                                    }}
-                                    className="p-2 -ml-1 text-sky-400 hover:bg-sky-500/20 rounded-xl transition-colors shrink-0"
-                                >
-                                    ✨
-                                </button>
+                            {/* AI Polish & Tone Rewrite Wand */}
+                            {text.trim().length > 2 && (
+                                <div className="relative shrink-0 mb-1">
+                                    <button
+                                        type="button"
+                                        title="AI Polish & Tone Rewrite"
+                                        disabled={isPolishing}
+                                        onClick={(e) => {
+                                            e.preventDefault();
+                                            setShowToneMenu(!showToneMenu);
+                                        }}
+                                        className={`p-1.5 -ml-1 text-cyan-300 hover:bg-cyan-500/20 rounded-xl transition-all flex items-center justify-center cursor-pointer ${
+                                            isPolishing ? "animate-spin text-amber-300" : ""
+                                        }`}
+                                    >
+                                        {isPolishing ? <RefreshCw className="w-4 h-4" /> : <Sparkles className="w-4 h-4" />}
+                                    </button>
+
+                                    <AnimatePresence>
+                                        {showToneMenu && (
+                                            <>
+                                                <div className="fixed inset-0 z-40" onClick={() => setShowToneMenu(false)} />
+                                                <motion.div
+                                                    initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                                                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                                                    exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                                                    className="absolute bottom-full left-0 mb-2 z-50 min-w-[170px] rounded-2xl border border-white/15 bg-[#0e121e]/95 p-1.5 shadow-2xl backdrop-blur-xl text-xs font-semibold"
+                                                >
+                                                    <div className="px-2 py-1 text-[10px] uppercase font-bold text-white/40 tracking-wider">
+                                                        Tone Rewrite
+                                                    </div>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handlePolish("professional")}
+                                                        className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-white/80 hover:text-white hover:bg-white/10 transition-colors text-left cursor-pointer"
+                                                    >
+                                                        <span>👔</span>
+                                                        <span>Professional</span>
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handlePolish("casual")}
+                                                        className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-white/80 hover:text-white hover:bg-white/10 transition-colors text-left cursor-pointer"
+                                                    >
+                                                        <span>😎</span>
+                                                        <span>Casual & Chill</span>
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handlePolish("roast")}
+                                                        className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-rose-300 hover:text-white hover:bg-rose-500/20 transition-colors text-left cursor-pointer"
+                                                    >
+                                                        <span>🔥</span>
+                                                        <span>Savage Roast</span>
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handlePolish("concise")}
+                                                        className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-white/80 hover:text-white hover:bg-white/10 transition-colors text-left cursor-pointer"
+                                                    >
+                                                        <span>⚡</span>
+                                                        <span>Short & Punchy</span>
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handlePolish("flirty")}
+                                                        className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-pink-300 hover:text-white hover:bg-pink-500/20 transition-colors text-left cursor-pointer"
+                                                    >
+                                                        <span>❤️</span>
+                                                        <span>Charming & Flirty</span>
+                                                    </button>
+                                                    <div className="border-t border-white/10 my-1" />
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handlePolish("clean")}
+                                                        className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-cyan-300 hover:text-white hover:bg-cyan-500/20 transition-colors text-left cursor-pointer"
+                                                    >
+                                                        <span>🧹</span>
+                                                        <span>Clean Dictation</span>
+                                                    </button>
+                                                </motion.div>
+                                            </>
+                                        )}
+                                    </AnimatePresence>
+                                </div>
                             )}
 
                             <textarea

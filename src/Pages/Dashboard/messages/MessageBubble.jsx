@@ -705,6 +705,31 @@ const MessageBubble = React.memo(({
         speechService.speakMessage(msg.id, msg.message);
     }, [msg.id, msg.message]);
 
+    const [translatedText, setTranslatedText] = useState(null);
+    const [isTranslating, setIsTranslating] = useState(false);
+
+    const handleTranslate = useCallback(async (targetLang = "English") => {
+        if (!msg.message || isTranslating) return;
+        if (translatedText) {
+            setTranslatedText(null);
+            return;
+        }
+        setIsTranslating(true);
+        soundEngine.play("coin");
+        const token = sessionStorage.getItem("token");
+        try {
+            const res = await API.post("/api/ai/translate", { text: msg.message, target_language: targetLang }, { params: { token } });
+            if (res.data?.status === "success" && res.data.translated) {
+                setTranslatedText(res.data.translated);
+                soundEngine.play("pop");
+            }
+        } catch (e) {
+            console.warn("Translation failed:", e);
+        } finally {
+            setIsTranslating(false);
+        }
+    }, [msg.message, isTranslating, translatedText]);
+
     // Cyber Shield state
     const [unlockedPayload, setUnlockedPayload] = useState(null);
 
@@ -880,8 +905,23 @@ const MessageBubble = React.memo(({
             ))}
 
             {/* Math & text formatting */}
-            {!hasImages && !hasVideos && !hasAudio && !hasFiles && !isP2P && actualMessage && (
-                <MathFormattedText text={actualMessage} className="text-[13px] sm:text-[15px] leading-relaxed text-white/90 selection:bg-white/20" />
+            {!hasImages && !hasVideos && !hasAudio && !hasFiles && !isP2P && (actualMessage || msg.is_streaming) && (
+                <div className="relative">
+                    {actualMessage ? (
+                        <MathFormattedText text={actualMessage} className="text-[13px] sm:text-[15px] leading-relaxed text-white/90 selection:bg-white/20" />
+                    ) : null}
+                    {msg.is_streaming && (
+                        <span className="inline-block w-2 h-4 ml-1 bg-cyan-400 rounded-sm animate-pulse align-middle" />
+                    )}
+                    {translatedText && (
+                        <div className="mt-2 pt-2 border-t border-white/10 text-xs text-white/90">
+                            <div className="text-[10px] text-emerald-300 font-bold mb-1 flex items-center gap-1">
+                                <span>🌐 AI Translation:</span>
+                            </div>
+                            <MathFormattedText text={translatedText} className="text-[13px] leading-relaxed text-emerald-100" />
+                        </div>
+                    )}
+                </div>
             )}
         </>
     );
@@ -977,6 +1017,26 @@ const MessageBubble = React.memo(({
                                             </svg>
                                             <span>Read</span>
                                         </>
+                                    )}
+                                </motion.button>
+                                <div className="w-[1px] h-3.5 bg-white/10 mx-1" role="separator" />
+                                <motion.button
+                                    type="button"
+                                    whileHover={{ scale: 1.15 }}
+                                    whileTap={{ scale: 0.9 }}
+                                    onClick={() => handleTranslate("English")}
+                                    className={`text-[11px] px-1.5 py-0.5 rounded-md transition-all font-medium flex items-center gap-1 ${
+                                        translatedText
+                                            ? "text-emerald-300 bg-emerald-500/20 shadow-[0_0_8px_rgba(16,185,129,0.4)]"
+                                            : "text-white/50 hover:text-white/90 hover:bg-white/[0.08]"
+                                    }`}
+                                    aria-label="Translate message"
+                                    title={translatedText ? "Hide translation" : "Translate with AI"}
+                                >
+                                    {isTranslating ? (
+                                        <span className="animate-spin text-xs">🌐</span>
+                                    ) : (
+                                        <span>🌐 Translate</span>
                                     )}
                                 </motion.button>
                                 <div className="w-[1px] h-3.5 bg-white/10 mx-1" role="separator" />

@@ -118,6 +118,7 @@ async def email_verification_middleware(request, call_next):
 # ============================================================================
 
 from admin_routes import router as admin_router
+from ai_routes import router as ai_router
 
 app.include_router(auth_router)
 app.include_router(user_router)
@@ -126,6 +127,7 @@ app.include_router(websocket_router)
 app.include_router(upload_router)
 app.include_router(connection_router)
 app.include_router(admin_router)
+app.include_router(ai_router)
 
 UPLOAD_DIR = Path(os.getenv("UPLOAD_DIR", Path(__file__).parent / "uploads"))
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)

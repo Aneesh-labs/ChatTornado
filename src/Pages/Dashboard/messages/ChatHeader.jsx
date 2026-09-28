@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from "react";
 import PropTypes from "prop-types";
 import { motion, AnimatePresence } from "framer-motion";
-import { MoreVertical } from "lucide-react";
+import { MoreVertical, Sparkles, Brain } from "lucide-react";
 import { IconBtn, Avatar, useTheme } from "./constants";
+import PersonalizeModal from "./PersonalizeModal";
 import { triggerDemoNotification } from "../../../Services/notifications";
 import { isAdminUnlocked, setAdminUnlockedSession, touchAdminSession } from "../../../utils/adminSession";
 
@@ -26,6 +27,7 @@ const ChatHeader = React.memo(({
 }) => {
     const theme = useTheme();
     const [showMoreMenu, setShowMoreMenu] = useState(false);
+    const [showPersonalizeModal, setShowPersonalizeModal] = useState(false);
     const username = user?.username || "Chat Room";
     const isOnline = user?.status === "online";
 
@@ -167,7 +169,7 @@ const ChatHeader = React.memo(({
                     </div>
                     
                     {isBotUser ? (
-                        <div className="flex items-center gap-2 mt-1">
+                        <div className="flex items-center gap-1.5 mt-1">
                             <select
                                 value={aiMode}
                                 onChange={(e) => handleModeChange(e.target.value)}
@@ -188,6 +190,15 @@ const ChatHeader = React.memo(({
                                     </option>
                                 )}
                             </select>
+                            <button
+                                type="button"
+                                onClick={() => setShowPersonalizeModal(true)}
+                                title="Personalize VORTEX-9 from your last 30 messages"
+                                className="flex items-center gap-1 text-[10px] sm:text-[11px] font-bold px-2 py-0.5 rounded-md bg-gradient-to-r from-violet-600/40 via-purple-600/40 to-fuchsia-600/40 hover:from-violet-600/60 hover:to-fuchsia-600/60 border border-violet-400/40 text-violet-200 transition-all shadow-sm active:scale-95 cursor-pointer"
+                            >
+                                <Sparkles className="w-2.5 h-2.5 text-amber-300" />
+                                <span>Personalize</span>
+                            </button>
                         </div>
                     ) : (
                         <p className={`text-[9px] sm:text-xs mt-0.5 font-medium transition-colors truncate ${
@@ -349,6 +360,11 @@ const ChatHeader = React.memo(({
                     </svg>
                 </IconBtn>
             </div>
+
+            <PersonalizeModal
+                isOpen={showPersonalizeModal}
+                onClose={() => setShowPersonalizeModal(false)}
+            />
         </div>
     );
 });

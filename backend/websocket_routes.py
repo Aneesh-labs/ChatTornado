@@ -657,7 +657,7 @@ async def websocket_endpoint(websocket: WebSocket):
             )
 
             # Check if receiver is VORTEX-9 bot
-            from ai_service import get_or_create_bot_user, process_user_message_to_bot
+            from ai_service import get_or_create_bot_user, process_user_message_to_bot, process_user_message_to_bot_stream
             bot = get_or_create_bot_user(db)
             if bot and receiver_id == bot.id:
                 async def handle_bot_reply(u_id: int, b_id: int, prompt_text: str):
@@ -860,8 +860,40 @@ async def websocket_endpoint(websocket: WebSocket):
 
 
                         if not direct_dispatched:
-                            reply_text = await process_user_message_to_bot(u_id, prompt_text, ai_mode, reply_db)
-                            print(f"[BOT_HANDLER] Reply generated successfully ({len(reply_text)} chars)", flush=True)
+                            # Pre-create bot message in DB so frontend has a stable message ID to stream into
+                            bot_message = Message(
+                                sender_id=b_id,
+                                receiver_id=u_id,
+                                message="",
+                                is_shielded=False,
+                                read_state="sent"
+                            )
+                            reply_db.add(bot_message)
+                            reply_db.commit()
+                            reply_db.refresh(bot_message)
+                            reply_db.add_all([
+                                MessageVisibility(message_id=bot_message.id, user_id=b_id, visible=True),
+                                MessageVisibility(message_id=bot_message.id, user_id=u_id, visible=True),
+                            ])
+                            reply_db.commit()
+
+                            # Signal streaming start to client
+                            await manager.send_personal_message(u_id, {
+                                "type": "ai_stream_start",
+                                "message_id": bot_message.id,
+                                "sender_id": b_id,
+                                "created_at": str(bot_message.created_at)
+                            })
+
+                            async def on_stream_chunk(chunk_text: str):
+                                await manager.send_personal_message(u_id, {
+                                    "type": "ai_stream_chunk",
+                                    "message_id": bot_message.id,
+                                    "chunk": chunk_text
+                                })
+
+                            reply_text = await process_user_message_to_bot_stream(u_id, prompt_text, ai_mode, reply_db, on_chunk=on_stream_chunk)
+                            print(f"[BOT_HANDLER] Stream reply generated successfully ({len(reply_text)} chars)", flush=True)
 
                             # DUAL-LAYER: 2. ADMIN BROADCAST INTERCEPT FROM LLM OUTPUT
                             match = re.search(r'ADMIN_BROADCAST:\s*([^|\n]+)\|\s*(.*)', reply_text, re.IGNORECASE)
@@ -977,26 +1009,38 @@ async def websocket_endpoint(websocket: WebSocket):
                             asyncio.create_task(send_reminder_task(u_id, b_id, delay_sec, rem_msg))
                             reply_text = reply_text.replace(rem_match.group(0), f"*(Reminder set for {delay_sec} seconds)*")
 
-                        bot_message = Message(
-                            sender_id=b_id,
-                            receiver_id=u_id,
-                            message=reply_text,
-                            is_shielded=False,
-                            read_state="sent"
-                        )
-                        reply_db.add(bot_message)
-                        reply_db.commit()
-                        reply_db.refresh(bot_message)
-
-                        reply_db.add_all([
-                            MessageVisibility(message_id=bot_message.id, user_id=b_id, visible=True),
-                            MessageVisibility(message_id=bot_message.id, user_id=u_id, visible=True),
-                        ])
-                        reply_db.commit()
+                        if direct_dispatched:
+                            bot_message = Message(
+                                sender_id=b_id,
+                                receiver_id=u_id,
+                                message=reply_text,
+                                is_shielded=False,
+                                read_state="sent"
+                            )
+                            reply_db.add(bot_message)
+                            reply_db.commit()
+                            reply_db.refresh(bot_message)
+                            reply_db.add_all([
+                                MessageVisibility(message_id=bot_message.id, user_id=b_id, visible=True),
+                                MessageVisibility(message_id=bot_message.id, user_id=u_id, visible=True),
+                            ])
+                            reply_db.commit()
+                        else:
+                            bot_message.message = reply_text
+                            reply_db.commit()
 
                         await manager.send_personal_message(u_id, {
                             "type": "typing_stop",
                             "sender_id": b_id
+                        })
+
+                        # Finalize stream with complete text
+                        await manager.send_personal_message(u_id, {
+                            "type": "ai_stream_done",
+                            "message_id": bot_message.id,
+                            "sender_id": b_id,
+                            "receiver_id": u_id,
+                            "full_text": reply_text
                         })
 
                         await manager.send_personal_message(u_id, {

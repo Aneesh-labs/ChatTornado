@@ -175,3 +175,19 @@ class Connection(Base):
     __table_args__ = (
         UniqueConstraint('sender_id', 'receiver_id', name='uq_connection'),
     )
+
+# ============================================================================
+# USER AI PERSONA MODEL (Memory & Personalization)
+# ============================================================================
+
+class UserAIPersona(Base):
+    __tablename__ = "user_ai_personas"
+
+    id: Mapped[int] = mapped_column(primary_key=True, index=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), unique=True, nullable=False, index=True)
+    persona_summary: Mapped[str] = mapped_column(Text, nullable=False)
+    message_count_analyzed: Mapped[int] = mapped_column(Integer, default=0)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+    # Relationship
+    user: Mapped["User"] = relationship("User", foreign_keys=[user_id])

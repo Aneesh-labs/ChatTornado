@@ -1035,6 +1035,56 @@ const Messages = () => {
                         );
                         return;
                     }
+                    if (packet.type === "ai_stream_start") {
+                        setMessages((prev) => {
+                            const exists = prev.some((m) => String(m.id) === String(packet.message_id));
+                            if (exists) {
+                                return prev.map((m) => String(m.id) === String(packet.message_id) ? { ...m, is_streaming: true } : m);
+                            }
+                            return [
+                                ...prev,
+                                {
+                                    id: packet.message_id,
+                                    sender_id: packet.sender_id,
+                                    receiver_id: myUserId.current,
+                                    message: "",
+                                    created_at: packet.created_at || new Date().toISOString(),
+                                    is_shielded: false,
+                                    is_locked: false,
+                                    is_streaming: true,
+                                    read_state: "sent",
+                                    reactions: []
+                                }
+                            ];
+                        });
+                        return;
+                    }
+                    if (packet.type === "ai_stream_chunk") {
+                        setMessages((prev) => prev.map((m) => {
+                            if (String(m.id) === String(packet.message_id)) {
+                                return {
+                                    ...m,
+                                    message: (m.message || "") + (packet.chunk || ""),
+                                    is_streaming: true
+                                };
+                            }
+                            return m;
+                        }));
+                        return;
+                    }
+                    if (packet.type === "ai_stream_done") {
+                        setMessages((prev) => prev.map((m) => {
+                            if (String(m.id) === String(packet.message_id)) {
+                                return {
+                                    ...m,
+                                    message: packet.full_text !== undefined ? packet.full_text : m.message,
+                                    is_streaming: false
+                                };
+                            }
+                            return m;
+                        }));
+                        return;
+                    }
                     if (packet.type === "message") {
                         // ✅ Fixed: Update existing messages instead of skipping
                         setMessages((prev) => {
@@ -1059,7 +1109,7 @@ const Messages = () => {
                                 console.log("🔄 Updating existing message (video preview fix)");
                                 const updated = [...prev];
                                 // Merge the new packet data (could have different formatting)
-                                updated[existingIndex] = { ...updated[existingIndex], ...packet };
+                                updated[existingIndex] = { ...updated[existingIndex], ...packet, is_streaming: false };
                                 return updated;
                             }
 

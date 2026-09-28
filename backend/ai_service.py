@@ -11,7 +11,7 @@ from typing import Optional, Tuple, List, Dict, Any
 from sqlalchemy.orm import Session
 from sqlalchemy import or_
 
-from models import User, Message, MessageVisibility
+from models import User, Message, MessageVisibility, UserAIPersona
 from auth import hash_password
 
 from prompts import (
@@ -617,6 +617,66 @@ async def process_user_message_to_bot(user_id: int, message_text: str, ai_mode: 
     return output_text
 
 
+async def process_user_message_to_bot_stream(
+    user_id: int,
+    message_text: str,
+    ai_mode: str,
+    db: Session,
+    on_chunk: Optional[Any] = None
+) -> str:
+    """Orchestrates AI response for a user message sent to VORTEX-9 with real-time streaming and personalization."""
+    bot = get_or_create_bot_user(db)
+    is_img, img_prompt = is_image_request(message_text)
+
+    if is_img:
+        res = await generate_ai_image(img_prompt)
+        if on_chunk:
+            await on_chunk(res)
+        return res
+
+    cleaned_prompt, system_prompt, mode, local_history = ai_cache.analyze_and_prepare(user_id, message_text, ai_mode)
+    is_admin = (mode == VortexMode.ADMIN or str(mode).upper() == "ADMIN")
+
+    if not local_history:
+        past_msgs = (
+            db.query(Message)
+            .filter(
+                or_(
+                    (Message.sender_id == user_id) & (Message.receiver_id == bot.id),
+                    (Message.sender_id == bot.id) & (Message.receiver_id == user_id)
+                )
+            )
+            .order_by(Message.created_at.desc())
+            .limit(10)
+            .all()
+        )
+        for m in reversed(past_msgs):
+            if m.message:
+                local_history.append({
+                    "role": "user" if m.sender_id == user_id else "model",
+                    "text": m.message
+                })
+
+    db_context = get_platform_db_context(db, bot.id, is_admin=is_admin)
+    dynamic_system_prompt = system_prompt + db_context
+
+    if is_admin:
+        local_history = []
+
+    raw_response = await generate_ai_text_stream(
+        cleaned_prompt,
+        local_history,
+        system_prompt=dynamic_system_prompt,
+        on_chunk=on_chunk,
+        user_id=user_id,
+        db=db
+    )
+
+    output_text = ai_cache.commit_turn(user_id, message_text, raw_response, mode=mode)
+    return output_text
+
+
+
 async def ai_clean_text(text: str) -> str:
     """Uses Gemini to clean up dictated text (removes umms, ahs, rambling, spaces)."""
     api_key = os.getenv("GEMINI_API_KEY")
@@ -661,3 +721,424 @@ async def ai_summarize_chat(messages_text: str) -> str:
     except Exception:
         pass
     return "Error summarizing."
+
+
+# ============================================================================
+# PERSONALIZATION (Last 30 Messages Profiler)
+# ============================================================================
+
+def get_user_persona(user_id: int, db: Session) -> Optional[str]:
+    """Retrieve existing persona summary for user."""
+    try:
+        record = db.query(UserAIPersona).filter(UserAIPersona.user_id == user_id).first()
+        if record and record.persona_summary:
+            return record.persona_summary
+    except Exception as e:
+        logger.warning("Error fetching user persona: %s", e)
+    return None
+
+
+async def personalize_user_from_history(user_id: int, db: Session) -> Dict[str, Any]:
+    """Analyzes the last 30 messages sent by the user across all chats to build a personalized persona profile."""
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise ValueError("User not found")
+
+    # Fetch last 35 messages from this user across all conversations to filter down to 30 clean chat texts
+    messages = db.query(Message).filter(
+        Message.sender_id == user_id,
+        Message.message.isnot(None)
+    ).order_by(Message.created_at.desc()).limit(35).all()
+
+    valid_texts = []
+    for m in messages:
+        txt = (m.message or "").strip()
+        if not txt:
+            continue
+        if txt.startswith("🎮 GAME:") or txt.startswith("⚡ P2P_MEDIA") or txt.startswith("🔊 SOUND:"):
+            continue
+        valid_texts.append(txt)
+        if len(valid_texts) >= 30:
+            break
+
+    if not valid_texts:
+        default_persona = (
+            f"• Style: Enthusiastic and exploratory new user on ChatTornado.\n"
+            f"• Tone: Friendly, responsive, and open to discovering features.\n"
+            f"• Interactions: Prefers clear, structured answers with helpful examples."
+        )
+        persona_record = db.query(UserAIPersona).filter(UserAIPersona.user_id == user_id).first()
+        if not persona_record:
+            persona_record = UserAIPersona(
+                user_id=user_id,
+                persona_summary=default_persona,
+                message_count_analyzed=0,
+                updated_at=datetime.utcnow()
+            )
+            db.add(persona_record)
+        else:
+            persona_record.persona_summary = default_persona
+            persona_record.message_count_analyzed = 0
+            persona_record.updated_at = datetime.utcnow()
+        db.commit()
+        db.refresh(persona_record)
+        return {
+            "persona": default_persona,
+            "message_count": 0,
+            "updated_at": persona_record.updated_at.isoformat()
+        }
+
+    sample_corpus = "\n".join([f"- {t}" for t in valid_texts])
+    profiler_prompt = f"""You are an elite cognitive profiler for VORTEX-9, an advanced AI companion in ChatTornado.
+Analyze these {len(valid_texts)} recent chat messages sent by user '{user.username}':
+
+<USER_MESSAGES>
+{sample_corpus}
+</USER_MESSAGES>
+
+Create a concise, punchy, high-value personalization profile (exactly 3-5 bullet points) capturing:
+1. Communication style & tone (e.g. casual/formal, technical/colloquial, witty, sarcastic, punchy)
+2. Interests, recurrent topics, favorite subjects, or tech stack
+3. Banter preference (e.g. loves humor/roasts vs straight-to-the-point answers)
+4. Key quirks, catchphrases, or personality cues
+
+Format ONLY as clean bullet points starting with '• '. Keep it concise, observant, and directly usable by VORTEX-9 to adapt to this user."""
+
+    api_key = os.getenv("GEMINI_API_KEY")
+    persona_summary = ""
+    if api_key:
+        try:
+            from google import genai
+            client = genai.Client(api_key=api_key)
+            response = client.models.generate_content(
+                model="gemini-2.5-flash",
+                contents=profiler_prompt
+            )
+            if response and response.text:
+                persona_summary = response.text.strip()
+        except Exception as e:
+            logger.warning("Gemini personalization generation error: %s", e)
+
+    if not persona_summary:
+        persona_summary = (
+            f"• Style: Active conversationalist with direct, clear phrasing.\n"
+            f"• Topics: Engages in dynamic chat across various topics.\n"
+            f"• Banter: Enjoys responsive, interactive AI dialogues."
+        )
+
+    persona_record = db.query(UserAIPersona).filter(UserAIPersona.user_id == user_id).first()
+    if not persona_record:
+        persona_record = UserAIPersona(
+            user_id=user_id,
+            persona_summary=persona_summary,
+            message_count_analyzed=len(valid_texts),
+            updated_at=datetime.utcnow()
+        )
+        db.add(persona_record)
+    else:
+        persona_record.persona_summary = persona_summary
+        persona_record.message_count_analyzed = len(valid_texts)
+        persona_record.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(persona_record)
+
+    return {
+        "persona": persona_summary,
+        "message_count": len(valid_texts),
+        "updated_at": persona_record.updated_at.isoformat()
+    }
+
+
+# ============================================================================
+# REAL-TIME TOKEN STREAMING (Word-By-Word + Google Search Grounding)
+# ============================================================================
+
+async def generate_ai_text_stream(
+    prompt: str,
+    chat_history: List[dict],
+    system_prompt: str = PROMPT_DEFAULT,
+    on_chunk: Optional[Any] = None,
+    user_id: Optional[int] = None,
+    db: Optional[Session] = None
+) -> str:
+    """Generate conversational response using Gemini API with real-time token streaming and Google Search grounding."""
+    api_key = os.getenv("GEMINI_API_KEY")
+    if not api_key:
+        fallback = "⚡ **VORTEX-9 Neural Link Offline**\n\nGemini API key is not configured. Please add `GEMINI_API_KEY` to backend `.env`."
+        if on_chunk:
+            await on_chunk(fallback)
+        return fallback
+
+    clean_prompt = prompt.strip()
+
+    # 1. Exact Live Real-Time System Clock Injection
+    now_utc = datetime.now(timezone.utc)
+    now_ist = now_utc + timedelta(hours=5, minutes=30)
+    clock_instruction = (
+        f"\n\n[REAL-TIME LIVE SYSTEM CLOCK - MANDATORY GROUND TRUTH]\n"
+        f"- Current Coordinated Universal Time (UTC): {now_utc.strftime('%A, %B %d, %Y, %I:%M:%S %p UTC')}\n"
+        f"- Current Indian Standard Time (IST): {now_ist.strftime('%A, %B %d, %Y, %I:%M:%S %p IST')}\n"
+        f"- When asked for current time, date, today's time in India, or timezone conversions, you MUST reference this exact live clock time."
+    )
+    system_prompt = system_prompt + clock_instruction
+
+    # 2. Inject User Personalization Profile if available
+    if user_id and db:
+        try:
+            persona_record = db.query(UserAIPersona).filter(UserAIPersona.user_id == user_id).first()
+            if persona_record and persona_record.persona_summary:
+                user_obj = db.query(User).filter(User.id == user_id).first()
+                u_name = user_obj.username if user_obj else "User"
+                system_prompt += (
+                    f"\n\n[USER PERSONALIZATION & PREFERRED STYLE PROFILE]\n"
+                    f"User: {u_name}\n"
+                    f"{persona_record.persona_summary}\n"
+                    f"Adapt tone, humor, vocabulary, and depth to resonate naturally with this user's profile."
+                )
+        except Exception as pe:
+            logger.warning("Failed to load user persona: %s", pe)
+
+    # 3. Handle image extraction from upload URLs
+    from google import genai
+    from google.genai import types
+
+    image_parts = []
+    upload_matches = re.finditer(r'/uploads/([^\s]+\.(?:png|jpg|jpeg|gif|webp))', clean_prompt, re.IGNORECASE)
+    upload_base = Path(os.getenv("UPLOAD_DIR", Path(__file__).parent / "uploads"))
+    for match in upload_matches:
+        rel_path = match.group(1)
+        full_path = upload_base / rel_path
+        if full_path.exists():
+            mime, _ = mimetypes.guess_type(str(full_path))
+            mime = mime or "image/png"
+            with open(full_path, "rb") as f:
+                image_parts.append(
+                    types.Part.from_bytes(data=f.read(), mime_type=mime)
+                )
+            clean_prompt = clean_prompt.replace(match.group(0), "[Image Attached]")
+
+    # 4. Build alternating history
+    filtered = []
+    for h in chat_history:
+        role = "user" if h.get("is_user") or h.get("role") == "user" else "model"
+        text_content = (h.get("text") or "").strip()
+        if not text_content:
+            continue
+        if filtered and filtered[-1]["role"] == role:
+            filtered[-1]["text"] += "\n" + text_content
+        else:
+            filtered.append({"role": role, "text": text_content})
+
+    if filtered and filtered[-1]["role"] == "user":
+        if filtered[-1]["text"] == clean_prompt:
+            filtered.pop()
+        else:
+            clean_prompt = filtered.pop()["text"] + "\n" + clean_prompt
+
+    while filtered and filtered[0]["role"] != "user":
+        filtered.pop(0)
+
+    contents = []
+    for f in filtered[-10:]:
+        contents.append(
+            types.Content(
+                role=f["role"],
+                parts=[types.Part.from_text(text=f["text"])]
+            )
+        )
+
+    user_parts = [types.Part.from_text(text=clean_prompt)]
+    user_parts.extend(image_parts)
+    contents.append(
+        types.Content(
+            role="user",
+            parts=user_parts
+        )
+    )
+
+    safety_settings = [
+        types.SafetySetting(category=types.HarmCategory.HARM_CATEGORY_HARASSMENT, threshold=types.HarmBlockThreshold.BLOCK_NONE),
+        types.SafetySetting(category=types.HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold=types.HarmBlockThreshold.BLOCK_NONE),
+        types.SafetySetting(category=types.HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold=types.HarmBlockThreshold.BLOCK_NONE),
+        types.SafetySetting(category=types.HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold=types.HarmBlockThreshold.BLOCK_NONE),
+    ]
+
+    models_to_try = [
+        "gemini-2.5-flash",
+        "gemini-2.0-flash",
+        "gemini-3.5-flash",
+        "gemini-3.1-pro-preview",
+    ]
+
+    client = genai.Client(api_key=api_key)
+    full_accumulated_text = ""
+    grounding_citations = []
+
+    for model_name in models_to_try:
+        try:
+            gen_config = types.GenerateContentConfig(
+                system_instruction=system_prompt,
+                temperature=0.75,
+                max_output_tokens=2048,
+                safety_settings=safety_settings,
+                tools=[{"google_search": {}}]
+            )
+
+            full_accumulated_text = ""
+            async for chunk in client.aio.models.generate_content_stream(
+                model=model_name,
+                contents=contents,
+                config=gen_config
+            ):
+                chunk_text = chunk.text or ""
+                if chunk_text:
+                    full_accumulated_text += chunk_text
+                    if on_chunk:
+                        await on_chunk(chunk_text)
+
+                try:
+                    candidate = chunk.candidates[0] if chunk.candidates else None
+                    grounding_meta = getattr(candidate, "grounding_metadata", None)
+                    if grounding_meta:
+                        chunks = getattr(grounding_meta, "grounding_chunks", []) or []
+                        for c in chunks:
+                            web = getattr(c, "web", None)
+                            if web:
+                                uri = getattr(web, "uri", None)
+                                title = getattr(web, "title", None) or uri
+                                if uri:
+                                    grounding_citations.append(f"• [{title}]({uri})")
+                except Exception:
+                    pass
+
+            if full_accumulated_text:
+                if grounding_citations and "Sources" not in full_accumulated_text:
+                    unique_sources = list(dict.fromkeys(grounding_citations))[:5]
+                    source_block = "\n\n**🌐 Sources & Web References:**\n" + "\n".join(unique_sources)
+                    full_accumulated_text += source_block
+                    if on_chunk:
+                        await on_chunk(source_block)
+
+                return full_accumulated_text
+
+        except Exception as stream_err:
+            print(f"[AI_STREAM] Model {model_name} with tools failed: {stream_err}. Retrying without search tool...", flush=True)
+            try:
+                gen_config_notools = types.GenerateContentConfig(
+                    system_instruction=system_prompt,
+                    temperature=0.75,
+                    max_output_tokens=2048,
+                    safety_settings=safety_settings
+                )
+                full_accumulated_text = ""
+                async for chunk in client.aio.models.generate_content_stream(
+                    model=model_name,
+                    contents=contents,
+                    config=gen_config_notools
+                ):
+                    chunk_text = chunk.text or ""
+                    if chunk_text:
+                        full_accumulated_text += chunk_text
+                        if on_chunk:
+                            await on_chunk(chunk_text)
+                if full_accumulated_text:
+                    return full_accumulated_text
+            except Exception as stream_err2:
+                print(f"[AI_STREAM] Model {model_name} (no-tools) failed: {stream_err2}", flush=True)
+                continue
+
+    # Fallback to non-streaming generate_ai_text if all streams fail
+    fallback_res = await generate_ai_text(prompt, chat_history, system_prompt)
+    if on_chunk:
+        await on_chunk(fallback_res)
+    return fallback_res
+
+
+# ============================================================================
+# ONE-CLICK MESSAGE TOOLS (Tone Polish, Translate, Smart Replies)
+# ============================================================================
+
+async def ai_polish_text(text: str, tone: str = "professional") -> str:
+    """Polishes / rewrites a draft message in a specific tone."""
+    api_key = os.getenv("GEMINI_API_KEY")
+    if not api_key or not text.strip():
+        return text
+
+    tones = {
+        "professional": "Polished, courteous, articulate, and clear business communication.",
+        "casual": "Warm, relaxed, friendly, authentic, and modern chat vibe.",
+        "roast": "Biting, razor-sharp witty roast, humorous sarcasm, but clever.",
+        "concise": "Ultra-short, direct, no fluff, to the point.",
+        "flirty": "Playful, charming, charismatic, witty with subtle flirtatious energy."
+    }
+    tone_desc = tones.get(tone.lower(), tones["professional"])
+    prompt = f"Rewrite the following draft message with this tone ({tone_desc}). Output ONLY the rewritten message text without preamble, quotes, or explanations:\n\n{text}"
+
+    try:
+        from google import genai
+        client = genai.Client(api_key=api_key)
+        res = client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=prompt
+        )
+        if res and res.text:
+            return res.text.strip().strip('"').strip("'")
+    except Exception as e:
+        logger.warning("ai_polish_text error: %s", e)
+    return text
+
+
+async def ai_translate_text(text: str, target_language: str = "English") -> str:
+    """Translates text naturally into the target language."""
+    api_key = os.getenv("GEMINI_API_KEY")
+    if not api_key or not text.strip():
+        return text
+
+    prompt = f"Translate the following chat message into {target_language}. Preserve formatting, emojis, and casual chat nuance. Output ONLY the translated text without extra explanation:\n\n{text}"
+
+    try:
+        from google import genai
+        client = genai.Client(api_key=api_key)
+        res = client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=prompt
+        )
+        if res and res.text:
+            return res.text.strip().strip('"').strip("'")
+    except Exception as e:
+        logger.warning("ai_translate_text error: %s", e)
+    return text
+
+
+async def ai_smart_replies(context_list: List[str]) -> List[str]:
+    """Generates 3 smart contextual quick replies (2-5 words each)."""
+    api_key = os.getenv("GEMINI_API_KEY")
+    if not api_key or not context_list:
+        return ["Sounds great!", "Tell me more", "I'll check it out"]
+
+    recent_context = "\n".join([f"- {c}" for c in context_list[-5:]])
+    prompt = f"""Given this recent conversation context:
+{recent_context}
+
+Suggest exactly 3 short, natural, relevant quick responses the user might want to tap next (2 to 5 words each).
+Format as JSON array of 3 strings: ["Reply 1", "Reply 2", "Reply 3"]. Output JSON only."""
+
+    try:
+        import json
+        from google import genai
+        client = genai.Client(api_key=api_key)
+        res = client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=prompt
+        )
+        if res and res.text:
+            cleaned = res.text.strip()
+            if cleaned.startswith("```"):
+                cleaned = re.sub(r"^```(?:json)?|```$", "", cleaned, flags=re.MULTILINE).strip()
+            arr = json.loads(cleaned)
+            if isinstance(arr, list) and len(arr) > 0:
+                return [str(x) for x in arr[:3]]
+    except Exception as e:
+        logger.warning("ai_smart_replies error: %s", e)
+    return ["Sounds great!", "Tell me more", "Got it!"]
+
