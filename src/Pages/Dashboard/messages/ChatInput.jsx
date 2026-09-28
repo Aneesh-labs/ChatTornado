@@ -4,12 +4,13 @@ import { motion, AnimatePresence } from "framer-motion";
 import { IconBtn, useTheme } from "./constants";
 import API from "../../../Services/API";
 import { prepareP2PFile } from "../../../Services/p2p";
-import { Shield, X, Gamepad2, Volume2, Mic, MicOff, MoreVertical, Sparkles, Wand2, RefreshCw, ImageIcon, Eye, Cpu, Zap } from "lucide-react";
+import { Shield, X, Gamepad2, Volume2, Mic, MicOff, MoreVertical, Sparkles, Wand2, RefreshCw, ImageIcon, Eye, Cpu, Zap, FileText, FileCode } from "lucide-react";
 import CyberShieldModal from "./CyberShieldModal";
 import InChatGameModal from "./InChatGameModal";
 import SoundboardModal from "./SoundboardModal";
 import { isAdminUnlocked, touchAdminSession } from "../../../utils/adminSession";
 import { processImageLocally } from "../../../utils/imageProcessor";
+import { isProcessableDocument, processDocumentLocally } from "../../../utils/fileProcessor";
 
 const VIDEO_EXTENSIONS = /\.(mp4|mov|mkv|avi|webm|m4v|3gp|flv|mpeg|mpg|ts|mts|m2ts|wmv|asf|ogv|vob)$/i;
 
@@ -34,8 +35,10 @@ const ChatInput = React.memo(({ onSend, replyTo, onCancelReply, selectedUser, so
     const [showToneMenu, setShowToneMenu] = useState(false);
     const [isPolishing, setIsPolishing] = useState(false);
     const [stagedImage, setStagedImage] = useState(null);
+    const [stagedDoc, setStagedDoc] = useState(null);
     const [isDragging, setIsDragging] = useState(false);
     const [isProcessingImage, setIsProcessingImage] = useState(false);
+    const [isProcessingDoc, setIsProcessingDoc] = useState(false);
 
 
     const handlePolish = useCallback(async (toneKey) => {
@@ -86,6 +89,21 @@ const ChatInput = React.memo(({ onSend, replyTo, onCancelReply, selectedUser, so
         }
     }, []);
 
+    const stageDocumentLocally = useCallback(async (file) => {
+        if (!file) return;
+        setIsProcessingDoc(true);
+        setUploadError("");
+        try {
+            const processed = await processDocumentLocally(file);
+            setStagedDoc(processed);
+        } catch (err) {
+            console.warn("Document local processing failed:", err);
+            setUploadError("Could not extract document text.");
+        } finally {
+            setIsProcessingDoc(false);
+        }
+    }, []);
+
     const handlePaste = useCallback((e) => {
         const items = e.clipboardData?.items;
         if (!items) return;
@@ -122,9 +140,11 @@ const ChatInput = React.memo(({ onSend, replyTo, onCancelReply, selectedUser, so
             const file = files[0];
             if (file.type && file.type.startsWith("image/")) {
                 stageImageLocally(file);
+            } else if (isProcessableDocument(file)) {
+                stageDocumentLocally(file);
             }
         }
-    }, [stageImageLocally]);
+    }, [stageImageLocally, stageDocumentLocally]);
 
 
     // Audio recording state (Voice Notes)
@@ -248,7 +268,7 @@ const ChatInput = React.memo(({ onSend, replyTo, onCancelReply, selectedUser, so
         if (isSendingRef.current) return;
 
         const trimmed = text.trim();
-        if ((!trimmed && !stagedImage) || disabled) return;
+        if ((!trimmed && !stagedImage && !stagedDoc) || disabled) return;
 
         isSendingRef.current = true;
 
@@ -462,6 +482,24 @@ const ChatInput = React.memo(({ onSend, replyTo, onCancelReply, selectedUser, so
             }
         }
 
+        // If a document is staged for QA / Analysis:
+        if (stagedDoc) {
+            const codeFenceLang = stagedDoc.type === "code" ? stagedDoc.ext : stagedDoc.type === "csv" ? "csv" : stagedDoc.type === "json" ? "json" : "";
+            const docHeader = `📄 **Document Attached: \`${stagedDoc.name}\`** (${stagedDoc.formattedSize}, ${stagedDoc.wordCount.toLocaleString()} words, ${stagedDoc.lineCount.toLocaleString()} lines)\n\n\`\`\`${codeFenceLang}\n${stagedDoc.text}\n\`\`\``;
+            const promptWithDoc = trimmed
+                ? `${docHeader}\n\n${trimmed}`
+                : `${docHeader}\n\nPlease analyze this document thoroughly and extract key points.`;
+
+            onSend(promptWithDoc, { ...(shieldOptions || {}), ai_mode: activeInputMode });
+
+            setStagedDoc(null);
+            setText("");
+            setShieldOptions(null);
+            if (textareaRef.current) textareaRef.current.style.height = "auto";
+            setTimeout(() => { isSendingRef.current = false; }, 200);
+            return;
+        }
+
         if (!onSend(trimmed, { ...(shieldOptions || {}), ai_mode: activeInputMode })) {
             isSendingRef.current = false;
             return;
@@ -473,7 +511,7 @@ const ChatInput = React.memo(({ onSend, replyTo, onCancelReply, selectedUser, so
         setTimeout(() => {
             isSendingRef.current = false;
         }, 200);
-    }, [text, disabled, onSend, shieldOptions, editModeId, sendStopTypingSignal, aiMode, stagedImage]);
+    }, [text, disabled, onSend, shieldOptions, editModeId, sendStopTypingSignal, aiMode, stagedImage, stagedDoc]);
 
 
 
@@ -510,7 +548,7 @@ const ChatInput = React.memo(({ onSend, replyTo, onCancelReply, selectedUser, so
         }
     };
 
-    const canSend = text.trim().length > 0 || Boolean(stagedImage);
+    const canSend = text.trim().length > 0 || Boolean(stagedImage) || Boolean(stagedDoc);
 
     const startRecording = async () => {
         if (disabled || isSendingRef.current) return;
@@ -607,6 +645,12 @@ const ChatInput = React.memo(({ onSend, replyTo, onCancelReply, selectedUser, so
         const isBot = Boolean(selectedUser?.is_bot || selectedUser?.username === "VORTEX-9");
         if (file.type?.startsWith("image/") && isBot) {
             await stageImageLocally(file);
+            return;
+        }
+
+        // Check if document / code for AI Bot QA -> Stage locally in RAM
+        if (isProcessableDocument(file) && isBot) {
+            await stageDocumentLocally(file);
             return;
         }
 
@@ -829,6 +873,66 @@ const ChatInput = React.memo(({ onSend, replyTo, onCancelReply, selectedUser, so
                 )}
             </AnimatePresence>
 
+            {/* ✅ STAGED DOCUMENT TRAY (Local Text Extraction & Deep QA) */}
+            <AnimatePresence>
+                {stagedDoc && (
+                    <motion.div
+                        initial={{ opacity: 0, y: 8, height: 0 }}
+                        animate={{ opacity: 1, y: 0, height: "auto" }}
+                        exit={{ opacity: 0, y: 8, height: 0 }}
+                        className="mb-2 p-2 sm:p-2.5 rounded-2xl bg-gradient-to-r from-[#0a1824]/95 via-[#0e2133]/95 to-[#161f36]/95 border border-cyan-400/40 shadow-xl backdrop-blur-2xl"
+                    >
+                        <div className="flex items-center justify-between gap-2 mb-2 pb-1.5 border-b border-white/10">
+                            <div className="flex items-center gap-2.5 min-w-0">
+                                <div className="w-10 h-10 rounded-xl bg-cyan-500/20 border border-cyan-400/30 flex items-center justify-center text-cyan-300 font-bold text-xs flex-shrink-0 shadow-inner">
+                                    {stagedDoc.type === "pdf" ? "PDF" : stagedDoc.type === "code" ? "</>" : stagedDoc.type === "csv" ? "CSV" : "DOC"}
+                                </div>
+                                <div className="min-w-0">
+                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                        <span className="text-xs font-bold text-white truncate max-w-[180px] sm:max-w-[280px]">
+                                            {stagedDoc.name}
+                                        </span>
+                                        <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 flex items-center gap-1">
+                                            <FileText className="w-2.5 h-2.5" />
+                                            Doc QA Ready
+                                        </span>
+                                    </div>
+                                    <p className="text-[10px] text-white/50 font-mono mt-0.5 truncate">
+                                        {stagedDoc.formattedSize} • {stagedDoc.wordCount.toLocaleString()} words • {stagedDoc.lineCount.toLocaleString()} lines
+                                        {stagedDoc.isTruncated ? " (Trimmed)" : ""}
+                                    </p>
+                                </div>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => setStagedDoc(null)}
+                                title="Remove staged document"
+                                className="p-1 rounded-lg text-white/40 hover:text-white hover:bg-white/10 transition-colors flex-shrink-0 cursor-pointer"
+                            >
+                                <X className="w-4 h-4" />
+                            </button>
+                        </div>
+
+                        {/* Quick Document QA Chips */}
+                        <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 scrollbar-none text-[11px]">
+                            {stagedDoc.suggestions?.map((prompt, idx) => (
+                                <button
+                                    key={idx}
+                                    type="button"
+                                    onClick={() => {
+                                        setText(prompt);
+                                        textareaRef.current?.focus();
+                                    }}
+                                    className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-cyan-500/15 hover:bg-cyan-500/30 border border-cyan-500/30 text-cyan-200 transition-all active:scale-95 flex-shrink-0 cursor-pointer text-[11px]"
+                                >
+                                    <span>{prompt}</span>
+                                </button>
+                            ))}
+                        </div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
             <AnimatePresence>
                 {isListening && (
                     <motion.div
@@ -952,7 +1056,7 @@ const ChatInput = React.memo(({ onSend, replyTo, onCancelReply, selectedUser, so
                     </motion.div>
                 ) : (
                     <>
-                        <input ref={fileInputRef} type="file" className="hidden" accept="image/*,video/*,audio/*,.mkv,.avi,.mov,.mp4,.webm,.m4v,.flv,.3gp,.pdf,.zip,.txt" onChange={handleAttachment} />
+                        <input ref={fileInputRef} type="file" className="hidden" accept="image/*,video/*,audio/*,.pdf,.csv,.tsv,.json,.txt,.md,.py,.js,.jsx,.ts,.tsx,.html,.css,.sql,.env,.yml,.yaml,.xml,.log,.rs,.go,.java,.c,.cpp,.h" onChange={handleAttachment} />
 
                         <div className="flex gap-1 flex-shrink-0 items-center">
                             <IconBtn title="More options" onClick={() => setShowMoreOptions(!showMoreOptions)} small className={showMoreOptions ? "bg-white/10" : ""}>
@@ -967,10 +1071,19 @@ const ChatInput = React.memo(({ onSend, replyTo, onCancelReply, selectedUser, so
                                         exit={{ opacity: 0, width: 0, x: -10 }}
                                         className="flex gap-1 overflow-hidden"
                                     >
-                                        <IconBtn title="Attach image, video, or file" onClick={() => fileInputRef.current?.click()} small className="shrink-0">
+                                        <IconBtn title="Attach image, video, or media" onClick={() => fileInputRef.current?.click()} small className="shrink-0">
                                             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
                                             </svg>
+                                        </IconBtn>
+
+                                        <IconBtn
+                                            title="Attach Document or Code (PDF, CSV, Python, JS, etc.)"
+                                            onClick={() => fileInputRef.current?.click()}
+                                            small
+                                            className="text-cyan-400/80 hover:!text-cyan-300 hover:bg-cyan-500/10 shrink-0"
+                                        >
+                                            <FileText className="w-4 h-4" />
                                         </IconBtn>
 
                                         <IconBtn

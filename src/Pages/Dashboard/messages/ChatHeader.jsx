@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from "react";
 import PropTypes from "prop-types";
 import { motion, AnimatePresence } from "framer-motion";
-import { MoreVertical, Sparkles, Brain } from "lucide-react";
+import { MoreVertical, Sparkles, Brain, Download } from "lucide-react";
 import { IconBtn, Avatar, useTheme } from "./constants";
 import PersonalizeModal from "./PersonalizeModal";
+import ExportModal from "./ExportModal";
 import { triggerDemoNotification } from "../../../Services/notifications";
 import { isAdminUnlocked, setAdminUnlockedSession, touchAdminSession } from "../../../utils/adminSession";
 
@@ -24,10 +25,12 @@ const ChatHeader = React.memo(({
     isReloading = false,
     aiMode,
     setAiMode,
+    messages = [],
 }) => {
     const theme = useTheme();
     const [showMoreMenu, setShowMoreMenu] = useState(false);
     const [showPersonalizeModal, setShowPersonalizeModal] = useState(false);
+    const [showExportModal, setShowExportModal] = useState(false);
     const username = user?.username || "Chat Room";
     const isOnline = user?.status === "online";
 
@@ -287,6 +290,10 @@ const ChatHeader = React.memo(({
                                                 </button>
                                             </>
                                         )}
+                                        <button onClick={() => { setShowExportModal(true); setShowMoreMenu(false); }} className="flex items-center gap-2 px-3 py-2 text-xs text-white/80 hover:text-white hover:bg-white/10 rounded-lg text-left cursor-pointer">
+                                            <Download className="w-4 h-4 text-cyan-400" />
+                                            Export Chat
+                                        </button>
                                         <button onClick={() => { onToggleSelectionMode(); setShowMoreMenu(false); }} className="flex items-center gap-2 px-3 py-2 text-xs text-white/80 hover:text-white hover:bg-white/10 rounded-lg text-left">
                                             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" /></svg>
                                             Select
@@ -349,6 +356,9 @@ const ChatHeader = React.memo(({
                             </svg>
                         </IconBtn>
                     )}
+                    <IconBtn title="Export chat transcript (.md, .html, .txt)" onClick={() => setShowExportModal(true)} small className="hover:!text-cyan-300">
+                        <Download className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-cyan-400" />
+                    </IconBtn>
                     <IconBtn title="Select messages" onClick={onToggleSelectionMode} small>
                         <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
@@ -366,6 +376,13 @@ const ChatHeader = React.memo(({
             <PersonalizeModal
                 isOpen={showPersonalizeModal}
                 onClose={() => setShowPersonalizeModal(false)}
+            />
+
+            <ExportModal
+                isOpen={showExportModal}
+                onClose={() => setShowExportModal(false)}
+                messages={messages}
+                user={user}
             />
         </div>
     );
@@ -392,6 +409,7 @@ ChatHeader.propTypes = {
     onDeleteSelected: PropTypes.func,
     onReloadChat: PropTypes.func,
     isReloading: PropTypes.bool,
+    messages: PropTypes.array,
 };
 
 export default ChatHeader;

@@ -1014,12 +1014,14 @@ const MessageBubble = React.memo(({
     return (
         <>
             <motion.div
+                id={`msg-${msg.id}`}
+                data-msg-id={msg.id}
                 layout
                 initial={{ opacity: 0, y: 6, scale: 0.98 }}
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.96 }}
                 transition={{ type: "spring", stiffness: 400, damping: 28 }}
-                className={`flex ${isMe ? "justify-end" : "justify-start"} group relative px-2 sm:px-4 my-1 sm:my-1.5`}
+                className={`flex ${isMe ? "justify-end" : "justify-start"} group relative px-2 sm:px-4 my-1 sm:my-1.5 scroll-mt-20`}
                 onMouseEnter={() => setHover(true)}
                 onMouseLeave={() => setHover(false)}
                 onTouchStart={handleTouchStart}

@@ -4,6 +4,7 @@ import "katex/dist/katex.min.css";
 import { marked } from "marked";
 import DOMPurify from "dompurify";
 import { motion, AnimatePresence } from "framer-motion";
+import ArtifactSandboxModal, { buildSandboxHtml } from "./ArtifactSandboxModal";
 
 /**
  * Escape HTML special characters
@@ -143,12 +144,12 @@ const postProcessHtml = (html) => {
     );
     res = res.replace(/<\/table>/g, "</table></div>");
 
-    // 2. Enhance code blocks with top bar, language badge, and copy button
+    // 2. Enhance code blocks with top bar, language badge, runnable sandbox tabs, and copy button
     res = res.replace(
         /<pre><code(?: class="language-([a-zA-Z0-9_\-+]+)")?>([\s\S]*?)<\/code><\/pre>/g,
         (match, lang, code) => {
             const displayLang = (lang || "code").toLowerCase();
-            // Decode entities to get raw code for clipboard
+            // Decode entities to get raw code for clipboard and runner
             const rawCode = code
                 .replace(/&amp;/g, "&")
                 .replace(/&lt;/g, "<")
@@ -157,16 +158,51 @@ const postProcessHtml = (html) => {
                 .replace(/&#039;/g, "'");
             const encoded = encodeURIComponent(rawCode);
 
+            // Determine if code block is runnable interactive artifact
+            const isRunnable = [
+                "html", "htm", "svg", "javascript", "js", "web", "jsx"
+            ].includes(displayLang) ||
+                rawCode.includes("<!DOCTYPE") ||
+                rawCode.includes("<html") ||
+                rawCode.includes("<svg") ||
+                rawCode.includes("<canvas") ||
+                rawCode.includes("<button") ||
+                (displayLang === "xml" && rawCode.includes("<svg"));
+
             return `
-<div class="chat-code-card my-3 rounded-xl border border-white/10 bg-[#0d1117] shadow-xl overflow-hidden text-xs sm:text-sm font-mono">
-  <div class="flex items-center justify-between px-3.5 py-1.5 bg-white/[0.05] border-b border-white/10 text-white/70 select-none">
-    <span class="text-[11px] font-bold uppercase tracking-wider text-cyan-400">${displayLang}</span>
-    <button type="button" class="chat-copy-code-btn flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-medium text-white/80 hover:text-white bg-white/5 hover:bg-white/10 transition-colors cursor-pointer" data-code="${encoded}">
-      <svg class="w-3.5 h-3.5 text-cyan-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
-      <span>Copy code</span>
-    </button>
+<div class="chat-code-card my-3 rounded-xl border border-white/10 bg-[#0d1117] shadow-xl overflow-hidden text-xs sm:text-sm font-mono" data-card-code="${encoded}" data-card-lang="${displayLang}">
+  <div class="flex items-center justify-between px-3.5 py-1.5 bg-white/[0.05] border-b border-white/10 text-white/70 select-none flex-wrap gap-1.5">
+    <div class="flex items-center gap-2">
+      <span class="text-[11px] font-bold uppercase tracking-wider text-cyan-400">${displayLang}</span>
+      ${isRunnable ? `
+      <div class="flex items-center gap-1 bg-black/40 rounded-lg p-0.5 border border-white/10">
+        <button type="button" class="chat-code-tab-btn active px-2 py-0.5 rounded text-[10px] font-semibold bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 transition-all cursor-pointer" data-action="tab-code">
+          💻 Code
+        </button>
+        <button type="button" class="chat-preview-tab-btn px-2 py-0.5 rounded text-[10px] font-semibold text-emerald-400/90 hover:text-emerald-300 hover:bg-emerald-500/10 transition-all cursor-pointer" data-action="tab-preview">
+          ▶ Preview
+        </button>
+      </div>` : ''}
+    </div>
+    <div class="flex items-center gap-1.5">
+      ${isRunnable ? `
+      <button type="button" class="chat-fullscreen-btn flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-medium text-purple-300 hover:text-purple-200 bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/20 transition-colors cursor-pointer" data-action="fullscreen" title="Open Fullscreen Artifact Sandbox">
+        <svg class="w-3.5 h-3.5 text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 8V4m0 0h4M4 4l5 5m11-5h-4m4 0v4m0-4l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"/></svg>
+        <span>Expand</span>
+      </button>` : ''}
+      <button type="button" class="chat-copy-code-btn flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-medium text-white/80 hover:text-white bg-white/5 hover:bg-white/10 transition-colors cursor-pointer" data-code="${encoded}">
+        <svg class="w-3.5 h-3.5 text-cyan-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
+        <span>Copy code</span>
+      </button>
+    </div>
   </div>
-  <pre class="p-3.5 overflow-x-auto text-emerald-300 leading-relaxed font-mono"><code>${code}</code></pre>
+  <pre class="chat-code-pre p-3.5 overflow-x-auto text-emerald-300 leading-relaxed font-mono"><code>${code}</code></pre>
+  ${isRunnable ? `
+  <div class="chat-preview-container hidden w-full bg-[#0a0d14] border-t border-white/10 p-2 sm:p-3">
+    <div class="w-full h-[320px] rounded-lg overflow-hidden border border-white/10 bg-[#0f172a] relative">
+      <iframe class="chat-sandbox-iframe w-full h-full border-0 block" sandbox="allow-scripts allow-modals" loading="lazy"></iframe>
+    </div>
+  </div>` : ''}
 </div>`;
         }
     );
@@ -220,6 +256,7 @@ marked.setOptions({
 const MathFormattedText = React.memo(({ text, className = "", onOpenLightbox }) => {
     const containerRef = useRef(null);
     const [localLightboxImg, setLocalLightboxImg] = useState(null);
+    const [sandboxModalData, setSandboxModalData] = useState(null);
 
     // Compute parsed and sanitized HTML
     const sanitizedHtml = useMemo(() => {
@@ -244,8 +281,11 @@ const MathFormattedText = React.memo(({ text, className = "", onOpenLightbox }) 
 
         // 5. Sanitize with DOMPurify
         const clean = DOMPurify.sanitize(withMath, {
-            ADD_ATTR: ["target", "rel", "data-action", "data-src", "data-alt", "data-code", "loading", "align"],
-            ADD_TAGS: ["svg", "path", "button", "table", "thead", "tbody", "tr", "th", "td"],
+            ADD_ATTR: [
+                "target", "rel", "data-action", "data-src", "data-alt", "data-code",
+                "data-card-code", "data-card-lang", "loading", "align", "sandbox", "srcdoc"
+            ],
+            ADD_TAGS: ["svg", "path", "button", "table", "thead", "tbody", "tr", "th", "td", "iframe"],
         });
 
         return clean;
@@ -276,7 +316,70 @@ const MathFormattedText = React.memo(({ text, className = "", onOpenLightbox }) 
             return;
         }
 
-        // 2. Zoom / Lightbox image
+        // 2. Tab Preview Click
+        const previewTabBtn = e.target.closest("[data-action='tab-preview']");
+        if (previewTabBtn) {
+            e.stopPropagation();
+            const card = previewTabBtn.closest(".chat-code-card");
+            if (card) {
+                const pre = card.querySelector(".chat-code-pre");
+                const previewContainer = card.querySelector(".chat-preview-container");
+                const codeBtn = card.querySelector("[data-action='tab-code']");
+                const iframe = card.querySelector(".chat-sandbox-iframe");
+                const rawCode = decodeURIComponent(card.getAttribute("data-card-code") || "");
+                const lang = card.getAttribute("data-card-lang") || "html";
+
+                if (pre && previewContainer && iframe) {
+                    pre.classList.add("hidden");
+                    previewContainer.classList.remove("hidden");
+                    previewTabBtn.className = "chat-preview-tab-btn active px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 transition-all cursor-pointer";
+                    if (codeBtn) {
+                        codeBtn.className = "chat-code-tab-btn px-2 py-0.5 rounded text-[10px] font-semibold text-white/60 hover:text-white hover:bg-white/10 transition-all cursor-pointer";
+                    }
+                    if (!iframe.srcdoc || iframe.srcdoc === "about:blank") {
+                        iframe.srcdoc = buildSandboxHtml(rawCode, lang);
+                    }
+                }
+            }
+            return;
+        }
+
+        // 3. Tab Code Click
+        const codeTabBtn = e.target.closest("[data-action='tab-code']");
+        if (codeTabBtn) {
+            e.stopPropagation();
+            const card = codeTabBtn.closest(".chat-code-card");
+            if (card) {
+                const pre = card.querySelector(".chat-code-pre");
+                const previewContainer = card.querySelector(".chat-preview-container");
+                const previewBtn = card.querySelector("[data-action='tab-preview']");
+
+                if (pre && previewContainer) {
+                    previewContainer.classList.add("hidden");
+                    pre.classList.remove("hidden");
+                    codeTabBtn.className = "chat-code-tab-btn active px-2 py-0.5 rounded text-[10px] font-semibold bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 transition-all cursor-pointer";
+                    if (previewBtn) {
+                        previewBtn.className = "chat-preview-tab-btn px-2 py-0.5 rounded text-[10px] font-semibold text-emerald-400/90 hover:text-emerald-300 hover:bg-emerald-500/10 transition-all cursor-pointer";
+                    }
+                }
+            }
+            return;
+        }
+
+        // 4. Fullscreen Expand Click
+        const fullscreenBtn = e.target.closest("[data-action='fullscreen']");
+        if (fullscreenBtn) {
+            e.stopPropagation();
+            const card = fullscreenBtn.closest(".chat-code-card");
+            if (card) {
+                const rawCode = decodeURIComponent(card.getAttribute("data-card-code") || "");
+                const lang = card.getAttribute("data-card-lang") || "html";
+                setSandboxModalData({ code: rawCode, lang, isOpen: true });
+            }
+            return;
+        }
+
+        // 5. Zoom / Lightbox image
         const zoomEl = e.target.closest("[data-action='zoom']");
         if (zoomEl) {
             e.stopPropagation();
@@ -291,7 +394,7 @@ const MathFormattedText = React.memo(({ text, className = "", onOpenLightbox }) 
             return;
         }
 
-        // 3. Download image
+        // 6. Download image
         const dlBtn = e.target.closest("[data-action='download']");
         if (dlBtn) {
             e.stopPropagation();
@@ -450,6 +553,14 @@ const MathFormattedText = React.memo(({ text, className = "", onOpenLightbox }) 
                     </motion.div>
                 )}
             </AnimatePresence>
+
+            {/* Fullscreen Interactive Artifact Sandbox Modal */}
+            <ArtifactSandboxModal
+                isOpen={Boolean(sandboxModalData?.isOpen)}
+                onClose={() => setSandboxModalData(null)}
+                code={sandboxModalData?.code || ""}
+                lang={sandboxModalData?.lang || "html"}
+            />
         </>
     );
 });

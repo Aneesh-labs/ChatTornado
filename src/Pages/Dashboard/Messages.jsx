@@ -1350,6 +1350,20 @@ const Messages = () => {
 
     const handleOpenSearch = useCallback(() => setSearchOpen(true), []);
     const handleCloseSearch = useCallback(() => setSearchOpen(false), []);
+    const handleJumpToMessage = useCallback((msgId) => {
+        if (!msgId) return;
+        setSearchOpen(false);
+        setTimeout(() => {
+            const el = document.getElementById(`msg-${msgId}`);
+            if (el) {
+                el.scrollIntoView({ behavior: "smooth", block: "center" });
+                el.classList.add("ring-2", "ring-cyan-400", "bg-cyan-500/20", "rounded-2xl", "transition-all", "duration-500");
+                setTimeout(() => {
+                    el.classList.remove("ring-2", "ring-cyan-400", "bg-cyan-500/20");
+                }, 2500);
+            }
+        }, 150);
+    }, []);
     const handleOpenSettings = useCallback(() => setSettingsOpen(true), []);
     const handleCloseRightPanel = useCallback(() => setRightPanelOpen(false), []);
 
@@ -1540,6 +1554,7 @@ const Messages = () => {
                                 setAiMode={setAiMode}
                                 socket={socketRef.current}
                                 isMobile={isMobile}
+                                messages={messages}
                                 onGameMove={handleGameMove}
                             />
                         ) : (
@@ -1560,6 +1575,8 @@ const Messages = () => {
                         onClose={handleCloseSearch}
                         users={enrichedUsers}
                         onSelectUser={selectUser}
+                        messages={messages}
+                        onJumpToMessage={handleJumpToMessage}
                     />
                     <CallOverlay
                         call={call}

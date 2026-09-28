@@ -42,6 +42,7 @@ const ChatWindow = React.memo(({
     aiMode: propAiMode,
     setAiMode: propSetAiMode,
     onGameMove,
+    messages = [],
 }) => {
     const [localAiMode, setLocalAiMode] = useState(() => {
         return isAdminUnlocked() ? "ADMIN" : "DEFAULT";
@@ -81,6 +82,7 @@ const ChatWindow = React.memo(({
                 isReloading={isReloading}
                 aiMode={aiMode}
                 setAiMode={setAiMode}
+                messages={messages}
             />
             <ChatMessages
                 groupedMessages={groupedMessages}
