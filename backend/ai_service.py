@@ -44,12 +44,11 @@ VORTEX_SYSTEM_PROMPT = PROMPT_DEFAULT
 
 # Active high-performance Gemini models with robust fallback
 RECOMMENDED_GEMINI_MODELS = [
-    "gemini-2.5-flash",
-    "gemini-2.0-flash",
-    "gemini-1.5-flash",
-    "gemini-2.5-flash-lite",
+    "gemini-3.8-flash",
     "gemini-3.5-flash",
     "gemini-3.5-flash-lite",
+    "gemini-2.5-flash",
+    "gemini-2.0-flash",
 ]
 
 
@@ -1464,11 +1463,12 @@ async def generate_ai_text_stream(
                     gen_config.tools = [{"google_search": {}}]
 
                 full_accumulated_text = ""
-                async for chunk in client.aio.models.generate_content_stream(
+                response_stream = await client.aio.models.generate_content_stream(
                     model=model_name,
                     contents=contents,
                     config=gen_config
-                ):
+                )
+                async for chunk in response_stream:
                     chunk_text = extract_chunk_text(chunk)
                     if chunk_text:
                         full_accumulated_text += chunk_text
@@ -1731,11 +1731,12 @@ Synthesize all relevant findings, empirical comparisons, mathematical models (if
             temperature=0.6,
             max_output_tokens=8192,
         )
-        async for chunk in client.aio.models.generate_content_stream(
-            model="gemini-3.5-flash",
+        research_stream = await client.aio.models.generate_content_stream(
+            model="gemini-3.8-flash",
             contents=[types.Content(role="user", parts=[types.Part.from_text(text=research_prompt)])],
             config=gen_config
-        ):
+        )
+        async for chunk in research_stream:
             c_text = extract_chunk_text(chunk)
             if c_text:
                 synthesis_accumulated += c_text

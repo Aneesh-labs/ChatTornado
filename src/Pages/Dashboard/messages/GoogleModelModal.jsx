@@ -365,11 +365,11 @@ export default function GoogleModelModal({ isOpen, onClose }) {
                     exit={{ scale: 0.94, y: 15 }}
                     transition={{ type: "spring", stiffness: 380, damping: 28 }}
                     onClick={(e) => e.stopPropagation()}
-                    className="relative w-full max-w-2xl overflow-hidden rounded-3xl border border-cyan-500/30 bg-gradient-to-b from-[#0c101d] via-[#090c17] to-[#05070f] p-4 sm:p-6 shadow-2xl flex flex-col max-h-[92vh]"
+                    className="relative w-full max-w-2xl max-h-[85vh] sm:max-h-[88vh] my-auto overflow-hidden rounded-3xl border border-cyan-500/30 bg-gradient-to-b from-[#0c101d] via-[#090c17] to-[#05070f] p-4 sm:p-6 shadow-2xl flex flex-col"
                     style={{ boxShadow: "0 0 55px rgba(6,182,212,0.18)" }}
                 >
                     {/* Header */}
-                    <div className="flex items-start justify-between pb-3 border-b border-white/10 mb-3">
+                    <div className="flex-shrink-0 flex items-start justify-between pb-3 border-b border-white/10 mb-3">
                         <div className="flex items-center gap-3">
                             <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-tr from-cyan-500 via-indigo-500 to-purple-600 p-[1px] shadow-lg">
                                 <div className="flex h-full w-full items-center justify-center rounded-2xl bg-[#090d18]">
@@ -396,7 +396,7 @@ export default function GoogleModelModal({ isOpen, onClose }) {
                     </div>
 
                     {/* Provider Tabs */}
-                    <div className="flex items-center gap-1.5 p-1 bg-black/40 rounded-xl border border-white/10 mb-3">
+                    <div className="flex-shrink-0 flex items-center gap-1.5 p-1 bg-black/40 rounded-xl border border-white/10 mb-3">
                         <button
                             type="button"
                             onClick={() => { setActiveTab("google"); soundEngine?.play?.("click"); }}
@@ -428,6 +428,9 @@ export default function GoogleModelModal({ isOpen, onClose }) {
                             </span>
                         </button>
                     </div>
+
+                    {/* Main Scrollable Body */}
+                    <div className="flex-1 overflow-y-auto min-h-0 pr-1.5 space-y-3">
 
                     {/* Search & Filter Toolbar */}
                     <div className="space-y-2 mb-3">
@@ -544,8 +547,8 @@ export default function GoogleModelModal({ isOpen, onClose }) {
                         </div>
                     </div>
 
-                    {/* Scrollable Model List */}
-                    <div className="space-y-2 flex-1 overflow-y-auto pr-1 min-h-[160px] max-h-[38vh]">
+                    {/* Model List */}
+                    <div className="space-y-2">
                         {filteredModels.length === 0 ? (
                             <div className="py-10 text-center text-white/50 flex flex-col items-center justify-center gap-2.5">
                                 <Filter className="w-8 h-8 text-white/20" />
@@ -702,9 +705,10 @@ export default function GoogleModelModal({ isOpen, onClose }) {
                             )}
                         </div>
                     )}
+                    </div>
 
                     {/* Footer */}
-                    <div className="mt-3 pt-3 border-t border-white/10 flex items-center justify-between gap-3">
+                    <div className="flex-shrink-0 mt-3 pt-3 border-t border-white/10 flex items-center justify-between gap-3">
                         <div className="text-[11px] text-white/50 hidden sm:block">
                             Automatic fallback guarantees zero interruption
                         </div>
