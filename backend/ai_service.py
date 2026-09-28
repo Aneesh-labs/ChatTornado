@@ -41,11 +41,41 @@ VORTEX_SYSTEM_PROMPT = PROMPT_DEFAULT
 
 # Active high-performance Gemini models with robust fallback
 RECOMMENDED_GEMINI_MODELS = [
+    "gemini-2.5-flash",
+    "gemini-2.0-flash",
+    "gemini-1.5-flash",
+    "gemini-2.5-flash-lite",
     "gemini-3.5-flash",
     "gemini-3.5-flash-lite",
-    "gemini-3.1-flash-lite",
-    "gemini-3.8-flash",
 ]
+
+
+def extract_chunk_text(chunk: Any) -> str:
+    """Safely extracts text string from a Gemini stream chunk without throwing ValueError on thought/tool parts."""
+    if not chunk:
+        return ""
+    try:
+        if getattr(chunk, "text", None):
+            return str(chunk.text)
+    except Exception:
+        pass
+
+    try:
+        candidates = getattr(chunk, "candidates", None) or []
+        if candidates:
+            content = getattr(candidates[0], "content", None)
+            if content:
+                parts = getattr(content, "parts", None) or []
+                collected = []
+                for p in parts:
+                    txt = getattr(p, "text", None)
+                    if txt:
+                        collected.append(str(txt))
+                if collected:
+                    return "".join(collected)
+    except Exception:
+        pass
+    return ""
 
 
 def get_or_create_bot_user(db: Session) -> User:
@@ -1012,81 +1042,65 @@ async def generate_ai_text_stream(
 
     models_to_try = list(RECOMMENDED_GEMINI_MODELS)
 
+    has_images = len(image_parts) > 0
     client = genai.Client(api_key=api_key)
     full_accumulated_text = ""
     grounding_citations = []
 
     for model_name in models_to_try:
-        try:
-            gen_config = types.GenerateContentConfig(
-                system_instruction=system_prompt,
-                temperature=0.75,
-                max_output_tokens=8192,
-                safety_settings=safety_settings,
-                tools=[{"google_search": {}}]
-            )
+        # If images are attached, do not use google_search tool (causes multimodal streaming conflicts)
+        tool_options = [True, False] if not has_images else [False]
 
-            full_accumulated_text = ""
-            async for chunk in client.aio.models.generate_content_stream(
-                model=model_name,
-                contents=contents,
-                config=gen_config
-            ):
-                chunk_text = chunk.text or ""
-                if chunk_text:
-                    full_accumulated_text += chunk_text
-                    if on_chunk:
-                        await on_chunk(chunk_text)
-
-                try:
-                    candidate = chunk.candidates[0] if chunk.candidates else None
-                    grounding_meta = getattr(candidate, "grounding_metadata", None)
-                    if grounding_meta:
-                        chunks = getattr(grounding_meta, "grounding_chunks", []) or []
-                        for c in chunks:
-                            web = getattr(c, "web", None)
-                            if web:
-                                uri = getattr(web, "uri", None)
-                                title = getattr(web, "title", None) or uri
-                                if uri:
-                                    grounding_citations.append(f"• [{title}]({uri})")
-                except Exception:
-                    pass
-
-            if full_accumulated_text:
-                if grounding_citations and "Sources" not in full_accumulated_text:
-                    unique_sources = list(dict.fromkeys(grounding_citations))[:5]
-                    source_block = "\n\n**🌐 Sources & Web References:**\n" + "\n".join(unique_sources)
-                    full_accumulated_text += source_block
-                    if on_chunk:
-                        await on_chunk(source_block)
-
-                return full_accumulated_text
-
-        except Exception as stream_err:
-            print(f"[AI_STREAM] Model {model_name} with tools failed: {stream_err}. Retrying without search tool...", flush=True)
+        for use_search in tool_options:
             try:
-                gen_config_notools = types.GenerateContentConfig(
+                gen_config = types.GenerateContentConfig(
                     system_instruction=system_prompt,
                     temperature=0.75,
                     max_output_tokens=8192,
-                    safety_settings=safety_settings
+                    safety_settings=safety_settings,
                 )
+                if use_search:
+                    gen_config.tools = [{"google_search": {}}]
+
                 full_accumulated_text = ""
                 async for chunk in client.aio.models.generate_content_stream(
                     model=model_name,
                     contents=contents,
-                    config=gen_config_notools
+                    config=gen_config
                 ):
-                    chunk_text = chunk.text or ""
+                    chunk_text = extract_chunk_text(chunk)
                     if chunk_text:
                         full_accumulated_text += chunk_text
                         if on_chunk:
                             await on_chunk(chunk_text)
+
+                    try:
+                        candidate = chunk.candidates[0] if chunk.candidates else None
+                        grounding_meta = getattr(candidate, "grounding_metadata", None)
+                        if grounding_meta:
+                            chunks = getattr(grounding_meta, "grounding_chunks", []) or []
+                            for c in chunks:
+                                web = getattr(c, "web", None)
+                                if web:
+                                    uri = getattr(web, "uri", None)
+                                    title = getattr(web, "title", None) or uri
+                                    if uri:
+                                        grounding_citations.append(f"• [{title}]({uri})")
+                    except Exception:
+                        pass
+
                 if full_accumulated_text:
+                    if grounding_citations and "Sources" not in full_accumulated_text:
+                        unique_sources = list(dict.fromkeys(grounding_citations))[:5]
+                        source_block = "\n\n**🌐 Sources & Web References:**\n" + "\n".join(unique_sources)
+                        full_accumulated_text += source_block
+                        if on_chunk:
+                            await on_chunk(source_block)
+
                     return full_accumulated_text
-            except Exception as stream_err2:
-                print(f"[AI_STREAM] Model {model_name} (no-tools) failed: {stream_err2}", flush=True)
+
+            except Exception as stream_err:
+                print(f"[AI_STREAM] Model {model_name} (search={use_search}) error: {stream_err}", flush=True)
                 continue
 
     # Fallback to non-streaming generate_ai_text if all streams fail
@@ -1321,7 +1335,7 @@ Synthesize all relevant findings, empirical comparisons, mathematical models (if
             contents=[types.Content(role="user", parts=[types.Part.from_text(text=research_prompt)])],
             config=gen_config
         ):
-            c_text = chunk.text or ""
+            c_text = extract_chunk_text(chunk)
             if c_text:
                 synthesis_accumulated += c_text
                 if on_chunk:

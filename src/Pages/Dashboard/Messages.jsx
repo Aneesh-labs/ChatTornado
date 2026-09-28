@@ -1093,8 +1093,8 @@ const Messages = () => {
                             console.log("Current messages:", prev);
 
                             // Check if message exists by ID or temp_id
-                            const existingIndex = prev.findIndex((m) => m.id === packet.id);
-                            const tempIndex = prev.findIndex((m) => packet.temp_id && m.temp_id === packet.temp_id);
+                            const existingIndex = prev.findIndex((m) => String(m.id) === String(packet.id));
+                            const tempIndex = prev.findIndex((m) => packet.temp_id && String(m.temp_id) === String(packet.temp_id));
 
                             // If it exists as a temp message, replace it
                             if (tempIndex !== -1) {
