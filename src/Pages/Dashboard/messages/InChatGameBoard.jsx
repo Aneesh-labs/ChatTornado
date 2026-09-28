@@ -74,6 +74,7 @@ const checkConnect4Winner = (board) => {
 export default function InChatGameBoard({ gameData, messageId, myUserId, senderId, receiverId, onUpdateGame }) {
     const [localGame, setLocalGame] = useState(gameData);
     const isMovingRef = useRef(false);
+    const lastMoveRef = useRef(gameData?.moves || 0);
 
     useEffect(() => {
         if (!gameData) return;
@@ -91,7 +92,19 @@ export default function InChatGameBoard({ gameData, messageId, myUserId, senderI
             setLocalGame(gameData);
         }
         isMovingRef.current = false;
-    }, [gameData]);
+
+        // Play feedback when opponent makes a move or wins
+        if (gameData.moves !== undefined && gameData.moves > lastMoveRef.current) {
+            if (gameData.lastMoveBy && String(gameData.lastMoveBy) !== String(myUserId)) {
+                if (gameData.winner && gameData.winner !== "draw") {
+                    soundEngine.play("drum");
+                } else {
+                    soundEngine.play("pop");
+                }
+            }
+        }
+        lastMoveRef.current = gameData.moves || 0;
+    }, [gameData, myUserId]);
 
     if (!localGame) return null;
 
@@ -414,6 +427,7 @@ export default function InChatGameBoard({ gameData, messageId, myUserId, senderI
                 turn: nextTurn,
                 winner: win,
                 moves: (localGame.moves || 0) + 1,
+                lastMoveBy: myUserId,
             };
             setLocalGame(updated);
             onUpdateGame?.(updated);

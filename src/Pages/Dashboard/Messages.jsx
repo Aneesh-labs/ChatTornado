@@ -184,6 +184,7 @@ const Messages = () => {
     const token = sessionStorage.getItem("token");
 
     const activeUserRef = useRef(selectedUser);
+    const selectedUserRef = activeUserRef;
     useEffect(() => {
         activeUserRef.current = selectedUser;
     }, [selectedUser]);
@@ -988,7 +989,10 @@ const Messages = () => {
                         const incomingGame = packet.game_data;
                         if (incomingGame) {
                             setMessages((prev) => prev.map((m) => {
-                                if (m.id === packet.message_id || (packet.game_id && typeof m.message === "string" && m.message.includes(`"id":"${packet.game_id}"`))) {
+                                const isMatch = (packet.message_id != null && String(m.id) === String(packet.message_id)) ||
+                                    (packet.game_id && typeof m.message === "string" && m.message.includes(`"id":"${packet.game_id}"`)) ||
+                                    (incomingGame?.id && typeof m.message === "string" && m.message.includes(`"id":"${incomingGame.id}"`));
+                                if (isMatch) {
                                     return {
                                         ...m,
                                         message: "🎮 GAME:" + JSON.stringify(incomingGame)
@@ -1238,12 +1242,14 @@ const Messages = () => {
         }
     }, [selectedUser, token]);
 
-    const handleGameMove = useCallback((messageId, updatedGame) => {
+    const handleGameMove = useCallback((messageId, updatedGame, partnerId) => {
         if (!messageId || !updatedGame) return;
 
         // 1. Optimistically update local message in state in-place
         setMessages((prev) => prev.map((m) => {
-            if (m.id === messageId || (updatedGame?.id && typeof m.message === "string" && m.message.includes(`"id":"${updatedGame.id}"`))) {
+            const isMatch = (messageId != null && String(m.id) === String(messageId)) ||
+                (updatedGame?.id && typeof m.message === "string" && m.message.includes(`"id":"${updatedGame.id}"`));
+            if (isMatch) {
                 return {
                     ...m,
                     message: "🎮 GAME:" + JSON.stringify(updatedGame)
@@ -1253,7 +1259,7 @@ const Messages = () => {
         }));
 
         // 2. Transmit real-time move over WebSocket
-        const targetUserId = selectedUserRef.current?.id || selectedUser?.id;
+        const targetUserId = partnerId || activeUserRef.current?.id || selectedUser?.id;
         if (socketRef.current?.readyState === WebSocket.OPEN && targetUserId) {
             try {
                 socketRef.current.send(JSON.stringify({

@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback, useEffect } from "react";
+import React, { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import PropTypes from "prop-types";
 import { motion, AnimatePresence } from "framer-motion";
 import { Avatar, useTheme, fmtTime, getMyUserId } from "./constants";
@@ -770,14 +770,15 @@ const MessageBubble = React.memo(({
     const isP2P = typeof actualMessage === "string" && actualMessage.startsWith('⚡ P2P_MEDIA');
     const isGame = typeof actualMessage === "string" && actualMessage.startsWith('🎮 GAME:');
     const isSound = typeof actualMessage === "string" && actualMessage.startsWith('🔊 SOUND:');
-    let parsedGame = null;
-    if (isGame) {
+    const parsedGame = useMemo(() => {
+        if (!isGame) return null;
         try {
-            parsedGame = JSON.parse(actualMessage.replace(/^🎮 GAME:\s*/, ""));
+            return JSON.parse(actualMessage.replace(/^🎮 GAME:\s*/, ""));
         } catch (e) {
             console.warn("Failed to parse game data:", e);
+            return null;
         }
-    }
+    }, [isGame, actualMessage]);
 
     const imageUrls = !isP2P && !isGame && !isSound ? extractImageUrls(actualMessage) : [];
     const videoUrls = !isP2P && !isGame && !isSound ? extractVideoUrls(actualMessage) : [];
@@ -792,6 +793,7 @@ const MessageBubble = React.memo(({
 
     const renderMessageContent = () => {
         if (isGame && parsedGame) {
+            const partnerId = isMe ? msg.receiver_id : msg.sender_id;
             return (
                 <InChatGameBoard
                     gameData={parsedGame}
@@ -801,12 +803,12 @@ const MessageBubble = React.memo(({
                     receiverId={msg.receiver_id}
                     onUpdateGame={(updatedGame) => {
                         if (onGameMove) {
-                            onGameMove(msg.id, updatedGame);
+                            onGameMove(msg.id, updatedGame, partnerId);
                         } else if (socket && socket.readyState === 1) { // 1 = WebSocket.OPEN
                             socket.send(JSON.stringify({
                                 type: "game_move",
                                 message_id: msg.id,
-                                receiver_id: isMe ? msg.receiver_id : msg.sender_id,
+                                receiver_id: partnerId,
                                 game_id: updatedGame?.id,
                                 game_data: updatedGame
                             }));

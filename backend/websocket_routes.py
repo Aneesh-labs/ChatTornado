@@ -474,7 +474,8 @@ async def websocket_endpoint(websocket: WebSocket):
                 # Persist updated game state into existing message row in DB
                 if message_id:
                     try:
-                        msg_row = db.query(Message).filter(Message.id == message_id).first()
+                        m_id = int(message_id) if str(message_id).isdigit() else message_id
+                        msg_row = db.query(Message).filter(Message.id == m_id).first()
                         if msg_row:
                             # Special handling for RPS simultaneous choices merge:
                             if game_data.get("game") == "rps" and msg_row.message and msg_row.message.startswith("🎮 GAME:"):
@@ -496,7 +497,7 @@ async def websocket_endpoint(websocket: WebSocket):
                         logger.error("Failed to persist game move in DB: %s", db_err)
                         db.rollback()
 
-                # Broadcast game_update to recipient
+                # Broadcast game_update to recipient and sender's other tabs/sessions
                 packet = {
                     "type": "game_update",
                     "message_id": message_id,
@@ -507,6 +508,7 @@ async def websocket_endpoint(websocket: WebSocket):
                 }
 
                 await manager.send_personal_message(receiver_id, packet)
+                await manager.send_personal_message(user_id, packet)
                 continue
 
             # ==========================
