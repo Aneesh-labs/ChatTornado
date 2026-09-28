@@ -547,16 +547,27 @@ export default function GoogleModelModal({ isOpen, onClose }) {
                     {/* Scrollable Model List */}
                     <div className="space-y-2 flex-1 overflow-y-auto pr-1 min-h-[160px] max-h-[38vh]">
                         {filteredModels.length === 0 ? (
-                            <div className="py-12 text-center text-white/50 flex flex-col items-center justify-center gap-2">
+                            <div className="py-10 text-center text-white/50 flex flex-col items-center justify-center gap-2.5">
                                 <Filter className="w-8 h-8 text-white/20" />
                                 <p className="text-xs font-semibold">No models found matching "{searchQuery}"</p>
-                                <button
-                                    type="button"
-                                    onClick={() => { setSearchQuery(""); setFilterFreeOnly(false); setActiveCategory("all"); }}
-                                    className="text-[11px] text-cyan-400 hover:underline cursor-pointer"
-                                >
-                                    Reset search and filters
-                                </button>
+                                {searchQuery.includes("/") ? (
+                                    <button
+                                        type="button"
+                                        onClick={() => handleSelect(searchQuery.trim())}
+                                        className="mt-1 px-4 py-2 rounded-xl bg-gradient-to-r from-purple-500 to-indigo-600 hover:from-purple-400 hover:to-indigo-500 text-white font-bold text-xs shadow-lg shadow-purple-500/25 transition-all cursor-pointer flex items-center gap-2"
+                                    >
+                                        <Sparkles className="w-4 h-4 text-amber-300" />
+                                        <span>Use Custom OpenRouter Model ID: "{searchQuery.trim()}"</span>
+                                    </button>
+                                ) : (
+                                    <button
+                                        type="button"
+                                        onClick={() => { setSearchQuery(""); setFilterFreeOnly(false); setActiveCategory("all"); }}
+                                        className="text-[11px] text-cyan-400 hover:underline cursor-pointer"
+                                    >
+                                        Reset search and filters
+                                    </button>
+                                )}
                             </div>
                         ) : (
                             filteredModels.map((model) => {
