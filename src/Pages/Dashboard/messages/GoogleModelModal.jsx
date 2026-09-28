@@ -24,17 +24,34 @@ import API from "../../../Services/API";
 // Curated Google Gemini Foundation Models
 export const GOOGLE_MODELS = [
     {
+        id: "gemini-3.8-flash",
+        name: "Gemini 3.8 Flash",
+        provider: "Google",
+        version: "v3.8",
+        tag: "Latest • Fastest & Smartest",
+        badge: "⚡ New",
+        badgeStyle: "bg-rose-500/20 text-rose-300 border-rose-500/40 shadow-[0_0_10px_rgba(244,63,94,0.3)]",
+        icon: Zap,
+        iconColor: "text-rose-400",
+        iconBg: "bg-rose-500/10 border-rose-500/30",
+        description: "Google's newest flagship model — fastest inference, highest reasoning accuracy, and real-time Google Search grounding.",
+        speed: "0.2s (Ultra-fast)",
+        intelligence: "Maximum",
+        context_length: 1000000,
+        pricing: { is_free: true, prompt: "0", completion: "0" }
+    },
+    {
         id: "gemini-3.5-flash",
         name: "Gemini 3.5 Flash",
         provider: "Google",
         version: "v3.5",
-        tag: "Default • Smart & Fast",
+        tag: "Smart & Balanced",
         badge: "Recommended",
         badgeStyle: "bg-cyan-500/20 text-cyan-300 border-cyan-500/40 shadow-[0_0_10px_rgba(6,182,212,0.3)]",
         icon: Zap,
         iconColor: "text-cyan-400",
         iconBg: "bg-cyan-500/10 border-cyan-500/30",
-        description: "Google's flagship multimodal model with integrated Google Search grounding, fast reasoning, and balanced conversational depth.",
+        description: "Proven multimodal model with integrated Google Search grounding, fast reasoning, and balanced conversational depth.",
         speed: "0.3s (Ultra-fast)",
         intelligence: "Very High",
         context_length: 1000000,
@@ -79,13 +96,13 @@ export const GOOGLE_MODELS = [
         name: "Gemini 2.5 Flash",
         provider: "Google",
         version: "v2.5",
-        tag: "Battle-Tested Production",
-        badge: "Ultra-Stable",
-        badgeStyle: "bg-amber-500/20 text-amber-300 border-amber-500/40 shadow-[0_0_10px_rgba(245,158,11,0.3)]",
+        tag: "Legacy • May Be Deprecated",
+        badge: "Legacy",
+        badgeStyle: "bg-zinc-500/20 text-zinc-400 border-zinc-500/40",
         icon: Shield,
-        iconColor: "text-amber-400",
-        iconBg: "bg-amber-500/10 border-amber-500/30",
-        description: "Proven long-running production standard known for robust consistency and reliable instruction adherence across diverse inputs.",
+        iconColor: "text-zinc-400",
+        iconBg: "bg-zinc-500/10 border-zinc-500/30",
+        description: "Older generation model — may not work for new users. Kept for existing setups. Prefer Gemini 3.8 Flash instead.",
         speed: "0.4s (Very Fast)",
         intelligence: "High",
         context_length: 1000000,
@@ -170,8 +187,8 @@ export const ALL_MODELS = [...GOOGLE_MODELS, ...OPENROUTER_MODELS];
 export const STORAGE_KEY_GOOGLE_MODEL = "vortex_selected_google_model";
 
 export const getSelectedGoogleModel = () => {
-    if (typeof window === "undefined") return "gemini-3.5-flash";
-    return localStorage.getItem(STORAGE_KEY_GOOGLE_MODEL) || "gemini-3.5-flash";
+    if (typeof window === "undefined") return "gemini-3.8-flash";
+    return localStorage.getItem(STORAGE_KEY_GOOGLE_MODEL) || "gemini-3.8-flash";
 };
 
 // Helper: Format raw context length integers into human-readable token strings
