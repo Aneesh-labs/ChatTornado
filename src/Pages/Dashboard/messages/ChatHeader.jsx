@@ -154,20 +154,27 @@ const ChatHeader = React.memo(({
                 )}
                 <Avatar user={user} size="md" className="flex-shrink-0 scale-90 sm:scale-100 origin-left" />
                 <div className="min-w-0 flex-1 flex flex-col justify-center">
-                    <div className="flex flex-wrap items-center gap-1 sm:gap-2">
+                    <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
                         <h2 className="text-xs sm:text-sm font-semibold text-white leading-tight truncate tracking-wide max-w-[120px] sm:max-w-none">
                             {username}
                         </h2>
                         {isBotUser && (
-                            (adminUnlocked || aiMode === "ADMIN") ? (
-                                <span className="text-[8px] sm:text-[10px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded-md bg-amber-500/20 text-amber-300 border border-amber-500/40 flex items-center gap-1 shadow-[0_0_12px_rgba(245,158,11,0.4)] animate-pulse">
-                                    👑 ADMIN ACTIVE
-                                </span>
-                            ) : (
-                                <span className="text-[8px] sm:text-[10px] uppercase font-bold tracking-wider px-1 sm:px-1.5 py-0.5 rounded-md bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 flex items-center gap-1 shadow-[0_0_8px_rgba(6,182,212,0.3)] flex-shrink-0">
-                                    ⚡ AI CORE
-                                </span>
-                            )
+                            <>
+                                {(adminUnlocked || aiMode === "ADMIN") && (
+                                    <span className="text-[8px] sm:text-[10px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded-md bg-amber-500/20 text-amber-300 border border-amber-500/40 flex items-center gap-1 shadow-[0_0_12px_rgba(245,158,11,0.4)] animate-pulse flex-shrink-0">
+                                        👑 ADMIN ACTIVE
+                                    </span>
+                                )}
+                                <button
+                                    type="button"
+                                    onClick={() => setShowPersonalizeModal(true)}
+                                    title="Personalize VORTEX-9 from your last 30 messages"
+                                    className="flex items-center gap-1 text-[10px] sm:text-[11px] font-bold px-2 py-0.5 rounded-md bg-gradient-to-r from-violet-600/40 via-purple-600/40 to-fuchsia-600/40 hover:from-violet-600/60 hover:to-fuchsia-600/60 border border-violet-400/40 text-violet-200 transition-all shadow-sm active:scale-95 cursor-pointer flex-shrink-0"
+                                >
+                                    <Sparkles className="w-2.5 h-2.5 text-amber-300" />
+                                    <span>Personalize</span>
+                                </button>
+                            </>
                         )}
                     </div>
                     
@@ -193,17 +200,7 @@ const ChatHeader = React.memo(({
                                         👑 Admin Mode
                                     </option>
                                 )}
-
                             </select>
-                            <button
-                                type="button"
-                                onClick={() => setShowPersonalizeModal(true)}
-                                title="Personalize VORTEX-9 from your last 30 messages"
-                                className="flex items-center gap-1 text-[10px] sm:text-[11px] font-bold px-2 py-0.5 rounded-md bg-gradient-to-r from-violet-600/40 via-purple-600/40 to-fuchsia-600/40 hover:from-violet-600/60 hover:to-fuchsia-600/60 border border-violet-400/40 text-violet-200 transition-all shadow-sm active:scale-95 cursor-pointer"
-                            >
-                                <Sparkles className="w-2.5 h-2.5 text-amber-300" />
-                                <span>Personalize</span>
-                            </button>
                         </div>
                     ) : (
                         <p className={`text-[9px] sm:text-xs mt-0.5 font-medium transition-colors truncate ${
