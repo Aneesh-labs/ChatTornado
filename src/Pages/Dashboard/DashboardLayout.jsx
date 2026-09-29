@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import React, { useMemo, useState, useEffect } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import {
     BarChart3,
@@ -22,10 +22,30 @@ const navItems = [
 ];
 
 import { clearAdminSession } from "../../utils/adminSession";
+import PortfolioOnboardingModal from "../../Components/PortfolioOnboardingModal";
 
 export default function DashboardLayout() {
     const navigate = useNavigate();
-    const username = useMemo(() => sessionStorage.getItem("username") || "Member", []);
+    const [username, setUsername] = useState(() => sessionStorage.getItem("username") || "Member");
+    const [showOnboarding, setShowOnboarding] = useState(() => {
+        return sessionStorage.getItem("onboardingCompleted") !== "true";
+    });
+
+    useEffect(() => {
+        const syncState = () => {
+            setUsername(sessionStorage.getItem("username") || "Member");
+            setShowOnboarding(sessionStorage.getItem("onboardingCompleted") !== "true");
+        };
+        const handleOpenOnboarding = () => setShowOnboarding(true);
+
+        window.addEventListener("sessionStorageUpdate", syncState);
+        window.addEventListener("openPortfolioOnboarding", handleOpenOnboarding);
+        return () => {
+            window.removeEventListener("sessionStorageUpdate", syncState);
+            window.removeEventListener("openPortfolioOnboarding", handleOpenOnboarding);
+        };
+    }, []);
+
     const initial = username.trim().charAt(0).toUpperCase() || "M";
 
     const handleLogout = () => {
@@ -37,6 +57,11 @@ export default function DashboardLayout() {
 
     return (
         <div className="relative flex h-dvh w-screen overflow-hidden bg-[#07090d] text-white">
+            <PortfolioOnboardingModal
+                isOpen={showOnboarding}
+                onClose={() => setShowOnboarding(false)}
+                onComplete={() => setShowOnboarding(false)}
+            />
             <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(135deg,rgba(125,211,252,0.08),transparent_34%,rgba(248,196,113,0.07)_68%,transparent)]" />
             <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.026)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.022)_1px,transparent_1px)] bg-[size:48px_48px]" />
 

@@ -28,6 +28,10 @@ export default function ProtectedRoute({ children }) {
                 if (res.data.username) {
                     sessionStorage.setItem("username", res.data.username);
                 }
+                sessionStorage.setItem("onboardingCompleted", String(Boolean(res.data.onboarding_completed)));
+                if (res.data.portfolio_data) {
+                    sessionStorage.setItem("portfolioData", JSON.stringify(res.data.portfolio_data));
+                }
                 setEmailVerified(res.data.email_verified);
                 setAuthorized(true)
             })

@@ -37,6 +37,8 @@ class User(Base):
     account_status: Mapped[str] = mapped_column(String(20), default="active", nullable=False)  # "active", "restricted", "permanently_blocked"
     restricted_until: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     restriction_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    onboarding_completed: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    portfolio_data: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
     last_seen: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
     last_login: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)

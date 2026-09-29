@@ -264,7 +264,9 @@ def login(
         "account_status": user.account_status,
         "restricted_until": user.restricted_until.isoformat() if user.restricted_until else None,
         "restriction_reason": user.restriction_reason,
-        "custom_status": user.custom_status
+        "custom_status": user.custom_status,
+        "onboarding_completed": getattr(user, "onboarding_completed", False),
+        "portfolio_data": getattr(user, "portfolio_data", None)
     }
 
 
@@ -398,7 +400,10 @@ def verify_user(
         "username": user.username,
         "email": user.email,
         "user_id": user.id,
-        "email_verified": user.email_verified
+        "email_verified": user.email_verified,
+        "role": user.role,
+        "onboarding_completed": getattr(user, "onboarding_completed", False),
+        "portfolio_data": getattr(user, "portfolio_data", None)
     }
 
 

@@ -232,6 +232,14 @@ export default function Profile() {
     const [copiedEmail, setCopiedEmail] = useState(false);
     const [userRole, setUserRole] = useState("Architect / Admin");
     const [isVerified, setIsVerified] = useState(true);
+    const [portfolioData, setPortfolioData] = useState(() => {
+        try {
+            const raw = sessionStorage.getItem("portfolioData");
+            return raw ? JSON.parse(raw) : null;
+        } catch {
+            return null;
+        }
+    });
 
     useEffect(() => {
         const syncProfileData = () => {
@@ -241,20 +249,47 @@ export default function Profile() {
             if (storedUser) setUsername(storedUser);
             if (storedEmail) setEmail(storedEmail);
             setIsVerified(verified);
+            try {
+                const raw = sessionStorage.getItem("portfolioData");
+                if (raw) setPortfolioData(JSON.parse(raw));
+            } catch {}
         };
 
         syncProfileData();
         window.addEventListener("storage", syncProfileData);
         window.addEventListener("sessionStorageUpdate", syncProfileData);
+
+        const token = sessionStorage.getItem("token");
+        if (token) {
+            API.get(`/user/portfolio?token=${token}`)
+                .then(res => {
+                    if (res.data?.portfolio_data) {
+                        setPortfolioData(res.data.portfolio_data);
+                        sessionStorage.setItem("portfolioData", JSON.stringify(res.data.portfolio_data));
+                    }
+                    if (res.data?.role) setUserRole(res.data.role);
+                })
+                .catch(() => {});
+        }
+
         return () => {
             window.removeEventListener("storage", syncProfileData);
             window.removeEventListener("sessionStorageUpdate", syncProfileData);
         };
     }, []);
 
-    const initial = useMemo(() => username.trim().charAt(0).toUpperCase() || "A", [username]);
+    const effectiveName = portfolioData?.displayName || username;
+    const effectiveEmail = portfolioData?.email || email;
+    const effectiveRole = portfolioData?.role || userRole;
+    const effectiveHeadline = portfolioData?.headline || "Engineering robust real-time web applications & AI pipelines.";
+    const effectiveBio = portfolioData?.bio || "Full-stack developer with a focus on modern React frontends, high-concurrency Python & FastAPI backends, real-time WebSocket systems, and agentic AI pipelines.";
+    const effectiveSkills = portfolioData?.skills && portfolioData.skills.length > 0 ? portfolioData.skills : ["React 19", "TypeScript", "Tailwind CSS", "Python", "FastAPI", "PostgreSQL", "WebSockets"];
+    const effectiveProjects = portfolioData?.projects && portfolioData.projects.length > 0 ? portfolioData.projects : PROJECTS_SHOWCASE;
+    const effectiveGithub = portfolioData?.socials?.github || "https://github.com/Aneesh-labs/ChatTornado";
 
-    const codeSnippetText = `const { react19, typescript, tailwindV4, pythonFastAPI, postgreSQL, webSockets, geminiAI, ...coreSkills } = developerProfile;`;
+    const initial = useMemo(() => effectiveName.trim().charAt(0).toUpperCase() || "A", [effectiveName]);
+
+    const codeSnippetText = `const { ${effectiveSkills.slice(0, 6).map(s => s.toLowerCase().replace(/[^a-z0-9]/g, '')).join(', ')}, ...moreSkills } = ${effectiveName.toLowerCase().replace(/\s+/g, '')}Profile;`;
 
     const handleCopyCode = () => {
         navigator.clipboard.writeText(codeSnippetText);
@@ -293,12 +328,12 @@ export default function Profile() {
                         </div>
                         <div>
                             <div className="flex items-center gap-2">
-                                <span className="font-bold text-white tracking-tight">{username}</span>
+                                <span className="font-bold text-white tracking-tight">{effectiveName}</span>
                                 {isVerified && (
                                     <BadgeCheck className="h-4 w-4 text-sky-400" title="Verified Identity" />
                                 )}
                             </div>
-                            <span className="text-xs text-white/40 font-mono">Portfolio & Profile Enclave</span>
+                            <span className="text-xs text-purple-300/80 font-mono">{effectiveRole}</span>
                         </div>
                     </div>
 
@@ -329,22 +364,32 @@ export default function Profile() {
                     {/* Quick Connect Actions */}
                     <div className="flex items-center gap-2">
                         <button
+                            onClick={() => window.dispatchEvent(new Event("openPortfolioOnboarding"))}
+                            className="flex items-center gap-1.5 rounded-lg border border-sky-500/30 bg-sky-500/10 px-3 py-1.5 text-xs font-semibold text-sky-300 transition hover:bg-sky-500/20"
+                            title="Re-open Onboarding & Portfolio Setup"
+                        >
+                            <Sparkles className="h-3.5 w-3.5" />
+                            <span>Edit Portfolio</span>
+                        </button>
+                        <button
                             onClick={handleCopyEmail}
                             className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-medium text-white/70 transition hover:bg-white/10 hover:text-white"
                         >
                             {copiedEmail ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />}
                             <span>{copiedEmail ? "Copied!" : "Email"}</span>
                         </button>
-                        <a
-                            href="https://github.com/Aneesh-labs/ChatTornado"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="flex items-center gap-1.5 rounded-lg border border-purple-500/30 bg-purple-500/10 px-3 py-1.5 text-xs font-semibold text-purple-300 transition hover:bg-purple-500/20"
-                        >
-                            <GithubIcon className="h-3.5 w-3.5" />
-                            <span>GitHub</span>
-                            <ExternalLink className="h-3 w-3 opacity-60" />
-                        </a>
+                        {effectiveGithub && (
+                            <a
+                                href={effectiveGithub}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="flex items-center gap-1.5 rounded-lg border border-purple-500/30 bg-purple-500/10 px-3 py-1.5 text-xs font-semibold text-purple-300 transition hover:bg-purple-500/20"
+                            >
+                                <GithubIcon className="h-3.5 w-3.5" />
+                                <span>GitHub</span>
+                                <ExternalLink className="h-3 w-3 opacity-60" />
+                            </a>
+                        )}
                     </div>
                 </header>
 
@@ -372,19 +417,7 @@ export default function Profile() {
                         </button>
                     </div>
                     <code className="text-purple-300 leading-relaxed break-all">
-                        <span className="text-pink-400 font-bold">const</span>{" "}
-                        <span className="text-white/80">{"{"}</span>{" "}
-                        <span className="text-sky-300">react19</span>,{" "}
-                        <span className="text-blue-300">typescript</span>,{" "}
-                        <span className="text-teal-300">tailwindV4</span>,{" "}
-                        <span className="text-emerald-300">pythonFastAPI</span>,{" "}
-                        <span className="text-indigo-300">postgreSQL</span>,{" "}
-                        <span className="text-amber-300">webSockets</span>,{" "}
-                        <span className="text-violet-300">geminiAI</span>,{" "}
-                        <span className="text-white/40 font-italic">...coreSkills</span>{" "}
-                        <span className="text-white/80">{"}"}</span>{" "}
-                        <span className="text-pink-400">=</span>{" "}
-                        <span className="text-amber-200">developerProfile</span>;
+                        {codeSnippetText}
                     </code>
                 </motion.div>
 
@@ -413,11 +446,11 @@ export default function Profile() {
                                         </span>
                                         Available for Collaboration & Scaling
                                     </div>
-                                    <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight text-white">
-                                        Engineering robust real-time web applications & AI pipelines.
+                                    <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight text-white leading-tight">
+                                        {effectiveHeadline}
                                     </h1>
                                     <p className="text-sm md:text-base leading-relaxed text-white/60">
-                                        Full-stack developer with a focus on modern React frontends, high-concurrency Python & FastAPI backends, real-time WebSocket systems, and agentic AI pipelines. Architect of ChatTornado and the VORTEX-9 cognitive assistant engine.
+                                        {effectiveBio}
                                     </p>
                                 </div>
 
@@ -446,7 +479,7 @@ export default function Profile() {
                                         Explore Projects
                                     </button>
                                     <a
-                                        href={`mailto:${email}?subject=Project%20Collaboration`}
+                                        href={`mailto:${effectiveEmail}?subject=Project%20Collaboration`}
                                         className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-5 py-2.5 text-xs font-bold text-white/80 transition hover:bg-white/10 hover:text-white"
                                     >
                                         <Mail className="h-4 w-4" />
@@ -464,15 +497,15 @@ export default function Profile() {
                                     <div className="space-y-3 text-sm">
                                         <div className="flex items-center justify-between border-b border-white/5 pb-2">
                                             <span className="text-white/50 flex items-center gap-2"><UserRound className="h-4 w-4 text-sky-400" /> Name</span>
-                                            <span className="font-semibold text-white">{username}</span>
+                                            <span className="font-semibold text-white">{effectiveName}</span>
                                         </div>
                                         <div className="flex items-center justify-between border-b border-white/5 pb-2">
                                             <span className="text-white/50 flex items-center gap-2"><Mail className="h-4 w-4 text-purple-400" /> Email</span>
-                                            <span className="font-mono text-xs text-white/80">{email}</span>
+                                            <span className="font-mono text-xs text-white/80">{effectiveEmail}</span>
                                         </div>
                                         <div className="flex items-center justify-between border-b border-white/5 pb-2">
                                             <span className="text-white/50 flex items-center gap-2"><ShieldCheck className="h-4 w-4 text-emerald-400" /> Role</span>
-                                            <span className="rounded-md bg-emerald-500/10 px-2 py-0.5 text-xs font-bold text-emerald-400 border border-emerald-500/20">{userRole}</span>
+                                            <span className="rounded-md bg-emerald-500/10 px-2 py-0.5 text-xs font-bold text-emerald-400 border border-emerald-500/20">{effectiveRole}</span>
                                         </div>
                                         <div className="flex items-center justify-between">
                                             <span className="text-white/50 flex items-center gap-2"><Fingerprint className="h-4 w-4 text-pink-400" /> Auth Status</span>
@@ -590,64 +623,75 @@ export default function Profile() {
                             transition={{ duration: 0.25 }}
                             className="grid gap-6 md:grid-cols-2"
                         >
-                            {PROJECTS_SHOWCASE.map((proj, idx) => (
-                                <div
-                                    key={idx}
-                                    className="flex flex-col justify-between rounded-2xl border border-white/10 bg-[#0d111a]/80 p-6 backdrop-blur-2xl transition hover:border-white/20 group"
-                                >
-                                    <div className="space-y-3">
-                                        <div className="flex items-center justify-between">
-                                            <span className="rounded-md bg-purple-500/10 border border-purple-500/20 px-2 py-0.5 text-[10px] font-bold text-purple-300 uppercase tracking-wide">
-                                                {proj.status}
-                                            </span>
-                                            <div className="flex items-center gap-2">
-                                                {proj.repo && (
-                                                    <a
-                                                        href={proj.repo}
-                                                        target="_blank"
-                                                        rel="noopener noreferrer"
-                                                        className="text-white/40 hover:text-white transition"
-                                                        title="GitHub Repository"
-                                                    >
-                                                        <GithubIcon className="h-4 w-4" />
-                                                    </a>
-                                                )}
-                                                {proj.url && (
-                                                    <a
-                                                        href={proj.url}
-                                                        target="_blank"
-                                                        rel="noopener noreferrer"
-                                                        className="text-white/40 hover:text-white transition"
-                                                        title="Open Link"
-                                                    >
-                                                        <ExternalLink className="h-4 w-4" />
-                                                    </a>
-                                                )}
+                            {effectiveProjects.map((proj, idx) => {
+                                const tagList = Array.isArray(proj.tags) 
+                                    ? proj.tags 
+                                    : typeof proj.tags === "string" 
+                                    ? proj.tags.split(",").map(t => t.trim()).filter(Boolean) 
+                                    : [];
+                                return (
+                                    <div
+                                        key={idx}
+                                        className="flex flex-col justify-between rounded-2xl border border-white/10 bg-[#0d111a]/80 p-6 backdrop-blur-2xl transition hover:border-white/20 group"
+                                    >
+                                        <div className="space-y-3">
+                                            <div className="flex items-center justify-between">
+                                                <span className="rounded-md bg-purple-500/10 border border-purple-500/20 px-2 py-0.5 text-[10px] font-bold text-purple-300 uppercase tracking-wide">
+                                                    {proj.status || "PROJECT"}
+                                                </span>
+                                                <div className="flex items-center gap-2">
+                                                    {proj.repo && (
+                                                        <a
+                                                            href={proj.repo}
+                                                            target="_blank"
+                                                            rel="noopener noreferrer"
+                                                            className="text-white/40 hover:text-white transition"
+                                                            title="GitHub Repository"
+                                                        >
+                                                            <GithubIcon className="h-4 w-4" />
+                                                        </a>
+                                                    )}
+                                                    {proj.url && (
+                                                        <a
+                                                            href={proj.url}
+                                                            target="_blank"
+                                                            rel="noopener noreferrer"
+                                                            className="text-white/40 hover:text-white transition"
+                                                            title="Open Link"
+                                                        >
+                                                            <ExternalLink className="h-4 w-4" />
+                                                        </a>
+                                                    )}
+                                                </div>
                                             </div>
+
+                                            <h3 className="text-xl font-bold text-white group-hover:text-purple-300 transition">
+                                                {proj.title}
+                                            </h3>
+
+                                            <p className="text-xs md:text-sm text-white/60 leading-relaxed">
+                                                {proj.description}
+                                            </p>
+
+                                            {proj.metrics && (
+                                                <div className="rounded-lg bg-black/30 p-2.5 text-[11px] font-mono text-emerald-400/90 border border-white/5">
+                                                    ⚡ {proj.metrics}
+                                                </div>
+                                            )}
                                         </div>
 
-                                        <h3 className="text-xl font-bold text-white group-hover:text-purple-300 transition">
-                                            {proj.title}
-                                        </h3>
-
-                                        <p className="text-xs md:text-sm text-white/60 leading-relaxed">
-                                            {proj.description}
-                                        </p>
-
-                                        <div className="rounded-lg bg-black/30 p-2.5 text-[11px] font-mono text-emerald-400/90 border border-white/5">
-                                            ⚡ {proj.metrics}
-                                        </div>
+                                        {tagList.length > 0 && (
+                                            <div className="flex flex-wrap gap-1.5 pt-4 mt-auto">
+                                                {tagList.map((t) => (
+                                                    <span key={t} className="rounded-md bg-white/[0.04] px-2 py-0.5 text-[11px] font-mono text-white/50 border border-white/5">
+                                                        {t}
+                                                    </span>
+                                                ))}
+                                            </div>
+                                        )}
                                     </div>
-
-                                    <div className="flex flex-wrap gap-1.5 pt-4 mt-auto">
-                                        {proj.tags.map((t) => (
-                                            <span key={t} className="rounded-md bg-white/[0.04] px-2 py-0.5 text-[11px] font-mono text-white/50 border border-white/5">
-                                                {t}
-                                            </span>
-                                        ))}
-                                    </div>
-                                </div>
-                            ))}
+                                );
+                            })}
                         </motion.div>
                     )}
 

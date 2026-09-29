@@ -135,8 +135,9 @@ export default function VerifyEmail() {
         navigate("/", { replace: true });
     };
 
-    const handleContinue = () => {
-        navigate("/home", { replace: true });
+    const handleGoToLogin = () => {
+        sessionStorage.clear();
+        navigate("/", { replace: true });
     };
 
     return (
@@ -156,13 +157,13 @@ export default function VerifyEmail() {
                 {status === "success" && (
                     <div className="flex flex-col items-center text-center">
                         <CheckCircle2 className="mb-4 h-12 w-12 text-emerald-400" />
-                        <h2 className="text-xl font-bold text-emerald-400">Verified!</h2>
-                        <p className="mt-2 text-sm text-white/60">{message}</p>
+                        <h2 className="text-xl font-bold text-emerald-400">Access Granted!</h2>
+                        <p className="mt-2 text-sm text-white/60">{message || "Email verified successfully! Please log in to complete your portfolio."}</p>
                         <button 
-                            onClick={handleContinue}
-                            className="mt-6 w-full rounded-xl bg-emerald-500 py-3 font-bold text-black transition hover:bg-emerald-400"
+                            onClick={handleGoToLogin}
+                            className="mt-6 w-full rounded-xl bg-emerald-500 py-3 font-bold text-black transition hover:bg-emerald-400 shadow-lg shadow-emerald-500/20"
                         >
-                            Continue to ChatTornado
+                            Proceed to Login →
                         </button>
                     </div>
                 )}

@@ -89,6 +89,8 @@ def run_migrations():
                 ("restricted_until", "TIMESTAMP"),
                 ("restriction_reason", "TEXT"),
                 ("custom_status", "VARCHAR(100)"),
+                ("onboarding_completed", "BOOLEAN DEFAULT FALSE"),
+                ("portfolio_data", "TEXT"),
             ]
             with engine.begin() as conn:
                 for col_name, col_def in user_cols_to_add:

@@ -241,3 +241,57 @@ async def delete_account(
         "success": True,
         "message": "Account and all associated data permanently deleted."
     }
+
+
+@router.get("/user/portfolio")
+def get_user_portfolio(
+    token: str,
+    db: Session = Depends(get_db)
+):
+    payload = decode_token(token)
+    if not payload:
+        raise HTTPException(status_code=401, detail="Invalid token.")
+    user = db.query(User).filter(User.id == payload["user_id"]).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found.")
+    return {
+        "user_id": user.id,
+        "username": user.username,
+        "email": user.email,
+        "role": user.role,
+        "onboarding_completed": getattr(user, "onboarding_completed", False),
+        "portfolio_data": getattr(user, "portfolio_data", None)
+    }
+
+
+@router.post("/user/portfolio")
+def save_user_portfolio(
+    data: dict,
+    token: str = "",
+    db: Session = Depends(get_db)
+):
+    auth_token = token or data.get("token")
+    if not auth_token:
+        raise HTTPException(status_code=401, detail="Authorization token is required.")
+    payload = decode_token(auth_token)
+    if not payload:
+        raise HTTPException(status_code=401, detail="Invalid token.")
+    user = db.query(User).filter(User.id == payload["user_id"]).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found.")
+        
+    portfolio = data.get("portfolio") if data.get("portfolio") is not None else data.get("portfolio_data", {})
+    user.portfolio_data = portfolio
+    user.onboarding_completed = True
+    
+    if data.get("custom_status"):
+        user.custom_status = data["custom_status"][:100]
+        
+    db.commit()
+    db.refresh(user)
+    return {
+        "success": True,
+        "message": "Portfolio updated successfully!",
+        "onboarding_completed": True,
+        "portfolio_data": user.portfolio_data
+    }
