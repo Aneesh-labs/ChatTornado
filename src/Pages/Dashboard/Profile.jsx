@@ -31,7 +31,7 @@ const GithubIcon = ({ className = "h-4 w-4" }) => (
 );
 
 // ============================================================================
-// LIGHTWEIGHT AMBIENT PARTICLE MESH (Inspired by rai.codes WebGL backdrop)
+// LIGHTWEIGHT AMBIENT PARTICLE MESH
 // ============================================================================
 const AmbientParticleCanvas = () => {
     const canvasRef = useRef(null);
@@ -319,7 +319,7 @@ export default function Profile() {
             <div className="relative z-10 mx-auto max-w-6xl space-y-8">
                 
                 {/* ========================================================================= */}
-                {/* SIGNATURE RAI.CODES TOP NAVIGATION DOCK */}
+                {/* TOP NAVIGATION DOCK */}
                 {/* ========================================================================= */}
                 <header className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-white/10 bg-[#0d111a]/80 p-3 px-5 shadow-2xl backdrop-blur-2xl">
                     <div className="flex items-center gap-3">
@@ -394,7 +394,7 @@ export default function Profile() {
                 </header>
 
                 {/* ========================================================================= */}
-                {/* SIGNATURE MONOSPACE CODE BLOCK BANNER (Inspired by rai.codes) */}
+                {/* SIGNATURE MONOSPACE CODE BLOCK BANNER */}
                 {/* ========================================================================= */}
                 <motion.div 
                     initial={{ opacity: 0, y: 10 }}

@@ -211,7 +211,7 @@ export default function PortfolioOnboardingModal({ isOpen, onClose, onComplete }
                         </div>
                         <div>
                             <h2 className="text-base font-bold tracking-tight text-white">Create Your Profile Showcase</h2>
-                            <p className="text-xs text-white/40">Step {step} of 6 • rai.codes Aesthetic</p>
+                            <p className="text-xs text-white/40">Step {step} of 6 • Developer Showcase</p>
                         </div>
                     </div>
 
@@ -594,7 +594,7 @@ export default function PortfolioOnboardingModal({ isOpen, onClose, onComplete }
                     {step === 6 && (
                         <div className="space-y-4">
                             <div>
-                                <h3 className="text-xl font-extrabold text-white">Review Your rai.codes Portfolio</h3>
+                                <h3 className="text-xl font-extrabold text-white">Review Your Developer Portfolio</h3>
                                 <p className="text-xs text-white/50 mt-1">
                                     This showcase is strictly private to your account. Only you can view it in your dashboard profile.
                                 </p>
