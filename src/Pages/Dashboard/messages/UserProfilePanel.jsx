@@ -1,6 +1,7 @@
 import React from "react";
 import { motion } from "framer-motion";
 import PropTypes from "prop-types";
+import { BadgeCheck } from "lucide-react";
 import { Avatar, useTheme } from "./constants";
 
 const UserProfilePanel = React.memo(({ user }) => {
@@ -21,8 +22,13 @@ const UserProfilePanel = React.memo(({ user }) => {
 
             {/* User Information Summary Card */}
             <div className="text-center mt-1">
-                <h3 className="text-sm font-semibold text-white">
-                    {user.username}
+                <h3 className="text-sm font-semibold text-white flex items-center justify-center gap-1.5">
+                    <span>{user.username}</span>
+                    {(Boolean(user?.is_verified) || Boolean(user?.email_verified)) && (
+                        <span title="Verified User" className="inline-flex items-center text-sky-400">
+                            <BadgeCheck className="h-4 w-4 fill-sky-400/20 text-sky-400" />
+                        </span>
+                    )}
                 </h3>
 
                 <p

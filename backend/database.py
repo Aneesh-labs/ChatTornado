@@ -91,6 +91,8 @@ def run_migrations():
                 ("custom_status", "VARCHAR(100)"),
                 ("onboarding_completed", "BOOLEAN DEFAULT FALSE"),
                 ("portfolio_data", "TEXT"),
+                ("is_verified", "BOOLEAN DEFAULT FALSE"),
+                ("game_stats", "TEXT"),
             ]
             with engine.begin() as conn:
                 for col_name, col_def in user_cols_to_add:
@@ -102,6 +104,7 @@ def run_migrations():
 
                 try:
                     conn.execute(text("UPDATE users SET email_verified = TRUE WHERE verification_token_hash IS NULL;"))
+                    conn.execute(text("UPDATE users SET is_verified = TRUE WHERE email_verified = TRUE AND is_verified IS NULL;"))
                     conn.execute(text("UPDATE users SET role = 'USER' WHERE role IS NULL;"))
                     conn.execute(text("UPDATE users SET account_status = 'active' WHERE account_status IS NULL;"))
                 except Exception:

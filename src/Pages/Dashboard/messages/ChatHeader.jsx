@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import PropTypes from "prop-types";
 import { motion, AnimatePresence } from "framer-motion";
-import { MoreVertical, Sparkles, Brain, Download, Cpu, Ban, UserCheck, ShieldAlert, Users } from "lucide-react";
+import { MoreVertical, Sparkles, Brain, Download, Cpu, Ban, UserCheck, ShieldAlert, Users, BadgeCheck } from "lucide-react";
 import { IconBtn, Avatar, useTheme } from "./constants";
 import PersonalizeModal from "./PersonalizeModal";
 import ExportModal from "./ExportModal";
@@ -212,8 +212,13 @@ const ChatHeader = React.memo(({
                 )}
                 <div className="min-w-0 flex-1 flex flex-col justify-center">
                     <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
-                        <h2 className="text-xs sm:text-sm font-semibold text-white leading-tight truncate tracking-wide max-w-[120px] sm:max-w-none">
-                            {username}
+                        <h2 className="text-xs sm:text-sm font-semibold text-white leading-tight truncate tracking-wide max-w-[120px] sm:max-w-none flex items-center gap-1.5">
+                            <span>{username}</span>
+                            {!isGroup && (Boolean(user?.is_verified) || Boolean(user?.email_verified)) && (
+                                <span title="Verified User" className="inline-flex items-center text-sky-400">
+                                    <BadgeCheck className="h-4 w-4 fill-sky-400/20 text-sky-400" />
+                                </span>
+                            )}
                         </h2>
                         {isBotUser && (
                             <>

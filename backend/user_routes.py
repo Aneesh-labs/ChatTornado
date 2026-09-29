@@ -51,7 +51,9 @@ def get_users(
             "email": user.email,
             "avatar_url": user.avatar_url,
             "status": user.status if (user.id in online_ids or str(user.id) in online_ids) else "offline",
-            "custom_status": user.custom_status
+            "custom_status": user.custom_status,
+            "is_verified": bool(getattr(user, "is_verified", False) or getattr(user, "email_verified", False)),
+            "game_stats": getattr(user, "game_stats", {}) or {}
         }
         for user in users
     ]
@@ -90,7 +92,9 @@ def get_user(
         "email": user.email,
         "avatar_url": user.avatar_url,
         "status": user.status if (user.id in online_ids or str(user.id) in online_ids) else "offline",
-        "custom_status": user.custom_status
+        "custom_status": user.custom_status,
+        "is_verified": bool(getattr(user, "is_verified", False) or getattr(user, "email_verified", False)),
+        "game_stats": getattr(user, "game_stats", {}) or {}
     }
 
 
@@ -141,7 +145,9 @@ def search_users(
             "email": user.email,
             "avatar_url": user.avatar_url,
             "status": user.status if (user.id in online_ids or str(user.id) in online_ids) else "offline",
-            "custom_status": user.custom_status
+            "custom_status": user.custom_status,
+            "is_verified": bool(getattr(user, "is_verified", False) or getattr(user, "email_verified", False)),
+            "game_stats": getattr(user, "game_stats", {}) or {}
         }
         for user in users
     ]
@@ -294,4 +300,114 @@ def save_user_portfolio(
         "message": "Portfolio updated successfully!",
         "onboarding_completed": True,
         "portfolio_data": user.portfolio_data
+    }
+
+
+@router.post("/user/game-score")
+def save_game_score(
+    data: dict,
+    token: str = "",
+    db: Session = Depends(get_db)
+):
+    auth_token = token or data.get("token")
+    if not auth_token:
+        raise HTTPException(status_code=401, detail="Authorization token is required.")
+    payload = decode_token(auth_token)
+    if not payload:
+        raise HTTPException(status_code=401, detail="Invalid token.")
+    user = db.query(User).filter(User.id == payload["user_id"]).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found.")
+        
+    game = str(data.get("game", "")).strip().lower()
+    score = int(data.get("score", 0))
+    if not game:
+        raise HTTPException(status_code=400, detail="Game name is required.")
+        
+    current_stats = dict(user.game_stats or {})
+    current_high = int(current_stats.get(game, 0))
+    if score > current_high:
+        current_stats[game] = score
+        user.game_stats = current_stats
+        db.commit()
+        db.refresh(user)
+        
+    return {
+        "success": True,
+        "game": game,
+        "high_score": current_stats.get(game, score),
+        "game_stats": user.game_stats or {}
+    }
+
+
+@router.get("/user/stats")
+def get_user_stats(
+    token: str = "",
+    db: Session = Depends(get_db)
+):
+    if not token:
+        raise HTTPException(status_code=401, detail="Authorization token is required.")
+    payload = decode_token(token)
+    if not payload:
+        raise HTTPException(status_code=401, detail="Invalid token.")
+    user = db.query(User).filter(User.id == payload["user_id"]).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found.")
+        
+    game_stats = user.game_stats or {}
+    highest_score = max(game_stats.values()) if game_stats else 0
+    total_messages_sent = db.query(Message).filter(Message.sender_id == user.id).count()
+    total_messages_received = db.query(Message).filter(Message.receiver_id == user.id).count()
+    total_messages_all = db.query(Message).count()
+    is_verified = bool(getattr(user, "is_verified", False) or getattr(user, "email_verified", False))
+    
+    return {
+        "user_id": user.id,
+        "username": user.username,
+        "email": user.email,
+        "is_verified": is_verified,
+        "verification_status": "verified" if is_verified else "not verified",
+        "game_stats": game_stats,
+        "highest_game_score": highest_score,
+        "total_messages_sent": total_messages_sent,
+        "total_messages_received": total_messages_received,
+        "total_messages_all": total_messages_all,
+        "portfolio_data": getattr(user, "portfolio_data", None)
+    }
+
+
+@router.get("/user/{user_id}/stats")
+def get_specific_user_stats(
+    user_id: int,
+    token: str = "",
+    db: Session = Depends(get_db)
+):
+    if not token:
+        raise HTTPException(status_code=401, detail="Authorization token is required.")
+    payload = decode_token(token)
+    if not payload:
+        raise HTTPException(status_code=401, detail="Invalid token.")
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found.")
+        
+    game_stats = user.game_stats or {}
+    highest_score = max(game_stats.values()) if game_stats else 0
+    total_messages_sent = db.query(Message).filter(Message.sender_id == user.id).count()
+    total_messages_received = db.query(Message).filter(Message.receiver_id == user.id).count()
+    total_messages_all = db.query(Message).count()
+    is_verified = bool(getattr(user, "is_verified", False) or getattr(user, "email_verified", False))
+    
+    return {
+        "user_id": user.id,
+        "username": user.username,
+        "email": user.email,
+        "is_verified": is_verified,
+        "verification_status": "verified" if is_verified else "not verified",
+        "game_stats": game_stats,
+        "highest_game_score": highest_score,
+        "total_messages_sent": total_messages_sent,
+        "total_messages_received": total_messages_received,
+        "total_messages_all": total_messages_all,
+        "portfolio_data": getattr(user, "portfolio_data", None)
     }

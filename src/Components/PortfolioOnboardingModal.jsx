@@ -22,24 +22,42 @@ import {
     Brain, 
     Terminal, 
     Flame, 
-    Zap 
+    Zap,
+    Gamepad2,
+    Music,
+    PenTool,
+    TrendingUp,
+    Compass,
+    BookOpen
 } from "lucide-react";
 import API from "../Services/API";
 
 const DOMAINS_LIST = [
-    { id: "fullstack", label: "Full-Stack Architect", icon: Layers, desc: "End-to-end architectures, React & FastAPI pipelines" },
-    { id: "frontend", label: "Frontend & UI/UX Engineer", icon: Palette, desc: "Fluid animations, responsive layouts, design systems" },
-    { id: "ai_ml", label: "AI & Cognitive Systems Engineer", icon: Brain, desc: "Agentic AI, LLM pipelines, autonomous workflows" },
-    { id: "backend", label: "Backend & Distributed Systems", icon: Cpu, desc: "High-throughput APIs, microservices, databases" },
-    { id: "devops", label: "DevOps & Cloud Security", icon: ShieldCheck, desc: "CI/CD, container orchestration, resilience" },
-    { id: "founder", label: "Solo Founder & Product Builder", icon: Flame, desc: "Zero-to-one product shipping and monetization" },
-    { id: "student", label: "Developer & Explorer", icon: Terminal, desc: "Passionate coder learning, hacking and building" }
+    { id: "gaming", label: "Gaming & Esports", icon: Gamepad2, desc: "Pro gamer, streamer, game developer, or guild master" },
+    { id: "music", label: "Music & Audio Production", icon: Music, desc: "Producer, beatmaker, DJ, composer, sound designer" },
+    { id: "arts", label: "Digital Arts & 3D Design", icon: Palette, desc: "Visual artist, 3D modeler, animator, concept designer" },
+    { id: "writing", label: "Writing & Content Creation", icon: PenTool, desc: "Author, YouTuber, podcaster, journalist, storyteller" },
+    { id: "business", label: "Business, Finance & Startups", icon: TrendingUp, desc: "Entrepreneur, investor, trader, growth strategist" },
+    { id: "science", label: "Science & Academia", icon: BookOpen, desc: "Researcher, scholar, student, data scientist" },
+    { id: "fullstack", label: "Full-Stack & Systems Engineering", icon: Layers, desc: "End-to-end architectures, modern web & APIs" },
+    { id: "ai_ml", label: "AI & Cognitive Systems", icon: Brain, desc: "Agentic AI, deep learning, prompt crafting" },
+    { id: "devops", label: "Cybersecurity & DevOps", icon: ShieldCheck, desc: "Ethical hacking, cloud infrastructure, resilience" },
+    { id: "explorer", label: "Lifestyle & Community Explorer", icon: Compass, desc: "Culture enthusiast, community leader, creator" }
 ];
 
 const PRESET_SKILLS = [
-    "React", "TypeScript", "JavaScript", "Python", "FastAPI", "Tailwind CSS", 
-    "PostgreSQL", "WebSockets", "Docker", "Node.js", "Next.js", "Redis", 
-    "GraphQL", "REST APIs", "Git", "Framer Motion", "Gemini AI", "SQLAlchemy"
+    // Tech & Code
+    "React", "TypeScript", "Python", "FastAPI", "Tailwind CSS", "Docker", "Node.js", "AI & LLMs",
+    // Gaming & Interactive
+    "Unreal Engine", "Unity", "Blender", "Streaming", "OBS Studio", "Esports", "Game Design",
+    // Audio & Music
+    "Ableton Live", "FL Studio", "Logic Pro", "Sound Design", "Mixing & Mastering", "Beatmaking",
+    // Design & Creative
+    "Figma", "Photoshop", "After Effects", "UI/UX", "3D Animation", "Digital Illustration",
+    // Writing & Media
+    "Storytelling", "Video Editing", "Content Creation", "Podcast Production", "SEO & Copywriting",
+    // Business & Strategy
+    "Product Management", "Growth Marketing", "Crypto & Trading", "Entrepreneurship"
 ];
 
 const GithubIcon = ({ className = "h-4 w-4" }) => (
@@ -447,7 +465,7 @@ export default function PortfolioOnboardingModal({ isOpen, onClose, onComplete }
                                             type="text"
                                             value={newProject.title}
                                             onChange={(e) => setNewProject({ ...newProject, title: e.target.value })}
-                                            placeholder="Project Name *"
+                                            placeholder="Work / Project / Channel Name *"
                                             className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs text-white outline-none"
                                             required
                                         />
@@ -455,7 +473,7 @@ export default function PortfolioOnboardingModal({ isOpen, onClose, onComplete }
                                             type="text"
                                             value={newProject.tags}
                                             onChange={(e) => setNewProject({ ...newProject, tags: e.target.value })}
-                                            placeholder="Tech tags (e.g. React, Node.js)"
+                                            placeholder="Genre / Tags (e.g. Unreal Engine, Ableton, 3D Art, React)"
                                             className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs text-white outline-none"
                                         />
                                     </div>
@@ -463,7 +481,7 @@ export default function PortfolioOnboardingModal({ isOpen, onClose, onComplete }
                                         type="text"
                                         value={newProject.description}
                                         onChange={(e) => setNewProject({ ...newProject, description: e.target.value })}
-                                        placeholder="Short description / highlight of what it does..."
+                                        placeholder="Short description / highlight of what you created or built..."
                                         className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs text-white outline-none"
                                     />
                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -471,14 +489,14 @@ export default function PortfolioOnboardingModal({ isOpen, onClose, onComplete }
                                             type="url"
                                             value={newProject.url}
                                             onChange={(e) => setNewProject({ ...newProject, url: e.target.value })}
-                                            placeholder="Live Demo URL (optional)"
+                                            placeholder="Live Demo / Stream / Portfolio URL (optional)"
                                             className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs text-white outline-none font-mono text-[11px]"
                                         />
                                         <input
                                             type="url"
                                             value={newProject.repo}
                                             onChange={(e) => setNewProject({ ...newProject, repo: e.target.value })}
-                                            placeholder="GitHub Repo URL (optional)"
+                                            placeholder="Platform Link (GitHub, Behance, SoundCloud, Steam) (optional)"
                                             className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs text-white outline-none font-mono text-[11px]"
                                         />
                                     </div>

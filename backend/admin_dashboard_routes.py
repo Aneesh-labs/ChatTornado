@@ -231,6 +231,8 @@ def get_admin_users(
                 "restricted_until": u.restricted_until.isoformat() if u.restricted_until else None,
                 "restriction_reason": u.restriction_reason,
                 "custom_status": u.custom_status,
+                "is_verified": bool(getattr(u, "is_verified", False) or getattr(u, "email_verified", False)),
+                "game_stats": getattr(u, "game_stats", {}) or {},
                 "last_seen": u.last_seen.isoformat() if u.last_seen else None,
                 "last_login": u.last_login.isoformat() if u.last_login else None,
                 "created_at": u.created_at.isoformat() if u.created_at else None,
@@ -307,6 +309,45 @@ def take_user_action(
         "action": log_action,
         "account_status": target.account_status,
         "restricted_until": target.restricted_until.isoformat() if target.restricted_until else None
+    }
+
+
+class VerificationToggleRequest(BaseModel):
+    is_verified: Optional[bool] = None
+
+
+@router.post("/users/{target_user_id}/verification")
+def toggle_user_verification(
+    target_user_id: int,
+    payload: VerificationToggleRequest,
+    request: Request,
+    admin: User = Depends(require_super_admin),
+    db: Session = Depends(get_db)
+):
+    target = db.query(User).filter(User.id == target_user_id).first()
+    if not target:
+        raise HTTPException(status_code=404, detail="Target user not found.")
+        
+    if payload.is_verified is not None:
+        target.is_verified = payload.is_verified
+    else:
+        current_state = bool(getattr(target, "is_verified", False) or getattr(target, "email_verified", False))
+        target.is_verified = not current_state
+        
+    db.commit()
+    db.refresh(target)
+    
+    action_name = "grant_verified_badge" if target.is_verified else "kill_verified_badge"
+    log_admin_action(
+        db, admin.id, action_name, "user", target.id,
+        {"is_verified": target.is_verified}, request.client.host if request.client else None
+    )
+    return {
+        "success": True,
+        "user_id": target.id,
+        "username": target.username,
+        "is_verified": target.is_verified,
+        "message": f"Verified badge {'granted' if target.is_verified else 'killed/revoked'} successfully."
     }
 
 

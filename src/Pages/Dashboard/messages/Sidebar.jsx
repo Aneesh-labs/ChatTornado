@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import PropTypes from "prop-types";
-import { Users, Plus } from "lucide-react";
+import { Users, Plus, BadgeCheck } from "lucide-react";
 import { useTheme, Avatar, Badge, IconBtn, StatusDot, USER_STATUSES, areIdsEqual } from "./constants";
 import API from "../../../Services/API";
 import CreateGroupModal from "./CreateGroupModal";
@@ -92,10 +92,18 @@ export const ConversationCard = React.memo(({
             <Avatar user={user} size="sm" />
 
             <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 mb-0.5">
+                <div className="flex items-center gap-1.5 mb-0.5 min-w-0">
                     <span className={`text-sm font-semibold truncate ${selected && canOpenChat ? "text-white" : "text-white/80"}`}>
                         {user?.username || "Unknown User"}
                     </span>
+                    {(Boolean(user?.is_verified) || Boolean(user?.email_verified)) && (
+                        <span 
+                            title="Verified Identity" 
+                            className="inline-flex items-center shrink-0 text-sky-400 drop-shadow-[0_0_6px_rgba(56,189,248,0.4)]"
+                        >
+                            <BadgeCheck className="h-4 w-4 fill-sky-400/20 text-sky-400" />
+                        </span>
+                    )}
                     {user?.is_bot && (
                         <span className="text-[10px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded-md bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 flex items-center gap-1 shadow-[0_0_8px_rgba(6,182,212,0.3)]">
                             ⚡ AI
@@ -413,8 +421,11 @@ const Sidebar = React.memo(({
                     >
                         <div className="flex items-center gap-2 min-w-0">
                             <Avatar user={selectedUser} size="xs" showStatus={false} />
-                            <span className="text-[11px] font-medium text-white/60 truncate">
+                            <span className="text-[11px] font-medium text-white/60 truncate flex items-center gap-1">
                                 <span className="text-white/90 font-semibold">{selectedUser.username}</span>
+                                {(Boolean(selectedUser?.is_verified) || Boolean(selectedUser?.email_verified)) && (
+                                    <BadgeCheck className="h-3.5 w-3.5 text-sky-400 shrink-0" />
+                                )}
                             </span>
                         </div>
                         <span className="text-[10px] text-white/40 font-semibold uppercase tracking-wider flex-shrink-0 ml-2">

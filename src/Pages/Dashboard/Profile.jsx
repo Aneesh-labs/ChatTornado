@@ -240,6 +240,7 @@ export default function Profile() {
             return null;
         }
     });
+    const [userStats, setUserStats] = useState(null);
 
     useEffect(() => {
         const syncProfileData = () => {
@@ -268,6 +269,17 @@ export default function Profile() {
                         sessionStorage.setItem("portfolioData", JSON.stringify(res.data.portfolio_data));
                     }
                     if (res.data?.role) setUserRole(res.data.role);
+                })
+                .catch(() => {});
+
+            API.get(`/user/stats?token=${token}`)
+                .then(res => {
+                    if (res.data) {
+                        setUserStats(res.data);
+                        if (res.data.is_verified !== undefined) {
+                            setIsVerified(Boolean(res.data.is_verified));
+                        }
+                    }
                 })
                 .catch(() => {});
         }
@@ -512,6 +524,69 @@ export default function Profile() {
                                             <span className="font-mono text-xs text-emerald-300 font-semibold">JWT Session Valid</span>
                                         </div>
                                     </div>
+                                </div>
+
+                                {/* Stats & Global Feed Card */}
+                                <div className="rounded-2xl border border-white/10 bg-[#0d111a]/80 p-6 backdrop-blur-2xl space-y-4">
+                                    <div className="flex items-center justify-between border-b border-white/5 pb-2">
+                                        <h3 className="text-sm font-bold uppercase tracking-wider text-white/40 font-mono flex items-center gap-2">
+                                            <Sparkles className="h-4 w-4 text-amber-400" /> Stats & Global Feed
+                                        </h3>
+                                        <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-full border ${
+                                            isVerified 
+                                                ? "bg-sky-500/10 text-sky-400 border-sky-500/30" 
+                                                : "bg-white/5 text-white/40 border-white/10"
+                                        }`}>
+                                            {isVerified ? "VERIFIED BADGE ACTIVE" : "NOT VERIFIED"}
+                                        </span>
+                                    </div>
+                                    <div className="space-y-3 text-xs">
+                                        <div className="flex items-center justify-between border-b border-white/5 pb-2">
+                                            <span className="text-white/50">Verification Status</span>
+                                            <span className="font-semibold flex items-center gap-1.5">
+                                                {isVerified ? (
+                                                    <>
+                                                        <BadgeCheck className="h-4 w-4 text-sky-400" />
+                                                        <span className="text-sky-400 font-bold">Verified User</span>
+                                                    </>
+                                                ) : (
+                                                    <span className="text-white/40 italic">Pending / Unverified</span>
+                                                )}
+                                            </span>
+                                        </div>
+                                        <div className="flex items-center justify-between border-b border-white/5 pb-2">
+                                            <span className="text-white/50">Max Arcade Score</span>
+                                            <span className="font-mono text-amber-300 font-bold">
+                                                {userStats?.highest_game_score || 0} pts
+                                            </span>
+                                        </div>
+                                        <div className="flex items-center justify-between border-b border-white/5 pb-2">
+                                            <span className="text-white/50">Messages Sent by You</span>
+                                            <span className="font-mono text-purple-300 font-bold">
+                                                {userStats?.total_messages_sent || 0}
+                                            </span>
+                                        </div>
+                                        <div className="flex items-center justify-between">
+                                            <span className="text-white/50">Total Platform Messages</span>
+                                            <span className="font-mono text-emerald-300 font-bold">
+                                                {userStats?.total_messages_all || 0}
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    {/* Game score chips */}
+                                    {userStats?.game_stats && Object.keys(userStats.game_stats).length > 0 && (
+                                        <div className="pt-2 border-t border-white/5">
+                                            <span className="text-[10px] text-white/40 uppercase font-mono block mb-2">Max Scores in Games:</span>
+                                            <div className="flex flex-wrap gap-1.5">
+                                                {Object.entries(userStats.game_stats).map(([game, sc]) => (
+                                                    <span key={game} className="text-[10px] font-mono bg-white/5 border border-white/10 px-2 py-0.5 rounded text-white/80">
+                                                        <span className="text-white/40 uppercase">{game}:</span> <span className="text-amber-300 font-bold">{sc}</span>
+                                                    </span>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
 
                                 <div className="rounded-2xl border border-white/10 bg-[#0d111a]/80 p-6 backdrop-blur-2xl">

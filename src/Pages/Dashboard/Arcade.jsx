@@ -2,6 +2,16 @@ import React, { useState, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Gamepad2, Trophy, RotateCcw, Volume2, VolumeX, Sparkles, Play, ArrowLeft } from "lucide-react";
 import { soundEngine } from "../../utils/soundEffects";
+import API from "../../Services/API";
+
+const saveBackendGameScore = (game, score) => {
+    try {
+        const token = sessionStorage.getItem("token");
+        if (token && score > 0) {
+            API.post("/user/game-score", { game, score, token }).catch(() => {});
+        }
+    } catch (_) {}
+};
 
 /* ═══════════════════════════════════════════════════════════════
    1. SNAKE GAME COMPONENT (Ultra-Smooth with Dynamic Grid)
@@ -121,6 +131,7 @@ const SnakeGame = ({ onBack, isMuted }) => {
                         highScoreRef.current = newScore;
                         setHighScore(newScore);
                         localStorage.setItem("snake_highscore", String(newScore));
+                        saveBackendGameScore("snake", newScore);
                     }
                     const nextF = generateFood([newHead, ...prev]);
                     foodRef.current = nextF;
@@ -347,6 +358,7 @@ const FlappyTornadoGame = ({ onBack, isMuted }) => {
                                 highScoreRef.current = newScore;
                                 setHighScore(newScore);
                                 localStorage.setItem("flappy_highscore", String(newScore));
+                                saveBackendGameScore("flappy", newScore);
                             }
                             return newScore;
                         });
@@ -692,6 +704,7 @@ const Game2048 = ({ onBack, isMuted }) => {
             if (nextScore > highScore) {
                 setHighScore(nextScore);
                 localStorage.setItem("2048_highscore", String(nextScore));
+                saveBackendGameScore("2048", nextScore);
             }
 
             // Check game over
@@ -1029,6 +1042,7 @@ const ZombieShooter = ({ onBack, isMuted }) => {
                             highScoreRef.current = currentScore;
                             setHighScore(currentScore);
                             localStorage.setItem("zombie_highscore", String(currentScore));
+                            saveBackendGameScore("zombie", currentScore);
                         }
                         zombies.splice(i, 1);
                         bullets.splice(j, 1);
@@ -1220,6 +1234,7 @@ const NeonDodge = ({ onBack, isMuted }) => {
                         highScoreRef.current = currentScore;
                         setHighScore(currentScore);
                         localStorage.setItem("neondodge_highscore", String(currentScore));
+                        saveBackendGameScore("neondodge", currentScore);
                     }
                     if (currentScore % 200 === 0) {
                         speedMultiplier += 0.2;
@@ -1469,6 +1484,7 @@ const NeonBlade = ({ onBack, isMuted }) => {
                                 highScoreRef.current = newScore;
                                 setHighScore(newScore);
                                 localStorage.setItem("neonblade_highscore", String(newScore));
+                                saveBackendGameScore("neonblade", newScore);
                             }
                             return newScore;
                         });
@@ -1732,6 +1748,7 @@ const SubwaySurfersGame = ({ onBack, isMuted }) => {
                 highScoreRef.current = currentScore;
                 setHighScore(currentScore);
                 localStorage.setItem("subwaysurfers_highscore", String(currentScore));
+                saveBackendGameScore("subwaysurfers", currentScore);
             }
 
             lanePosX += (targetLane - lanePosX) * 0.25;
@@ -2090,6 +2107,27 @@ export default function Arcade() {
     const [selectedGame, setSelectedGame] = useState(null);
     const [isMuted, setIsMuted] = useState(false);
     const handleBack = useCallback(() => setSelectedGame(null), []);
+
+    useEffect(() => {
+        const fetchStats = async () => {
+            try {
+                const token = sessionStorage.getItem("token");
+                if (!token) return;
+                const res = await API.get("/user/stats", { params: { token } });
+                const stats = res.data?.game_stats;
+                if (stats && typeof stats === "object") {
+                    Object.entries(stats).forEach(([game, sc]) => {
+                        const localKey = `${game}_highscore`;
+                        const localScore = Number(localStorage.getItem(localKey) || 0);
+                        if (Number(sc) > localScore) {
+                            localStorage.setItem(localKey, String(sc));
+                        }
+                    });
+                }
+            } catch (_) {}
+        };
+        fetchStats();
+    }, []);
 
     const GAMES = [
         {
