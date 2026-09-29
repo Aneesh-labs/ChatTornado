@@ -1,7 +1,7 @@
 import React, { useCallback, useState } from "react";
 import PropTypes from "prop-types";
 import { AnimatePresence } from "framer-motion";
-import { DateDivider } from "./constants";
+import { DateDivider, areIdsEqual } from "./constants";
 import MessageBubble from "./MessageBubble";
 import TypingIndicator from "./TypingIndicator";
 import MobileMessageActions from "./MobileMessageActions";
@@ -104,6 +104,7 @@ const ChatMessages = React.memo(({
     socket = null,
     onSend,
     onGameMove,
+    onRetry,
 }) => {
     const [mobileActionMsg, setMobileActionMsg] = useState(null);
 
@@ -131,12 +132,76 @@ const ChatMessages = React.memo(({
         setMobileActionMsg(msg);
     }, [isMobile, selectionMode]);
 
+    const isAiChat = Boolean(
+        enrichedSelected?.is_bot ||
+        enrichedSelected?.username?.toLowerCase?.() === "vortex-9" ||
+        enrichedSelected?.username?.toLowerCase?.() === "vortex9"
+    );
+
+    const hasMessages = groupedMessages.some((item) => item.type === "message" && (item.msg?.id || item.msg?.temp_id));
+
     return (
         <>
             <div
                 ref={scrollContainerRef}
                 className="flex-1 overflow-y-auto px-2 sm:px-6 py-3 sm:py-6 space-y-1 sm:space-y-3 min-h-0 custom-scrollbar overscroll-contain select-none"
             >
+                {!hasMessages && isAiChat && (
+                    <div className="flex flex-col items-center justify-center h-full min-h-[300px] text-center px-4 py-8 select-none">
+                        <div className="w-16 h-16 rounded-3xl bg-gradient-to-tr from-cyan-500/20 to-blue-500/20 border border-cyan-400/30 flex items-center justify-center text-3xl mb-4 shadow-[0_0_30px_rgba(6,182,212,0.2)]">
+                            🤖
+                        </div>
+                        <h2 className="text-xl font-black tracking-tight text-white mb-1.5 flex items-center gap-2">
+                            <span>VORTEX-9</span>
+                            <span className="text-[10px] uppercase font-bold tracking-widest px-2 py-0.5 rounded-full bg-cyan-500/20 border border-cyan-400/30 text-cyan-300">
+                                Online
+                            </span>
+                        </h2>
+                        <p className="text-xs text-white/50 max-w-sm mb-6 leading-relaxed">
+                            Your high-performance AI assistant. Ask questions, build software, explore ideas, or start autonomous research.
+                        </p>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-w-md w-full">
+                            {[
+                                { icon: "⚡", title: "What can you do?", prompt: "What can you help me with?" },
+                                { icon: "💻", title: "Coding & Architecture", prompt: "Can you help me design a fast, secure backend service?" },
+                                { icon: "🔬", title: "Deep Research", prompt: "/research Quantum error correction progress in 2026" },
+                                { icon: "💡", title: "Brainstorm Ideas", prompt: "Brainstorm 5 innovative startup ideas in AI devtools" }
+                            ].map((starter, sIdx) => (
+                                <button
+                                    key={sIdx}
+                                    type="button"
+                                    onClick={() => onSend?.(starter.prompt)}
+                                    className="flex items-start gap-2.5 p-3 rounded-2xl bg-white/[0.03] hover:bg-white/[0.08] border border-white/10 hover:border-cyan-500/30 text-left transition-all group active:scale-98 cursor-pointer"
+                                >
+                                    <span className="text-lg">{starter.icon}</span>
+                                    <div>
+                                        <div className="text-xs font-bold text-white/90 group-hover:text-cyan-300 transition-colors">
+                                            {starter.title}
+                                        </div>
+                                        <div className="text-[10px] text-white/40 truncate max-w-[170px]">
+                                            {starter.prompt}
+                                        </div>
+                                    </div>
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
+                {!hasMessages && !isAiChat && (
+                    <div className="flex flex-col items-center justify-center h-full min-h-[260px] text-center px-4 py-8 select-none">
+                        <div className="w-14 h-14 rounded-2xl bg-white/[0.05] border border-white/10 flex items-center justify-center text-2xl mb-3 shadow-inner">
+                            💬
+                        </div>
+                        <h3 className="text-sm font-bold text-white mb-1">
+                            No messages yet
+                        </h3>
+                        <p className="text-xs text-white/40 max-w-xs">
+                            This is the beginning of your conversation with <span className="text-white/70 font-semibold">{enrichedSelected?.username || "this user"}</span>. Say hello! 👋
+                        </p>
+                    </div>
+                )}
+
                 <AnimatePresence initial={false}>
                     {groupedMessages.map((item) => {
                         if (item.type === "divider") {
@@ -145,12 +210,13 @@ const ChatMessages = React.memo(({
                         if (item.type === "session_divider") {
                             return <SessionDivider key={item.key} sessionText={item.sessionText} />;
                         }
-                        if (!item.msg?.id) return null;
-                        const isMe = item.msg.sender_id === myUserId;
-                        const isSelected = isMessageSelected(item.msg.id);
+                        if (!item.msg?.id && !item.msg?.temp_id) return null;
+                        const isMe = areIdsEqual(item.msg.sender_id, myUserId);
+                        const msgIdentifier = item.msg.id || item.msg.temp_id;
+                        const isSelected = isMessageSelected(msgIdentifier);
                         return (
                             <MessageBubble
-                                key={item.msg.id}
+                                key={item.key || msgIdentifier}
                                 msg={item.msg}
                                 isMe={isMe}
                                 showAvatar={item.showAvatar}
@@ -165,6 +231,7 @@ const ChatMessages = React.memo(({
                                 isMobile={isMobile}
                                 onSend={onSend}
                                 onGameMove={onGameMove}
+                                onRetry={onRetry}
                             />
                         );
                     })}
@@ -180,7 +247,7 @@ const ChatMessages = React.memo(({
             <MobileMessageActions
                 open={!!mobileActionMsg}
                 msg={mobileActionMsg}
-                isMe={mobileActionMsg?.sender_id === myUserId}
+                isMe={areIdsEqual(mobileActionMsg?.sender_id, myUserId)}
                 onClose={() => setMobileActionMsg(null)}
                 onReaction={addReaction}
                 onReply={setReplyingTo}

@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import PropTypes from "prop-types";
 import { Users, Plus } from "lucide-react";
-import { useTheme, Avatar, Badge, IconBtn, StatusDot, USER_STATUSES } from "./constants";
+import { useTheme, Avatar, Badge, IconBtn, StatusDot, USER_STATUSES, areIdsEqual } from "./constants";
 import API from "../../../Services/API";
 import CreateGroupModal from "./CreateGroupModal";
 import UserStatusModal from "./UserStatusModal";
@@ -331,7 +331,7 @@ const Sidebar = React.memo(({
 
             const isBot = Boolean(user.is_bot || user.username === "VORTEX-9");
             const isPinned = safePinnedChats.has(user.id);
-            const isUnread = (safeUnreadCounts[user.id] || 0) > 0;
+            const isUnread = (safeUnreadCounts[user.id] || safeUnreadCounts[String(user.id)] || safeUnreadCounts[Number(user.id)] || 0) > 0;
 
             if (mainTab === "chats") {
                 if (filter === "pinned" && !isPinned && !isBot) return;
@@ -500,7 +500,7 @@ const Sidebar = React.memo(({
                                 <GroupCard
                                     key={`group-${group.id}`}
                                     group={group}
-                                    selected={selectedUser?.is_group && selectedUser?.id === group.id}
+                                    selected={Boolean(selectedUser?.is_group) && areIdsEqual(selectedUser?.id, group.id)}
                                     onSelect={() => {
                                         onSelectUser?.({
                                             id: group.id,
@@ -542,8 +542,8 @@ const Sidebar = React.memo(({
                                     <ConversationCard
                                         key={user.id}
                                         user={user}
-                                        selected={selectedUser?.id === user.id}
-                                        unread={safeUnreadCounts[user.id] || 0}
+                                        selected={!selectedUser?.is_group && areIdsEqual(selectedUser?.id, user.id)}
+                                        unread={safeUnreadCounts[user.id] || safeUnreadCounts[String(user.id)] || safeUnreadCounts[Number(user.id)] || 0}
                                         pinned={safePinnedChats.has(user.id)}
                                         typing={safeTypingUsers.has(user.id) || safeTypingUsers.has(Number(user.id)) || safeTypingUsers.has(String(user.id))}
                                         onSelect={() => {

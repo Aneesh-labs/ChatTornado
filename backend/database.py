@@ -29,6 +29,9 @@ class Base(DeclarativeBase):
 
 engine = create_engine(
     DATABASE_URL,
+    pool_size=25,
+    max_overflow=50,
+    pool_timeout=30,
     pool_pre_ping=True,
     pool_recycle=300,
     future=True,
@@ -111,6 +114,8 @@ def run_migrations():
                 ("unlock_at", "TIMESTAMP"),
                 ("is_edited", "BOOLEAN DEFAULT FALSE"),
                 ("group_id", "INTEGER"),
+                ("client_temp_id", "VARCHAR(100)"),
+                ("correlation_id", "VARCHAR(100)"),
             ]
             with engine.begin() as conn:
                 for col_name, col_def in msg_cols_to_add:

@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 import time
 import re
 import json
@@ -15,6 +15,11 @@ from database import SessionLocal
 from models import Message, MessageVisibility, MessageReaction, User, GroupMember
 from websocket_manager import manager, ghost_manager
 from block_routes import is_blocked_bidirectional
+from diagnostics import (
+    log_message_event,
+    log_message_error,
+    generate_correlation_id
+)
 
 router = APIRouter()
 logger = logging.getLogger("chat_tornado.websocket")
@@ -87,19 +92,26 @@ async def websocket_endpoint(websocket: WebSocket):
                 new_status = str(data.get("status", "online")).lower().strip()
                 new_custom = data.get("custom_status")
                 if new_status in {"online", "away", "dnd", "offline"}:
-                    u = db.query(User).filter(User.id == user_id).first()
-                    if u:
-                        u.status = new_status
-                        u.custom_status = str(new_custom)[:100] if new_custom else None
-                        u.last_seen = datetime.utcnow()
-                        db.commit()
-                        await manager.broadcast_user_status(user_id, new_status, u.custom_status, db=db)
+                    try:
+                        u = db.query(User).filter(User.id == user_id).first()
+                        if u:
+                            u.status = new_status
+                            u.custom_status = str(new_custom)[:100] if new_custom else None
+                            u.last_seen = datetime.utcnow()
+                            db.commit()
+                            await manager.broadcast_user_status(user_id, new_status, u.custom_status, db=db)
+                    except Exception as st_err:
+                        db.rollback()
+                        logger.error("Error updating status: %s", st_err)
                 continue
 
             # ---------- Group Message Event ----------
             if data.get("type") == "group_message":
                 group_id = data.get("group_id")
                 msg_text = str(data.get("message", "")).strip()
+                temp_id = data.get("temp_id")
+                correlation_id = data.get("correlation_id") or generate_correlation_id()
+
                 if not group_id or not msg_text:
                     continue
                 try:
@@ -107,13 +119,42 @@ async def websocket_endpoint(websocket: WebSocket):
                 except (ValueError, TypeError):
                     continue
 
+                log_message_event(
+                    logger,
+                    "MESSAGE_RECEIVED",
+                    user_id=user_id,
+                    group_id=group_id,
+                    temp_id=temp_id,
+                    correlation_id=correlation_id
+                )
+
+                # Check idempotency for group message
+                if temp_id:
+                    existing_grp_msg = db.query(Message).filter(
+                        Message.sender_id == user_id,
+                        Message.client_temp_id == temp_id
+                    ).first()
+                    if existing_grp_msg:
+                        log_message_event(
+                            logger,
+                            "MESSAGE_DUPLICATE_IGNORED",
+                            user_id=user_id,
+                            group_id=group_id,
+                            message_id=existing_grp_msg.id,
+                            temp_id=temp_id,
+                            correlation_id=correlation_id
+                        )
+                        continue
+
                 sender = db.query(User).filter(User.id == user_id).first()
                 now = datetime.utcnow()
                 if sender and sender.account_status == "restricted":
                     if sender.restricted_until and now < sender.restricted_until:
                         await manager.send_personal_message(user_id, {
                             "type": "error",
-                            "message": "Your account is temporarily restricted from sending messages."
+                            "message": "Your account is temporarily restricted from sending messages.",
+                            "temp_id": temp_id,
+                            "correlation_id": correlation_id
                         })
                         continue
 
@@ -125,31 +166,65 @@ async def websocket_endpoint(websocket: WebSocket):
                 if not member:
                     continue
 
-                new_group_msg = Message(
-                    sender_id=user_id,
-                    receiver_id=None,
-                    group_id=group_id,
-                    message=msg_text,
-                    read_state="sent"
-                )
-                db.add(new_group_msg)
-                db.commit()
-                db.refresh(new_group_msg)
+                try:
+                    new_group_msg = Message(
+                        sender_id=user_id,
+                        receiver_id=None,
+                        group_id=group_id,
+                        message=msg_text,
+                        read_state="sent",
+                        client_temp_id=temp_id,
+                        correlation_id=correlation_id
+                    )
+                    db.add(new_group_msg)
+                    db.commit()
+                    db.refresh(new_group_msg)
+                    log_message_event(
+                        logger,
+                        "DB_COMMIT_SUCCESS",
+                        user_id=user_id,
+                        group_id=group_id,
+                        message_id=new_group_msg.id,
+                        temp_id=temp_id,
+                        correlation_id=correlation_id
+                    )
+                except Exception as grp_db_err:
+                    db.rollback()
+                    log_message_error(
+                        logger,
+                        "DB_COMMIT_FAILED",
+                        str(grp_db_err),
+                        user_id=user_id,
+                        group_id=group_id,
+                        temp_id=temp_id,
+                        correlation_id=correlation_id
+                    )
+                    await manager.send_personal_message(user_id, {
+                        "type": "error",
+                        "message": "Failed to persist group message in database.",
+                        "temp_id": temp_id,
+                        "correlation_id": correlation_id
+                    })
+                    continue
 
-                # Broadcast to all group members
-                all_members = db.query(GroupMember.user_id).filter(GroupMember.group_id == group_id).all()
-                group_packet = {
-                    "type": "group_message",
-                    "id": new_group_msg.id,
-                    "temp_id": data.get("temp_id"),
-                    "group_id": group_id,
-                    "sender_id": user_id,
-                    "sender_name": sender.username if sender else "Member",
-                    "message": msg_text,
-                    "created_at": str(new_group_msg.created_at)
-                }
-                for (m_uid,) in all_members:
-                    await manager.send_personal_message(m_uid, group_packet)
+                # Broadcast to all group members (Decoupled delivery)
+                try:
+                    all_members = db.query(GroupMember.user_id).filter(GroupMember.group_id == group_id).all()
+                    group_packet = {
+                        "type": "group_message",
+                        "id": new_group_msg.id,
+                        "temp_id": temp_id,
+                        "group_id": group_id,
+                        "sender_id": user_id,
+                        "sender_name": sender.username if sender else "Member",
+                        "message": msg_text,
+                        "created_at": new_group_msg.created_at.isoformat() if hasattr(new_group_msg.created_at, "isoformat") else str(new_group_msg.created_at),
+                        "correlation_id": correlation_id
+                    }
+                    for (m_uid,) in all_members:
+                        await manager.send_personal_message(m_uid, group_packet)
+                except Exception as bcast_err:
+                    logger.warning("Group message broadcast partial failure: %s", bcast_err)
                 continue
 
             # ---------- Ghost Chat ----------
@@ -595,7 +670,6 @@ async def websocket_endpoint(websocket: WebSocket):
                 if message_id:
                     msg = db.query(Message).filter(Message.id == message_id).first()
                     if msg and msg.shield_mode == "timelock":
-                        from datetime import timezone, datetime
                         now = datetime.now(timezone.utc)
                         unlock_time = msg.unlock_at
                         if unlock_time:
@@ -632,6 +706,20 @@ async def websocket_endpoint(websocket: WebSocket):
             if not message_text:
                 continue
 
+            temp_id = data.get("temp_id")
+            correlation_id = data.get("correlation_id") or generate_correlation_id()
+            ai_mode = data.get("ai_mode", "DEFAULT")
+            ai_model = data.get("ai_model")
+
+            log_message_event(
+                logger,
+                "MESSAGE_RECEIVED",
+                user_id=user_id,
+                receiver_id=receiver_id,
+                temp_id=temp_id,
+                correlation_id=correlation_id
+            )
+
             # ==========================
             # Security & Moderation Checks
             # ==========================
@@ -642,7 +730,9 @@ async def websocket_endpoint(websocket: WebSocket):
                 if sender_user.restricted_until and now_dt < sender_user.restricted_until:
                     await manager.send_personal_message(user_id, {
                         "type": "error",
-                        "message": "Your account is temporarily restricted from sending messages."
+                        "message": "Your account is temporarily restricted from sending messages.",
+                        "temp_id": temp_id,
+                        "correlation_id": correlation_id
                     })
                     continue
                 elif sender_user.restricted_until and now_dt >= sender_user.restricted_until:
@@ -652,19 +742,58 @@ async def websocket_endpoint(websocket: WebSocket):
                     db.commit()
 
             if is_blocked_bidirectional(db, user_id, receiver_id):
+                log_message_event(
+                    logger,
+                    "MESSAGE_BLOCKED",
+                    user_id=user_id,
+                    receiver_id=receiver_id,
+                    temp_id=temp_id,
+                    correlation_id=correlation_id
+                )
                 await manager.send_personal_message(user_id, {
                     "type": "error",
-                    "message": "Unable to send message. Interaction with this user is blocked."
+                    "message": "Unable to send message. Interaction with this user is blocked.",
+                    "temp_id": temp_id,
+                    "correlation_id": correlation_id
                 })
                 continue
 
             # ==========================
-            # Save Message
+            # Backend Idempotency Check
             # ==========================
+            if temp_id:
+                existing_msg = db.query(Message).filter(
+                    Message.sender_id == user_id,
+                    Message.client_temp_id == temp_id
+                ).first()
+                if existing_msg:
+                    log_message_event(
+                        logger,
+                        "MESSAGE_DUPLICATE_IGNORED",
+                        user_id=user_id,
+                        receiver_id=receiver_id,
+                        message_id=existing_msg.id,
+                        temp_id=temp_id,
+                        correlation_id=correlation_id
+                    )
+                    # Acknowledge back to sender so client knows it was saved
+                    await manager.send_personal_message(user_id, {
+                        "type": "message",
+                        "id": existing_msg.id,
+                        "temp_id": temp_id,
+                        "sender_id": user_id,
+                        "receiver_id": receiver_id,
+                        "message": existing_msg.message,
+                        "created_at": str(existing_msg.created_at),
+                        "is_shielded": existing_msg.is_shielded,
+                        "shield_mode": existing_msg.shield_mode,
+                        "correlation_id": correlation_id
+                    })
+                    continue
 
-            temp_id = data.get("temp_id")
-            ai_mode = data.get("ai_mode", "DEFAULT")
-            ai_model = data.get("ai_model")
+            # ==========================
+            # Save Message (Transaction Isolated)
+            # ==========================
 
             is_shielded = bool(data.get("is_shielded", False))
             shield_mode = data.get("shield_mode")
@@ -677,45 +806,70 @@ async def websocket_endpoint(websocket: WebSocket):
                 except Exception:
                     pass
 
-            new_message = Message(
-                sender_id=user_id,
-                receiver_id=receiver_id,
-                message=message_text,
-                is_shielded=is_shielded,
-                shield_mode=shield_mode,
-                unlock_at=unlock_at
-            )
+            try:
+                new_message = Message(
+                    sender_id=user_id,
+                    receiver_id=receiver_id,
+                    message=message_text,
+                    is_shielded=is_shielded,
+                    shield_mode=shield_mode,
+                    unlock_at=unlock_at,
+                    client_temp_id=temp_id,
+                    correlation_id=correlation_id
+                )
 
-            db.add(new_message)
-            db.commit()
-            db.refresh(new_message)
+                db.add(new_message)
+                db.commit()
+                db.refresh(new_message)
+
+                db.add_all(
+                    [
+                        MessageVisibility(
+                            message_id=new_message.id,
+                            user_id=user_id,
+                            visible=True
+                        ),
+                        MessageVisibility(
+                            message_id=new_message.id,
+                            user_id=receiver_id,
+                            visible=True
+                        )
+                    ]
+                )
+
+                db.commit()
+                log_message_event(
+                    logger,
+                    "DB_COMMIT_SUCCESS",
+                    user_id=user_id,
+                    receiver_id=receiver_id,
+                    message_id=new_message.id,
+                    temp_id=temp_id,
+                    correlation_id=correlation_id
+                )
+            except Exception as db_err:
+                db.rollback()
+                log_message_error(
+                    logger,
+                    "DB_COMMIT_FAILED",
+                    str(db_err),
+                    user_id=user_id,
+                    receiver_id=receiver_id,
+                    temp_id=temp_id,
+                    correlation_id=correlation_id
+                )
+                await manager.send_personal_message(user_id, {
+                    "type": "error",
+                    "message": "Failed to persist message in database. Please retry.",
+                    "temp_id": temp_id,
+                    "correlation_id": correlation_id
+                })
+                continue
 
             # ==========================
-            # Visibility
+            # Packet Construction & Decoupled Delivery
             # ==========================
 
-            db.add_all(
-                [
-                    MessageVisibility(
-                        message_id=new_message.id,
-                        user_id=user_id,
-                        visible=True
-                    ),
-                    MessageVisibility(
-                        message_id=new_message.id,
-                        user_id=receiver_id,
-                        visible=True
-                    )
-                ]
-            )
-
-            db.commit()
-
-            # ==========================
-            # Packet
-            # ==========================
-
-            from datetime import timezone, datetime
             now = datetime.now(timezone.utc)
             u_time = unlock_at if (unlock_at and unlock_at.tzinfo) else (unlock_at.replace(tzinfo=timezone.utc) if unlock_at else None)
             u_iso = None
@@ -737,7 +891,8 @@ async def websocket_endpoint(websocket: WebSocket):
                 "is_shielded": is_shielded,
                 "shield_mode": shield_mode,
                 "unlock_at": u_iso,
-                "is_locked": is_locked
+                "is_locked": is_locked,
+                "correlation_id": correlation_id
             }
             
             packet_receiver = dict(packet_sender)
@@ -745,25 +900,63 @@ async def websocket_endpoint(websocket: WebSocket):
                 packet_receiver["message"] = None
                 packet_receiver["is_locked"] = True
 
-            logger.info("Message: %s -> %s", user_id, receiver_id)
+            logger.info("Message persisted: msg_id=%s, %s -> %s", new_message.id, user_id, receiver_id)
 
-            # Send to receiver
-            await manager.send_personal_message(
-                receiver_id,
-                packet_receiver
-            )
-
-            # Echo back to sender
+            # 1. Echo back to sender first (guarantees sender sees confirmation)
             await manager.send_personal_message(
                 user_id,
                 packet_sender
             )
+            log_message_event(
+                logger,
+                "WS_SENDER_ACK_SENT",
+                user_id=user_id,
+                receiver_id=receiver_id,
+                message_id=new_message.id,
+                temp_id=temp_id,
+                correlation_id=correlation_id
+            )
+
+            # 2. Decoupled Delivery to receiver (offline receiver does NOT fail the message)
+            try:
+                delivered = await manager.send_personal_message(
+                    receiver_id,
+                    packet_receiver
+                )
+                if delivered:
+                    log_message_event(
+                        logger,
+                        "WS_DELIVERY_SUCCESS",
+                        user_id=user_id,
+                        receiver_id=receiver_id,
+                        message_id=new_message.id,
+                        correlation_id=correlation_id
+                    )
+                else:
+                    log_message_event(
+                        logger,
+                        "WS_RECIPIENT_OFFLINE",
+                        user_id=user_id,
+                        receiver_id=receiver_id,
+                        message_id=new_message.id,
+                        correlation_id=correlation_id
+                    )
+            except Exception as deliv_err:
+                logger.warning("Recipient delivery network error (message safely saved in DB): %s", deliv_err)
 
             # Check if receiver is VORTEX-9 bot
             from ai_service import get_or_create_bot_user, process_user_message_to_bot, process_user_message_to_bot_stream, execute_deep_research
             bot = get_or_create_bot_user(db)
-
+            is_bot_target = False
             if bot and receiver_id == bot.id:
+                is_bot_target = True
+            else:
+                target_u = db.query(User).filter(User.id == receiver_id).first()
+                if target_u and (target_u.username == "VORTEX-9" or target_u.email == "vortex9@system.bot"):
+                    is_bot_target = True
+                    bot = target_u
+
+            if is_bot_target and bot:
                 async def handle_bot_reply(u_id: int, b_id: int, prompt_text: str):
                     await manager.send_personal_message(u_id, {
                         "type": "typing_start",

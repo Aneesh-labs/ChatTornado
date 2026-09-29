@@ -143,25 +143,41 @@ export const getMyUserId = () => {
     }
 };
 
+export const areIdsEqual = (a, b) => {
+    if (a == null || b == null) return false;
+    return String(a) === String(b);
+};
+
 export const AVATARS = ["🧑", "👩", "🧔", "👱", "🧕", "👨", "🧑‍💻", "👩‍💻", "🧑‍🎨", "👩‍🎨"];
 export const avatarFor = (id) => AVATARS[Number(id || 0) % AVATARS.length];
 
 export const fmtTime = (iso) => {
     if (!iso) return "";
-    return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    try {
+        const d = new Date(typeof iso === "string" && !iso.includes("T") ? iso.replace(" ", "T") : iso);
+        if (isNaN(d.getTime())) return "";
+        return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    } catch {
+        return "";
+    }
 };
 
 export const fmtDate = (iso) => {
     if (!iso) return "";
-    const d = new Date(iso);
-    const today = new Date();
-    if (d.toDateString() === today.toDateString()) return "Today";
+    try {
+        const d = new Date(typeof iso === "string" && !iso.includes("T") ? iso.replace(" ", "T") : iso);
+        if (isNaN(d.getTime())) return "";
+        const today = new Date();
+        if (d.toDateString() === today.toDateString()) return "Today";
 
-    const yesterday = new Date(today);
-    yesterday.setDate(today.getDate() - 1);
-    if (d.toDateString() === yesterday.toDateString()) return "Yesterday";
+        const yesterday = new Date(today);
+        yesterday.setDate(today.getDate() - 1);
+        if (d.toDateString() === yesterday.toDateString()) return "Yesterday";
 
-    return d.toLocaleDateString([], { month: "short", day: "numeric" });
+        return d.toLocaleDateString([], { month: "short", day: "numeric" });
+    } catch {
+        return "";
+    }
 };
 
 /* ==========================================================================

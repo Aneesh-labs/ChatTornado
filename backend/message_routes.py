@@ -1,15 +1,20 @@
 from datetime import datetime, timezone
 from typing import Optional
+import asyncio
+import logging
 from fastapi import APIRouter, Depends, HTTPException, Query, Header
 from sqlalchemy.orm import Session
 from sqlalchemy import or_, and_
 
 from auth import decode_token
-from database import get_db
-from models import Message, MessageVisibility, MessageReaction
-from schemas import MessageReactionData
+from database import get_db, SessionLocal
+from models import Message, MessageVisibility, MessageReaction, User
+from schemas import MessageReactionData, SendMessageRequest
 from websocket_manager import manager
+from block_routes import is_blocked_bidirectional
+from diagnostics import log_message_event, log_message_error, generate_correlation_id
 
+logger = logging.getLogger("chat_tornado.message_routes")
 router = APIRouter()
 
 
@@ -86,7 +91,6 @@ async def get_messages(
         pass
 
     # ✅ Convert to list of dicts
-    from datetime import timezone
     now = datetime.now(timezone.utc)
     
     result = []
@@ -544,5 +548,259 @@ async def ai_summarize(
     from ai_service import ai_summarize_chat
     summary = await ai_summarize_chat(data.chat_text)
     return {"success": True, "summary": summary}
+
+
+# ============================================================================
+# GUARANTEED REST FALLBACK SEND ENDPOINT
+# ============================================================================
+@router.post("/messages/send")
+async def send_message_rest(
+    data: SendMessageRequest,
+    token: Optional[str] = Query(None),
+    authorization: Optional[str] = Header(None),
+    db: Session = Depends(get_db)
+):
+    auth_token = token
+    if not auth_token and authorization:
+        auth_token = authorization.replace("Bearer ", "").strip()
+
+    payload = decode_token(auth_token)
+    if not payload:
+        raise HTTPException(status_code=401, detail="Invalid or expired token.")
+
+    user_id = int(payload["user_id"])
+    receiver_id = int(data.receiver_id)
+    message_text = str(data.message).strip()
+    temp_id = data.temp_id
+    correlation_id = data.correlation_id or generate_correlation_id()
+
+    if not message_text:
+        raise HTTPException(status_code=400, detail="Message cannot be empty.")
+
+    log_message_event(
+        logger,
+        "REST_MESSAGE_RECEIVED",
+        user_id=user_id,
+        receiver_id=receiver_id,
+        temp_id=temp_id,
+        correlation_id=correlation_id
+    )
+
+    # Security & Moderation checks
+    sender_user = db.query(User).filter(User.id == user_id).first()
+    now_dt = datetime.utcnow()
+    if sender_user and sender_user.account_status == "restricted":
+        if sender_user.restricted_until and now_dt < sender_user.restricted_until:
+            raise HTTPException(
+                status_code=403,
+                detail="Your account is temporarily restricted from sending messages."
+            )
+        elif sender_user.restricted_until and now_dt >= sender_user.restricted_until:
+            sender_user.account_status = "active"
+            sender_user.restricted_until = None
+            sender_user.restriction_reason = None
+            db.commit()
+
+    if is_blocked_bidirectional(db, user_id, receiver_id):
+        log_message_event(
+            logger,
+            "REST_MESSAGE_BLOCKED",
+            user_id=user_id,
+            receiver_id=receiver_id,
+            temp_id=temp_id,
+            correlation_id=correlation_id
+        )
+        raise HTTPException(
+            status_code=403,
+            detail="Unable to send message. Interaction with this user is blocked."
+        )
+
+    # Idempotency check
+    if temp_id:
+        existing_msg = db.query(Message).filter(
+            Message.sender_id == user_id,
+            Message.client_temp_id == temp_id
+        ).first()
+        if existing_msg:
+            log_message_event(
+                logger,
+                "REST_MESSAGE_DUPLICATE_IGNORED",
+                user_id=user_id,
+                receiver_id=receiver_id,
+                message_id=existing_msg.id,
+                temp_id=temp_id,
+                correlation_id=correlation_id
+            )
+            return {
+                "status": "success",
+                "id": existing_msg.id,
+                "temp_id": temp_id,
+                "sender_id": user_id,
+                "receiver_id": receiver_id,
+                "message": existing_msg.message,
+                "created_at": existing_msg.created_at.isoformat() if existing_msg.created_at else None,
+                "is_shielded": existing_msg.is_shielded,
+                "shield_mode": existing_msg.shield_mode,
+                "correlation_id": correlation_id
+            }
+
+    # Time-lock capsule handling
+    unlock_at = None
+    if data.unlock_at:
+        try:
+            from dateutil import parser
+            unlock_at = parser.isoparse(data.unlock_at)
+        except Exception:
+            pass
+
+    try:
+        new_message = Message(
+            sender_id=user_id,
+            receiver_id=receiver_id,
+            message=message_text,
+            is_shielded=data.is_shielded,
+            shield_mode=data.shield_mode,
+            unlock_at=unlock_at,
+            client_temp_id=temp_id,
+            correlation_id=correlation_id,
+            read_state="sent"
+        )
+        db.add(new_message)
+        db.commit()
+        db.refresh(new_message)
+
+        db.add_all([
+            MessageVisibility(message_id=new_message.id, user_id=user_id, visible=True),
+            MessageVisibility(message_id=new_message.id, user_id=receiver_id, visible=True)
+        ])
+        db.commit()
+        log_message_event(
+            logger,
+            "REST_DB_COMMIT_SUCCESS",
+            user_id=user_id,
+            receiver_id=receiver_id,
+            message_id=new_message.id,
+            temp_id=temp_id,
+            correlation_id=correlation_id
+        )
+    except Exception as db_err:
+        db.rollback()
+        log_message_error(
+            logger,
+            "REST_DB_COMMIT_FAILED",
+            str(db_err),
+            user_id=user_id,
+            receiver_id=receiver_id,
+            temp_id=temp_id,
+            correlation_id=correlation_id
+        )
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to persist message in database. Please retry."
+        )
+
+    # Construct and dispatch real-time WebSocket push (Decoupled delivery)
+    now = datetime.now(timezone.utc)
+    u_time = unlock_at if (unlock_at and unlock_at.tzinfo) else (unlock_at.replace(tzinfo=timezone.utc) if unlock_at else None)
+    u_iso = u_time.isoformat() if u_time else None
+    is_locked = bool(data.is_shielded and data.shield_mode == "timelock" and u_time and u_time > now)
+
+    packet_sender = {
+        "type": "message",
+        "id": new_message.id,
+        "temp_id": temp_id,
+        "sender_id": user_id,
+        "receiver_id": receiver_id,
+        "message": message_text,
+        "created_at": new_message.created_at.isoformat() if new_message.created_at else str(now),
+        "is_shielded": data.is_shielded,
+        "shield_mode": data.shield_mode,
+        "unlock_at": u_iso,
+        "is_locked": is_locked,
+        "read_state": "sent",
+        "reactions": [],
+        "correlation_id": correlation_id
+    }
+
+    packet_receiver = dict(packet_sender)
+    if is_locked:
+        packet_receiver["message"] = None
+
+    try:
+        await manager.send_personal_message(receiver_id, packet_receiver)
+        await manager.send_personal_message(user_id, packet_sender)
+    except Exception as ws_err:
+        logger.warning("Decoupled WS broadcast notice: %s", ws_err)
+
+    # Check if receiver is bot
+    is_bot = False
+    bot = None
+    target_u = db.query(User).filter(User.id == receiver_id).first()
+    if target_u and (target_u.username == "VORTEX-9" or target_u.email == "vortex9@system.bot"):
+        is_bot = True
+        bot = target_u
+
+    if is_bot and bot:
+        from ai_service import process_user_message_to_bot
+        async def trigger_bot():
+            bot_db = SessionLocal()
+            try:
+                reply_text = await process_user_message_to_bot(
+                    user_id,
+                    message_text,
+                    data.ai_mode or "DEFAULT",
+                    bot_db,
+                    ai_model=data.ai_model
+                )
+                bot_msg = Message(
+                    sender_id=bot.id,
+                    receiver_id=user_id,
+                    message=reply_text,
+                    is_shielded=False,
+                    read_state="sent"
+                )
+                bot_db.add(bot_msg)
+                bot_db.commit()
+                bot_db.refresh(bot_msg)
+                bot_db.add_all([
+                    MessageVisibility(message_id=bot_msg.id, user_id=bot.id, visible=True),
+                    MessageVisibility(message_id=bot_msg.id, user_id=user_id, visible=True),
+                ])
+                bot_db.commit()
+
+                await manager.send_personal_message(user_id, {
+                    "type": "message",
+                    "id": bot_msg.id,
+                    "sender_id": bot.id,
+                    "receiver_id": user_id,
+                    "message": reply_text,
+                    "created_at": str(bot_msg.created_at),
+                    "is_shielded": False,
+                    "is_locked": False,
+                    "read_state": "sent",
+                    "reactions": []
+                })
+            except Exception as bot_err:
+                logger.error("REST bot reply error: %s", bot_err)
+            finally:
+                bot_db.close()
+
+        asyncio.create_task(trigger_bot())
+
+    return {
+        "status": "success",
+        "id": new_message.id,
+        "temp_id": temp_id,
+        "sender_id": user_id,
+        "receiver_id": receiver_id,
+        "message": message_text,
+        "created_at": new_message.created_at.isoformat() if new_message.created_at else None,
+        "is_shielded": data.is_shielded,
+        "shield_mode": data.shield_mode,
+        "unlock_at": u_iso,
+        "is_locked": is_locked,
+        "correlation_id": correlation_id
+    }
+
 
 

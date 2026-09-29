@@ -78,6 +78,18 @@ class MessageData(BaseModel):
     media_metadata: Optional[dict] = None  # For image/video dimensions, etc.
 
 
+class SendMessageRequest(BaseModel):
+    receiver_id: int
+    message: str
+    temp_id: Optional[str] = None
+    correlation_id: Optional[str] = None
+    is_shielded: bool = False
+    shield_mode: Optional[str] = None
+    unlock_at: Optional[str] = None
+    ai_mode: Optional[str] = "DEFAULT"
+    ai_model: Optional[str] = None
+
+
 class MessageResponse(BaseModel):
     id: int
     sender_id: int

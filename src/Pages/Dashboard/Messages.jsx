@@ -24,7 +24,8 @@ import {
     THEMES,
     getMyUserId,
     avatarFor,
-    fmtDate
+    fmtDate,
+    areIdsEqual
 } from "./messages/constants";
 
 import { useIsMobile } from "./messages/useMediaQuery";
@@ -41,18 +42,10 @@ import PerformanceMonitor, { usePerformanceMonitor } from "./messages/Performanc
    SECURITY & UTILITY FUNCTIONS
    ========================================================================== */
 
-/** Sanitize user input to prevent XSS injection vectors */
+/** Sanitize user input to trim whitespace without corrupting valid markdown, quotes, or code */
 const sanitizeInput = (input) => {
     if (typeof input !== "string") return "";
-    return input
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;")
-        .replace(/'/g, "&#x27;")
-        // .replace(/\//g, "&#x2F;")  // REMOVED - breaks URLs!
-        .replace(/\\/g, "&#x5C;")
-        .replace(/`/g, "&#96;")
-        .trim();
+    return input.trim();
 };
 
 /** Validate and sanitize message content before sending */
@@ -163,6 +156,14 @@ const Messages = () => {
     const [callNotice, setCallNotice] = useState("");
     const [securityStatus, setSecurityStatus] = useState("SECURE");
 
+    useEffect(() => {
+        if (!callNotice) return;
+        const timer = setTimeout(() => {
+            setCallNotice("");
+        }, 6000);
+        return () => clearTimeout(timer);
+    }, [callNotice]);
+
     // ── Operational Refs ───────────────────────────────────────────────────────
     const myUserId = useRef(getMyUserId());
     const socketRef = useRef(null);
@@ -230,7 +231,7 @@ const Messages = () => {
     const enrichedSelected = useMemo(() => {
         if (!selectedUser) return null;
         // Prefer finding in activeUsers, fallback to global
-        const found = enrichedActiveUsers.find((u) => u.id === selectedUser.id) || enrichedUsers.find((u) => u.id === selectedUser.id);
+        const found = enrichedActiveUsers.find((u) => areIdsEqual(u.id, selectedUser.id)) || enrichedUsers.find((u) => areIdsEqual(u.id, selectedUser.id));
         return found || selectedUser;
     }, [enrichedActiveUsers, enrichedUsers, selectedUser]);
 
@@ -239,16 +240,18 @@ const Messages = () => {
         let lastDate = "";
 
         messages.forEach((msg, i) => {
-            if (!msg?.created_at) return;
-            const dateStr = fmtDate(msg.created_at);
+            if (!msg) return;
+            const createdAt = msg.created_at || new Date().toISOString();
+            const dateStr = fmtDate(createdAt);
             if (dateStr !== lastDate) {
                 result.push({ type: "divider", label: dateStr, key: `d-${dateStr}` });
                 lastDate = dateStr;
             }
 
             const prev = messages[i - 1];
-            if (prev && prev.created_at) {
-                const diff = new Date(msg.created_at) - new Date(prev.created_at);
+            if (prev) {
+                const prevCreatedAt = prev.created_at || createdAt;
+                const diff = new Date(createdAt) - new Date(prevCreatedAt);
                 if (diff >= 3600000) { // 1 hour gap between consecutive messages
                     // Collect text of the previous completed session
                     let prevSessionText = "";
@@ -257,10 +260,12 @@ const Messages = () => {
                         const m = messages[k];
                         if (k < i - 1) {
                             const nextM = messages[k + 1];
-                            if (new Date(nextM.created_at) - new Date(m.created_at) >= 3600000) break;
+                            const currMTime = nextM?.created_at ? new Date(nextM.created_at) : new Date();
+                            const prevMTime = m?.created_at ? new Date(m.created_at) : new Date();
+                            if (currMTime - prevMTime >= 3600000) break;
                         }
-                        if (m.message && !m.message.startsWith('⚡') && !m.message.startsWith('🎮') && !m.message.startsWith('🔊')) {
-                            const sender = m.sender_id === myUserId.current ? "Me" : "Them";
+                        if (m?.message && !m.message.startsWith('⚡') && !m.message.startsWith('🎮') && !m.message.startsWith('🔊')) {
+                            const sender = areIdsEqual(m.sender_id, myUserId.current) ? "Me" : "Them";
                             prevSessionText = `${sender}: ${m.message}\n` + prevSessionText;
                         }
                         k--;
@@ -268,13 +273,13 @@ const Messages = () => {
                     result.push({
                         type: "session_divider",
                         sessionText: prevSessionText,
-                        key: `session-gap-${msg.id || i}`
+                        key: `session-gap-${msg.id || msg.temp_id || i}`
                     });
                 }
             }
 
-            const showAvatar = !prev || prev.sender_id !== msg.sender_id;
-            result.push({ type: "message", msg, showAvatar, key: msg.id || i });
+            const showAvatar = !prev || !areIdsEqual(prev.sender_id, msg.sender_id);
+            result.push({ type: "message", msg, showAvatar, key: msg.id || msg.temp_id || `msg-${i}` });
         });
         return result;
     }, [messages]);
@@ -578,7 +583,7 @@ const Messages = () => {
                     setSecurityStatus("SESSION_EXPIRED");
                 }
             });
-        setUnreadCounts((prev) => ({ ...prev, [selectedUser.id]: 0 }));
+        setUnreadCounts((prev) => ({ ...prev, [selectedUser.id]: 0, [String(selectedUser.id)]: 0, [Number(selectedUser.id)]: 0 }));
     }, [selectedUser, token, scrollToBottom, validateToken]);
 
     useEffect(() => {
@@ -609,7 +614,7 @@ const Messages = () => {
             const res = await API.get(url, { params: { token } });
             setMessages(res.data || []);
             requestAnimationFrame(() => scrollToBottom("smooth"));
-            setUnreadCounts((prev) => ({ ...prev, [selectedUser.id]: 0 }));
+            setUnreadCounts((prev) => ({ ...prev, [selectedUser.id]: 0, [String(selectedUser.id)]: 0, [Number(selectedUser.id)]: 0 }));
         } catch (err) {
             console.error("Failed to reload chat messages:", err);
             if (err.response?.status === 401) {
@@ -748,6 +753,7 @@ const Messages = () => {
             ws.onopen = () => {
                 setSocketReady(true);
                 setSecurityStatus("SECURE");
+                setCallNotice("");
                 heartbeatTimer = setInterval(() => {
                     if (ws.readyState === WebSocket.OPEN) {
                         ws.send(JSON.stringify({ type: "ping" }));
@@ -760,13 +766,26 @@ const Messages = () => {
                     const packet = JSON.parse(event.data);
                     if (packet.type === "pong") return;
 
+                    if (packet.type === "error") {
+                        setCallNotice(packet.message || "Message delivery failed.");
+                        if (packet.temp_id) {
+                            pendingTempIds.current.delete(packet.temp_id);
+                            setMessages((prev) => prev.map((m) =>
+                                areIdsEqual(m.temp_id, packet.temp_id)
+                                    ? { ...m, status: "failed", errorMessage: packet.message || "Delivery failed" }
+                                    : m
+                            ));
+                        }
+                        return;
+                    }
+
                     // ==========================
                     // Ghost Chat
                     // ==========================
 
                     if (packet.type === "ghost_invite") {
 
-                        const user = usersRef.current.find(u => Number(u.id) === Number(packet.sender_id)) || { id: packet.sender_id, username: "Unknown User" };
+                        const user = usersRef.current.find(u => areIdsEqual(u.id, packet.sender_id)) || { id: packet.sender_id, username: "Unknown User" };
                         console.log("Ghost packet:", packet);
                         console.log("Users:", users);
                         console.log(
@@ -920,13 +939,13 @@ const Messages = () => {
                     }
                     if (packet.type === "user_status_update") {
                         setUsers((prev) => prev.map((u) => {
-                            if (u.id === packet.user_id) {
+                            if (areIdsEqual(u.id, packet.user_id)) {
                                 return { ...u, status: packet.status, custom_status: packet.custom_status };
                             }
                             return u;
                         }));
                         setActiveUsers((prev) => prev.map((u) => {
-                            if (u.id === packet.user_id) {
+                            if (areIdsEqual(u.id, packet.user_id)) {
                                 return { ...u, status: packet.status, custom_status: packet.custom_status };
                             }
                             return u;
@@ -936,12 +955,12 @@ const Messages = () => {
                     if (packet.type === "group_message") {
                         const isForCurrentChat = Boolean(
                             selectedUserRef.current?.is_group && 
-                            Number(selectedUserRef.current?.id) === Number(packet.group_id)
+                            areIdsEqual(selectedUserRef.current?.id, packet.group_id)
                         );
                         if (isForCurrentChat) {
                             setMessages((prev) => {
-                                const existingIndex = prev.findIndex((m) => String(m.id) === String(packet.id));
-                                const tempIndex = prev.findIndex((m) => packet.temp_id && String(m.temp_id) === String(packet.temp_id));
+                                const existingIndex = prev.findIndex((m) => areIdsEqual(m.id, packet.id));
+                                const tempIndex = prev.findIndex((m) => packet.temp_id && areIdsEqual(m.temp_id, packet.temp_id));
 
                                 if (tempIndex !== -1) {
                                     const updated = [...prev];
@@ -960,13 +979,13 @@ const Messages = () => {
                             });
                         }
 
-                        if (packet.sender_id !== myUserId.current) {
+                        if (!areIdsEqual(packet.sender_id, myUserId.current)) {
                             showMessageNotification(packet.sender_name || "Group", packet.message || "New message in group");
                         }
                         return;
                     }
                     if (packet.type === "chat_cleared") {
-                        if (selectedUserRef.current?.id === packet.cleared_by || selectedUserRef.current?.id === packet.partner_id) {
+                        if (areIdsEqual(selectedUserRef.current?.id, packet.cleared_by) || areIdsEqual(selectedUserRef.current?.id, packet.partner_id)) {
                             setMessages([]);
                         }
                         return;
@@ -1013,7 +1032,7 @@ const Messages = () => {
                     }
                     if (packet.type === "message_edited") {
                         setMessages((prev) => prev.map((m) => {
-                            if (m.id === packet.message_id) {
+                            if (areIdsEqual(m.id, packet.message_id)) {
                                 return { ...m, message: packet.new_text, is_edited: true };
                             }
                             return m;
@@ -1021,17 +1040,19 @@ const Messages = () => {
                         return;
                     }
                     if (packet.type === "message_deleted" || packet.type === "delete_message") {
-                        setMessages((prev) => prev.filter((m) => m.id !== packet.message_id));
+                        setMessages((prev) => prev.filter((m) => !areIdsEqual(m.id, packet.message_id)));
                         setSelectedMsgIds((prev) => {
                             const next = new Set(prev);
                             next.delete(packet.message_id);
+                            next.delete(String(packet.message_id));
+                            next.delete(Number(packet.message_id));
                             return next;
                         });
                         return;
                     }
                     if (packet.type === "capsule_unlocked") {
                         setMessages((prev) => prev.map((m) => {
-                            if (m.id === packet.message_id) {
+                            if (areIdsEqual(m.id, packet.message_id)) {
                                 return { ...m, is_locked: false, message: packet.message ?? m.message };
                             }
                             return m;
@@ -1042,7 +1063,7 @@ const Messages = () => {
                         const incomingGame = packet.game_data;
                         if (incomingGame) {
                             setMessages((prev) => prev.map((m) => {
-                                const isMatch = (packet.message_id != null && String(m.id) === String(packet.message_id)) ||
+                                const isMatch = (packet.message_id != null && areIdsEqual(m.id, packet.message_id)) ||
                                     (packet.game_id && typeof m.message === "string" && m.message.includes(`"id":"${packet.game_id}"`)) ||
                                     (incomingGame?.id && typeof m.message === "string" && m.message.includes(`"id":"${incomingGame.id}"`));
                                 if (isMatch) {
@@ -1058,7 +1079,7 @@ const Messages = () => {
                     }
                     if (packet.type === "reaction") {
                         setMessages((prev) => prev.map((m) => {
-                            if (m.id !== packet.message_id) return m;
+                            if (!areIdsEqual(m.id, packet.message_id)) return m;
                             if (Array.isArray(packet.reactions)) {
                                 return { ...m, reactions: packet.reactions };
                             }
@@ -1081,7 +1102,7 @@ const Messages = () => {
                     if (packet.type === "read_receipt") {
                         setMessages((prev) =>
                             prev.map((m) =>
-                                m.receiver_id === packet.reader_id
+                                areIdsEqual(m.receiver_id, packet.reader_id)
                                     ? { ...m, read_state: "read", readState: "read" }
                                     : m
                             )
@@ -1089,98 +1110,109 @@ const Messages = () => {
                         return;
                     }
                     if (packet.type === "ai_stream_start") {
-                        setMessages((prev) => {
-                            const exists = prev.some((m) => String(m.id) === String(packet.message_id));
-                            if (exists) {
-                                return prev.map((m) => String(m.id) === String(packet.message_id) ? { ...m, is_streaming: true } : m);
-                            }
-                            return [
-                                ...prev,
-                                {
-                                    id: packet.message_id,
-                                    sender_id: packet.sender_id,
-                                    receiver_id: myUserId.current,
-                                    message: "",
-                                    created_at: packet.created_at || new Date().toISOString(),
-                                    is_shielded: false,
-                                    is_locked: false,
-                                    is_streaming: true,
-                                    read_state: "sent",
-                                    reactions: []
+                        const currentChat = selectedUserRef.current;
+                        const isAiChat = Boolean(currentChat && (currentChat.is_bot || currentChat.username === "VORTEX-9" || areIdsEqual(currentChat.id, packet.sender_id)));
+                        if (isAiChat) {
+                            setMessages((prev) => {
+                                const exists = prev.some((m) => areIdsEqual(m.id, packet.message_id));
+                                if (exists) {
+                                    return prev.map((m) => areIdsEqual(m.id, packet.message_id) ? { ...m, is_streaming: true } : m);
                                 }
-                            ];
-                        });
+                                return [
+                                    ...prev,
+                                    {
+                                        id: packet.message_id,
+                                        sender_id: packet.sender_id,
+                                        receiver_id: myUserId.current,
+                                        message: "",
+                                        created_at: packet.created_at || new Date().toISOString(),
+                                        is_shielded: false,
+                                        is_locked: false,
+                                        is_streaming: true,
+                                        read_state: "sent",
+                                        reactions: []
+                                    }
+                                ];
+                            });
+                        }
                         return;
                     }
                     if (packet.type === "ai_stream_chunk") {
-                        setMessages((prev) => prev.map((m) => {
-                            if (String(m.id) === String(packet.message_id)) {
-                                return {
-                                    ...m,
-                                    message: (m.message || "") + (packet.chunk || ""),
-                                    is_streaming: true
-                                };
-                            }
-                            return m;
-                        }));
+                        const currentChat = selectedUserRef.current;
+                        const isAiChat = Boolean(currentChat && (currentChat.is_bot || currentChat.username === "VORTEX-9" || areIdsEqual(currentChat.id, packet.sender_id)));
+                        if (isAiChat) {
+                            setMessages((prev) => prev.map((m) => {
+                                if (areIdsEqual(m.id, packet.message_id)) {
+                                    return {
+                                        ...m,
+                                        message: (m.message || "") + (packet.chunk || ""),
+                                        is_streaming: true
+                                    };
+                                }
+                                return m;
+                            }));
+                        }
                         return;
                     }
                     if (packet.type === "ai_stream_done") {
-                        setMessages((prev) => prev.map((m) => {
-                            if (String(m.id) === String(packet.message_id)) {
-                                return {
-                                    ...m,
-                                    message: packet.full_text !== undefined ? packet.full_text : m.message,
-                                    is_streaming: false
-                                };
-                            }
-                            return m;
-                        }));
+                        const currentChat = selectedUserRef.current;
+                        const isAiChat = Boolean(currentChat && (currentChat.is_bot || currentChat.username === "VORTEX-9" || areIdsEqual(currentChat.id, packet.sender_id)));
+                        if (isAiChat) {
+                            setMessages((prev) => prev.map((m) => {
+                                if (areIdsEqual(m.id, packet.message_id)) {
+                                    return {
+                                        ...m,
+                                        message: packet.full_text !== undefined ? packet.full_text : m.message,
+                                        is_streaming: false
+                                    };
+                                }
+                                return m;
+                            }));
+                        }
                         return;
                     }
                     if (packet.type === "message") {
-                        // ✅ Fixed: Update existing messages instead of skipping
-                        setMessages((prev) => {
-                            console.log("===== INCOMING PACKET =====");
-                            console.log(packet);
-                            console.log("Current messages:", prev);
+                        const currentChat = selectedUserRef.current;
+                        const isCurrentDirectChat = Boolean(
+                            currentChat &&
+                            !currentChat.is_group &&
+                            (
+                                (areIdsEqual(packet.sender_id, currentChat.id) && areIdsEqual(packet.receiver_id, myUserId.current)) ||
+                                (areIdsEqual(packet.sender_id, myUserId.current) && areIdsEqual(packet.receiver_id, currentChat.id)) ||
+                                (packet.temp_id && pendingTempIds.current.has(packet.temp_id))
+                            )
+                        );
 
-                            // Check if message exists by ID or temp_id
-                            const existingIndex = prev.findIndex((m) => String(m.id) === String(packet.id));
-                            const tempIndex = prev.findIndex((m) => packet.temp_id && String(m.temp_id) === String(packet.temp_id));
+                        if (isCurrentDirectChat) {
+                            setMessages((prev) => {
+                                const existingIndex = prev.findIndex((m) => areIdsEqual(m.id, packet.id));
+                                const tempIndex = prev.findIndex((m) => packet.temp_id && areIdsEqual(m.temp_id, packet.temp_id));
 
-                            // If it exists as a temp message, replace it
-                            if (tempIndex !== -1) {
-                                console.log("🔄 Replacing temp message with real one");
-                                const updated = [...prev];
-                                updated[tempIndex] = { ...packet, temp_id: undefined };
-                                return updated;
-                            }
+                                if (tempIndex !== -1) {
+                                    const updated = [...prev];
+                                    updated[tempIndex] = { ...packet, temp_id: undefined };
+                                    return updated;
+                                }
 
-                            // If it exists by ID, UPDATE it (important for video previews!)
-                            if (existingIndex !== -1) {
-                                console.log("🔄 Updating existing message (video preview fix)");
-                                const updated = [...prev];
-                                // Merge the new packet data (could have different formatting)
-                                updated[existingIndex] = { ...updated[existingIndex], ...packet, is_streaming: false };
-                                return updated;
-                            }
+                                if (existingIndex !== -1) {
+                                    const updated = [...prev];
+                                    updated[existingIndex] = { ...updated[existingIndex], ...packet, is_streaming: false };
+                                    return updated;
+                                }
 
-                            console.log("✅ Adding new message");
-                            // New message - add it
-                            if (packet.temp_id) {
-                                pendingTempIds.current.delete(packet.temp_id);
-                            }
-                            return [...prev, packet];
-                        });
-
-
+                                if (packet.temp_id) {
+                                    pendingTempIds.current.delete(packet.temp_id);
+                                }
+                                return [...prev, packet];
+                            });
+                        }
 
                         // Handle unread counts and notifications
-                        const isFromCurrentUser = packet.sender_id === myUserId.current;
-                        const isFromSelected = packet.sender_id === activeUserRef.current?.id;
+                        const isFromCurrentUser = areIdsEqual(packet.sender_id, myUserId.current);
+                        const isFromSelected = Boolean(currentChat && !currentChat.is_group && areIdsEqual(packet.sender_id, currentChat.id));
+
                         if (!isFromCurrentUser) {
-                            const senderObj = usersRef.current.find((u) => Number(u.id) === Number(packet.sender_id));
+                            const senderObj = usersRef.current.find((u) => areIdsEqual(u.id, packet.sender_id));
                             const senderName = senderObj?.username || "Friend";
                             let notificationBody = packet.message || "New message";
                             if (packet.is_shielded) {
@@ -1207,6 +1239,7 @@ const Messages = () => {
                 setTypingUsers(new Set());
                 clearInterval(heartbeatTimer);
                 if (!disposed) {
+                    setCallNotice("Real-time connection interrupted. Reconnecting...");
                     reconnectTimer = window.setTimeout(connect, 3000);
                 }
             };
@@ -1217,10 +1250,18 @@ const Messages = () => {
             };
         };
 
+        const handleOnline = () => {
+            if (!disposed && (!socketRef.current || socketRef.current.readyState !== WebSocket.OPEN)) {
+                connect();
+            }
+        };
+        window.addEventListener("online", handleOnline);
+
         connect();
 
         return () => {
             disposed = true;
+            window.removeEventListener("online", handleOnline);
             clearInterval(heartbeatTimer);
             if (reconnectTimer) window.clearTimeout(reconnectTimer);
             Object.values(typingTimeouts.current).forEach(clearTimeout);
@@ -1230,7 +1271,13 @@ const Messages = () => {
 
     /* ── Message Sending (with rate limiting & sanitization) ────────────── */
     const sendMessage = useCallback((text, options = {}) => {
-        if (!selectedUser || !socketRef.current || socketRef.current.readyState !== WebSocket.OPEN) {
+        const currentTarget = activeUserRef.current || selectedUser;
+        if (!currentTarget) {
+            setCallNotice("Please select a conversation to send a message.");
+            return false;
+        }
+        if (!socketRef.current || socketRef.current.readyState !== WebSocket.OPEN) {
+            setCallNotice("Connecting to real-time chat server... Please wait a moment.");
             return false;
         }
         const rateCheck = rateLimiterRef.current();
@@ -1247,12 +1294,12 @@ const Messages = () => {
         pendingTempIds.current.add(temp_id);
 
         // Handle Group Message Send
-        if (selectedUser?.is_group) {
+        if (currentTarget?.is_group) {
             const optimisticMessage = {
                 temp_id,
                 sender_id: myUserId.current,
                 sender_name: "You",
-                group_id: selectedUser.id,
+                group_id: currentTarget.id,
                 message: validation.text,
                 created_at: new Date().toISOString(),
                 ...options
@@ -1262,7 +1309,7 @@ const Messages = () => {
             const outgoingPayload = {
                 type: "group_message",
                 temp_id,
-                group_id: selectedUser.id,
+                group_id: currentTarget.id,
                 message: validation.text,
             };
 
@@ -1271,7 +1318,12 @@ const Messages = () => {
             } catch (err) {
                 console.error("[WS GROUP SEND ERROR]", err);
                 pendingTempIds.current.delete(temp_id);
-                setMessages((prev) => prev.filter((m) => m.temp_id !== temp_id));
+                setMessages((prev) => prev.map((m) =>
+                    areIdsEqual(m.temp_id, temp_id)
+                        ? { ...m, status: "failed", errorMessage: "Network error sending group message" }
+                        : m
+                ));
+                setCallNotice("Failed to send message: network error. Tap retry.");
                 return false;
             }
             setReplyingTo(null);
@@ -1282,10 +1334,11 @@ const Messages = () => {
         const optimisticMessage = {
             temp_id,
             sender_id: myUserId.current,
-            receiver_id: selectedUser.id,
+            receiver_id: currentTarget.id,
             message: validation.text,
             created_at: new Date().toISOString(),
             is_locked: options.shield_mode === 'timelock',
+            status: "sending",
             ...options
         };
         setMessages((prev) => [...prev, optimisticMessage]);
@@ -1302,7 +1355,7 @@ const Messages = () => {
 
         const outgoingPayload = {
             temp_id,
-            receiver_id: selectedUser.id,
+            receiver_id: currentTarget.id,
             message: validation.text,
             ai_mode: activeAiMode,
             ai_model: activeAiModel,
@@ -1310,7 +1363,7 @@ const Messages = () => {
         };
 
         console.log(
-            `%c[WS SEND]%c To: ${selectedUser.username} (ID: ${selectedUser.id}) | Mode: %c${outgoingPayload.ai_mode}%c | Text: "${validation.text}"`,
+            `%c[WS SEND]%c To: ${currentTarget.username} (ID: ${currentTarget.id}) | Mode: %c${outgoingPayload.ai_mode}%c | Text: "${validation.text}"`,
             "background: #059669; color: white; font-weight: bold; padding: 2px 6px; border-radius: 3px;",
             "",
             "color: #34d399; font-weight: bold;",
@@ -1323,13 +1376,88 @@ const Messages = () => {
         } catch (err) {
             console.error("[WS SEND ERROR]", err);
             pendingTempIds.current.delete(temp_id);
-            // Remove optimistic message on error
-            setMessages((prev) => prev.filter((m) => m.temp_id !== temp_id));
+            setMessages((prev) => prev.map((m) =>
+                areIdsEqual(m.temp_id, temp_id)
+                    ? { ...m, status: "failed", errorMessage: "Network error sending message" }
+                    : m
+            ));
+            setCallNotice("Failed to send message: network error. Tap retry.");
             return false;
         }
         setReplyingTo(null);
         return true;
-    }, [selectedUser]);
+    }, [selectedUser, aiMode]);
+
+    /* ── Message Retry (via WebSocket or Guaranteed REST Fallback) ─────── */
+    const retryMessage = useCallback(async (failedMsg) => {
+        if (!failedMsg || !failedMsg.temp_id) return;
+        const temp_id = failedMsg.temp_id;
+        const currentTarget = activeUserRef.current || selectedUser;
+        const targetId = failedMsg.receiver_id || failedMsg.group_id || currentTarget?.id;
+
+        // Mark status as sending
+        setMessages((prev) => prev.map((m) =>
+            areIdsEqual(m.temp_id, temp_id)
+                ? { ...m, status: "sending", errorMessage: null }
+                : m
+        ));
+        pendingTempIds.current.add(temp_id);
+
+        // Try WebSocket first if connected
+        if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
+            const outgoingPayload = {
+                type: failedMsg.group_id ? "group_message" : "message",
+                temp_id,
+                receiver_id: targetId,
+                group_id: failedMsg.group_id,
+                message: failedMsg.message,
+                ai_mode: failedMsg.ai_mode || aiMode,
+                ai_model: failedMsg.ai_model,
+                is_shielded: failedMsg.is_shielded || false,
+                shield_mode: failedMsg.shield_mode,
+                unlock_at: failedMsg.unlock_at
+            };
+            try {
+                socketRef.current.send(JSON.stringify(outgoingPayload));
+                return true;
+            } catch (wsErr) {
+                console.warn("WebSocket retry send failed, falling back to REST...", wsErr);
+            }
+        }
+
+        // REST fallback
+        try {
+            const token = sessionStorage.getItem("token");
+            const res = await API.post("/messages/send", {
+                receiver_id: targetId,
+                message: failedMsg.message,
+                temp_id: temp_id,
+                is_shielded: failedMsg.is_shielded || false,
+                shield_mode: failedMsg.shield_mode,
+                unlock_at: failedMsg.unlock_at,
+                ai_mode: failedMsg.ai_mode || aiMode,
+                ai_model: failedMsg.ai_model
+            }, { params: { token } });
+
+            if (res.data?.id) {
+                setMessages((prev) => prev.map((m) =>
+                    areIdsEqual(m.temp_id, temp_id)
+                        ? { ...m, ...res.data, status: "sent", temp_id: undefined }
+                        : m
+                ));
+                pendingTempIds.current.delete(temp_id);
+                return true;
+            }
+        } catch (restErr) {
+            console.error("REST message retry failed:", restErr);
+            pendingTempIds.current.delete(temp_id);
+            setMessages((prev) => prev.map((m) =>
+                areIdsEqual(m.temp_id, temp_id)
+                    ? { ...m, status: "failed", errorMessage: restErr.response?.data?.detail || "Retry failed" }
+                    : m
+            ));
+        }
+    }, [aiMode, selectedUser]);
 
     /* ── Reactions ──────────────────────────────────────────────────────── */
     const addReaction = useCallback((messageId, emoji) => {
@@ -1480,13 +1608,15 @@ const Messages = () => {
             await API.post(`/delete_message/${messageId}?mode=${mode}&token=${encodeURIComponent(token)}`);
 
             // Remove message from UI
-            setMessages((prev) => prev.filter((m) => m.id !== messageId));
+            setMessages((prev) => prev.filter((m) => !areIdsEqual(m.id, messageId)));
 
             // Exit selection mode if active
             if (selectionMode) {
                 setSelectedMsgIds((prev) => {
                     const next = new Set(prev);
                     next.delete(messageId);
+                    next.delete(String(messageId));
+                    next.delete(Number(messageId));
                     if (next.size === 0) setSelectionMode(false);
                     return next;
                 });
@@ -1514,8 +1644,7 @@ const Messages = () => {
             );
 
             // Remove messages from UI
-            const idsToRemove = new Set(messageIds);
-            setMessages((prev) => prev.filter((m) => !idsToRemove.has(m.id)));
+            setMessages((prev) => prev.filter((m) => !messageIds.some((id) => areIdsEqual(id, m.id))));
 
             // Exit selection mode
             setSelectionMode(false);
@@ -1644,6 +1773,7 @@ const Messages = () => {
                                 isMobile={isMobile}
                                 messages={messages}
                                 onGameMove={handleGameMove}
+                                onRetry={retryMessage}
                             />
                         ) : (
                             <EmptyState onOpenSearch={handleOpenSearch} />

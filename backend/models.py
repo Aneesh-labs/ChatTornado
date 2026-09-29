@@ -76,6 +76,10 @@ class Message(Base):
     shield_mode: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
     unlock_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     
+    # Idempotency & Observability
+    client_temp_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True, index=True)
+    correlation_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True, index=True)
+    
     # Relationships
     sender: Mapped["User"] = relationship("User", foreign_keys=[sender_id], back_populates="sent_messages")
     receiver: Mapped[Optional["User"]] = relationship("User", foreign_keys=[receiver_id], back_populates="received_messages")

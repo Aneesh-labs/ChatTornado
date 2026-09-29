@@ -42,6 +42,7 @@ const ChatWindow = React.memo(({
     aiMode: propAiMode,
     setAiMode: propSetAiMode,
     onGameMove,
+    onRetry,
     messages = [],
 }) => {
     const [localAiMode, setLocalAiMode] = useState(() => {
@@ -103,6 +104,7 @@ const ChatWindow = React.memo(({
                 socket={socket}
                 onSend={sendMessage}
                 onGameMove={onGameMove}
+                onRetry={onRetry}
             />
             <ScrollBar show={showScrollBtn} currentTheme={currentTheme} scrollToBottom={scrollToBottom} isMobile={isMobile} />
             {!selectionMode && (
@@ -111,7 +113,7 @@ const ChatWindow = React.memo(({
                     replyTo={replyingTo}
                     onCancelReply={handleCancelReply}
                     selectedUser={enrichedSelected}
-                    disabled={!socketReady}
+                    socketReady={socketReady}
                     socket={socket}
                     aiMode={aiMode}
                 />

@@ -32,6 +32,11 @@ from prompts import (
 )
 
 from ai_cache import ai_cache, LocalMemoryManager
+from diagnostics import (
+    log_message_event,
+    log_message_error,
+    generate_correlation_id
+)
 
 logger = logging.getLogger("chat_tornado.ai_service")
 

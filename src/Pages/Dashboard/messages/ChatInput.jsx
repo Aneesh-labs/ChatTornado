@@ -14,7 +14,7 @@ import { isProcessableDocument, processDocumentLocally } from "../../../utils/fi
 
 const VIDEO_EXTENSIONS = /\.(mp4|mov|mkv|avi|webm|m4v|3gp|flv|mpeg|mpg|ts|mts|m2ts|wmv|asf|ogv|vob)$/i;
 
-const ChatInput = React.memo(({ onSend, replyTo, onCancelReply, selectedUser, socket = null, disabled = false, aiMode }) => {
+const ChatInput = React.memo(({ onSend, replyTo, onCancelReply, selectedUser, socket = null, disabled = false, socketReady = true, aiMode }) => {
     const theme = useTheme();
     const baseUrl = (API.defaults.baseURL || "").replace(/\/+$/, "");
     const [text, setText] = useState("");
@@ -500,18 +500,23 @@ const ChatInput = React.memo(({ onSend, replyTo, onCancelReply, selectedUser, so
             return;
         }
 
-        const activeAiModel = (typeof window !== "undefined" ? localStorage.getItem("vortex_selected_google_model") : null) || "gemini-3.5-flash";
-        if (!onSend(trimmed, { ...(shieldOptions || {}), ai_mode: activeInputMode, ai_model: activeAiModel })) {
-            isSendingRef.current = false;
-            return;
+        try {
+            const activeAiModel = (typeof window !== "undefined" ? localStorage.getItem("vortex_selected_google_model") : null) || "gemini-3.5-flash";
+            const sent = onSend(trimmed, { ...(shieldOptions || {}), ai_mode: activeInputMode, ai_model: activeAiModel });
+            if (!sent) {
+                isSendingRef.current = false;
+                return;
+            }
+            setText("");
+            setShieldOptions(null);
+            if (textareaRef.current) textareaRef.current.style.height = "auto";
+        } catch (err) {
+            console.error("Error in onSend:", err);
+        } finally {
+            setTimeout(() => {
+                isSendingRef.current = false;
+            }, 100);
         }
-        setText("");
-        setShieldOptions(null);
-        if (textareaRef.current) textareaRef.current.style.height = "auto";
-
-        setTimeout(() => {
-            isSendingRef.current = false;
-        }, 200);
     }, [text, disabled, onSend, shieldOptions, editModeId, sendStopTypingSignal, aiMode, stagedImage, stagedDoc]);
 
 

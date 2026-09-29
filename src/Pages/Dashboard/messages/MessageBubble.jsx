@@ -1,7 +1,7 @@
 import React, { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import PropTypes from "prop-types";
 import { motion, AnimatePresence } from "framer-motion";
-import { Avatar, useTheme, fmtTime, getMyUserId } from "./constants";
+import { Avatar, useTheme, fmtTime, getMyUserId, areIdsEqual } from "./constants";
 import { getLocalMediaUrl } from "../../../Services/db";
 import { requestP2PDownload } from "../../../Services/p2p";
 import API from "../../../Services/API";
@@ -110,9 +110,25 @@ const downloadImage = downloadFile;
 
 const decodeHtmlEntities = (text) => {
     if (!text || typeof text !== "string") return "";
-    const textarea = document.createElement('textarea');
-    textarea.innerHTML = text;
-    return textarea.value;
+    let decoded = text;
+    if (typeof document !== "undefined") {
+        try {
+            const textarea = document.createElement("textarea");
+            textarea.innerHTML = text;
+            decoded = textarea.value;
+        } catch {
+            // fallback to string replace
+        }
+    }
+    return decoded
+        .replace(/&quot;/g, '"')
+        .replace(/&#96;/g, '`')
+        .replace(/&#x27;/g, "'")
+        .replace(/&#039;/g, "'")
+        .replace(/&#x5C;/g, '\\')
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&amp;/g, '&');
 };
 
 /* ═══════════════════════════════════════════════════════════════
@@ -684,6 +700,7 @@ const MessageBubble = React.memo(({
     isMobile = false,
     onSend,
     onGameMove,
+    onRetry,
 }) => {
     const theme = useTheme();
     const myId = getMyUserId();
@@ -695,7 +712,14 @@ const MessageBubble = React.memo(({
 
     // ── ChatGPT-style typewriter ──────────────────────────────────────────────
     // Only fires for bot messages (VORTEX-9). Historical messages show instantly.
-    const isBotMsg = msg.sender_id === 1 || msg.sender?.is_bot || msg.sender?.username?.toLowerCase?.() === "vortex9";
+    const isBotMsg = !isMe && Boolean(
+        user?.is_bot ||
+        user?.username?.toLowerCase?.() === "vortex-9" ||
+        user?.username?.toLowerCase?.() === "vortex9" ||
+        msg.sender?.is_bot ||
+        msg.sender?.username?.toLowerCase?.() === "vortex9" ||
+        msg.sender?.username?.toLowerCase?.() === "vortex-9"
+    );
     const [typedText, setTypedText] = useState(() => {
         // Historical (already arrived, not streaming) → show immediately
         if (isBotMsg && msg.message && !msg.is_streaming) return msg.message;
@@ -798,6 +822,12 @@ const MessageBubble = React.memo(({
     const bubbleClass = isMe ? theme.bubble.me : theme.bubble.them;
 
     const readStateConfig = (() => {
+        if (msg.status === "failed") {
+            return { label: "Delivery Failed", marks: "⚠️ Failed", className: "text-rose-400 font-bold" };
+        }
+        if (msg.temp_id && !msg.id) {
+            return { label: "Sending", marks: "🕒", className: "text-white/30 animate-pulse" };
+        }
         const state = msg.readState || msg.read_state || "sent";
         if (state === "read") {
             return { label: "Read", marks: "✓✓", className: theme.accentText };
@@ -902,8 +932,7 @@ const MessageBubble = React.memo(({
         actualMessage.includes("`") ||
         actualMessage.includes("\n") ||
         Boolean(msg.is_streaming) ||
-        Boolean(msg.sender?.username?.toLowerCase?.() === "vortex9") ||
-        Boolean(msg.sender_id === 1)
+        isBotMsg
     );
 
     const imageUrls = !isP2P && !isGame && !isSound && !isRichMarkdown ? extractImageUrls(actualMessage) : [];
@@ -1018,11 +1047,11 @@ const MessageBubble = React.memo(({
                         </span>
                     )}
 
-                    {/* ── TYPEWRITER: render typedText after streaming finishes ── */}
-                    {isBotMsg && !msg.is_streaming && typedText !== null && (
+                    {/* ── TYPEWRITER: render typedText (or actualMessage fallback) for bot messages ── */}
+                    {isBotMsg && !msg.is_streaming && (
                         <>
                             <MathFormattedText
-                                text={typedText}
+                                text={typedText !== null ? typedText : actualMessage}
                                 className="text-[13px] sm:text-[15px] leading-relaxed text-white/90 selection:bg-white/20"
                                 onOpenLightbox={setLightboxImage}
                             />
@@ -1088,8 +1117,8 @@ const MessageBubble = React.memo(({
     return (
         <>
             <motion.div
-                id={`msg-${msg.id}`}
-                data-msg-id={msg.id}
+                id={`msg-${msg.id || msg.temp_id}`}
+                data-msg-id={msg.id || msg.temp_id}
                 layout
                 initial={{ opacity: 0, y: 6, scale: 0.98 }}
                 animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -1295,6 +1324,20 @@ const MessageBubble = React.memo(({
                                     <span className="sr-only">{readStateConfig.label}</span>
                                     {readStateConfig.marks}
                                 </span>
+                            )}
+                            {isMe && msg.status === "failed" && onRetry && (
+                                <button
+                                    type="button"
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        onRetry(msg);
+                                    }}
+                                    className="text-[9px] text-rose-300 bg-rose-500/20 hover:bg-rose-500/30 border border-rose-500/40 px-1.5 py-0.5 rounded flex items-center gap-1 transition-colors cursor-pointer ml-1 active:scale-95 font-semibold"
+                                    title="Click to retry sending message"
+                                >
+                                    <span>🔄</span>
+                                    <span>Retry</span>
+                                </button>
                             )}
                         </div>
                     </motion.div>
