@@ -1201,17 +1201,31 @@ export default function LoginMobile() {
         try {
             if (mode === 'signup') {
                 const payload = {
-                    username: displayName,
-                    email: usernameCredential,
+                    username: displayName.trim(),
+                    email: usernameCredential.trim(),
                     password: passwordCredential
                 };
                 await API.post("/signup", payload);
                 setAmbientGreetingText("Identity established. Logging in...");
-                setMode('login');
-                setTimeout(() => executeAuthenticationRequest(), 1500);
+                
+                // Direct login request
+                const loginResponse = await API.post("/login", {
+                    email: usernameCredential.trim(),
+                    password: passwordCredential,
+                });
+
+                const payloadToken = loginResponse.data.access_token || loginResponse.data.token;
+                if (payloadToken) {
+                    sessionStorage.setItem('token', payloadToken);
+                    triggerCinematicSuccessSequence();
+                } else {
+                    setMode('login');
+                    setSystemStateStep('idle');
+                    setAmbientGreetingText("Account created! Please sign in.");
+                }
             } else {
                 const response = await API.post("/login", {
-                    email: usernameCredential,
+                    email: usernameCredential.trim(),
                     password: passwordCredential,
                 });
 

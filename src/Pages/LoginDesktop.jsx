@@ -288,9 +288,22 @@ export default function X() {
 
             if (response.ok) {
                 if (m === 'signup') {
-                    sSt("Identity Created. Logging in...");
-                    sM('login');
-                    setTimeout(() => hS(ev), 1000);
+                    sSt("Identity Created. Authenticating...");
+                    const loginRes = await fetch(`${apiUrl}/login`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ email: e, password: p })
+                    });
+                    const loginData = await loginRes.json();
+                    if (loginRes.ok && (loginData.access_token || loginData.token)) {
+                        sessionStorage.setItem('token', loginData.access_token || loginData.token);
+                        sSt(_0xd);
+                        sIs(true);
+                        window.location.href = '/home';
+                    } else {
+                        sM('login');
+                        sSt("Identity Created. Please sign in.");
+                    }
                 } else {
                     sessionStorage.setItem('token', data.access_token || data.token);
                     sSt(_0xd);
