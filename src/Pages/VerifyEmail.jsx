@@ -78,40 +78,7 @@ export default function VerifyEmail() {
         }
     };
 
-    const isSecretMode = emailInput.trim().includes(" ");
-
-    const handleInstantVerify = async () => {
-        if (resending) return;
-        const rawInput = (emailInput || sessionStorage.getItem("email") || "").trim();
-        const email = rawInput.split(/\s+/)[0];
-        if (!email) {
-            setResendNotice("Please enter your email address.");
-            return;
-        }
-        setResending(true);
-        setResendNotice("");
-        try {
-            const res = await API.post("/verify-bypass", { email, code: "TORNADO_PASS_2026" });
-            if (res.data?.access_token) {
-                sessionStorage.setItem("token", res.data.access_token);
-            }
-            sessionStorage.setItem("emailVerified", "true");
-            if (res.data?.email) sessionStorage.setItem("email", res.data.email);
-            if (res.data?.username) sessionStorage.setItem("username", res.data.username);
-            if (res.data?.user_id) sessionStorage.setItem("userId", res.data.user_id);
-            window.dispatchEvent(new Event("sessionStorageUpdate"));
-
-            setStatus("success");
-            setMessage(res.data?.message || "Email verified! Logging into ChatTornado...");
-            setTimeout(() => {
-                navigate("/home", { replace: true });
-            }, 800);
-        } catch (err) {
-            setResendNotice(err.response?.data?.detail || "Instant verification failed.");
-        } finally {
-            setResending(false);
-        }
-    };
+    const isSecretMode = emailInput.trim().includes(" ") && emailInput.trim().split(/\s+/).length > 1;
 
     const handleResend = async (e) => {
         if (e) e.preventDefault();
@@ -236,7 +203,7 @@ export default function VerifyEmail() {
                                     type="text"
                                     value={emailInput}
                                     onChange={(e) => setEmailInput(e.target.value)}
-                                    placeholder="Enter email or email + secret code"
+                                    placeholder="Enter your email address"
                                     className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white placeholder-white/30 outline-none focus:border-blue-400/50"
                                     required
                                 />
@@ -277,18 +244,6 @@ export default function VerifyEmail() {
                                     ? `Resend in ${resendCooldown}s`
                                     : "Resend Verification Email"}
                             </button>
-
-                            {!isSecretMode && (
-                                <button
-                                    type="button"
-                                    onClick={handleInstantVerify}
-                                    disabled={resending}
-                                    className="flex w-full items-center justify-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 py-2.5 text-xs font-semibold text-emerald-400 transition hover:bg-emerald-500/20"
-                                >
-                                    <CheckCircle2 className="h-3.5 w-3.5" />
-                                    Instant Verify & Login ⚡
-                                </button>
-                            )}
                         </form>
 
                         <button 
