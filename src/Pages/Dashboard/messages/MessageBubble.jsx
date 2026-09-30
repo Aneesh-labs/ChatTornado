@@ -1035,11 +1035,11 @@ const MessageBubble = React.memo(({
                 <FileLink key={`${msg.id}-file-${idx}`} url={url} />
             ))}
 
-            {/* Math & text formatting — with ChatGPT-style typewriter */}
+            {/* Math & text formatting — with live streaming & markdown */}
             {!hasImages && !hasVideos && !hasAudio && !hasFiles && !isP2P && (actualMessage || msg.is_streaming) && (
                 <div className="relative">
-                    {/* ── STREAMING: show thinking dots while waiting for full response ── */}
-                    {isBotMsg && msg.is_streaming && (
+                    {/* ── STREAMING: show thinking dots while waiting for first chunk ── */}
+                    {isBotMsg && msg.is_streaming && !actualMessage && (
                         <span className="inline-flex items-center gap-1 py-0.5">
                             <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-bounce [animation-delay:0ms]" />
                             <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-bounce [animation-delay:150ms]" />
@@ -1047,19 +1047,25 @@ const MessageBubble = React.memo(({
                         </span>
                     )}
 
-                    {/* ── TYPEWRITER: render typedText (or actualMessage fallback) for bot messages ── */}
-                    {isBotMsg && !msg.is_streaming && (
+                    {/* ── LIVE STREAMING: render real-time incoming text with blinking cursor ── */}
+                    {isBotMsg && msg.is_streaming && actualMessage && (
                         <>
                             <MathFormattedText
-                                text={typedText !== null ? typedText : actualMessage}
+                                text={actualMessage}
                                 className="text-[13px] sm:text-[15px] leading-relaxed text-white/90 selection:bg-white/20"
                                 onOpenLightbox={setLightboxImage}
                             />
-                            {/* Blinking cursor while still typing */}
-                            {typewriterRef.current !== null && (
-                                <span className="inline-block w-[2px] h-[1em] ml-0.5 bg-cyan-400 align-middle animate-[blink_0.8s_step-start_infinite]" />
-                            )}
+                            <span className="inline-block w-[2px] h-[1em] ml-0.5 bg-cyan-400 align-middle animate-[blink_0.8s_step-start_infinite]" />
                         </>
+                    )}
+
+                    {/* ── BOT completed or historical message ── */}
+                    {isBotMsg && !msg.is_streaming && (
+                        <MathFormattedText
+                            text={actualMessage}
+                            className="text-[13px] sm:text-[15px] leading-relaxed text-white/90 selection:bg-white/20"
+                            onOpenLightbox={setLightboxImage}
+                        />
                     )}
 
                     {/* ── NON-BOT messages: render normally ── */}

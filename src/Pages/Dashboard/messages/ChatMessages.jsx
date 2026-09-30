@@ -237,9 +237,13 @@ const ChatMessages = React.memo(({
                     })}
                 </AnimatePresence>
                 <AnimatePresence>
-                    {enrichedSelected?.id && (typingUsers?.has?.(enrichedSelected.id) || typingUsers?.has?.(Number(enrichedSelected.id)) || typingUsers?.has?.(String(enrichedSelected.id))) && (
-                        <TypingIndicator user={enrichedSelected} />
-                    )}
+                    {enrichedSelected?.id &&
+                        (typingUsers?.has?.(enrichedSelected.id) ||
+                            typingUsers?.has?.(Number(enrichedSelected.id)) ||
+                            typingUsers?.has?.(String(enrichedSelected.id))) &&
+                        !messages.some((m) => m.is_streaming && areIdsEqual(m.sender_id, enrichedSelected.id)) && (
+                            <TypingIndicator user={enrichedSelected} />
+                        )}
                 </AnimatePresence>
                 <div ref={messagesEndRef} className="h-1 sm:h-2 w-full clear-both" aria-hidden="true" />
             </div>

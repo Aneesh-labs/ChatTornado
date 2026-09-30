@@ -1110,6 +1110,15 @@ const Messages = () => {
                         return;
                     }
                     if (packet.type === "ai_stream_start") {
+                        if (packet.sender_id) {
+                            setTypingUsers((prev) => {
+                                const next = new Set(prev);
+                                next.delete(packet.sender_id);
+                                next.delete(Number(packet.sender_id));
+                                next.delete(String(packet.sender_id));
+                                return next;
+                            });
+                        }
                         const currentChat = selectedUserRef.current;
                         const isAiChat = Boolean(currentChat && (currentChat.is_bot || currentChat.username === "VORTEX-9" || areIdsEqual(currentChat.id, packet.sender_id)));
                         if (isAiChat) {
@@ -1155,6 +1164,15 @@ const Messages = () => {
                         return;
                     }
                     if (packet.type === "ai_stream_done") {
+                        if (packet.sender_id) {
+                            setTypingUsers((prev) => {
+                                const next = new Set(prev);
+                                next.delete(packet.sender_id);
+                                next.delete(Number(packet.sender_id));
+                                next.delete(String(packet.sender_id));
+                                return next;
+                            });
+                        }
                         const currentChat = selectedUserRef.current;
                         const isAiChat = Boolean(currentChat && (currentChat.is_bot || currentChat.username === "VORTEX-9" || areIdsEqual(currentChat.id, packet.sender_id)));
                         if (isAiChat) {

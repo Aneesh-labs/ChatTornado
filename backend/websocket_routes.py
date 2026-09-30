@@ -1174,7 +1174,11 @@ async def websocket_endpoint(websocket: WebSocket):
                             ])
                             reply_db.commit()
 
-                            # Signal streaming start to client
+                            # Signal streaming start to client and stop typing indicator
+                            await manager.send_personal_message(u_id, {
+                                "type": "typing_stop",
+                                "sender_id": b_id
+                            })
                             await manager.send_personal_message(u_id, {
                                 "type": "ai_stream_start",
                                 "message_id": bot_message.id,
