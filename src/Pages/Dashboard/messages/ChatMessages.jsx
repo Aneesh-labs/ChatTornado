@@ -241,7 +241,7 @@ const ChatMessages = React.memo(({
                         (typingUsers?.has?.(enrichedSelected.id) ||
                             typingUsers?.has?.(Number(enrichedSelected.id)) ||
                             typingUsers?.has?.(String(enrichedSelected.id))) &&
-                        !messages.some((m) => m.is_streaming && areIdsEqual(m.sender_id, enrichedSelected.id)) && (
+                        !groupedMessages.some((item) => item.msg?.is_streaming && areIdsEqual(item.msg?.sender_id, enrichedSelected.id)) && (
                             <TypingIndicator user={enrichedSelected} />
                         )}
                 </AnimatePresence>
