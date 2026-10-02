@@ -147,7 +147,8 @@ def is_image_request(text: str) -> Tuple[bool, str]:
     # Direct slash commands
     for prefix in ("/image", "/imagine", "/img", "!image", "!imagine"):
         if lower.startswith(prefix):
-            prompt = cleaned[len(prefix):].strip().lstrip(":").strip()
+            raw_prompt = cleaned[len(prefix):].strip().lstrip(":").strip()
+            prompt = re.sub(r'^(?:of|for|about)\s+(?:a|an|the)?\s*', '', raw_prompt, flags=re.IGNORECASE).strip() or raw_prompt
             return True, prompt
 
     # Natural language phrasing
@@ -176,12 +177,15 @@ def is_image_request(text: str) -> Tuple[bool, str]:
         "make a picture of",
         "can you generate an image of",
         "can you create an image of",
+        "can you draw me a",
+        "can you draw me an",
         "can you draw me",
         "can you draw a",
         "can you draw an",
         "can you draw",
         "draw me a",
         "draw me an",
+        "draw me",
         "paint me a",
         "paint me an",
         "draw ",
@@ -190,8 +194,9 @@ def is_image_request(text: str) -> Tuple[bool, str]:
     ]
     for trig in triggers:
         if lower.startswith(trig):
-            prompt = cleaned[len(trig):].strip().rstrip(".!?")
-            if len(prompt) > 2:
+            raw_prompt = cleaned[len(trig):].strip().rstrip(".!?")
+            prompt = re.sub(r'^(?:of|for|about)\s+(?:a|an|the)?\s*', '', raw_prompt, flags=re.IGNORECASE).strip() or raw_prompt
+            if len(prompt) > 1:
                 return True, prompt
 
     return False, cleaned
@@ -913,9 +918,15 @@ async def generate_ai_text(
 
 
 async def generate_ai_image(prompt: str) -> str:
-    """Generate image using Gemini/Imagen model with robust fallback, saved locally and returned as markdown."""
+    """Generate image using Gemini/Imagen or multi-model Pollinations (Flux/Turbo) with ultra-resilient fallback, saved locally and returned as markdown."""
+    import httpx
+    import urllib.parse
+    import random
+    import re
+
     api_key = os.getenv("GEMINI_API_KEY")
-    clean_prompt = prompt.strip()
+    raw_prompt = (prompt or "").strip()
+    clean_prompt = re.sub(r'^(?:of|for|about)\s+(?:a|an|the)?\s*', '', raw_prompt, flags=re.IGNORECASE).strip() or raw_prompt
     if not clean_prompt:
         clean_prompt = "Futuristic cybernetic tornado with neon data particles"
 
@@ -924,15 +935,15 @@ async def generate_ai_image(prompt: str) -> str:
     ai_dir.mkdir(parents=True, exist_ok=True)
 
     image_bytes = None
-    mime_type = "image/png"
+    mime_type = "image/jpeg"
 
-    # Strategy 1: Imagen via Gemini Client if available
+    # Strategy 1: Imagen via Google GenAI Client if available
     if api_key:
         try:
             from google import genai
             from google.genai import types
             client = genai.Client(api_key=api_key)
-            for imagen_model in ("imagen-3.0-generate-002", "imagen-4.0-generate-001"):
+            for imagen_model in ("imagen-3.0-generate-002", "imagen-3.0-generate-001", "imagen-4.0-generate-001"):
                 try:
                     logger.info("Attempting image generation with %s: %s", imagen_model, clean_prompt)
                     result = client.models.generate_images(
@@ -946,46 +957,64 @@ async def generate_ai_image(prompt: str) -> str:
                     if result and result.generated_images:
                         image_bytes = result.generated_images[0].image.image_bytes
                         mime_type = "image/png"
+                        logger.info("Imagen %s generated %d bytes", imagen_model, len(image_bytes))
                         break
                 except Exception as e_img:
                     logger.debug("Imagen model %s failed: %s", imagen_model, e_img)
         except Exception as exc:
             logger.debug("Gemini client imagen attempt error: %s", exc)
 
-    # Strategy 2: High-speed Generative Engine fallback (Pollinations Flux/Photorealistic)
+    # Strategy 2: Multi-Model Pollinations Engine (Flux / Turbo / Standard) with auto-redirect & browser headers
     if not image_bytes:
+        encoded_prompt = urllib.parse.quote(clean_prompt)
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+            "Accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8"
+        }
+        models_to_try = ["flux", "turbo", ""]
         try:
-            import httpx
-            import urllib.parse
-            import random
-            encoded_prompt = urllib.parse.quote(clean_prompt)
-            seed = random.randint(1000, 999999)
-            poll_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=1024&height=1024&nologo=true&seed={seed}"
-            logger.info("Attempting visual synthesis with high-res generative fallback: %s", poll_url)
-            async with httpx.AsyncClient(timeout=35.0) as http_client:
-                resp = await http_client.get(poll_url)
-                if resp.status_code == 200 and len(resp.content) > 1000:
-                    image_bytes = resp.content
-                    mime_type = resp.headers.get("content-type", "image/jpeg")
-        except Exception as p_err:
-            logger.warning("Generative image fallback failed: %s", p_err)
+            async with httpx.AsyncClient(timeout=30.0, follow_redirects=True, headers=headers) as http_client:
+                for model_name in models_to_try:
+                    try:
+                        seed = random.randint(1000, 9999999)
+                        model_param = f"&model={model_name}" if model_name else ""
+                        poll_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=1024&height=1024&nologo=true&seed={seed}{model_param}"
+                        logger.info("Attempting visual synthesis with Pollinations (%s): %s", model_name or "default", poll_url)
+                        resp = await http_client.get(poll_url)
+                        if resp.status_code == 200 and len(resp.content) > 1000:
+                            image_bytes = resp.content
+                            mime_type = resp.headers.get("content-type", "image/jpeg")
+                            logger.info("Pollinations (%s) successfully fetched %d bytes", model_name or "default", len(image_bytes))
+                            break
+                    except Exception as p_err:
+                        logger.warning("Pollinations (%s) attempt failed: %s", model_name or "default", p_err)
+        except Exception as net_err:
+            logger.warning("Network client error during image synthesis: %s", net_err)
 
+    # Strategy 3: Direct CDN Fallback URL if local save/download failed
     if not image_bytes:
-        return f"⚠️ **Visual Synthesis Failed**: Could not generate image for \"{clean_prompt}\". Please try a different prompt."
+        encoded_prompt = urllib.parse.quote(clean_prompt)
+        cdn_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=1024&height=1024&nologo=true"
+        return f"![{clean_prompt}]({cdn_url})\n\n🎨 *Generated by VORTEX-9:* \"{clean_prompt}\""
 
     ext = "png" if "png" in mime_type else "jpg"
     file_name = f"vortex_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:8]}.{ext}"
     target_path = ai_dir / file_name
 
-    with open(target_path, "wb") as f:
-        f.write(image_bytes)
-        f.flush()
-        try:
-            os.fsync(f.fileno())
-        except Exception:
-            pass
-
-    logger.info("Saved AI generated image to %s (%d bytes)", target_path, len(image_bytes))
+    try:
+        with open(target_path, "wb") as f:
+            f.write(image_bytes)
+            f.flush()
+            try:
+                os.fsync(f.fileno())
+            except Exception:
+                pass
+        logger.info("Saved AI generated image to %s (%d bytes)", target_path, len(image_bytes))
+    except Exception as save_err:
+        logger.warning("Could not write image to local disk: %s. Using direct CDN URL.", save_err)
+        encoded_prompt = urllib.parse.quote(clean_prompt)
+        cdn_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=1024&height=1024&nologo=true"
+        return f"![{clean_prompt}]({cdn_url})\n\n🎨 *Generated by VORTEX-9:* \"{clean_prompt}\""
 
     # Prefer full backend URL if deployed (e.g. Render), else relative path
     backend_base = (os.getenv("RENDER_EXTERNAL_URL") or os.getenv("BACKEND_URL") or "").rstrip("/")
