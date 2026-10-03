@@ -121,6 +121,9 @@ def run_migrations():
                 ("group_id", "INTEGER"),
                 ("client_temp_id", "VARCHAR(100)"),
                 ("correlation_id", "VARCHAR(100)"),
+                ("branch_id", "INTEGER"),
+                ("is_future_message", "BOOLEAN DEFAULT FALSE"),
+                ("future_message_id", "INTEGER"),
             ]
             with engine.begin() as conn:
                 for col_name, col_def in msg_cols_to_add:
@@ -144,6 +147,9 @@ def run_migrations():
                     conn.execute(text("UPDATE connections SET status = 'declined' WHERE status = 'decline';"))
                 except Exception:
                     pass
+
+        # 4. Ensure all new tables (conversation_branches, conversation_dna, future_messages) exist
+        Base.metadata.create_all(bind=engine)
     except Exception as exc:
         print(f"[MIGRATION WARNING] Error running migrations: {exc}")
 

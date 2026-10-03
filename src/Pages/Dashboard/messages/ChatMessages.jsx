@@ -105,6 +105,7 @@ const ChatMessages = React.memo(({
     onSend,
     onGameMove,
     onRetry,
+    onFork,
 }) => {
     const [mobileActionMsg, setMobileActionMsg] = useState(null);
 
@@ -232,6 +233,7 @@ const ChatMessages = React.memo(({
                                 onSend={onSend}
                                 onGameMove={onGameMove}
                                 onRetry={onRetry}
+                                onFork={onFork}
                             />
                         );
                     })}
@@ -256,7 +258,8 @@ const ChatMessages = React.memo(({
                 onReaction={addReaction}
                 onReply={setReplyingTo}
                 onSelect={handleSelectMessage}
-                onDelete={onDelete}  // ✅ PASS TO MOBILE ACTIONS
+                onDelete={onDelete}
+                onFork={onFork}
             />
         </>
     );

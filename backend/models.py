@@ -84,10 +84,17 @@ class Message(Base):
     client_temp_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True, index=True)
     correlation_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True, index=True)
     
+    # Reality Forks & Future Messages
+    branch_id: Mapped[Optional[int]] = mapped_column(ForeignKey("conversation_branches.id", ondelete="SET NULL"), nullable=True, index=True)
+    is_future_message: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    future_message_id: Mapped[Optional[int]] = mapped_column(ForeignKey("future_messages.id", ondelete="SET NULL"), nullable=True, index=True)
+    
     # Relationships
     sender: Mapped["User"] = relationship("User", foreign_keys=[sender_id], back_populates="sent_messages")
     receiver: Mapped[Optional["User"]] = relationship("User", foreign_keys=[receiver_id], back_populates="received_messages")
     group: Mapped[Optional["Group"]] = relationship("Group", back_populates="messages")
+    branch: Mapped[Optional["ConversationBranch"]] = relationship("ConversationBranch", foreign_keys=[branch_id], back_populates="messages")
+    future_message: Mapped[Optional["FutureMessage"]] = relationship("FutureMessage", foreign_keys=[future_message_id])
     visibility: Mapped[List["MessageVisibility"]] = relationship(
         "MessageVisibility",
         back_populates="message",
@@ -407,4 +414,85 @@ class AdminAuditLog(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, nullable=False, index=True)
 
     # Relationships
-    admin: Mapped["User"] = relationship("User", foreign_keys=[admin_id])
+    admin: Mapped["User"] = relationship("User", foreign_keys=[admin_id])
+
+
+# ============================================================================
+# REALITY FORKS (CONVERSATION BRANCHING)
+# ============================================================================
+
+class ConversationBranch(Base):
+    __tablename__ = "conversation_branches"
+
+    id: Mapped[int] = mapped_column(primary_key=True, index=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    conversation_key: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
+    group_id: Mapped[Optional[int]] = mapped_column(ForeignKey("groups.id", ondelete="CASCADE"), nullable=True, index=True)
+    dm_user1_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=True, index=True)
+    dm_user2_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=True, index=True)
+    parent_branch_id: Mapped[Optional[int]] = mapped_column(ForeignKey("conversation_branches.id", ondelete="SET NULL"), nullable=True, index=True)
+    fork_message_id: Mapped[int] = mapped_column(ForeignKey("messages.id", ondelete="CASCADE"), nullable=False, index=True)
+    created_by: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+    is_archived: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+
+    # Relationships
+    creator: Mapped["User"] = relationship("User", foreign_keys=[created_by])
+    parent_branch: Mapped[Optional["ConversationBranch"]] = relationship("ConversationBranch", remote_side=[id])
+    fork_message: Mapped["Message"] = relationship("Message", foreign_keys=[fork_message_id])
+    messages: Mapped[List["Message"]] = relationship("Message", foreign_keys="Message.branch_id", back_populates="branch")
+    dna: Mapped[Optional["ConversationDNA"]] = relationship("ConversationDNA", back_populates="branch", uselist=False, cascade="all, delete-orphan")
+
+
+# ============================================================================
+# CONVERSATION DNA (STRUCTURE & PATTERNS CACHE)
+# ============================================================================
+
+class ConversationDNA(Base):
+    __tablename__ = "conversation_dna"
+
+    id: Mapped[int] = mapped_column(primary_key=True, index=True, autoincrement=True)
+    conversation_key: Mapped[str] = mapped_column(String(100), unique=True, nullable=False, index=True)
+    group_id: Mapped[Optional[int]] = mapped_column(ForeignKey("groups.id", ondelete="CASCADE"), nullable=True, index=True)
+    dm_user1_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=True, index=True)
+    dm_user2_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=True, index=True)
+    branch_id: Mapped[Optional[int]] = mapped_column(ForeignKey("conversation_branches.id", ondelete="CASCADE"), nullable=True, index=True)
+    metrics: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    message_count_analyzed: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    last_message_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    # Relationships
+    branch: Mapped[Optional["ConversationBranch"]] = relationship("ConversationBranch", back_populates="dna")
+
+
+# ============================================================================
+# FUTURE MESSAGES (TIME & CONDITION TRIGGERED SCHEDULER)
+# ============================================================================
+
+class FutureMessage(Base):
+    __tablename__ = "future_messages"
+
+    id: Mapped[int] = mapped_column(primary_key=True, index=True, autoincrement=True)
+    sender_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    receiver_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=True, index=True)
+    group_id: Mapped[Optional[int]] = mapped_column(ForeignKey("groups.id", ondelete="CASCADE"), nullable=True, index=True)
+    branch_id: Mapped[Optional[int]] = mapped_column(ForeignKey("conversation_branches.id", ondelete="SET NULL"), nullable=True, index=True)
+    message: Mapped[str] = mapped_column(Text, nullable=False)
+    trigger_type: Mapped[str] = mapped_column(String(30), default="time", nullable=False)  # "time" | "condition"
+    scheduled_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
+    condition_config: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    status: Mapped[str] = mapped_column(String(30), default="scheduled", nullable=False, index=True)  # "scheduled", "waiting", "triggered", "delivered", "cancelled", "expired", "failed"
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+    executed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    error_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    delivered_message_id: Mapped[Optional[int]] = mapped_column(ForeignKey("messages.id", ondelete="SET NULL"), nullable=True, index=True)
+    execution_metadata: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+
+    # Relationships
+    sender: Mapped["User"] = relationship("User", foreign_keys=[sender_id])
+    receiver: Mapped[Optional["User"]] = relationship("User", foreign_keys=[receiver_id])
+    group: Mapped[Optional["Group"]] = relationship("Group", foreign_keys=[group_id])
+    branch: Mapped[Optional["ConversationBranch"]] = relationship("ConversationBranch", foreign_keys=[branch_id])
+    delivered_message: Mapped[Optional["Message"]] = relationship("Message", foreign_keys=[delivered_message_id])

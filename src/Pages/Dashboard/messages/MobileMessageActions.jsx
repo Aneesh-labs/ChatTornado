@@ -109,6 +109,14 @@ const MobileMessageActions = React.memo(({ open, msg, isMe, onClose, onReaction,
                             </button>
                             <button
                                 type="button"
+                                onClick={() => { onFork?.(msg); onClose?.(); }}
+                                className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left text-sm text-purple-300 hover:bg-purple-500/10 active:bg-purple-500/20 transition-colors touch-manipulation"
+                            >
+                                <span className="text-base">🔀</span>
+                                Fork Reality from Here
+                            </button>
+                            <button
+                                type="button"
                                 onClick={() => { onSelect?.(msg.id); onClose?.(); }}
                                 className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left text-sm text-white/80 hover:bg-white/[0.04] active:bg-white/[0.06] transition-colors touch-manipulation"
                             >

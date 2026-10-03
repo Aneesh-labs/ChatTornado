@@ -44,6 +44,11 @@ const ChatWindow = React.memo(({
     onGameMove,
     onRetry,
     messages = [],
+    activeBranch = null,
+    onOpenDNA,
+    onOpenRealityForks,
+    onOpenFutureMessages,
+    onFork,
 }) => {
     const [localAiMode, setLocalAiMode] = useState(() => {
         return isAdminUnlocked() ? "ADMIN" : "DEFAULT";
@@ -84,6 +89,10 @@ const ChatWindow = React.memo(({
                 aiMode={aiMode}
                 setAiMode={setAiMode}
                 messages={messages}
+                activeBranch={activeBranch}
+                onOpenDNA={onOpenDNA}
+                onOpenRealityForks={onOpenRealityForks}
+                onOpenFutureMessages={onOpenFutureMessages}
             />
             <ChatMessages
                 groupedMessages={groupedMessages}
@@ -105,6 +114,7 @@ const ChatWindow = React.memo(({
                 onSend={sendMessage}
                 onGameMove={onGameMove}
                 onRetry={onRetry}
+                onFork={onFork}
             />
             <ScrollBar show={showScrollBtn} currentTheme={currentTheme} scrollToBottom={scrollToBottom} isMobile={isMobile} />
             {!selectionMode && (
@@ -116,6 +126,7 @@ const ChatWindow = React.memo(({
                     socketReady={socketReady}
                     socket={socket}
                     aiMode={aiMode}
+                    onOpenFutureMessages={onOpenFutureMessages}
                 />
             )}
         </div>

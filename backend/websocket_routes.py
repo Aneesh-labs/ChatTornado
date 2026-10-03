@@ -166,11 +166,18 @@ async def websocket_endpoint(websocket: WebSocket):
                 if not member:
                     continue
 
+                branch_id = data.get("branch_id")
+                try:
+                    branch_id = int(branch_id) if branch_id is not None else None
+                except (ValueError, TypeError):
+                    branch_id = None
+
                 try:
                     new_group_msg = Message(
                         sender_id=user_id,
                         receiver_id=None,
                         group_id=group_id,
+                        branch_id=branch_id,
                         message=msg_text,
                         read_state="sent",
                         client_temp_id=temp_id,
@@ -215,6 +222,7 @@ async def websocket_endpoint(websocket: WebSocket):
                         "id": new_group_msg.id,
                         "temp_id": temp_id,
                         "group_id": group_id,
+                        "branch_id": branch_id,
                         "sender_id": user_id,
                         "sender_name": sender.username if sender else "Member",
                         "message": msg_text,
@@ -806,10 +814,17 @@ async def websocket_endpoint(websocket: WebSocket):
                 except Exception:
                     pass
 
+            branch_id = data.get("branch_id")
+            try:
+                branch_id = int(branch_id) if branch_id is not None else None
+            except (ValueError, TypeError):
+                branch_id = None
+
             try:
                 new_message = Message(
                     sender_id=user_id,
                     receiver_id=receiver_id,
+                    branch_id=branch_id,
                     message=message_text,
                     is_shielded=is_shielded,
                     shield_mode=shield_mode,
@@ -886,6 +901,7 @@ async def websocket_endpoint(websocket: WebSocket):
                 "temp_id": temp_id,
                 "sender_id": user_id,
                 "receiver_id": receiver_id,
+                "branch_id": branch_id,
                 "message": message_text,
                 "created_at": str(new_message.created_at),
                 "is_shielded": is_shielded,

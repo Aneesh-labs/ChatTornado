@@ -701,6 +701,7 @@ const MessageBubble = React.memo(({
     onSend,
     onGameMove,
     onRetry,
+    onFork,
 }) => {
     const theme = useTheme();
     const myId = getMyUserId();
@@ -1244,6 +1245,18 @@ const MessageBubble = React.memo(({
                                     type="button"
                                     whileHover={{ scale: 1.1 }}
                                     whileTap={{ scale: 0.9 }}
+                                    onClick={() => onFork?.(msg)}
+                                    className="text-[11px] text-purple-300/80 hover:text-purple-200 px-1.5 py-0.5 rounded-md hover:bg-purple-500/20 transition-colors font-medium flex items-center gap-1"
+                                    aria-label="Fork reality from message"
+                                    title="Fork conversation branch from here"
+                                >
+                                    <span>🔀 Fork</span>
+                                </motion.button>
+                                <div className="w-[1px] h-3.5 bg-white/10 mx-1" role="separator" />
+                                <motion.button
+                                    type="button"
+                                    whileHover={{ scale: 1.1 }}
+                                    whileTap={{ scale: 0.9 }}
                                     onClick={() => onReply?.(msg)}
                                     className="text-[11px] text-white/50 hover:text-white/90 px-1.5 py-0.5 rounded-md hover:bg-white/[0.08] transition-colors font-medium"
                                     aria-label="Reply to message"
@@ -1277,6 +1290,11 @@ const MessageBubble = React.memo(({
                             ${isSpeaking ? "ring-2 ring-cyan-400/70 shadow-[0_0_15px_rgba(6,182,212,0.35)]" : ""}
                         `}
                     >
+                        {msg.is_future_message && (
+                            <div className="mb-1 flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider text-amber-300 bg-amber-500/15 border border-amber-500/30 px-1.5 py-0.5 rounded w-fit shadow-sm">
+                                <span>🕰️ Future Scheduled</span>
+                            </div>
+                        )}
                         {msg.is_shielded ? (
                             <CyberShieldVault
                                 shieldMode={msg.shield_mode}

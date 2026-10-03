@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import PropTypes from "prop-types";
 import { motion, AnimatePresence } from "framer-motion";
-import { MoreVertical, Sparkles, Brain, Download, Cpu, Ban, UserCheck, ShieldAlert, Users, BadgeCheck } from "lucide-react";
+import { MoreVertical, Sparkles, Brain, Download, Cpu, Ban, UserCheck, ShieldAlert, Users, BadgeCheck, Dna, GitFork, Clock } from "lucide-react";
 import { IconBtn, Avatar, useTheme } from "./constants";
 import PersonalizeModal from "./PersonalizeModal";
 import ExportModal from "./ExportModal";
@@ -24,12 +24,16 @@ const ChatHeader = React.memo(({
     onCancelSelection,
     onStartCall,
     onStartGhostChat,
-    onDeleteSelected, // ✅ NEW PROP
-    onReloadChat, // 🔄 Reload messages from backend
+    onDeleteSelected,
+    onReloadChat,
     isReloading = false,
     aiMode,
     setAiMode,
     messages = [],
+    activeBranch = null,
+    onOpenDNA,
+    onOpenRealityForks,
+    onOpenFutureMessages,
 }) => {
     const theme = useTheme();
     const [showMoreMenu, setShowMoreMenu] = useState(false);
@@ -220,6 +224,16 @@ const ChatHeader = React.memo(({
                                 </span>
                             )}
                         </h2>
+                        {/* Reality Branch Switcher Badge */}
+                        <button
+                            type="button"
+                            onClick={onOpenRealityForks}
+                            title="Reality Forks - Click to switch or create conversation branches"
+                            className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-purple-500/15 hover:bg-purple-500/25 border border-purple-500/30 text-purple-300 transition-all cursor-pointer shadow-sm active:scale-95"
+                        >
+                            <GitFork className="w-2.5 h-2.5 text-purple-400" />
+                            <span>{activeBranch ? activeBranch.name : "main"}</span>
+                        </button>
                         {isBotUser && (
                             <>
                                 {(adminUnlocked || aiMode === "ADMIN") && (
@@ -370,6 +384,18 @@ const ChatHeader = React.memo(({
                                                 </button>
                                             </>
                                         )}
+                                        <button onClick={() => { onOpenDNA?.(); setShowMoreMenu(false); }} className="flex items-center gap-2 px-3 py-2 text-xs font-semibold text-cyan-300 hover:text-white hover:bg-cyan-500/10 rounded-lg text-left cursor-pointer">
+                                            <Dna className="w-4 h-4 text-cyan-400" />
+                                            <span>Conversation DNA</span>
+                                        </button>
+                                        <button onClick={() => { onOpenRealityForks?.(); setShowMoreMenu(false); }} className="flex items-center gap-2 px-3 py-2 text-xs font-semibold text-purple-300 hover:text-white hover:bg-purple-500/10 rounded-lg text-left cursor-pointer">
+                                            <GitFork className="w-4 h-4 text-purple-400" />
+                                            <span>Reality Forks</span>
+                                        </button>
+                                        <button onClick={() => { onOpenFutureMessages?.(); setShowMoreMenu(false); }} className="flex items-center gap-2 px-3 py-2 text-xs font-semibold text-amber-300 hover:text-white hover:bg-amber-500/10 rounded-lg text-left cursor-pointer">
+                                            <Clock className="w-4 h-4 text-amber-400" />
+                                            <span>Future Messages</span>
+                                        </button>
                                         <button onClick={() => { setShowExportModal(true); setShowMoreMenu(false); }} className="flex items-center gap-2 px-3 py-2 text-xs text-white/80 hover:text-white hover:bg-white/10 rounded-lg text-left cursor-pointer">
                                             <Download className="w-4 h-4 text-cyan-400" />
                                             Export Chat
@@ -387,6 +413,17 @@ const ChatHeader = React.memo(({
 
                 {/* --- DESKTOP ACTIONS --- */}
                 <div className="hidden sm:flex items-center gap-0.5 sm:gap-1">
+                    {/* Integrated Features Desktop Quick Buttons */}
+                    <IconBtn title="Conversation DNA (Structural & State Telemetry)" onClick={onOpenDNA} small className="hover:!text-cyan-300">
+                        <Dna className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-cyan-400" />
+                    </IconBtn>
+                    <IconBtn title="Reality Forks (Timeline Branches)" onClick={onOpenRealityForks} small className="hover:!text-purple-300">
+                        <GitFork className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-purple-400" />
+                    </IconBtn>
+                    <IconBtn title="Future Messages (Scheduled Delivery)" onClick={() => onOpenFutureMessages?.()} small className="hover:!text-amber-300">
+                        <Clock className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-400" />
+                    </IconBtn>
+
                     {onReloadChat && (
                         <IconBtn 
                             title="Reload chat messages" 

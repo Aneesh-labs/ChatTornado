@@ -37,6 +37,9 @@ import WallpaperLayer from "./messages/WallpaperLayer";
 import CommandPalette from "./messages/CommandPalette";
 import CallOverlay from "./messages/CallOverlay";
 import PerformanceMonitor, { usePerformanceMonitor } from "./messages/PerformanceMonitor";
+import ConversationDNAPanel from "./messages/ConversationDNAPanel";
+import RealityForksModal from "./messages/RealityForksModal";
+import FutureMessagesModal from "./messages/FutureMessagesModal";
 
 /* ==========================================================================
    SECURITY & UTILITY FUNCTIONS
@@ -155,6 +158,14 @@ const Messages = () => {
     });
     const [callNotice, setCallNotice] = useState("");
     const [securityStatus, setSecurityStatus] = useState("SECURE");
+
+    // ── Integrated Features State (DNA, Reality Forks, Future Messages) ────────
+    const [activeBranch, setActiveBranch] = useState(null);
+    const [dnaPanelOpen, setDnaPanelOpen] = useState(false);
+    const [realityForksModalOpen, setRealityForksModalOpen] = useState(false);
+    const [futureMessagesModalOpen, setFutureMessagesModalOpen] = useState(false);
+    const [forkSourceMessage, setForkSourceMessage] = useState(null);
+    const [futureMessagePrefill, setFutureMessagePrefill] = useState("");
 
     useEffect(() => {
         if (!callNotice) return;
@@ -570,9 +581,11 @@ const Messages = () => {
         if (!selectedUser) return;
         setMessages([]);
         if (!validateToken()) return;
-        const url = selectedUser.is_group 
-            ? `/api/groups/${selectedUser.id}/messages` 
-            : `/messages/${selectedUser.id}`;
+        const url = activeBranch?.id
+            ? `/api/branches/${activeBranch.id}/messages`
+            : selectedUser.is_group 
+                ? `/api/groups/${selectedUser.id}/messages` 
+                : `/messages/${selectedUser.id}`;
         API.get(url, { params: { token } })
             .then((res) => {
                 setMessages(res.data || []);
@@ -584,7 +597,7 @@ const Messages = () => {
                 }
             });
         setUnreadCounts((prev) => ({ ...prev, [selectedUser.id]: 0, [String(selectedUser.id)]: 0, [Number(selectedUser.id)]: 0 }));
-    }, [selectedUser, token, scrollToBottom, validateToken]);
+    }, [selectedUser, activeBranch, token, scrollToBottom, validateToken]);
 
     useEffect(() => {
         const container = scrollContainerRef.current;
@@ -608,9 +621,11 @@ const Messages = () => {
         if (!validateToken()) return;
         if (showFeedback) setIsReloading(true);
         try {
-            const url = selectedUser.is_group 
-                ? `/api/groups/${selectedUser.id}/messages` 
-                : `/messages/${selectedUser.id}`;
+            const url = activeBranch?.id
+                ? `/api/branches/${activeBranch.id}/messages`
+                : selectedUser.is_group 
+                    ? `/api/groups/${selectedUser.id}/messages` 
+                    : `/messages/${selectedUser.id}`;
             const res = await API.get(url, { params: { token } });
             setMessages(res.data || []);
             requestAnimationFrame(() => scrollToBottom("smooth"));
@@ -627,7 +642,7 @@ const Messages = () => {
                 }, 400);
             }
         }
-    }, [selectedUser, token, validateToken, scrollToBottom]);
+    }, [selectedUser, activeBranch, token, validateToken, scrollToBottom]);
 
     const refreshSidebar = useCallback(async () => {
         if (!validateToken()) return;
@@ -1318,6 +1333,7 @@ const Messages = () => {
                 sender_id: myUserId.current,
                 sender_name: "You",
                 group_id: currentTarget.id,
+                branch_id: activeBranch?.id || null,
                 message: validation.text,
                 created_at: new Date().toISOString(),
                 ...options
@@ -1328,6 +1344,7 @@ const Messages = () => {
                 type: "group_message",
                 temp_id,
                 group_id: currentTarget.id,
+                branch_id: activeBranch?.id || null,
                 message: validation.text,
             };
 
@@ -1353,6 +1370,7 @@ const Messages = () => {
             temp_id,
             sender_id: myUserId.current,
             receiver_id: currentTarget.id,
+            branch_id: activeBranch?.id || null,
             message: validation.text,
             created_at: new Date().toISOString(),
             is_locked: options.shield_mode === 'timelock',
@@ -1374,6 +1392,7 @@ const Messages = () => {
         const outgoingPayload = {
             temp_id,
             receiver_id: currentTarget.id,
+            branch_id: activeBranch?.id || null,
             message: validation.text,
             ai_mode: activeAiMode,
             ai_model: activeAiModel,
@@ -1404,7 +1423,7 @@ const Messages = () => {
         }
         setReplyingTo(null);
         return true;
-    }, [selectedUser, aiMode]);
+    }, [selectedUser, aiMode, activeBranch]);
 
     /* ── Message Retry (via WebSocket or Guaranteed REST Fallback) ─────── */
     const retryMessage = useCallback(async (failedMsg) => {
@@ -1570,10 +1589,35 @@ const Messages = () => {
 
     const selectUser = useCallback((user) => {
         setSelectedUser(user);
+        setActiveBranch(null);
         setSelectionMode(false);
         setSelectedMsgIds(new Set());
         if (isMobile) setMobileView("chat");
     }, [isMobile]);
+
+    // ── Integrated Features Handlers ──────────────────────────────────────────
+    const handleOpenDNA = useCallback(() => {
+        setDnaPanelOpen(true);
+    }, []);
+
+    const handleOpenRealityForks = useCallback((sourceMsg = null) => {
+        setForkSourceMessage(sourceMsg);
+        setRealityForksModalOpen(true);
+    }, []);
+
+    const handleOpenFutureMessages = useCallback((prefill = "") => {
+        setFutureMessagePrefill(typeof prefill === "string" ? prefill : "");
+        setFutureMessagesModalOpen(true);
+    }, []);
+
+    const handleSelectBranch = useCallback((branch) => {
+        setActiveBranch(branch);
+    }, []);
+
+    const handleForkFromMessage = useCallback((msg) => {
+        setForkSourceMessage(msg);
+        setRealityForksModalOpen(true);
+    }, []);
 
     const handleBackToList = useCallback(() => {
         setMobileView("list");
@@ -1792,6 +1836,11 @@ const Messages = () => {
                                 messages={messages}
                                 onGameMove={handleGameMove}
                                 onRetry={retryMessage}
+                                activeBranch={activeBranch}
+                                onOpenDNA={handleOpenDNA}
+                                onOpenRealityForks={handleOpenRealityForks}
+                                onOpenFutureMessages={handleOpenFutureMessages}
+                                onFork={handleForkFromMessage}
                             />
                         ) : (
                             <EmptyState onOpenSearch={handleOpenSearch} />
@@ -1804,6 +1853,41 @@ const Messages = () => {
                         isOpen={rightPanelOpen}
                         onClose={handleCloseRightPanel}
                         onClearChat={clearConversation}
+                    />
+
+                    {/* Integrated Next-Gen System Overlays */}
+                    <ConversationDNAPanel
+                        isOpen={dnaPanelOpen}
+                        onClose={() => setDnaPanelOpen(false)}
+                        user={enrichedSelected}
+                        activeBranch={activeBranch}
+                        onSelectCategory={(category) => {
+                            setSearchOpen(true);
+                        }}
+                        onJumpToMessage={handleJumpToMessage}
+                    />
+
+                    <RealityForksModal
+                        isOpen={realityForksModalOpen}
+                        onClose={() => setRealityForksModalOpen(false)}
+                        user={enrichedSelected}
+                        activeBranch={activeBranch}
+                        onSelectBranch={handleSelectBranch}
+                        forkSourceMessage={forkSourceMessage}
+                        onForkCreated={(newBranch) => {
+                            setCallNotice(`Reality fork "${newBranch.name}" created!`);
+                        }}
+                    />
+
+                    <FutureMessagesModal
+                        isOpen={futureMessagesModalOpen}
+                        onClose={() => setFutureMessagesModalOpen(false)}
+                        user={enrichedSelected}
+                        activeBranch={activeBranch}
+                        initialMessage={futureMessagePrefill}
+                        onMessageScheduled={() => {
+                            setCallNotice("Future message queued with server-side scheduler!");
+                        }}
                     />
 
                     <CommandPalette

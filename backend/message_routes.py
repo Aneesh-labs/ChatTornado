@@ -127,6 +127,8 @@ async def get_messages(
             "id": msg.id,
             "sender_id": msg.sender_id,
             "receiver_id": msg.receiver_id,
+            "group_id": msg.group_id,
+            "branch_id": getattr(msg, "branch_id", None),
             "message": message_content,
             "created_at": msg.created_at.isoformat() if msg.created_at else None,
             "read_state": current_read_state,
@@ -134,7 +136,9 @@ async def get_messages(
             "is_shielded": msg.is_shielded,
             "shield_mode": msg.shield_mode,
             "unlock_at": u_iso,
-            "is_locked": is_locked
+            "is_locked": is_locked,
+            "is_future_message": getattr(msg, "is_future_message", False),
+            "future_message_id": getattr(msg, "future_message_id", None)
         })
 
     return result

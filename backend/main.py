@@ -28,13 +28,30 @@ from slowapi import _rate_limit_exceeded_handler
 Base.metadata.create_all(bind=engine)
 run_migrations()
 
+from contextlib import asynccontextmanager
+import asyncio
+from scheduler_service import background_scheduler_worker
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup: Launch the persistent Future Messages background scheduler
+    scheduler_task = asyncio.create_task(background_scheduler_worker())
+    yield
+    # Shutdown: Cleanly cancel background worker
+    scheduler_task.cancel()
+    try:
+        await scheduler_task
+    except asyncio.CancelledError:
+        pass
+
 # ============================================================================
 # FastAPI App
 # ============================================================================
 
 app = FastAPI(
     title="ChatTornado Backend",
-    version="2.0.0"
+    version="2.0.0",
+    lifespan=lifespan
 )
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
@@ -125,6 +142,9 @@ from group_routes import router as group_router
 from report_routes import router as report_router
 from announcement_routes import router as announcement_router
 from admin_dashboard_routes import router as admin_dashboard_router
+from dna_routes import router as dna_router
+from branch_routes import router as branch_router
+from future_message_routes import router as future_message_router
 
 app.include_router(auth_router)
 app.include_router(user_router)
@@ -140,6 +160,9 @@ app.include_router(group_router)
 app.include_router(report_router)
 app.include_router(announcement_router)
 app.include_router(admin_dashboard_router)
+app.include_router(dna_router)
+app.include_router(branch_router)
+app.include_router(future_message_router)
 
 UPLOAD_DIR = Path(os.getenv("UPLOAD_DIR", Path(__file__).parent / "uploads"))
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)

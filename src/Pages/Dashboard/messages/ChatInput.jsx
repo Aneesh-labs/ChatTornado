@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { IconBtn, useTheme } from "./constants";
 import API from "../../../Services/API";
 import { prepareP2PFile } from "../../../Services/p2p";
-import { Shield, X, Gamepad2, Volume2, Mic, MicOff, MoreVertical, Sparkles, Wand2, RefreshCw, ImageIcon, Eye, Cpu, Zap, FileText, FileCode } from "lucide-react";
+import { Shield, X, Gamepad2, Volume2, Mic, MicOff, MoreVertical, Sparkles, Wand2, RefreshCw, ImageIcon, Eye, Cpu, Zap, FileText, FileCode, Clock } from "lucide-react";
 import CyberShieldModal from "./CyberShieldModal";
 import InChatGameModal from "./InChatGameModal";
 import SoundboardModal from "./SoundboardModal";
@@ -14,7 +14,7 @@ import { isProcessableDocument, processDocumentLocally } from "../../../utils/fi
 
 const VIDEO_EXTENSIONS = /\.(mp4|mov|mkv|avi|webm|m4v|3gp|flv|mpeg|mpg|ts|mts|m2ts|wmv|asf|ogv|vob)$/i;
 
-const ChatInput = React.memo(({ onSend, replyTo, onCancelReply, selectedUser, socket = null, disabled = false, socketReady = true, aiMode }) => {
+const ChatInput = React.memo(({ onSend, replyTo, onCancelReply, selectedUser, socket = null, disabled = false, socketReady = true, aiMode, onOpenFutureMessages }) => {
     const theme = useTheme();
     const baseUrl = (API.defaults.baseURL || "").replace(/\/+$/, "");
     const [text, setText] = useState("");
@@ -1202,6 +1202,15 @@ const ChatInput = React.memo(({ onSend, replyTo, onCancelReply, selectedUser, so
                                                 }`}
                                         >
                                             <Shield className="w-4 h-4" />
+                                        </IconBtn>
+
+                                        <IconBtn
+                                            title="Schedule Future Message (Time or Condition Engine)"
+                                            onClick={() => onOpenFutureMessages?.(text)}
+                                            small
+                                            className="text-amber-400/80 hover:!text-amber-300 hover:bg-amber-500/10 shrink-0"
+                                        >
+                                            <Clock className="w-4 h-4" />
                                         </IconBtn>
                                     </motion.div>
                                 )}

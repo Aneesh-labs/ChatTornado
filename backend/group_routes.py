@@ -390,10 +390,13 @@ def get_group_messages(
             "sender_id": m.sender_id,
             "sender_name": sender_u.username if sender_u else "User",
             "group_id": m.group_id,
+            "branch_id": getattr(m, "branch_id", None),
             "message": m.message,
             "created_at": m.created_at.isoformat() if m.created_at else None,
             "is_shielded": m.is_shielded,
             "read_state": m.read_state,
+            "is_future_message": getattr(m, "is_future_message", False),
+            "future_message_id": getattr(m, "future_message_id", None),
             "reactions": []
         })
 
