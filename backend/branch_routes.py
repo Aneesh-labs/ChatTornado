@@ -85,7 +85,7 @@ async def list_branches_for_conversation(
             dm_user2_id=dm_user2_id,
             group_id=group_id
         )
-        return {"status": "success", "data": branches}
+        return {"status": "success", "branches": branches, "data": branches}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to list branches: {str(e)}")
 
@@ -104,7 +104,7 @@ async def get_messages_for_branch(
     user_id = int(payload["user_id"])
     try:
         messages = get_branch_messages(db=db, user_id=user_id, branch_id=branch_id)
-        return {"status": "success", "data": messages}
+        return {"status": "success", "messages": messages, "data": messages}
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except PermissionError as e:

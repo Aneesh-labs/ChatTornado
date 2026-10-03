@@ -49,7 +49,7 @@ const ConversationDNAPanel = ({
                 ? await API.post(endpoint, {}, { params })
                 : await API.get(endpoint, { params });
 
-            setDnaData(res.data);
+            setDnaData(res.data?.data || res.data);
         } catch (err) {
             console.error("Failed to load Conversation DNA:", err);
             setError(err.response?.data?.detail || "Failed to analyze conversation DNA.");
