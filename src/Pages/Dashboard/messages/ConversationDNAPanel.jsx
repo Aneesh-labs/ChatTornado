@@ -256,14 +256,29 @@ const ConversationDNAPanel = ({
                                             </h4>
                                             <div className="flex flex-wrap gap-1.5">
                                                 {(dnaData.dominant_topics || []).length > 0 ? (
-                                                    dnaData.dominant_topics.map((topic, i) => (
-                                                        <span
-                                                            key={i}
-                                                            className="text-xs px-2.5 py-1 rounded-lg bg-cyan-500/10 border border-cyan-500/20 text-cyan-300 font-medium hover:bg-cyan-500/20 transition-colors"
-                                                        >
-                                                            #{topic}
-                                                        </span>
-                                                    ))
+                                                    dnaData.dominant_topics.map((item, i) => {
+                                                        const topicName = typeof item === "string" ? item : (item?.topic || item?.name || "Topic");
+                                                        const topicCount = typeof item === "object" ? item?.count : null;
+                                                        const msgIds = typeof item === "object" ? item?.message_ids : [];
+                                                        return (
+                                                            <button
+                                                                key={i}
+                                                                onClick={() => {
+                                                                    if (msgIds && msgIds.length > 0 && onJumpToMessage) {
+                                                                        onJumpToMessage(msgIds[0]);
+                                                                    } else if (onSelectCategory) {
+                                                                        onSelectCategory("topics");
+                                                                    }
+                                                                }}
+                                                                className="text-xs px-2.5 py-1 rounded-lg bg-cyan-500/10 border border-cyan-500/20 text-cyan-300 font-medium hover:bg-cyan-500/20 transition-colors flex items-center gap-1 cursor-pointer"
+                                                            >
+                                                                <span>#{topicName}</span>
+                                                                {topicCount != null && (
+                                                                    <span className="text-[10px] text-cyan-400/70 font-mono">({topicCount})</span>
+                                                                )}
+                                                            </button>
+                                                        );
+                                                    })
                                                 ) : (
                                                     <span className="text-xs text-slate-500 italic">No recurring topics isolated yet</span>
                                                 )}
@@ -293,27 +308,32 @@ const ConversationDNAPanel = ({
 
                                         {(dnaData.unresolved_questions || []).length > 0 ? (
                                             <div className="space-y-2">
-                                                {dnaData.unresolved_questions.map((q, idx) => (
-                                                    <div
-                                                        key={idx}
-                                                        onClick={() => q.message_id && onJumpToMessage?.(q.message_id)}
-                                                        className="p-3 rounded-xl bg-[#161b22] border border-amber-500/20 hover:border-amber-500/40 hover:bg-amber-500/5 transition-all text-xs group cursor-pointer"
-                                                    >
-                                                        <div className="flex items-start justify-between gap-2">
-                                                            <div className="flex items-start gap-2">
-                                                                <HelpCircle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
-                                                                <span className="text-slate-200 group-hover:text-amber-200 transition-colors leading-relaxed">
-                                                                    "{q.text}"
-                                                                </span>
+                                                {dnaData.unresolved_questions.map((q, idx) => {
+                                                    const text = typeof q === "string" ? q : (q?.text || "");
+                                                    const author = typeof q === "object" ? (q?.author || (q?.author_id ? `User #${q.author_id}` : "Participant")) : "Participant";
+                                                    const msgId = typeof q === "object" ? q?.message_id : null;
+                                                    return (
+                                                        <div
+                                                            key={idx}
+                                                            onClick={() => msgId && onJumpToMessage?.(msgId)}
+                                                            className="p-3 rounded-xl bg-[#161b22] border border-amber-500/20 hover:border-amber-500/40 hover:bg-amber-500/5 transition-all text-xs group cursor-pointer"
+                                                        >
+                                                            <div className="flex items-start justify-between gap-2">
+                                                                <div className="flex items-start gap-2">
+                                                                    <HelpCircle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                                                                    <span className="text-slate-200 group-hover:text-amber-200 transition-colors leading-relaxed">
+                                                                        "{text}"
+                                                                    </span>
+                                                                </div>
+                                                                <ChevronRight className="w-4 h-4 text-slate-500 group-hover:text-amber-400 shrink-0 mt-0.5" />
                                                             </div>
-                                                            <ChevronRight className="w-4 h-4 text-slate-500 group-hover:text-amber-400 shrink-0 mt-0.5" />
+                                                            <div className="mt-2 text-[10px] text-slate-400 flex items-center justify-between">
+                                                                <span>By {author}</span>
+                                                                <span className="text-amber-400/80">Click to jump</span>
+                                                            </div>
                                                         </div>
-                                                        <div className="mt-2 text-[10px] text-slate-400 flex items-center justify-between">
-                                                            <span>By {q.author || "Participant"}</span>
-                                                            <span className="text-amber-400/80">Click to jump</span>
-                                                        </div>
-                                                    </div>
-                                                ))}
+                                                    );
+                                                })}
                                             </div>
                                         ) : (
                                             <div className="py-8 text-center text-slate-500 text-xs">
@@ -333,27 +353,32 @@ const ConversationDNAPanel = ({
 
                                         {(dnaData.decisions_emerged || []).length > 0 ? (
                                             <div className="space-y-2">
-                                                {dnaData.decisions_emerged.map((d, idx) => (
-                                                    <div
-                                                        key={idx}
-                                                        onClick={() => d.message_id && onJumpToMessage?.(d.message_id)}
-                                                        className="p-3 rounded-xl bg-[#161b22] border border-emerald-500/20 hover:border-emerald-500/40 hover:bg-emerald-500/5 transition-all text-xs group cursor-pointer"
-                                                    >
-                                                        <div className="flex items-start justify-between gap-2">
-                                                            <div className="flex items-start gap-2">
-                                                                <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
-                                                                <span className="text-slate-200 group-hover:text-emerald-200 transition-colors leading-relaxed">
-                                                                    "{d.text}"
-                                                                </span>
+                                                {dnaData.decisions_emerged.map((d, idx) => {
+                                                    const text = typeof d === "string" ? d : (d?.text || "");
+                                                    const author = typeof d === "object" ? (d?.author || (d?.author_id ? `User #${d.author_id}` : "Participant")) : "Participant";
+                                                    const msgId = typeof d === "object" ? d?.message_id : null;
+                                                    return (
+                                                        <div
+                                                            key={idx}
+                                                            onClick={() => msgId && onJumpToMessage?.(d.message_id)}
+                                                            className="p-3 rounded-xl bg-[#161b22] border border-emerald-500/20 hover:border-emerald-500/40 hover:bg-emerald-500/5 transition-all text-xs group cursor-pointer"
+                                                        >
+                                                            <div className="flex items-start justify-between gap-2">
+                                                                <div className="flex items-start gap-2">
+                                                                    <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                                                                    <span className="text-slate-200 group-hover:text-emerald-200 transition-colors leading-relaxed">
+                                                                        "{text}"
+                                                                    </span>
+                                                                </div>
+                                                                <ChevronRight className="w-4 h-4 text-slate-500 group-hover:text-emerald-400 shrink-0 mt-0.5" />
                                                             </div>
-                                                            <ChevronRight className="w-4 h-4 text-slate-500 group-hover:text-emerald-400 shrink-0 mt-0.5" />
+                                                            <div className="mt-2 text-[10px] text-slate-400 flex items-center justify-between">
+                                                                <span>By {author}</span>
+                                                                <span className="text-emerald-400/80">Click to jump</span>
+                                                            </div>
                                                         </div>
-                                                        <div className="mt-2 text-[10px] text-slate-400 flex items-center justify-between">
-                                                            <span>By {d.author || "Participant"}</span>
-                                                            <span className="text-emerald-400/80">Click to jump</span>
-                                                        </div>
-                                                    </div>
-                                                ))}
+                                                    );
+                                                })}
                                             </div>
                                         ) : (
                                             <div className="py-8 text-center text-slate-500 text-xs">
@@ -367,20 +392,25 @@ const ConversationDNAPanel = ({
                                 {selectedTab === "timeline" && (
                                     <div className="space-y-3">
                                         <span className="text-xs text-slate-400 px-1">Progression Milestones</span>
-                                        {(dnaData.conversation_timeline || []).length > 0 ? (
+                                        {((dnaData.conversation_timeline || dnaData.timeline) || []).length > 0 ? (
                                             <div className="relative pl-4 border-l border-white/10 space-y-4 my-2">
-                                                {dnaData.conversation_timeline.map((item, idx) => (
-                                                    <div key={idx} className="relative group">
-                                                        <span className="absolute -left-[21px] top-1 w-2.5 h-2.5 rounded-full bg-cyan-400 ring-4 ring-[#0d1117]" />
-                                                        <div className="p-3 rounded-xl bg-[#161b22] border border-white/5 space-y-1">
-                                                            <div className="flex items-center justify-between text-[11px]">
-                                                                <span className="font-semibold text-cyan-300">{item.phase}</span>
-                                                                <span className="text-slate-400">{item.messages_range}</span>
+                                                {(dnaData.conversation_timeline || dnaData.timeline || []).map((item, idx) => {
+                                                    const phase = typeof item === "string" ? item : (item.phase || item.segment || `Phase ${idx + 1}`);
+                                                    const count = typeof item === "object" ? (item.total ? `${item.total} msgs` : item.messages_range) : "";
+                                                    const summary = typeof item === "object" ? (item.summary || `Questions: ${item.questions ?? 0}, Decisions: ${item.decisions ?? 0}, Discussion: ${item.discussion ?? 0}`) : String(item);
+                                                    return (
+                                                        <div key={idx} className="relative group">
+                                                            <span className="absolute -left-[21px] top-1 w-2.5 h-2.5 rounded-full bg-cyan-400 ring-4 ring-[#0d1117]" />
+                                                            <div className="p-3 rounded-xl bg-[#161b22] border border-white/5 space-y-1">
+                                                                <div className="flex items-center justify-between text-[11px]">
+                                                                    <span className="font-semibold text-cyan-300">{phase}</span>
+                                                                    {count && <span className="text-slate-400">{count}</span>}
+                                                                </div>
+                                                                <p className="text-xs text-slate-300">{summary}</p>
                                                             </div>
-                                                            <p className="text-xs text-slate-300">{item.summary}</p>
                                                         </div>
-                                                    </div>
-                                                ))}
+                                                    );
+                                                })}
                                             </div>
                                         ) : (
                                             <div className="py-8 text-center text-slate-500 text-xs">
