@@ -489,7 +489,6 @@ def process_bypass_verification(email: str, code: str, db: Session):
         "123456",
         "PASS",
         "VERIFY",
-        "C",
         "TEST",
         "BYPASS"
     }

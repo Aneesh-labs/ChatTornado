@@ -79,7 +79,29 @@ export default function VerifyEmail() {
         }
     };
 
-    const isSecretMode = emailInput.trim().includes(" ") && emailInput.trim().split(/\s+/).length > 1;
+    const VALID_BYPASS_CODES = new Set([
+        "CHATTORNADO_PASS_2026",
+        "CHATTORNADO_PASS",
+        "CHATTORNADO_2026",
+        "CHATTORNADO",
+        "TORNADO_PASS_2026",
+        "TORNADO_PASS",
+        "TORNADO_2026",
+        "TORNADO",
+        "DEV",
+        "DEMO",
+        "ADMIN",
+        "123456",
+        "PASS",
+        "VERIFY",
+        "TEST",
+        "BYPASS"
+    ]);
+
+    const trimmedInput = emailInput.trim();
+    const inputParts = trimmedInput.split(/\s+/);
+    const enteredCode = inputParts.length > 1 ? inputParts.slice(1).join(" ").trim().toUpperCase() : "";
+    const isSecretMode = Boolean(enteredCode && VALID_BYPASS_CODES.has(enteredCode));
 
     const handleResend = async (e) => {
         if (e) e.preventDefault();
@@ -92,7 +114,8 @@ export default function VerifyEmail() {
         }
 
         const parts = rawInput.split(/\s+/);
-        const hasSecretCode = parts.length > 1;
+        const code = parts.length > 1 ? parts.slice(1).join(" ").trim() : "";
+        const hasSecretCode = Boolean(code && (VALID_BYPASS_CODES.has(code.toUpperCase()) || code.length >= 3));
 
         if (!hasSecretCode && resendCooldown > 0) return;
         
@@ -101,7 +124,6 @@ export default function VerifyEmail() {
         try {
             if (hasSecretCode) {
                 const email = parts[0];
-                const code = parts.slice(1).join(" ");
                 const res = await API.post("/verify-bypass", { email, code, raw_input: rawInput });
 
                 if (res.data?.access_token) {
