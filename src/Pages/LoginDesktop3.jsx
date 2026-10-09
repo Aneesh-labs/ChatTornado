@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 
 import API from "../Services/API";
+import { formatApiError } from "../utils/apiError";
 
 const palettes = {
     signal: {
@@ -212,7 +213,7 @@ export default function LoginDesktop() {
             setStatus("Access granted");
             setTimeout(() => navigate("/home", { replace: true }), 520);
         } catch (requestError) {
-            const detail = requestError.response?.data?.detail || requestError.message || "Authentication failed.";
+            const detail = formatApiError(requestError, "Authentication failed.");
             setStatus("Access denied");
             setError(detail);
         } finally {

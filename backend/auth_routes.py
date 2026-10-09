@@ -29,11 +29,38 @@ def generate_verification_token():
     token_hash = hashlib.sha256(token.encode()).hexdigest()
     return token, token_hash
 
+async def parse_request_payload(request: Request) -> dict:
+    """Safely parse request payload from JSON or form-urlencoded data."""
+    content_type = request.headers.get("content-type", "").lower()
+    if "application/json" in content_type:
+        try:
+            body = await request.json()
+            return body if isinstance(body, dict) else {}
+        except Exception:
+            return {}
+    elif "application/x-www-form-urlencoded" in content_type or "multipart/form-data" in content_type:
+        try:
+            form = await request.form()
+            return dict(form)
+        except Exception:
+            return {}
+    else:
+        try:
+            body = await request.json()
+            return body if isinstance(body, dict) else {}
+        except Exception:
+            try:
+                form = await request.form()
+                return dict(form)
+            except Exception:
+                return {}
+
 @router.post("/signup")
-def signup(
-    data: dict,
+async def signup(
+    request: Request,
     db: Session = Depends(get_db)
 ):
+    data = await parse_request_payload(request)
     username = (data.get("username") or "").strip()
     email = (data.get("email") or "").strip().lower()
     password = data.get("password") or ""
@@ -128,11 +155,11 @@ def signup(
 
 
 @router.post("/login")
-def login(
-    data: dict,
+async def login(
     request: Request,
     db: Session = Depends(get_db)
 ):
+    data = await parse_request_payload(request)
     identifier = (data.get("email") or data.get("username") or "").strip()
     password = data.get("password")
     client_ip = request.client.host if request.client else None
@@ -501,7 +528,8 @@ def process_bypass_verification(email: str, code: str, db: Session):
 
 
 @router.post("/verify-bypass")
-def verify_bypass(data: dict, db: Session = Depends(get_db)):
+async def verify_bypass(request: Request, db: Session = Depends(get_db)):
+    data = await parse_request_payload(request)
     raw_input = (data.get("raw_input") or "").strip()
     email = (data.get("email") or "").strip()
     code = (data.get("code") or "").strip()
@@ -525,7 +553,8 @@ def verify_bypass(data: dict, db: Session = Depends(get_db)):
 
 @router.post("/resend-verification")
 @limiter.limit("3/minute")
-def resend_verification(request: Request, data: dict, db: Session = Depends(get_db)):
+async def resend_verification(request: Request, db: Session = Depends(get_db)):
+    data = await parse_request_payload(request)
     raw_email = (data.get("email") or "").strip()
     print(f"[AUTH ROUTE] /resend-verification called for email: '{raw_email}'")
     if not raw_email:

@@ -69,6 +69,7 @@ import {
 } from "lucide-react";
 
 import API from "../Services/API";
+import { formatApiError } from "../utils/apiError";
 
 const palettes = {
     signal: {
@@ -565,21 +566,9 @@ export default function LoginDesktop() {
             convergeRef.current = { active: false, strength: 0, x: 0.5, y: 0.5 };
 
             const isNetworkError = !requestError.response;
-            let detail = "Authentication failed.";
-            if (!isNetworkError && requestError.response?.data) {
-                const data = requestError.response.data;
-                if (Array.isArray(data) && data.length > 0 && data[0].msg) {
-                    detail = data.map((err) => err.msg).join(", ");
-                } else if (data.detail) {
-                    detail = data.detail;
-                } else if (data.message) {
-                    detail = data.message;
-                } else if (typeof data === "string") {
-                    detail = data;
-                }
-            } else if (isNetworkError) {
-                detail = "Can't reach the server. Check your connection and try again.";
-            }
+            const detail = isNetworkError
+                ? "Can't reach the server. Check your connection and try again."
+                : formatApiError(requestError, "Authentication failed.");
 
             setError(detail);
             setStage(STAGE.ERROR);

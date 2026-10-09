@@ -80,6 +80,7 @@
 { console.log("LoginMobile loaded!") }
 
 import API from "../Services/API";
+import { formatApiError } from "../utils/apiError";
 
 import React, {
     useState,
@@ -1239,7 +1240,7 @@ export default function LoginMobile() {
             }
         } catch (networkCallException) {
             setSystemStateStep('idle');
-            const standardExplanationText = networkCallException.response?.data?.detail || "Verification failed. Secure handshake declined.";
+            const standardExplanationText = formatApiError(networkCallException, "Verification failed. Secure handshake declined.");
             renderErrorTelemetry(standardExplanationText);
         }
     };

@@ -80,6 +80,7 @@ import {
     Cpu as _Cp,
     Users as _U
 } from "lucide-react";
+import { formatApiError } from "../utils/apiError";
 const _0x1 = 0x4b;
 const _0x2 = 0x78;
 const _0x3 = 0x96;
@@ -280,11 +281,16 @@ export default function X() {
 
             const response = await fetch(`${apiUrl}${endpoint}`, {
                 method: 'POST',
-                headers: { 'Content-Type': m === 'signup' ? 'application/x-www-form-urlencoded' : 'application/json' },
-                body: m === 'signup' ? new URLSearchParams(payload) : JSON.stringify(payload)
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
             });
 
-            const data = await response.json();
+            let data = null;
+            try {
+                data = await response.json();
+            } catch {
+                data = null;
+            }
 
             if (response.ok) {
                 if (m === 'signup') {
@@ -294,8 +300,13 @@ export default function X() {
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ email: e, password: p })
                     });
-                    const loginData = await loginRes.json();
-                    if (loginRes.ok && (loginData.access_token || loginData.token)) {
+                    let loginData = null;
+                    try {
+                        loginData = await loginRes.json();
+                    } catch {
+                        loginData = null;
+                    }
+                    if (loginRes.ok && (loginData?.access_token || loginData?.token)) {
                         sessionStorage.setItem('token', loginData.access_token || loginData.token);
                         sSt(_0xd);
                         sIs(true);
@@ -305,18 +316,18 @@ export default function X() {
                         sSt("Identity Created. Please sign in.");
                     }
                 } else {
-                    sessionStorage.setItem('token', data.access_token || data.token);
+                    sessionStorage.setItem('token', data?.access_token || data?.token);
                     sSt(_0xd);
                     sIs(true);
                     window.location.href = '/home';
                 }
             } else {
-                sSt(data.detail || _0xe);
+                sSt(formatApiError(data?.detail, _0xe));
                 sIe(true);
                 setTimeout(() => sIe(false), 3000);
             }
         } catch (error) {
-            sSt(_0xf);
+            sSt(formatApiError(error, _0xf));
             sIe(true);
             setTimeout(() => sIe(false), 3000);
         } finally {

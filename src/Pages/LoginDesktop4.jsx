@@ -87,6 +87,7 @@ import {
 } from "lucide-react";
 
 import API from "../Services/API";
+import { formatApiError } from "../utils/apiError";
 
 /* ═══════════════════════════════════════════════════════════════
    SCI-FI THEME SYSTEM — Four holographic palettes
@@ -564,7 +565,7 @@ export default function LoginDesktop() {
             setScanActive(false);
             setTimeout(() => navigate("/home", { replace: true }), 800);
         } catch (requestError) {
-            const detail = requestError.response?.data?.detail || requestError.message || "AUTHENTICATION_FAILED";
+            const detail = formatApiError(requestError, "AUTHENTICATION_FAILED");
             setStatus("ACCESS_DENIED");
             setError(detail);
             setScanActive(false);
