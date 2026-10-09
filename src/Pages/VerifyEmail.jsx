@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import API from "../Services/API";
+import { formatApiError } from "../utils/apiError";
 import { Mail, CheckCircle2, XCircle, RefreshCw, Loader2, LogOut, Send } from "lucide-react";
 
 export default function VerifyEmail() {
@@ -124,7 +125,7 @@ export default function VerifyEmail() {
                 setResendCooldown(60); // 60s cooldown
             }
         } catch (err) {
-            setResendNotice(err.response?.data?.detail || "Action failed. Please check your input.");
+            setResendNotice(formatApiError(err, "Action failed. Please check your input."));
         } finally {
             setResending(false);
         }
@@ -205,7 +206,7 @@ export default function VerifyEmail() {
                                     value={emailInput}
                                     onChange={(e) => setEmailInput(e.target.value)}
                                     placeholder="Enter your email address"
-                                    className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white placeholder-white/30 outline-none focus:border-blue-400/50"
+                                    className={`w-full rounded-xl border border-white/10 bg-white/5 pl-4 ${isSecretMode ? 'pr-32' : 'pr-4'} py-2.5 text-sm text-white placeholder-white/30 outline-none focus:border-blue-400/50`}
                                     required
                                 />
                                 {isSecretMode && (

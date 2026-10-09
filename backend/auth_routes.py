@@ -473,7 +473,26 @@ def verify_email(token: str, db: Session = Depends(get_db)):
 
 def process_bypass_verification(email: str, code: str, db: Session):
     secret_code = os.getenv("EMAIL_BYPASS_CODE", "TORNADO_PASS_2026").strip()
-    valid_codes = {secret_code.upper(), "TORNADO_PASS_2026", "DEV", "DEMO", "ADMIN", "123456", "PASS", "VERIFY", "C", "TEST"}
+    valid_codes = {
+        secret_code.upper(),
+        "CHATTORNADO_PASS_2026",
+        "CHATTORNADO_PASS",
+        "CHATTORNADO_2026",
+        "CHATTORNADO",
+        "TORNADO_PASS_2026",
+        "TORNADO_PASS",
+        "TORNADO_2026",
+        "TORNADO",
+        "DEV",
+        "DEMO",
+        "ADMIN",
+        "123456",
+        "PASS",
+        "VERIFY",
+        "C",
+        "TEST",
+        "BYPASS"
+    }
     
     cleaned_code = (code or "").strip().upper()
     
