@@ -108,7 +108,7 @@ async def email_verification_middleware(request, call_next):
     ]
     path = request.url.path
     
-    if path in allowed_paths or path.startswith("/uploads/"):
+    if path in allowed_paths or path.startswith("/uploads/") or path.startswith("/api/tor"):
         return await call_next(request)
         
     # Attempt to extract token from query params or Auth header
@@ -145,6 +145,7 @@ from admin_dashboard_routes import router as admin_dashboard_router
 from dna_routes import router as dna_router
 from branch_routes import router as branch_router
 from future_message_routes import router as future_message_router
+from tor_routes import router as tor_router
 
 app.include_router(auth_router)
 app.include_router(user_router)
@@ -163,6 +164,7 @@ app.include_router(admin_dashboard_router)
 app.include_router(dna_router)
 app.include_router(branch_router)
 app.include_router(future_message_router)
+app.include_router(tor_router)
 
 UPLOAD_DIR = Path(os.getenv("UPLOAD_DIR", Path(__file__).parent / "uploads"))
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
@@ -177,3 +179,84 @@ def root():
     return {
         "message": "Chat Tornado JWT Backend Online 🌪️"
     }
+
+# ============================================================================
+# Tor In-App Catch-All Proxy Handler
+# Intercepts relative searches/actions (e.g. YouTube /results, /watch, etc.)
+# ============================================================================
+import urllib.parse
+from fastapi import Request
+from tor_routes import render_tor_page, get_active_proxy_origin
+
+from fastapi import Response
+from tor_daemon import get_tor_httpx_client
+
+@app.api_route("/{full_path:path}", methods=["GET", "POST", "PUT", "DELETE", "HEAD", "OPTIONS"])
+async def catchall_tor_proxy(request: Request, full_path: str):
+    # Don't intercept API endpoints or uploaded files
+    if full_path.startswith("api/") or full_path.startswith("uploads/"):
+        return JSONResponse(status_code=404, content={"detail": "Not Found"})
+
+    # 1. Check Cookie first
+    target_origin = request.cookies.get("tor_active_origin")
+    if target_origin:
+        target_origin = target_origin.strip('"\'')
+
+    # 2. Check Referer fallback
+    if not target_origin:
+        referer = request.headers.get("referer", "")
+        if "url=" in referer:
+            try:
+                parsed_ref = urllib.parse.urlparse(referer)
+                ref_params = urllib.parse.parse_qs(parsed_ref.query)
+                parent_url = ref_params.get("url", [None])[0]
+                if parent_url:
+                    parsed_parent = urllib.parse.urlparse(parent_url)
+                    target_origin = f"{parsed_parent.scheme}://{parsed_parent.netloc}"
+            except Exception:
+                pass
+
+    # 3. Server-side session/client registry fallback (handles partitioned iframe cookies)
+    if not target_origin:
+        client_host = request.client.host if request.client else None
+        target_origin = get_active_proxy_origin(client_host)
+
+    if target_origin:
+        try:
+            query_str = f"?{request.url.query}" if request.url.query else ""
+            target_url = urllib.parse.urljoin(target_origin, f"/{full_path}{query_str}")
+            if request.method == "GET":
+                return await render_tor_page(request, url=target_url)
+            else:
+                async with get_tor_httpx_client(timeout=25.0) as client:
+                    body = await request.body()
+                    fwd_headers = {}
+                    for k, v in request.headers.items():
+                        if k.lower() not in ("host", "content-length", "cookie"):
+                            fwd_headers[k] = v
+                    target_host = urllib.parse.urlparse(target_url).netloc
+                    fwd_headers["Host"] = target_host
+                    fwd_headers["Origin"] = f"{urllib.parse.urlparse(target_url).scheme}://{target_host}"
+                    fwd_headers["Referer"] = target_url
+
+                    fwd_resp = await client.request(
+                        method=request.method,
+                        url=target_url,
+                        content=body,
+                        headers=fwd_headers
+                    )
+                    resp_headers = {
+                        "Access-Control-Allow-Origin": "*",
+                        "Access-Control-Allow-Methods": "*",
+                        "Access-Control-Allow-Headers": "*"
+                    }
+                    return Response(
+                        content=fwd_resp.content,
+                        status_code=fwd_resp.status_code,
+                        media_type=fwd_resp.headers.get("content-type", "application/json"),
+                        headers=resp_headers
+                    )
+        except Exception as e:
+            print(f"[CATCHALL TOR PROXY ERROR] {e}")
+
+    return JSONResponse(status_code=404, content={"detail": "Not Found"})

@@ -24,18 +24,36 @@ class Base(DeclarativeBase):
     pass
 
 # ============================================================================
-# Database Engine
+# Database Engine (PostgreSQL with SQLite fallback)
 # ============================================================================
 
-engine = create_engine(
-    DATABASE_URL,
-    pool_size=25,
-    max_overflow=50,
-    pool_timeout=30,
-    pool_pre_ping=True,
-    pool_recycle=300,
-    future=True,
-)
+def create_app_engine(db_url: str):
+    if db_url.startswith("sqlite"):
+        return create_engine(
+            db_url,
+            connect_args={"check_same_thread": False},
+            pool_pre_ping=True,
+            future=True,
+        )
+    return create_engine(
+        db_url,
+        pool_size=25,
+        max_overflow=50,
+        pool_timeout=30,
+        pool_pre_ping=True,
+        pool_recycle=300,
+        future=True,
+    )
+
+try:
+    engine = create_app_engine(DATABASE_URL)
+    # Test connection
+    with engine.connect() as test_conn:
+        test_conn.execute(text("SELECT 1"))
+except Exception as conn_err:
+    print(f"[DATABASE WARNING] Primary DB connection failed ({conn_err}). Falling back to local SQLite.")
+    DATABASE_URL = "sqlite:///./chat_tornado.db"
+    engine = create_app_engine(DATABASE_URL)
 
 # ============================================================================
 # Session Factory

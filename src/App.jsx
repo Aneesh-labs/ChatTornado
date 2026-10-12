@@ -13,6 +13,7 @@ import Insights from "./Pages/Dashboard/Insights";
 import Arcade from "./Pages/Dashboard/Arcade";
 import VerifyEmail from "./Pages/VerifyEmail";
 import AdminDashboard from "./Pages/Dashboard/AdminDashboard";
+import DarkWebHub from "./Pages/Dashboard/DarkWebHub";
 
 export default function App() {
   return (
@@ -32,6 +33,7 @@ export default function App() {
       >
         <Route path="home" element={<Home />} />
         <Route path="messages" element={<Messages />} />
+        <Route path="darkweb" element={<DarkWebHub />} />
         <Route path="arcade" element={<Arcade />} />
         <Route path="insights" element={<Insights />} />
         <Route path="profile" element={<Profile />} />

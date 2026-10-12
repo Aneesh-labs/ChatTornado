@@ -3,6 +3,7 @@ import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import {
     BarChart3,
     Gamepad2,
+    Globe,
     Home,
     LogOut,
     MessageSquareText,
@@ -15,6 +16,7 @@ import {
 const navItems = [
     { to: "/home", label: "Home", icon: Home },
     { to: "/messages", label: "Messages", icon: MessageSquareText },
+    { to: "/darkweb", label: "Dark Web 🧅", icon: Globe },
     { to: "/arcade", label: "Arcade 🎮", icon: Gamepad2 },
     { to: "/insights", label: "Insights", icon: BarChart3 },
     { to: "/profile", label: "Profile", icon: UserRound },
@@ -145,20 +147,20 @@ export default function DashboardLayout() {
 
                 <Outlet />
 
-                <nav className="relative z-20 grid grid-cols-5 border-t border-white/10 bg-[#090c12]/92 px-2 py-2 backdrop-blur-2xl lg:hidden" aria-label="Mobile dashboard navigation">
+                <nav className="relative z-20 flex overflow-x-auto border-t border-white/10 bg-[#090c12]/95 px-2 py-2 backdrop-blur-2xl lg:hidden justify-between gap-1" aria-label="Mobile dashboard navigation">
                     {navItems.map(({ to, label, icon: Icon }) => (
                         <NavLink
                             key={to}
                             to={to}
                             className={({ isActive }) =>
                                 [
-                                    "flex min-h-[48px] flex-col items-center justify-center gap-1 rounded-lg text-[10px] font-bold transition",
+                                    "flex min-h-[46px] min-w-[48px] shrink-0 flex-1 flex-col items-center justify-center gap-1 rounded-lg px-1 text-[9px] font-bold transition",
                                     isActive ? "bg-white text-[#07131d]" : "text-white/48 hover:bg-white/[0.06] hover:text-white",
                                 ].join(" ")
                             }
                         >
                             <Icon className="h-4 w-4" />
-                            <span>{label}</span>
+                            <span className="truncate max-w-[50px]">{label.split(" ")[0]}</span>
                         </NavLink>
                     ))}
                 </nav>
