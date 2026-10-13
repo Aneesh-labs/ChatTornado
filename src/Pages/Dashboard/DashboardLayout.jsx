@@ -16,7 +16,7 @@ import {
 const navItems = [
     { to: "/home", label: "Home", icon: Home },
     { to: "/messages", label: "Messages", icon: MessageSquareText },
-    { to: "/darkweb", label: "Dark Web 🧅", icon: Globe },
+    { to: "/darkweb", label: "Dark Web 🧅", icon: Globe, mobileOnly: true },
     { to: "/arcade", label: "Arcade 🎮", icon: Gamepad2 },
     { to: "/insights", label: "Insights", icon: BarChart3 },
     { to: "/profile", label: "Profile", icon: UserRound },
@@ -79,7 +79,7 @@ export default function DashboardLayout() {
                 </div>
 
                 <nav className="mt-6 flex flex-1 flex-col gap-1" aria-label="Dashboard navigation">
-                    {navItems.map(({ to, label, icon: Icon }) => (
+                    {navItems.filter((item) => !item.mobileOnly).map(({ to, label, icon: Icon }) => (
                         <NavLink
                             key={to}
                             to={to}
