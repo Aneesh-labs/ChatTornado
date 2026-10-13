@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: chattornado-backend
+    name: chat-tornado-backend
     runtime: python
     rootDir: backend
     buildCommand: pip install -r requirements.txt
