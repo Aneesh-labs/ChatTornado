@@ -104,6 +104,20 @@ export const ConversationCard = React.memo(({
                             <BadgeCheck className="h-4 w-4 fill-sky-400/20 text-sky-400" />
                         </span>
                     )}
+                    {!user?.is_bot && user?.streak?.count > 0 && (
+                        <span
+                            title={`${user.streak.count}-day Tornado Streak (${user.streak.hours_left}h left)`}
+                            className={`inline-flex items-center gap-0.5 text-[10px] font-black px-1.5 py-0.2 rounded-full border shrink-0 ${
+                                user.streak.is_expiring
+                                    ? "bg-red-500/20 text-red-300 border-red-500/40 animate-pulse"
+                                    : "bg-orange-500/15 text-orange-300 border-orange-500/30"
+                            }`}
+                        >
+                            <span>{user.streak.badge || "🔥"}</span>
+                            <span>{user.streak.count}</span>
+                            {user.streak.is_expiring && <span>⏳</span>}
+                        </span>
+                    )}
                     {user?.is_bot && (
                         <span className="text-[10px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded-md bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 flex items-center gap-1 shadow-[0_0_8px_rgba(6,182,212,0.3)]">
                             ⚡ AI

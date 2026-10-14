@@ -41,8 +41,24 @@ def get_users(
 
     users = query.order_by(User.username).all()
 
-    # Determine live status
+    # Determine live status and streak states
     online_ids = set(manager.active_connections.keys())
+    from streak_service import get_user_streaks_map
+    streaks_map = get_user_streaks_map(db, current_user_id)
+
+    default_streak = {
+        "count": 0,
+        "best": 0,
+        "hours_left": 0,
+        "is_expiring": False,
+        "badge": "🔥",
+        "level": "inactive",
+        "title": "Ignite Streak",
+        "color": "text-white/40",
+        "bg": "bg-white/5",
+        "border": "border-white/10",
+        "freeze_count": 1
+    }
 
     return [
         {
@@ -53,7 +69,8 @@ def get_users(
             "status": user.status if (user.id in online_ids or str(user.id) in online_ids) else "offline",
             "custom_status": user.custom_status,
             "is_verified": bool(getattr(user, "is_verified", False) or getattr(user, "email_verified", False)),
-            "game_stats": getattr(user, "game_stats", {}) or {}
+            "game_stats": getattr(user, "game_stats", {}) or {},
+            "streak": streaks_map.get(user.id, default_streak)
         }
         for user in users
     ]
@@ -158,6 +175,51 @@ def get_online_users():
     return list(
         manager.active_connections.keys()
     )
+
+
+# ============================================================================
+# TORNADO STREAKS ENDPOINTS
+# ============================================================================
+
+@router.get("/streaks/{other_user_id}")
+def get_user_streak_detail(
+    other_user_id: int,
+    token: str,
+    db: Session = Depends(get_db)
+):
+    payload = decode_token(token)
+    if not payload:
+        raise HTTPException(status_code=401, detail="Invalid token.")
+    user_id = payload["user_id"]
+    from streak_service import get_or_create_streak_record, calculate_streak_state
+    record = get_or_create_streak_record(db, user_id, other_user_id)
+    return calculate_streak_state(record)
+
+
+@router.post("/streaks/{other_user_id}/freeze")
+def use_streak_freeze(
+    other_user_id: int,
+    token: str,
+    db: Session = Depends(get_db)
+):
+    payload = decode_token(token)
+    if not payload:
+        raise HTTPException(status_code=401, detail="Invalid token.")
+    user_id = payload["user_id"]
+    from streak_service import get_or_create_streak_record, calculate_streak_state
+    from datetime import datetime
+    record = get_or_create_streak_record(db, user_id, other_user_id)
+    if record.freeze_count <= 0:
+        raise HTTPException(status_code=400, detail="No streak freezes available.")
+    record.freeze_count -= 1
+    record.last_interaction = datetime.utcnow()
+    db.commit()
+    db.refresh(record)
+    return {
+        "status": "success",
+        "message": "🛡️ Streak Freeze activated! Your streak is protected for 36 hours.",
+        "streak": calculate_streak_state(record)
+    }
 
 
 # ============================================================================

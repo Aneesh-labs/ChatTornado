@@ -733,6 +733,23 @@ async def send_message_rest(
     try:
         await manager.send_personal_message(receiver_id, packet_receiver)
         await manager.send_personal_message(user_id, packet_sender)
+
+        # Update and broadcast Tornado Streaks
+        try:
+            from streak_service import update_streak_on_message
+            streak_state = update_streak_on_message(db, user_id, receiver_id)
+            await manager.send_personal_message(user_id, {
+                "type": "streak_update",
+                "other_user_id": receiver_id,
+                "streak": streak_state
+            })
+            await manager.send_personal_message(receiver_id, {
+                "type": "streak_update",
+                "other_user_id": user_id,
+                "streak": streak_state
+            })
+        except Exception as streak_err:
+            logger.warning("Streak update error in REST: %s", streak_err)
     except Exception as ws_err:
         logger.warning("Decoupled WS broadcast notice: %s", ws_err)
 

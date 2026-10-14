@@ -860,6 +860,26 @@ const Messages = () => {
                         return;
                     }
 
+                    if (packet.type === "streak_update") {
+                        const targetId = packet.other_user_id;
+                        setUsers((prev) =>
+                            prev.map((u) =>
+                                areIdsEqual(u.id, targetId)
+                                    ? { ...u, streak: packet.streak }
+                                    : u
+                            )
+                        );
+                        window.dispatchEvent(
+                            new CustomEvent("tornado_streak_updated", {
+                                detail: {
+                                    other_user_id: targetId,
+                                    streak: packet.streak
+                                }
+                            })
+                        );
+                        return;
+                    }
+
                     if (packet.type === "ghost_reaction") {
                         setGhostChat(prev => ({
                             ...prev,

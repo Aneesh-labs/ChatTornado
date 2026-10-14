@@ -8,6 +8,7 @@ import ExportModal from "./ExportModal";
 import GoogleModelModal, { getSelectedGoogleModel } from "./GoogleModelModal";
 import ReportUserModal from "./ReportUserModal";
 import GroupInfoModal from "./GroupInfoModal";
+import TornadoStreakModal from "./TornadoStreakModal";
 import API from "../../../Services/API";
 import { triggerDemoNotification } from "../../../Services/notifications";
 import { isAdminUnlocked, setAdminUnlockedSession, touchAdminSession } from "../../../utils/adminSession";
@@ -44,9 +45,25 @@ const ChatHeader = React.memo(({
     const [showGroupModal, setShowGroupModal] = useState(false);
     const [isBlocked, setIsBlocked] = useState(false);
     const [currentGoogleModel, setCurrentGoogleModel] = useState(getSelectedGoogleModel);
+    const [streak, setStreak] = useState(user?.streak || null);
+    const [showStreakModal, setShowStreakModal] = useState(false);
     const username = user?.name || user?.username || "Chat Room";
     const isOnline = user?.status === "online";
     const isGroup = Boolean(user?.is_group);
+
+    useEffect(() => {
+        setStreak(user?.streak || null);
+    }, [user?.id, user?.streak]);
+
+    useEffect(() => {
+        const handleStreakEvent = (e) => {
+            if (e.detail && (e.detail.other_user_id === user?.id || String(e.detail.other_user_id) === String(user?.id))) {
+                setStreak(e.detail.streak);
+            }
+        };
+        window.addEventListener("tornado_streak_updated", handleStreakEvent);
+        return () => window.removeEventListener("tornado_streak_updated", handleStreakEvent);
+    }, [user?.id]);
 
     useEffect(() => {
         if (!user?.id || user?.is_bot || isGroup) return;
@@ -224,6 +241,24 @@ const ChatHeader = React.memo(({
                                 </span>
                             )}
                         </h2>
+                        {!isGroup && !isBotUser && (
+                            <button
+                                type="button"
+                                onClick={() => setShowStreakModal(true)}
+                                title="Tornado Streak - Click for levels, stats & streak freeze"
+                                className={`inline-flex items-center gap-1 text-[11px] font-black px-2 py-0.5 rounded-full border transition-all cursor-pointer shadow-sm active:scale-95 ${
+                                    streak?.count > 0
+                                        ? "bg-gradient-to-r from-orange-500/25 to-amber-500/25 border-orange-500/40 text-orange-300 hover:from-orange-500/35 hover:to-amber-500/35 animate-pulse"
+                                        : "bg-white/5 border-white/10 text-white/40 hover:bg-white/10 hover:text-white/60"
+                                }`}
+                            >
+                                <span>{streak?.badge || "🔥"}</span>
+                                <span>{streak?.count || 0}</span>
+                                {streak?.is_expiring && (
+                                    <span className="text-[9px] text-red-400 font-bold">⏳</span>
+                                )}
+                            </button>
+                        )}
                         {/* Reality Branch Switcher Badge */}
                         <button
                             type="button"
@@ -621,6 +656,16 @@ const ChatHeader = React.memo(({
                         setShowGroupModal(false);
                         onBack?.();
                     }}
+                />
+            )}
+
+            {!isGroup && !isBotUser && (
+                <TornadoStreakModal
+                    isOpen={showStreakModal}
+                    onClose={() => setShowStreakModal(false)}
+                    user={user}
+                    streak={streak}
+                    onStreakUpdated={(newStreak) => setStreak(newStreak)}
                 />
             )}
         </div>

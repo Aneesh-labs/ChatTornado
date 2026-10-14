@@ -960,6 +960,27 @@ async def websocket_endpoint(websocket: WebSocket):
             except Exception as deliv_err:
                 logger.warning("Recipient delivery network error (message safely saved in DB): %s", deliv_err)
 
+            # Calculate and broadcast Tornado Streaks (between human users)
+            if not group_id and receiver_id:
+                try:
+                    from ai_service import get_or_create_bot_user
+                    bot_user = get_or_create_bot_user(db)
+                    if receiver_id != getattr(bot_user, "id", None):
+                        from streak_service import update_streak_on_message
+                        streak_state = update_streak_on_message(db, user_id, receiver_id)
+                        await manager.send_personal_message(user_id, {
+                            "type": "streak_update",
+                            "other_user_id": receiver_id,
+                            "streak": streak_state
+                        })
+                        await manager.send_personal_message(receiver_id, {
+                            "type": "streak_update",
+                            "other_user_id": user_id,
+                            "streak": streak_state
+                        })
+                except Exception as streak_err:
+                    logger.warning("Streak calculation error in WS: %s", streak_err)
+
             # Check if receiver is VORTEX-9 bot
             from ai_service import get_or_create_bot_user, process_user_message_to_bot, process_user_message_to_bot_stream, execute_deep_research
             bot = get_or_create_bot_user(db)

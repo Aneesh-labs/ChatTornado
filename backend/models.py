@@ -515,4 +515,30 @@ class MediaAttachment(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
 
     uploader: Mapped[Optional["User"]] = relationship("User", foreign_keys=[uploader_id])
+
+
+# ============================================================================
+# TORNADO STREAKS MODEL (DAILY ENGAGEMENT & RETENTION ENGINE)
+# ============================================================================
+
+class ChatStreak(Base):
+    __tablename__ = "chat_streaks"
+
+    id: Mapped[int] = mapped_column(primary_key=True, index=True, autoincrement=True)
+    user1_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    user2_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    streak_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    best_streak: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    last_interaction: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    last_sender_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    freeze_count: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+
+    user1: Mapped["User"] = relationship("User", foreign_keys=[user1_id])
+    user2: Mapped["User"] = relationship("User", foreign_keys=[user2_id])
+
+    __table_args__ = (
+        UniqueConstraint('user1_id', 'user2_id', name='uq_chat_streak_pair'),
+        Index('idx_chat_streaks_pair', 'user1_id', 'user2_id'),
+    )
+
 
