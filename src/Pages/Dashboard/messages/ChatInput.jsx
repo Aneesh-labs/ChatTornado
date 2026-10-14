@@ -460,9 +460,12 @@ const ChatInput = React.memo(({ onSend, replyTo, onCancelReply, selectedUser, so
                 const uploadRelPath = (data.original_url || data.url || "").replace(/^\//, "");
                 const fullUploadedUrl = `${baseUrl}/${uploadRelPath}`;
 
+                const isBotTarget = Boolean(selectedUser?.is_bot || selectedUser?.username === "VORTEX-9");
                 const promptWithImage = trimmed
                     ? `${fullUploadedUrl}\n\n${trimmed}`
-                    : `${fullUploadedUrl}\n\nPlease analyze and explain this image in detail.`;
+                    : isBotTarget
+                        ? `${fullUploadedUrl}\n\nPlease analyze and explain this image in detail.`
+                        : fullUploadedUrl;
 
                 onSend(promptWithImage, { ...(shieldOptions || {}), ai_mode: activeInputMode });
 

@@ -467,7 +467,7 @@ async def upload_file(token: str, file: UploadFile = File(...), db: Session = De
                     output.close()
                     if original_path.exists():
                         original_path.unlink()
-                    limit_str = "100 MB" if extension in IMAGE_EXTENSIONS else "1 GB"
+                    limit_str = "15 MB" if is_video else ("100 MB" if extension in IMAGE_EXTENSIONS else "1 GB")
                     raise HTTPException(
                         status_code=413,
                         detail=f"Files must be {limit_str} or smaller"
@@ -791,7 +791,10 @@ async def get_uploaded_media(filename: str, db: Session = Depends(get_db)):
     clean_id = Path(filename).name
 
     # 1. Query database first (persistent storage across all deployments/restarts)
-    media = db.query(MediaAttachment).filter(MediaAttachment.id == clean_id).first()
+    stem_id = Path(clean_id).stem
+    media = db.query(MediaAttachment).filter(
+        (MediaAttachment.id == clean_id) | (MediaAttachment.id == stem_id)
+    ).first()
     if media:
         return Response(
             content=media.data,
