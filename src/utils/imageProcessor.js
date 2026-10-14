@@ -44,7 +44,7 @@ export const formatBytes = (bytes, decimals = 1) => {
 export const processImageLocally = async (file, options = {}) => {
     const {
         maxDimension = 1600,
-        quality = 0.86,
+        quality = 0.82,
         format = "image/webp",
     } = options;
 

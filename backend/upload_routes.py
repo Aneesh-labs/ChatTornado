@@ -5,10 +5,13 @@ import secrets
 import subprocess
 from pathlib import Path
 
-from typing import List
-from fastapi import APIRouter, File, HTTPException, UploadFile
+from typing import List, Optional
+from fastapi import APIRouter, File, HTTPException, UploadFile, Depends, Response
+from sqlalchemy.orm import Session
 
 from auth import decode_token
+from database import get_db
+from models import MediaAttachment
 from PIL import Image
 from pillow_heif import register_heif_opener
 logger = logging.getLogger(__name__)
@@ -403,11 +406,18 @@ def generate_video_thumbnail(input_path: Path, output_path: Path, duration: floa
 # Upload endpoint
 # ----------------------------------------------------------------------
 @router.post("")
-async def upload_file(token: str, file: UploadFile = File(...)):
+async def upload_file(token: str, file: UploadFile = File(...), db: Session = Depends(get_db)):
     print("UPLOAD ENDPOINT HIT:", file.filename)
     # Authenticate
-    if not decode_token(token):
+    payload = decode_token(token)
+    if not payload:
         raise HTTPException(status_code=401, detail="Invalid token")
+
+    uploader_id = payload.get("user_id") or payload.get("sub")
+    try:
+        uploader_id = int(uploader_id)
+    except (ValueError, TypeError):
+        uploader_id = None
 
     # Safe filename
     original_name = Path(file.filename or "upload").name
@@ -424,6 +434,15 @@ async def upload_file(token: str, file: UploadFile = File(...)):
             detail="This file type is not supported"
         )
 
+    # Enforce video limit for database preservation (15MB cap)
+    is_video = content_type.startswith("video/") or extension in VIDEO_EXTENSIONS
+    if is_video:
+        max_size_limit = 15 * 1024 * 1024  # 15 MB cap for database storage
+    elif extension in IMAGE_EXTENSIONS:
+        max_size_limit = MAX_IMAGE_BYTES
+    else:
+        max_size_limit = MAX_UPLOAD_BYTES
+
     # Generate a safe random filename
     suffix = extension[:12]
     filename = f"{secrets.token_urlsafe(18)}{suffix}"
@@ -435,9 +454,6 @@ async def upload_file(token: str, file: UploadFile = File(...)):
 
     original_path = upload_dir / filename
     total_size = 0
-
-    # Enforce 100 MB limit for images, 1 GB for other files
-    max_size_limit = MAX_IMAGE_BYTES if extension in IMAGE_EXTENSIONS else MAX_UPLOAD_BYTES
 
     # Streaming upload with size limit
     try:
@@ -595,7 +611,38 @@ async def upload_file(token: str, file: UploadFile = File(...)):
     response["duration"] = info.get("duration", 0) if is_video else None
     response["codec"] = info.get("video_codec") if is_video else None
     response["audio_codec"] = info.get("audio_codec") if is_video else None
-    response["container"] = info.get("container") if is_video else None
+    # Persist file bytes directly into Database
+    try:
+        if final_path.exists():
+            with open(final_path, "rb") as f_in:
+                file_bytes = f_in.read()
+            media_item = MediaAttachment(
+                id=final_path.name,
+                filename=original_name,
+                content_type=content_type,
+                data=file_bytes,
+                size_bytes=len(file_bytes),
+                uploader_id=uploader_id
+            )
+            db.merge(media_item)
+
+            if thumbnail_path and thumbnail_path.exists():
+                with open(thumbnail_path, "rb") as t_in:
+                    thumb_bytes = t_in.read()
+                thumb_item = MediaAttachment(
+                    id=thumbnail_path.name,
+                    filename=thumbnail_path.name,
+                    content_type="image/webp",
+                    data=thumb_bytes,
+                    size_bytes=len(thumb_bytes),
+                    uploader_id=uploader_id
+                )
+                db.merge(thumb_item)
+            db.commit()
+    except Exception as db_err:
+        logger.error("Failed to persist uploaded file to DB: %s", db_err)
+        db.rollback()
+
     return response
 
 
@@ -605,10 +652,18 @@ async def upload_file(token: str, file: UploadFile = File(...)):
 @router.post("/images")
 async def upload_images_batch(
     token: str,
-    files: List[UploadFile] = File(...)
+    files: List[UploadFile] = File(...),
+    db: Session = Depends(get_db)
 ):
-    if not decode_token(token):
+    payload = decode_token(token)
+    if not payload:
         raise HTTPException(status_code=401, detail="Invalid token")
+
+    uploader_id = payload.get("user_id") or payload.get("sub")
+    try:
+        uploader_id = int(uploader_id)
+    except (ValueError, TypeError):
+        uploader_id = None
 
     if not files:
         raise HTTPException(status_code=400, detail="No image files provided.")
@@ -683,6 +738,22 @@ async def upload_images_batch(
                 })
                 continue
 
+            # Persist to persistent database table
+            with open(dest_path, "rb") as f_read:
+                img_bytes = f_read.read()
+
+            content_type = "image/webp" if ext == ".webp" else (EXTENSION_MIME_MAP.get(ext, ["image/jpeg"])[0])
+            media_item = MediaAttachment(
+                id=saved_name,
+                filename=orig_name,
+                content_type=content_type,
+                data=img_bytes,
+                size_bytes=len(img_bytes),
+                uploader_id=uploader_id
+            )
+            db.merge(media_item)
+            db.commit()
+
             # Valid image
             final_url = f"/uploads/{saved_name}"
             successful.append({
@@ -705,4 +776,48 @@ async def upload_images_batch(
         "failed_count": len(failed),
         "successful": successful,
         "failed": failed
-    }
+    }
+
+
+# ----------------------------------------------------------------------
+# Persistent Media Serving Endpoint (Database First + Local Disk Cache Fallback)
+# ----------------------------------------------------------------------
+@router.get("/{filename}")
+async def get_uploaded_media(filename: str, db: Session = Depends(get_db)):
+    """
+    Serves media directly from the persistent database.
+    Falls back to local disk cache if available.
+    """
+    clean_id = Path(filename).name
+
+    # 1. Query database first (persistent storage across all deployments/restarts)
+    media = db.query(MediaAttachment).filter(MediaAttachment.id == clean_id).first()
+    if media:
+        return Response(
+            content=media.data,
+            media_type=media.content_type,
+            headers={
+                "Cache-Control": "public, max-age=31536000, immutable",
+                "Content-Disposition": f'inline; filename="{media.filename}"'
+            }
+        )
+
+    # 2. Check disk cache
+    upload_dir = Path(os.getenv("UPLOAD_DIR", Path(__file__).parent / "uploads"))
+    disk_path = upload_dir / clean_id
+    if disk_path.exists() and disk_path.is_file():
+        ext = disk_path.suffix.lower()
+        content_type = EXTENSION_MIME_MAP.get(ext, ["application/octet-stream"])[0]
+        with open(disk_path, "rb") as f:
+            data = f.read()
+        return Response(
+            content=data,
+            media_type=content_type,
+            headers={
+                "Cache-Control": "public, max-age=86400",
+                "Content-Disposition": f'inline; filename="{clean_id}"'
+            }
+        )
+
+    raise HTTPException(status_code=404, detail="Media not found")
+

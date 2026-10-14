@@ -65,7 +65,7 @@ const ChatInput = React.memo(({ onSend, replyTo, onCancelReply, selectedUser, so
         try {
             const processed = await processImageLocally(file, {
                 maxDimension: 1600,
-                quality: 0.86,
+                quality: 0.82,
                 format: "image/webp",
             });
             setStagedImage(processed);
@@ -669,8 +669,25 @@ const ChatInput = React.memo(({ onSend, replyTo, onCancelReply, selectedUser, so
 
             setUploading(true);
             try {
+                // Offline client-side conversion to .webp in device RAM
+                const processedFiles = await Promise.all(
+                    rawFiles.map(async (f) => {
+                        try {
+                            const res = await processImageLocally(f, {
+                                maxDimension: 1600,
+                                quality: 0.82,
+                                format: "image/webp",
+                            });
+                            return res.file;
+                        } catch (err) {
+                            console.warn(`Local WebP conversion failed for ${f.name}, using raw file:`, err);
+                            return f;
+                        }
+                    })
+                );
+
                 const body = new FormData();
-                rawFiles.forEach((f) => body.append("files", f));
+                processedFiles.forEach((f) => body.append("files", f));
 
                 const token = sessionStorage.getItem("token") || "";
                 const response = await API.post(
@@ -728,10 +745,22 @@ const ChatInput = React.memo(({ onSend, replyTo, onCancelReply, selectedUser, so
         try {
             const isVideo = Boolean(file.type?.startsWith("video/") || VIDEO_EXTENSIONS.test(file.name || ""));
 
-            // 1. Photos & Documents: If human user, upload to server
+            // 1. Photos: Offline conversion to WebP before saving to database
             if (file.type?.startsWith("image/")) {
+                let fileToSend = file;
+                try {
+                    const processed = await processImageLocally(file, {
+                        maxDimension: 1600,
+                        quality: 0.82,
+                        format: "image/webp",
+                    });
+                    fileToSend = processed.file;
+                } catch (err) {
+                    console.warn("Local WebP conversion failed, sending raw file:", err);
+                }
+
                 const body = new FormData();
-                body.append("files", file);
+                body.append("files", fileToSend);
                 const response = await API.post(
                     `/uploads/images?token=${encodeURIComponent(sessionStorage.getItem("token") || "")}`,
                     body
@@ -754,7 +783,13 @@ const ChatInput = React.memo(({ onSend, replyTo, onCancelReply, selectedUser, so
                 return;
             }
 
-            // 3. Videos: Use FastAPI FFmpeg transcoding & WebP thumbnail generation pipeline
+            // 3. Videos: Check 15MB limit for DB storage
+            if (isVideo && file.size > 15 * 1024 * 1024) {
+                setUploadError("Videos over 15MB cannot be stored in the database. Please use direct P2P transfer or select a smaller video.");
+                setUploading(false);
+                return;
+            }
+
             const body = new FormData();
             body.append("file", file);
 

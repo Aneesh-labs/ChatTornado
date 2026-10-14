@@ -9,7 +9,8 @@ from sqlalchemy import (
     Integer,
     UniqueConstraint,
     Index,
-    JSON
+    JSON,
+    LargeBinary
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -495,4 +496,23 @@ class FutureMessage(Base):
     receiver: Mapped[Optional["User"]] = relationship("User", foreign_keys=[receiver_id])
     group: Mapped[Optional["Group"]] = relationship("Group", foreign_keys=[group_id])
     branch: Mapped[Optional["ConversationBranch"]] = relationship("ConversationBranch", foreign_keys=[branch_id])
-    delivered_message: Mapped[Optional["Message"]] = relationship("Message", foreign_keys=[delivered_message_id])
+    delivered_message: Mapped[Optional["Message"]] = relationship("Message", foreign_keys=[delivered_message_id])
+
+
+# ============================================================================
+# MEDIA ATTACHMENTS (PERSISTENT DATABASE-BACKED MEDIA STORAGE)
+# ============================================================================
+
+class MediaAttachment(Base):
+    __tablename__ = "media_attachments"
+
+    id: Mapped[str] = mapped_column(String(120), primary_key=True, index=True)
+    filename: Mapped[str] = mapped_column(String(255), nullable=False)
+    content_type: Mapped[str] = mapped_column(String(100), nullable=False)
+    data: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+    size_bytes: Mapped[int] = mapped_column(Integer, nullable=False)
+    uploader_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+    uploader: Mapped[Optional["User"]] = relationship("User", foreign_keys=[uploader_id])
+
