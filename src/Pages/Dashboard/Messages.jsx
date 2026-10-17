@@ -44,6 +44,7 @@ import StreakModal from "./messages/StreakModal";
 import WatchTogetherOverlay from "./messages/WatchTogetherOverlay";
 import VanishModeOverlay from "./messages/VanishModeOverlay";
 import { recordMessageSent } from "../../Services/streakService";
+import { selectRelevantVaultContext } from "../../Services/vortex/vaultService";
 
 /* ==========================================================================
    SECURITY & UTILITY FUNCTIONS
@@ -1438,6 +1439,15 @@ const Messages = () => {
         const normalizedModel = (storedGoogleModel && storedGoogleModel !== "gemini-2.5-flash") ? storedGoogleModel : "gemini-3.8-flash";
         const activeAiModel = options.ai_model || normalizedModel;
 
+        let vaultContext = null;
+        if (currentTarget?.is_bot || currentTarget?.username?.toUpperCase() === "VORTEX-9") {
+            try {
+                vaultContext = selectRelevantVaultContext(validation.text);
+            } catch (err) {
+                console.warn("[VortexVault] Context selection skipped:", err);
+            }
+        }
+
         const outgoingPayload = {
             temp_id,
             receiver_id: currentTarget.id,
@@ -1445,6 +1455,7 @@ const Messages = () => {
             message: validation.text,
             ai_mode: activeAiMode,
             ai_model: activeAiModel,
+            vault_context: vaultContext,
             ...options
         };
 

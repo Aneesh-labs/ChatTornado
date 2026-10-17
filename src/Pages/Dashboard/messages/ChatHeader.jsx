@@ -1,13 +1,14 @@
 import React, { useState, useEffect, useMemo } from "react";
 import PropTypes from "prop-types";
 import { motion, AnimatePresence } from "framer-motion";
-import { MoreVertical, Sparkles, Brain, Download, Cpu, Ban, UserCheck, ShieldAlert, Users, BadgeCheck, Dna, GitFork, Clock, Tv, Ghost, Flame } from "lucide-react";
+import { MoreVertical, Sparkles, Brain, Download, Cpu, Ban, UserCheck, ShieldAlert, Users, BadgeCheck, Dna, GitFork, Clock, Tv, Ghost, Flame, Shield } from "lucide-react";
 import { IconBtn, Avatar, useTheme } from "./constants";
 import PersonalizeModal from "./PersonalizeModal";
 import ExportModal from "./ExportModal";
 import GoogleModelModal, { getSelectedGoogleModel } from "./GoogleModelModal";
 import ReportUserModal from "./ReportUserModal";
 import GroupInfoModal from "./GroupInfoModal";
+import MemoryVaultModal from "./MemoryVaultModal";
 import API from "../../../Services/API";
 import { triggerDemoNotification } from "../../../Services/notifications";
 import { isAdminUnlocked, setAdminUnlockedSession, touchAdminSession } from "../../../utils/adminSession";
@@ -47,6 +48,7 @@ const ChatHeader = React.memo(({
     const [showGoogleModelModal, setShowGoogleModelModal] = useState(false);
     const [showReportModal, setShowReportModal] = useState(false);
     const [showGroupModal, setShowGroupModal] = useState(false);
+    const [showMemoryVaultModal, setShowMemoryVaultModal] = useState(false);
     const [isBlocked, setIsBlocked] = useState(false);
     const [currentGoogleModel, setCurrentGoogleModel] = useState(getSelectedGoogleModel);
     const username = user?.name || user?.username || "Chat Room";
@@ -514,11 +516,16 @@ const ChatHeader = React.memo(({
                             </button>
                         </>
                     ) : isBotUser ? (
-                        <IconBtn title="Live AI Voice Call" onClick={() => onStartCall?.("ai")} small>
-                            <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
-                            </svg>
-                        </IconBtn>
+                        <>
+                            <IconBtn title="Zero-Knowledge Memory Vault" onClick={() => setShowMemoryVaultModal(true)} small className="hover:!text-emerald-300">
+                                <Shield className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-400" />
+                            </IconBtn>
+                            <IconBtn title="Live AI Voice Call" onClick={() => onStartCall?.("ai")} small>
+                                <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                                </svg>
+                            </IconBtn>
+                        </>
                     ) : null}
                     <IconBtn title="Export chat transcript (.md, .html, .txt)" onClick={() => setShowExportModal(true)} small className="hover:!text-cyan-300">
                         <Download className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-cyan-400" />
@@ -569,6 +576,13 @@ const ChatHeader = React.memo(({
                                                 >
                                                     <Cpu className="w-4 h-4 text-cyan-400" />
                                                     <span>AI Models (OpenRouter & Gemini)</span>
+                                                </button>
+                                                <button 
+                                                    onClick={() => { setShowMemoryVaultModal(true); setShowMoreMenu(false); }} 
+                                                    className="flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-emerald-300 hover:text-white hover:bg-emerald-500/15 rounded-lg text-left cursor-pointer transition-colors"
+                                                >
+                                                    <Shield className="w-4 h-4 text-emerald-400" />
+                                                    <span>Memory Vault (Encrypted)</span>
                                                 </button>
                                                 <button 
                                                     onClick={() => { onStartCall?.("ai"); setShowMoreMenu(false); }} 
@@ -670,6 +684,11 @@ const ChatHeader = React.memo(({
                     }}
                 />
             )}
+
+            <MemoryVaultModal
+                isOpen={showMemoryVaultModal}
+                onClose={() => setShowMemoryVaultModal(false)}
+            />
         </div>
     );
 });

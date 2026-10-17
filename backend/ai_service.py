@@ -1070,17 +1070,22 @@ async def process_user_message_to_bot(
     message_text: str,
     ai_mode: str,
     db: Session,
-    ai_model: Optional[str] = None
+    ai_model: Optional[str] = None,
+    vault_context: Optional[str] = None
 ) -> str:
-    """Orchestrates AI response for a user message sent to VORTEX-9 via the Cache Layer."""
+    """Orchestrates AI response for a user message sent to VORTEX-9 via the Cache Layer with Security Pipeline & Vault context."""
+    from vortex.security_pipeline import scan_user_input
+    scan_res = scan_user_input(message_text, user_id=user_id, db=db)
+    effective_text = scan_res.sanitized_text if scan_res.sanitized_text else message_text
+
     bot = get_or_create_bot_user(db)
-    is_img, img_prompt = is_image_request(message_text)
+    is_img, img_prompt = is_image_request(effective_text)
 
     if is_img:
         return await generate_ai_image(img_prompt)
 
     # 1. AI Cache analyzes prompt and retrieves local editable memory
-    cleaned_prompt, system_prompt, mode, local_history = ai_cache.analyze_and_prepare(user_id, message_text, ai_mode)
+    cleaned_prompt, system_prompt, mode, local_history = ai_cache.analyze_and_prepare(user_id, effective_text, ai_mode)
     is_admin = (mode == VortexMode.ADMIN or str(mode).upper() == "ADMIN")
 
     # 2. If local memory is fresh/empty, hydrate from DB history
@@ -1104,9 +1109,11 @@ async def process_user_message_to_bot(
                     "text": m.message
                 })
 
-    # 3. Augment system prompt with live read-only database state
+    # 3. Augment system prompt with live read-only database state & Zero-Knowledge Vault context
     db_context = get_platform_db_context(db, bot.id, is_admin=is_admin)
     dynamic_system_prompt = system_prompt + db_context
+    if vault_context and isinstance(vault_context, str) and vault_context.strip():
+        dynamic_system_prompt += f"\n\n[USER PERSONAL MEMORY VAULT - ZERO KNOWLEDGE DECRYPTED CONTEXT]:\n{vault_context.strip()}\n"
 
     # Admin mode must start with a clean slate to prevent previous standard-mode refusals from influencing it.
     if is_admin:
@@ -1116,7 +1123,7 @@ async def process_user_message_to_bot(
     raw_response = await generate_ai_text(cleaned_prompt, local_history, system_prompt=dynamic_system_prompt, preferred_model=ai_model)
 
     # 5. Cache receives answer, records into local editable memory, and delivers finalized output
-    output_text = ai_cache.commit_turn(user_id, message_text, raw_response, mode=mode)
+    output_text = ai_cache.commit_turn(user_id, effective_text, raw_response, mode=mode)
     return output_text
 
 
@@ -1126,11 +1133,16 @@ async def process_user_message_to_bot_stream(
     ai_mode: str,
     db: Session,
     on_chunk: Optional[Any] = None,
-    ai_model: Optional[str] = None
+    ai_model: Optional[str] = None,
+    vault_context: Optional[str] = None
 ) -> str:
-    """Orchestrates AI response for a user message sent to VORTEX-9 with real-time streaming and personalization."""
+    """Orchestrates AI response for a user message sent to VORTEX-9 with real-time streaming, Security Pipeline & Vault context."""
+    from vortex.security_pipeline import scan_user_input
+    scan_res = scan_user_input(message_text, user_id=user_id, db=db)
+    effective_text = scan_res.sanitized_text if scan_res.sanitized_text else message_text
+
     bot = get_or_create_bot_user(db)
-    is_img, img_prompt = is_image_request(message_text)
+    is_img, img_prompt = is_image_request(effective_text)
 
     if is_img:
         res = await generate_ai_image(img_prompt)
@@ -1138,7 +1150,7 @@ async def process_user_message_to_bot_stream(
             await on_chunk(res)
         return res
 
-    cleaned_prompt, system_prompt, mode, local_history = ai_cache.analyze_and_prepare(user_id, message_text, ai_mode)
+    cleaned_prompt, system_prompt, mode, local_history = ai_cache.analyze_and_prepare(user_id, effective_text, ai_mode)
     is_admin = (mode == VortexMode.ADMIN or str(mode).upper() == "ADMIN")
 
     if not local_history:
@@ -1163,6 +1175,8 @@ async def process_user_message_to_bot_stream(
 
     db_context = get_platform_db_context(db, bot.id, is_admin=is_admin)
     dynamic_system_prompt = system_prompt + db_context
+    if vault_context and isinstance(vault_context, str) and vault_context.strip():
+        dynamic_system_prompt += f"\n\n[USER PERSONAL MEMORY VAULT - ZERO KNOWLEDGE DECRYPTED CONTEXT]:\n{vault_context.strip()}\n"
 
     if is_admin:
         local_history = []
@@ -1177,7 +1191,7 @@ async def process_user_message_to_bot_stream(
         preferred_model=ai_model
     )
 
-    output_text = ai_cache.commit_turn(user_id, message_text, raw_response, mode=mode)
+    output_text = ai_cache.commit_turn(user_id, effective_text, raw_response, mode=mode)
     return output_text
 
 

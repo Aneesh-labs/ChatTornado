@@ -146,6 +146,9 @@ from dna_routes import router as dna_router
 from branch_routes import router as branch_router
 from future_message_routes import router as future_message_router
 from tor_routes import router as tor_router
+from vortex.vault_routes import router as vortex_vault_router
+from vortex.group_vault_routes import router as vortex_group_vault_router
+from vortex.admin_routes import router as vortex_admin_router
 
 app.include_router(auth_router)
 app.include_router(user_router)
@@ -155,6 +158,9 @@ app.include_router(upload_router)
 app.include_router(connection_router)
 app.include_router(admin_router)
 app.include_router(ai_router)
+app.include_router(vortex_vault_router)
+app.include_router(vortex_group_vault_router)
+app.include_router(vortex_admin_router)
 app.include_router(block_router)
 app.include_router(status_router)
 app.include_router(group_router)

@@ -233,6 +233,70 @@ async def websocket_endpoint(websocket: WebSocket):
                         await manager.send_personal_message(m_uid, group_packet)
                 except Exception as bcast_err:
                     logger.warning("Group message broadcast partial failure: %s", bcast_err)
+
+                # Group AI Intelligence Invocation Check
+                lower_msg = (msg_text or "").lower()
+                is_group_ai = any(trigger in lower_msg for trigger in ("@vortex", "@ai", "/summarize", "/plan", "/ask", "@tornado"))
+                if is_group_ai:
+                    from ai_service import get_or_create_bot_user, generate_ai_text
+                    async def handle_group_ai_reply(g_id: int, s_name: str, trig_msg: str, b_branch: Optional[int]):
+                        grp_db = SessionLocal()
+                        try:
+                            bot_u = get_or_create_bot_user(grp_db)
+                            recent_msgs = (
+                                grp_db.query(Message)
+                                .filter(Message.group_id == g_id)
+                                .order_by(Message.created_at.desc())
+                                .limit(8)
+                                .all()
+                            )
+                            history_lines = []
+                            for m in reversed(recent_msgs):
+                                sender_label = "VORTEX-9" if m.sender_id == bot_u.id else (m.sender.username if m.sender else f"Member-{m.sender_id}")
+                                history_lines.append(f"{sender_label}: {m.message}")
+
+                            grp_prompt = (
+                                "You are VORTEX-9, participating as an intelligent assistant in a private group chat inside ChatTornado.\n"
+                                "Group Isolation Policy: You ONLY know what has been said in this group or saved to this group's shared knowledge. "
+                                "You do not possess or leak any personal member vault data.\n"
+                                "Be concise, helpful, objective, and format with clear markdown.\n\n"
+                                f"Recent Group Discussion:\n" + "\n".join(history_lines) + "\n\n"
+                                f"Member '{s_name}' invoked group intelligence with: {trig_msg}\n"
+                                "Respond directly to the group:"
+                            )
+                            ai_reply = await generate_ai_text(trig_msg, system_prompt=grp_prompt)
+                            if ai_reply:
+                                ai_grp_msg = Message(
+                                    sender_id=bot_u.id,
+                                    receiver_id=None,
+                                    group_id=g_id,
+                                    branch_id=b_branch,
+                                    message=ai_reply,
+                                    read_state="sent"
+                                )
+                                grp_db.add(ai_grp_msg)
+                                grp_db.commit()
+                                grp_db.refresh(ai_grp_msg)
+
+                                mems = grp_db.query(GroupMember.user_id).filter(GroupMember.group_id == g_id).all()
+                                ai_grp_packet = {
+                                    "type": "group_message",
+                                    "id": ai_grp_msg.id,
+                                    "group_id": g_id,
+                                    "branch_id": b_branch,
+                                    "sender_id": bot_u.id,
+                                    "sender_name": "VORTEX-9",
+                                    "message": ai_reply,
+                                    "created_at": ai_grp_msg.created_at.isoformat() if hasattr(ai_grp_msg.created_at, "isoformat") else str(ai_grp_msg.created_at)
+                                }
+                                for (m_uid,) in mems:
+                                    await manager.send_personal_message(m_uid, ai_grp_packet)
+                        except Exception as e:
+                            logger.exception("Error during group AI reply: %s", e)
+                        finally:
+                            grp_db.close()
+
+                    asyncio.create_task(handle_group_ai_reply(group_id, sender.username if sender else "Member", msg_text, branch_id))
                 continue
 
             # ---------- Ghost Chat ----------
@@ -1001,7 +1065,7 @@ async def websocket_endpoint(websocket: WebSocket):
                     bot = target_u
 
             if is_bot_target and bot:
-                async def handle_bot_reply(u_id: int, b_id: int, prompt_text: str, req_ai_mode: str = "DEFAULT", req_ai_model: Optional[str] = None):
+                async def handle_bot_reply(u_id: int, b_id: int, prompt_text: str, req_ai_mode: str = "DEFAULT", req_ai_model: Optional[str] = None, req_vault_context: Optional[str] = None):
                     await manager.send_personal_message(u_id, {
                         "type": "typing_start",
                         "sender_id": b_id
@@ -1255,7 +1319,7 @@ async def websocket_endpoint(websocket: WebSocket):
                                         db=reply_db
                                     )
                                 else:
-                                    reply_text = await process_user_message_to_bot_stream(u_id, prompt_text, req_ai_mode, reply_db, on_chunk=on_stream_chunk, ai_model=req_ai_model)
+                                    reply_text = await process_user_message_to_bot_stream(u_id, prompt_text, req_ai_mode, reply_db, on_chunk=on_stream_chunk, ai_model=req_ai_model, vault_context=req_vault_context)
                             except Exception as stream_call_err:
                                 logger.exception("Streaming call exception: %s", stream_call_err)
                                 if accumulated_streamed_chunks:
@@ -1491,7 +1555,8 @@ async def websocket_endpoint(websocket: WebSocket):
                     finally:
                         reply_db.close()
 
-                asyncio.create_task(handle_bot_reply(user_id, bot.id, message_text, ai_mode, ai_model))
+                vault_ctx = data.get("vault_context")
+                asyncio.create_task(handle_bot_reply(user_id, bot.id, message_text, ai_mode, ai_model, vault_ctx))
 
     except (WebSocketDisconnect, RuntimeError):
 

@@ -541,4 +541,79 @@ class ChatStreak(Base):
         Index('idx_chat_streaks_pair', 'user1_id', 'user2_id'),
     )
 
+
+# ============================================================================
+# VORTEX ZERO-KNOWLEDGE ENCRYPTED MEMORY VAULT MODEL
+# ============================================================================
+
+class VortexMemoryVaultRecord(Base):
+    __tablename__ = "vortex_memory_vault_records"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    category: Mapped[str] = mapped_column(String(50), default="fact", nullable=False, index=True)  # preference, fact, project, instruction
+    encrypted_payload: Mapped[str] = mapped_column(Text, nullable=False)
+    iv: Mapped[str] = mapped_column(String(64), nullable=False)
+    salt: Mapped[str] = mapped_column(String(64), nullable=False)
+    version: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+    user: Mapped["User"] = relationship("User", foreign_keys=[user_id])
+
+    __table_args__ = (
+        Index('idx_vortex_vault_user_cat', 'user_id', 'category'),
+    )
+
+
+# ============================================================================
+# VORTEX GROUP ENCRYPTED MEMORY VAULT MODEL (ISOLATED GROUP INTELLIGENCE)
+# ============================================================================
+
+class VortexGroupVaultRecord(Base):
+    __tablename__ = "vortex_group_vault_records"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, index=True)
+    group_id: Mapped[int] = mapped_column(ForeignKey("groups.id", ondelete="CASCADE"), nullable=False, index=True)
+    category: Mapped[str] = mapped_column(String(50), default="guideline", nullable=False, index=True)  # decision, action_item, guideline, summary, fact
+    encrypted_payload: Mapped[str] = mapped_column(Text, nullable=False)
+    iv: Mapped[str] = mapped_column(String(64), nullable=False)
+    salt: Mapped[str] = mapped_column(String(64), nullable=False)
+    created_by: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    version: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+    group: Mapped["Group"] = relationship("Group", foreign_keys=[group_id])
+    creator: Mapped["User"] = relationship("User", foreign_keys=[created_by])
+
+    __table_args__ = (
+        Index('idx_vortex_group_vault_cat', 'group_id', 'category'),
+    )
+
+
+# ============================================================================
+# VORTEX SECURITY AUDIT & DETERMINISTIC MODERATION LOG
+# ============================================================================
+
+class VortexSecurityAuditLog(Base):
+    __tablename__ = "vortex_security_audit_logs"
+
+    id: Mapped[int] = mapped_column(primary_key=True, index=True, autoincrement=True)
+    event_type: Mapped[str] = mapped_column(String(64), nullable=False, index=True)  # PROMPT_INJECTION, CREDENTIAL_LEAK, RATE_LIMIT, TOXICITY_FLAG, ADMIN_ACTION
+    severity: Mapped[str] = mapped_column(String(20), default="INFO", nullable=False)  # INFO, WARNING, CRITICAL
+    user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+    group_id: Mapped[Optional[int]] = mapped_column(ForeignKey("groups.id", ondelete="SET NULL"), nullable=True, index=True)
+    details: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+    user: Mapped[Optional["User"]] = relationship("User", foreign_keys=[user_id])
+    group: Mapped[Optional["Group"]] = relationship("Group", foreign_keys=[group_id])
+
+    __table_args__ = (
+        Index('idx_vortex_audit_type_time', 'event_type', 'created_at'),
+    )
+
+
+
 
