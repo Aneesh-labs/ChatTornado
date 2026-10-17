@@ -12,6 +12,7 @@ const SAMPLE_NOTES = [
         id: "sample-note-1",
         userId: "bot-tornado-ai",
         username: "Tornado AI",
+        avatar: "https://api.dicebear.com/7.x/bottts/svg?seed=VORTEX9&backgroundColor=0d1024",
         text: "Analyzing neural chat patterns 🌪️",
         emoji: "⚡",
         songTitle: "Midnight City",
@@ -23,6 +24,7 @@ const SAMPLE_NOTES = [
         id: "sample-note-2",
         userId: "alex-sample",
         username: "Alex",
+        avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=Alex&backgroundColor=b6e3f4",
         text: "Coding all night, send coffee ☕",
         emoji: "😴",
         songTitle: "Starboy",
@@ -34,6 +36,7 @@ const SAMPLE_NOTES = [
         id: "sample-note-3",
         userId: "sarah-sample",
         username: "Sarah",
+        avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=Sarah&backgroundColor=ffdfbf",
         text: "Off to Tokyo tomorrow! ✈️🍣",
         emoji: "🎌",
         songTitle: "Levitating",
@@ -53,8 +56,16 @@ export function getActiveNotes() {
         }
 
         const now = Date.now();
-        // Filter out expired notes
-        const active = list.filter(n => n.expiresAt && n.expiresAt > now);
+        // Filter out expired notes and ensure avatars are populated
+        const active = list
+            .filter(n => n.expiresAt && n.expiresAt > now)
+            .map(n => {
+                const sample = SAMPLE_NOTES.find(s => s.id === n.id);
+                if (sample && !n.avatar) {
+                    return { ...n, avatar: sample.avatar };
+                }
+                return n;
+            });
         if (active.length !== list.length) {
             localStorage.setItem(NOTES_STORAGE_KEY, JSON.stringify(active));
         }

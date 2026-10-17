@@ -84,37 +84,53 @@ export default function BubbleNotesBar({ onSelectUser, users = [], onSendDirectR
     };
 
     return (
-        <div className="w-full border-b border-white/[0.06] bg-black/20 backdrop-blur-md px-3 py-2.5 overflow-hidden">
+        <div className="w-full border-b border-white/[0.06] bg-black/20 backdrop-blur-md px-3 pt-5 pb-3 overflow-hidden">
             {/* Horizontal Scroll Track */}
             <div
                 ref={scrollContainerRef}
-                className="flex items-center gap-4 overflow-x-auto no-scrollbar scroll-smooth py-1"
+                className="flex items-start gap-4 overflow-x-auto no-scrollbar scroll-smooth py-1 px-1"
                 style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
             >
                 {/* 1. "Your Note" Bubble */}
-                <div className="flex flex-col items-center flex-shrink-0 cursor-pointer group" onClick={() => setCreateModalOpen(true)}>
+                <div 
+                    className="flex flex-col items-center flex-shrink-0 w-[72px] cursor-pointer group relative"
+                    onClick={() => setCreateModalOpen(true)}
+                >
+                    {/* Floating Speech Bubble preview if note exists */}
+                    <div className="h-6 flex items-center justify-center mb-1.5 w-full">
+                        {myNote ? (
+                            <div className="relative flex items-center justify-center max-w-[72px]">
+                                <div className="bg-[#19192c]/95 backdrop-blur-md border border-violet-400/30 px-2 py-0.5 rounded-full shadow-[0_4px_10px_rgba(0,0,0,0.4)] text-[10px] text-white/90 font-medium whitespace-nowrap truncate flex items-center gap-1 group-hover:scale-105 transition-transform">
+                                    <span className="text-[11px] shrink-0">{myNote.emoji}</span>
+                                    <span className="truncate max-w-[48px]">{myNote.text}</span>
+                                </div>
+                                <div className="w-1.5 h-1.5 bg-[#19192c] border-r border-b border-violet-400/30 rotate-45 absolute -bottom-1 left-1/2 -translate-x-1/2" />
+                            </div>
+                        ) : (
+                            <span className="text-[9px] font-semibold tracking-wider uppercase text-violet-400/70 group-hover:text-violet-300 transition-colors">
+                                New Note
+                            </span>
+                        )}
+                    </div>
+
+                    {/* Avatar & Story Ring */}
                     <div className="relative">
-                        {/* Bubble Preview or Plus Badge */}
-                        <div className="w-14 h-14 rounded-full bg-gradient-to-tr from-violet-600 via-indigo-600 to-cyan-500 p-0.5 shadow-md shadow-violet-500/20 group-hover:scale-105 transition-transform">
-                            <div className="w-full h-full rounded-full bg-[#0d0d18] flex items-center justify-center overflow-hidden">
+                        <div className="w-13 h-13 rounded-full p-[2px] bg-gradient-to-tr from-violet-500 via-indigo-500 to-cyan-400 shadow-md shadow-violet-500/20 group-hover:scale-105 transition-transform duration-200">
+                            <div className="w-full h-full rounded-full bg-[#0d0d18] p-[2px] flex items-center justify-center overflow-hidden">
                                 <span className="text-xl font-bold text-white/90">
                                     {myNote ? myNote.emoji : "👤"}
                                 </span>
                             </div>
                         </div>
 
-                        {/* Floating Speech Bubble preview if note exists */}
-                        {myNote ? (
-                            <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-white/10 backdrop-blur-md border border-white/20 px-2 py-0.5 rounded-full shadow-lg text-[10px] text-white/90 font-medium whitespace-nowrap max-w-[80px] truncate flex items-center gap-1">
-                                <span>{myNote.text}</span>
-                            </div>
-                        ) : (
-                            <div className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-gradient-to-r from-violet-500 to-indigo-500 border-2 border-[#0d0d18] flex items-center justify-center text-white shadow">
-                                <Plus className="w-3 h-3 stroke-[3]" />
+                        {!myNote && (
+                            <div className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-gradient-to-r from-violet-500 to-cyan-400 border-2 border-[#0d0d18] flex items-center justify-center text-white shadow">
+                                <Plus className="w-2.5 h-2.5 stroke-[3]" />
                             </div>
                         )}
                     </div>
-                    <span className="text-[10px] font-medium text-white/60 group-hover:text-white/90 mt-1.5 truncate max-w-[64px]">
+
+                    <span className="text-[11px] font-medium text-white/70 group-hover:text-white mt-1.5 truncate max-w-[68px] text-center transition-colors">
                         {myNote ? "Your Note" : "Share Note"}
                     </span>
                 </div>
@@ -123,36 +139,52 @@ export default function BubbleNotesBar({ onSelectUser, users = [], onSendDirectR
                 {otherNotes.map((note) => (
                     <motion.div
                         key={note.id}
-                        whileHover={{ scale: 1.05 }}
+                        whileHover={{ y: -2 }}
                         whileTap={{ scale: 0.95 }}
                         onClick={() => setSelectedNote(note)}
-                        className="flex flex-col items-center flex-shrink-0 cursor-pointer relative"
+                        className="flex flex-col items-center flex-shrink-0 w-[72px] cursor-pointer group relative"
                     >
-                        {/* Floating Top Thought Bubble */}
-                        <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 z-10 bg-gradient-to-r from-violet-950/90 to-indigo-950/90 border border-violet-400/40 px-2 py-0.5 rounded-full shadow-md text-[10px] text-white font-medium whitespace-nowrap max-w-[88px] truncate flex items-center gap-1">
-                            <span>{note.emoji}</span>
-                            <span className="truncate">{note.text}</span>
-                        </div>
-
-                        {/* Avatar */}
-                        <div className="w-14 h-14 rounded-full bg-gradient-to-tr from-cyan-400 via-violet-500 to-pink-500 p-0.5 shadow-md shadow-violet-500/20 mt-1">
-                            <div className="w-full h-full rounded-full bg-[#121220] flex items-center justify-center text-sm font-bold text-white overflow-hidden">
-                                {note.avatar ? (
-                                    <img src={note.avatar} alt={note.username} className="w-full h-full object-cover" />
-                                ) : (
-                                    <span>{note.username.slice(0, 2).toUpperCase()}</span>
-                                )}
+                        {/* Floating Speech Bubble */}
+                        <div className="h-6 flex items-center justify-center mb-1.5 w-full">
+                            <div className="relative flex items-center justify-center max-w-[72px]">
+                                <div className="bg-[#19192c]/95 backdrop-blur-md border border-violet-400/35 px-2 py-0.5 rounded-full shadow-[0_4px_10px_rgba(0,0,0,0.4)] text-[10px] text-white font-medium whitespace-nowrap truncate flex items-center gap-1 group-hover:scale-105 transition-transform">
+                                    <span className="text-[11px] shrink-0">{note.emoji}</span>
+                                    <span className="truncate max-w-[48px]">{note.text}</span>
+                                </div>
+                                <div className="w-1.5 h-1.5 bg-[#19192c] border-r border-b border-violet-400/35 rotate-45 absolute -bottom-1 left-1/2 -translate-x-1/2" />
                             </div>
                         </div>
 
-                        {/* Song Badge if present */}
-                        {note.songTitle && (
-                            <div className="absolute bottom-4 right-0 w-4 h-4 rounded-full bg-pink-500 text-white flex items-center justify-center shadow animate-spin" style={{ animationDuration: "6s" }}>
-                                <Music className="w-2.5 h-2.5" />
+                        {/* Avatar with Story Ring */}
+                        <div className="relative">
+                            <div className="w-13 h-13 rounded-full p-[2px] bg-gradient-to-tr from-amber-400 via-rose-500 to-purple-600 shadow-md shadow-rose-500/20 group-hover:scale-105 transition-transform duration-200">
+                                <div className="w-full h-full rounded-full bg-[#0c0d18] p-[2px] overflow-hidden flex items-center justify-center">
+                                    {note.avatar ? (
+                                        <img src={note.avatar} alt={note.username} className="w-full h-full rounded-full object-cover" />
+                                    ) : (
+                                        <span className="text-xs font-bold text-white/80">{note.username.slice(0, 2).toUpperCase()}</span>
+                                    )}
+                                </div>
                             </div>
-                        )}
 
-                        <span className="text-[10px] font-medium text-white/70 mt-1 truncate max-w-[64px]">
+                            {/* Music Badge with Equalizer */}
+                            {note.songTitle && (
+                                <div 
+                                    title={`${note.songTitle} • ${note.songArtist || ""}`}
+                                    className="absolute -bottom-0.5 -right-0.5 flex items-center gap-0.5 bg-gradient-to-r from-pink-500 to-rose-500 px-1.5 py-0.5 rounded-full border-2 border-[#0c0d18] shadow-md"
+                                >
+                                    <Music className="w-2.5 h-2.5 text-white" />
+                                    <div className="flex items-end gap-[1px] h-2">
+                                        <span className="w-[1.5px] h-full bg-white rounded-full animate-pulse" />
+                                        <span className="w-[1.5px] h-2/3 bg-white rounded-full animate-bounce" />
+                                        <span className="w-[1.5px] h-1/2 bg-white rounded-full animate-pulse" />
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Username */}
+                        <span className="text-[11px] font-medium text-white/70 group-hover:text-white mt-1.5 truncate max-w-[68px] text-center transition-colors">
                             {note.username}
                         </span>
                     </motion.div>
