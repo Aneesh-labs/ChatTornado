@@ -27,7 +27,7 @@ PROMPT_INJECTION_PATTERNS = [
 
 # Sensitive credential leaks
 CREDENTIAL_LEAK_PATTERNS = [
-    (re.compile(r"AIzaSy[A-Za-z0-9_-]{33}"), "Google Gemini API Key"),
+    (re.compile(r"AIzaSy[A-Za-z0-9_-]{30,45}"), "Google Gemini API Key"),
     (re.compile(r"sk-[A-Za-z0-9_-]{32,}"), "OpenAI/OpenRouter API Key"),
     (re.compile(r"ghp_[A-Za-z0-9]{36}"), "GitHub Personal Access Token"),
     (re.compile(r"xox[baprs]-[A-Za-z0-9-]{10,}"), "Slack Token"),

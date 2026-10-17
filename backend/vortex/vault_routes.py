@@ -120,6 +120,7 @@ def sync_vault_records(
     return {
         "status": "success",
         "synced": upserted_count,
+        "upserted": upserted_count,
         "message": f"Successfully synced {upserted_count} encrypted memory records."
     }
 
