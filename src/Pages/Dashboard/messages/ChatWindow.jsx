@@ -5,6 +5,8 @@ import ChatMessages from "./ChatMessages";
 import ChatInput from "./ChatInput";
 import ScrollBar from "./ScrollBar";
 import { isAdminUnlocked } from "../../../utils/adminSession";
+import ConversationHubBar from "./ConversationHubBar";
+import AntiLeakWatermark from "./AntiLeakWatermark";
 
 const ChatWindow = React.memo(({
     enrichedSelected,
@@ -49,6 +51,10 @@ const ChatWindow = React.memo(({
     onOpenRealityForks,
     onOpenFutureMessages,
     onFork,
+    onOpenStreakModal,
+    onToggleWatchParty,
+    onToggleVanishMode,
+    isVanishModeActive = false,
 }) => {
     const [localAiMode, setLocalAiMode] = useState(() => {
         return isAdminUnlocked() ? "ADMIN" : "DEFAULT";
@@ -93,29 +99,46 @@ const ChatWindow = React.memo(({
                 onOpenDNA={onOpenDNA}
                 onOpenRealityForks={onOpenRealityForks}
                 onOpenFutureMessages={onOpenFutureMessages}
+                onOpenStreakModal={onOpenStreakModal}
+                onToggleWatchParty={onToggleWatchParty}
+                onToggleVanishMode={onToggleVanishMode}
+                isVanishModeActive={isVanishModeActive}
             />
-            <ChatMessages
-                groupedMessages={groupedMessages}
-                typingUsers={typingUsers}
-                enrichedSelected={enrichedSelected}
+            <ConversationHubBar
+                conversationId={enrichedSelected?.id}
+                partnerName={enrichedSelected?.username || "Friend"}
                 myUserId={myUserId}
-                selectionMode={selectionMode}
-                selectedMsgIds={selectedMsgIds}
-                setSelectedMsgIds={setSelectedMsgIds}
-                setSelectionMode={setSelectionMode}
-                addReaction={addReaction}
-                setReplyingTo={setReplyingTo}
-                scrollContainerRef={scrollContainerRef}
-                messagesEndRef={messagesEndRef}
-                onSelectMessage={onSelectMessage}
-                onDelete={onDelete}
-                isMobile={isMobile}
-                socket={socket}
-                onSend={sendMessage}
-                onGameMove={onGameMove}
-                onRetry={onRetry}
-                onFork={onFork}
+                messages={messages}
+                onSendMessage={sendMessage}
             />
+            <div className="relative flex-1 overflow-hidden min-h-0 flex flex-col">
+                <AntiLeakWatermark
+                    active={Boolean(isVanishModeActive || enrichedSelected?.is_confidential)}
+                    viewerName={sessionStorage.getItem("username") || "Member"}
+                />
+                <ChatMessages
+                    groupedMessages={groupedMessages}
+                    typingUsers={typingUsers}
+                    enrichedSelected={enrichedSelected}
+                    myUserId={myUserId}
+                    selectionMode={selectionMode}
+                    selectedMsgIds={selectedMsgIds}
+                    setSelectedMsgIds={setSelectedMsgIds}
+                    setSelectionMode={setSelectionMode}
+                    addReaction={addReaction}
+                    setReplyingTo={setReplyingTo}
+                    scrollContainerRef={scrollContainerRef}
+                    messagesEndRef={messagesEndRef}
+                    onSelectMessage={onSelectMessage}
+                    onDelete={onDelete}
+                    isMobile={isMobile}
+                    socket={socket}
+                    onSend={sendMessage}
+                    onGameMove={onGameMove}
+                    onRetry={onRetry}
+                    onFork={onFork}
+                />
+            </div>
             <ScrollBar show={showScrollBtn} currentTheme={currentTheme} scrollToBottom={scrollToBottom} isMobile={isMobile} />
             {!selectionMode && (
                 <ChatInput

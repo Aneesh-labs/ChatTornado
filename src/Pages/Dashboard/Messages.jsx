@@ -40,6 +40,10 @@ import PerformanceMonitor, { usePerformanceMonitor } from "./messages/Performanc
 import ConversationDNAPanel from "./messages/ConversationDNAPanel";
 import RealityForksModal from "./messages/RealityForksModal";
 import FutureMessagesModal from "./messages/FutureMessagesModal";
+import StreakModal from "./messages/StreakModal";
+import WatchTogetherOverlay from "./messages/WatchTogetherOverlay";
+import VanishModeOverlay from "./messages/VanishModeOverlay";
+import { recordMessageSent } from "../../Services/streakService";
 
 /* ==========================================================================
    SECURITY & UTILITY FUNCTIONS
@@ -166,6 +170,11 @@ const Messages = () => {
     const [futureMessagesModalOpen, setFutureMessagesModalOpen] = useState(false);
     const [forkSourceMessage, setForkSourceMessage] = useState(null);
     const [futureMessagePrefill, setFutureMessagePrefill] = useState("");
+
+    // ── Viral Addiction Features (Streaks, Watch Together, Vanish Mode) ────────
+    const [streakModalUser, setStreakModalUser] = useState(null);
+    const [watchPartyOpen, setWatchPartyOpen] = useState(false);
+    const [vanishModeActive, setVanishModeActive] = useState(false);
 
     useEffect(() => {
         if (!callNotice) return;
@@ -860,26 +869,6 @@ const Messages = () => {
                         return;
                     }
 
-                    if (packet.type === "streak_update") {
-                        const targetId = packet.other_user_id;
-                        setUsers((prev) =>
-                            prev.map((u) =>
-                                areIdsEqual(u.id, targetId)
-                                    ? { ...u, streak: packet.streak }
-                                    : u
-                            )
-                        );
-                        window.dispatchEvent(
-                            new CustomEvent("tornado_streak_updated", {
-                                detail: {
-                                    other_user_id: targetId,
-                                    streak: packet.streak
-                                }
-                            })
-                        );
-                        return;
-                    }
-
                     if (packet.type === "ghost_reaction") {
                         setGhostChat(prev => ({
                             ...prev,
@@ -995,7 +984,16 @@ const Messages = () => {
                         if (isForCurrentChat) {
                             setMessages((prev) => {
                                 const existingIndex = prev.findIndex((m) => areIdsEqual(m.id, packet.id));
-                                const tempIndex = prev.findIndex((m) => packet.temp_id && areIdsEqual(m.temp_id, packet.temp_id));
+                                const tempIndex = prev.findIndex((m) => {
+                                    if (packet.temp_id && areIdsEqual(m.temp_id, packet.temp_id)) return true;
+                                    if (
+                                        !m.id &&
+                                        areIdsEqual(m.sender_id, packet.sender_id) &&
+                                        m.message === packet.message &&
+                                        Math.abs(new Date(m.created_at).getTime() - new Date(packet.created_at || Date.now()).getTime()) < 15000
+                                    ) return true;
+                                    return false;
+                                });
 
                                 if (tempIndex !== -1) {
                                     const updated = [...prev];
@@ -1010,6 +1008,11 @@ const Messages = () => {
                                 if (packet.temp_id) {
                                     pendingTempIds.current.delete(packet.temp_id);
                                 }
+                                const isDuplicate = prev.some((m) =>
+                                    areIdsEqual(m.id, packet.id) ||
+                                    (areIdsEqual(m.sender_id, packet.sender_id) && m.message === packet.message && Math.abs(new Date(m.created_at).getTime() - new Date(packet.created_at || Date.now()).getTime()) < 5000)
+                                );
+                                if (isDuplicate) return prev;
                                 return [...prev, packet];
                             });
                         }
@@ -1239,7 +1242,16 @@ const Messages = () => {
                         if (isCurrentDirectChat) {
                             setMessages((prev) => {
                                 const existingIndex = prev.findIndex((m) => areIdsEqual(m.id, packet.id));
-                                const tempIndex = prev.findIndex((m) => packet.temp_id && areIdsEqual(m.temp_id, packet.temp_id));
+                                const tempIndex = prev.findIndex((m) => {
+                                    if (packet.temp_id && areIdsEqual(m.temp_id, packet.temp_id)) return true;
+                                    if (
+                                        !m.id &&
+                                        areIdsEqual(m.sender_id, packet.sender_id) &&
+                                        m.message === packet.message &&
+                                        Math.abs(new Date(m.created_at).getTime() - new Date(packet.created_at || Date.now()).getTime()) < 15000
+                                    ) return true;
+                                    return false;
+                                });
 
                                 if (tempIndex !== -1) {
                                     const updated = [...prev];
@@ -1256,6 +1268,11 @@ const Messages = () => {
                                 if (packet.temp_id) {
                                     pendingTempIds.current.delete(packet.temp_id);
                                 }
+                                const isDuplicate = prev.some((m) =>
+                                    areIdsEqual(m.id, packet.id) ||
+                                    (areIdsEqual(m.sender_id, packet.sender_id) && m.message === packet.message && Math.abs(new Date(m.created_at).getTime() - new Date(packet.created_at || Date.now()).getTime()) < 5000)
+                                );
+                                if (isDuplicate) return prev;
                                 return [...prev, packet];
                             });
                         }
@@ -1398,6 +1415,11 @@ const Messages = () => {
             ...options
         };
         setMessages((prev) => [...prev, optimisticMessage]);
+
+        // Record streak progress for peer conversations
+        if (!currentTarget?.is_bot && !currentTarget?.is_group && currentTarget?.id) {
+            recordMessageSent(currentTarget.id);
+        }
 
         let activeAiMode = options.ai_mode || aiMode;
         if (isAdminUnlocked()) {
@@ -1810,6 +1832,13 @@ const Messages = () => {
                                     onRefresh={refreshSidebar}
                                     isRefreshing={isRefreshingSidebar}
                                     myUserId={myUserId.current}
+                                    onOpenStreakModal={(user) => setStreakModalUser(user)}
+                                    onSendDirectReply={(targetUser, replyMsg) => {
+                                        selectUser(targetUser);
+                                        setTimeout(() => {
+                                            sendMessage(replyMsg);
+                                        }, 150);
+                                    }}
                                 />
                             </motion.div>
                         )}
@@ -1861,10 +1890,25 @@ const Messages = () => {
                                 onOpenRealityForks={handleOpenRealityForks}
                                 onOpenFutureMessages={handleOpenFutureMessages}
                                 onFork={handleForkFromMessage}
+                                onOpenStreakModal={(user) => setStreakModalUser(user)}
+                                onToggleWatchParty={() => setWatchPartyOpen((prev) => !prev)}
+                                onToggleVanishMode={() => setVanishModeActive((prev) => !prev)}
+                                isVanishModeActive={vanishModeActive}
                             />
                         ) : (
                             <EmptyState onOpenSearch={handleOpenSearch} />
                         )}
+
+                        {/* Vanish Mode Active Cyber Guard Overlay */}
+                        <VanishModeOverlay
+                            isActive={vanishModeActive}
+                            onToggle={() => setVanishModeActive(false)}
+                            selectedUser={enrichedSelected}
+                            onScreenshotDetected={(warning) => {
+                                setCallNotice(warning);
+                                sendMessage(`⚠️ Vanish Guard: Screen capture / screenshot activity detected at ${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}`);
+                            }}
+                        />
                     </div>
 
                     <RightPanel
@@ -1947,6 +1991,21 @@ const Messages = () => {
                                 typing: false,
                             });
                         }}
+                    />
+
+                    {/* Streak Milestones Modal */}
+                    <StreakModal
+                        isOpen={Boolean(streakModalUser)}
+                        onClose={() => setStreakModalUser(null)}
+                        targetUser={streakModalUser}
+                    />
+
+                    {/* Synchronized Watch Together Player */}
+                    <WatchTogetherOverlay
+                        isOpen={watchPartyOpen}
+                        onClose={() => setWatchPartyOpen(false)}
+                        selectedUser={enrichedSelected}
+                        socket={socketRef.current}
                     />
 
                     {/* Call Notice Toast */}

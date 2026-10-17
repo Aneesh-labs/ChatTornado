@@ -37,8 +37,15 @@ const extractUrls = (text) => {
     if (!text || typeof text !== "string") return [];
     const fullUrls = text.match(/https?:\/\/[^\s<>"']+/g) || [];
     const dataUrls = text.match(/data:image\/[a-zA-Z0-9+]+;base64,[^\s<>"']+/g) || [];
-    const uploadPaths = (text.match(/\/uploads\/[^\s<>"']+/g) || []).map(resolveMediaUrl);
-    return [...fullUrls, ...dataUrls, ...uploadPaths];
+    // Strip already matched fullUrls before looking for relative /uploads/ paths
+    // to prevent matching /uploads/... inside http(s)://.../uploads/...
+    let remaining = text;
+    for (const u of fullUrls) {
+        remaining = remaining.split(u).join(" ");
+    }
+    const uploadPaths = (remaining.match(/\/uploads\/[^\s<>"']+/g) || []).map(resolveMediaUrl);
+    const combined = [...fullUrls, ...dataUrls, ...uploadPaths];
+    return Array.from(new Set(combined.filter(Boolean)));
 };
 
 const isImageUrl = (url) => {
@@ -936,10 +943,10 @@ const MessageBubble = React.memo(({
         isBotMsg
     );
 
-    const imageUrls = !isP2P && !isGame && !isSound && !isRichMarkdown ? extractImageUrls(actualMessage) : [];
-    const videoUrls = !isP2P && !isGame && !isSound ? extractVideoUrls(actualMessage) : [];
-    const audioUrls = !isP2P && !isGame && !isSound ? extractAudioUrls(actualMessage) : [];
-    const nonImageUrls = !isP2P && !isGame && !isSound && !isRichMarkdown ? extractNonImageUrls(actualMessage) : [];
+    const imageUrls = !isP2P && !isGame && !isSound && !isRichMarkdown ? Array.from(new Set(extractImageUrls(actualMessage))) : [];
+    const videoUrls = !isP2P && !isGame && !isSound ? Array.from(new Set(extractVideoUrls(actualMessage))) : [];
+    const audioUrls = !isP2P && !isGame && !isSound ? Array.from(new Set(extractAudioUrls(actualMessage))) : [];
+    const nonImageUrls = !isP2P && !isGame && !isSound && !isRichMarkdown ? Array.from(new Set(extractNonImageUrls(actualMessage))) : [];
     const caption = !isP2P && !isGame && !isSound && !isRichMarkdown ? extractCaption(actualMessage) : "";
 
     const hasImages = imageUrls.length > 0;

@@ -1,11 +1,15 @@
 import React, { useState, useMemo, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import PropTypes from "prop-types";
-import { Users, Plus, BadgeCheck } from "lucide-react";
+import { Users, Plus, BadgeCheck, Flame, Lock } from "lucide-react";
 import { useTheme, Avatar, Badge, IconBtn, StatusDot, USER_STATUSES, areIdsEqual } from "./constants";
 import API from "../../../Services/API";
 import CreateGroupModal from "./CreateGroupModal";
 import UserStatusModal from "./UserStatusModal";
+import BubbleNotesBar from "./BubbleNotesBar";
+import GhostVaultModal from "./GhostVaultModal";
+import { getStreak } from "../../../Services/streakService";
+import { isVaultUnlocked, isDecoyMode } from "../../../Services/vaultService";
 
 const FILTER_TABS = [
     ["all", "All"],
@@ -32,8 +36,10 @@ export const ConversationCard = React.memo(({
     isSender = true,
     onRequestConnection,
     onAcceptConnection,
+    onOpenStreakModal,
 }) => {
     const theme = useTheme();
+    const streak = useMemo(() => (!user?.is_bot && !isGlobal && user?.id ? getStreak(user.id) : null), [user?.id, user?.is_bot, isGlobal]);
 
     const canOpenChat = !isGlobal || connectionStatus === "accepted";
 
@@ -104,20 +110,6 @@ export const ConversationCard = React.memo(({
                             <BadgeCheck className="h-4 w-4 fill-sky-400/20 text-sky-400" />
                         </span>
                     )}
-                    {!user?.is_bot && user?.streak?.count > 0 && (
-                        <span
-                            title={`${user.streak.count}-day Tornado Streak (${user.streak.hours_left}h left)`}
-                            className={`inline-flex items-center gap-0.5 text-[10px] font-black px-1.5 py-0.2 rounded-full border shrink-0 ${
-                                user.streak.is_expiring
-                                    ? "bg-red-500/20 text-red-300 border-red-500/40 animate-pulse"
-                                    : "bg-orange-500/15 text-orange-300 border-orange-500/30"
-                            }`}
-                        >
-                            <span>{user.streak.badge || "🔥"}</span>
-                            <span>{user.streak.count}</span>
-                            {user.streak.is_expiring && <span>⏳</span>}
-                        </span>
-                    )}
                     {user?.is_bot && (
                         <span className="text-[10px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded-md bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 flex items-center gap-1 shadow-[0_0_8px_rgba(6,182,212,0.3)]">
                             ⚡ AI
@@ -126,6 +118,19 @@ export const ConversationCard = React.memo(({
                     {pinned && !isGlobal && !user?.is_bot && (
                         <span role="img" aria-label="Pinned conversation" className="text-[10px] text-white/25 flex-shrink-0">
                             📌
+                        </span>
+                    )}
+                    {streak && streak.count > 0 && !isGlobal && (
+                        <span
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                onOpenStreakModal?.(user);
+                            }}
+                            title={`${streak.count} Day Streak (${streak.tier.name})`}
+                            className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-gradient-to-r ${streak.tier.color} text-white shadow-sm cursor-pointer hover:scale-110 active:scale-95 transition-transform flex-shrink-0`}
+                        >
+                            <span>{streak.tier.icon}</span>
+                            <span>{streak.count}</span>
                         </span>
                     )}
                 </div>
@@ -302,6 +307,8 @@ const Sidebar = React.memo(({
     onRefresh,
     isRefreshing = false,
     myUserId,
+    onOpenStreakModal,
+    onSendDirectReply,
 }) => {
     const theme = useTheme();
     const [filter, setFilter] = useState("all");
@@ -309,6 +316,8 @@ const Sidebar = React.memo(({
     const [groups, setGroups] = useState([]);
     const [showCreateGroupModal, setShowCreateGroupModal] = useState(false);
     const [showStatusModal, setShowStatusModal] = useState(false);
+    const [showVaultModal, setShowVaultModal] = useState(false);
+    const [vaultState, setVaultState] = useState(() => ({ unlocked: isVaultUnlocked(), decoy: isDecoyMode() }));
     const [currentStatus, setCurrentStatus] = useState(() => sessionStorage.getItem("user_status") || "online");
     const [currentCustomStatus, setCurrentCustomStatus] = useState(() => sessionStorage.getItem("custom_status") || "");
 
@@ -317,8 +326,15 @@ const Sidebar = React.memo(({
             setCurrentStatus(sessionStorage.getItem("user_status") || "online");
             setCurrentCustomStatus(sessionStorage.getItem("custom_status") || "");
         };
+        const handleVaultToggle = (e) => {
+            setVaultState({ unlocked: e.detail?.unlocked, decoy: e.detail?.decoy });
+        };
         window.addEventListener("sessionStorageUpdate", handleStorageUpdate);
-        return () => window.removeEventListener("sessionStorageUpdate", handleStorageUpdate);
+        window.addEventListener("vortex_vault_toggled", handleVaultToggle);
+        return () => {
+            window.removeEventListener("sessionStorageUpdate", handleStorageUpdate);
+            window.removeEventListener("vortex_vault_toggled", handleVaultToggle);
+        };
     }, []);
 
     const fetchGroups = useCallback(async () => {
@@ -343,6 +359,14 @@ const Sidebar = React.memo(({
     const sortedUsers = useMemo(() => {
         const sourceList = mainTab === "chats" ? activeUsers : users;
         if (!Array.isArray(sourceList)) return [];
+
+        if (vaultState.decoy) {
+            // Decoy mode: show only innocent bot and safe decoy placeholder
+            const safeDecoyList = sourceList.filter((u) => u.is_bot || u.username === "VORTEX-9");
+            return safeDecoyList.length > 0
+                ? safeDecoyList
+                : [{ id: "decoy-bot", username: "VORTEX News & Daily Digest", is_bot: true, status: "online" }];
+        }
 
         const botList = [];
         const pinnedList = [];
@@ -424,6 +448,15 @@ const Sidebar = React.memo(({
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                             </svg>
                         </IconBtn>
+
+                        <IconBtn
+                            onClick={() => setShowVaultModal(true)}
+                            title={vaultState.unlocked ? "Ghost Vault (Unlocked)" : "Ghost Vault & Decoy Protection"}
+                            small
+                            className={vaultState.unlocked ? "text-purple-400 bg-purple-500/10" : "text-white/40 hover:text-purple-400"}
+                        >
+                            <Lock className="w-4 h-4" />
+                        </IconBtn>
                     </div>
                 </div>
 
@@ -470,6 +503,15 @@ const Sidebar = React.memo(({
                     );
                 })}
             </div>
+
+            {/* 24-Hour Bubble Notes Tray */}
+            {mainTab === "chats" && (
+                <BubbleNotesBar
+                    onSelectUser={onSelectUser}
+                    users={users}
+                    onSendDirectReply={onSendDirectReply}
+                />
+            )}
 
             {/* Filter Tabs (All / Pinned / Unread) — Only shown in Chats tab */}
             {mainTab === "chats" && (
@@ -586,6 +628,7 @@ const Sidebar = React.memo(({
                                             onAcceptConnection?.(userId);
                                             setMainTab("chats");
                                         }}
+                                        onOpenStreakModal={onOpenStreakModal}
                                     />
                                 );
                             })
@@ -645,6 +688,14 @@ const Sidebar = React.memo(({
                 onStatusUpdated={(updated) => {
                     if (updated?.status) setCurrentStatus(updated.status);
                     if (updated?.custom_status !== undefined) setCurrentCustomStatus(updated.custom_status || "");
+                }}
+            />
+
+            <GhostVaultModal
+                isOpen={showVaultModal}
+                onClose={() => setShowVaultModal(false)}
+                onVaultStateChange={(mode) => {
+                    setVaultState({ unlocked: mode === "unlocked", decoy: mode === "decoy" });
                 }}
             />
 

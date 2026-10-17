@@ -19,6 +19,8 @@ services:
         value: ./uploads
       - key: EMAIL_BYPASS_CODE
         value: TORNADO_PASS_2026
+      - key: ADMIN_PASSWORD
+        value: Admin@123
 
 databases:
   - name: chattornado-db

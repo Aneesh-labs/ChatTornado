@@ -1,8 +1,7 @@
 /**
  * In-Phone / In-Browser Local Image Processor
  * Leverages client-side device CPU & RAM using Canvas and Web Workers
- * Optimizes images locally before upload, reducing bandwidth by 85-95%
- * and providing instant local previews.
+ * Supports both "⚡ Fast WebP" (client-optimized) and "💎 HD Lossless" (uncompressed original studio quality).
  */
 
 /**
@@ -39,12 +38,13 @@ export const formatBytes = (bytes, decimals = 1) => {
 
 /**
  * Processes an image file locally in client-side RAM using Canvas
- * Auto-resizes, compresses to WebP/JPEG, extracts dimensions, and generates local preview URL
+ * Supports "webp" (RAM optimized) or "hd" (Full original zero-loss studio mode)
  */
 export const processImageLocally = async (file, options = {}) => {
     const {
+        mode = "webp", // 'webp' | 'hd'
         maxDimension = 1600,
-        quality = 0.82,
+        quality = 0.86,
         format = "image/webp",
     } = options;
 
@@ -55,6 +55,41 @@ export const processImageLocally = async (file, options = {}) => {
     const startTime = performance.now();
     const originalSize = file.size;
 
+    // IF HD MODE: Preserve exact original raw bytes without any compression or resizing
+    if (mode === "hd") {
+        return new Promise((resolve, reject) => {
+            const img = new Image();
+            const objectUrl = URL.createObjectURL(file);
+
+            img.onload = () => {
+                const processingTime = Math.round(performance.now() - startTime);
+                resolve({
+                    file,
+                    rawFile: file,
+                    blob: file,
+                    previewUrl: objectUrl,
+                    originalSize,
+                    processedSize: originalSize,
+                    savingsPercent: 0,
+                    isHd: true,
+                    mode: "hd",
+                    formattedOriginal: formatBytes(originalSize),
+                    formattedProcessed: formatBytes(originalSize),
+                    dimensions: { width: img.naturalWidth || img.width, height: img.naturalHeight || img.height },
+                    processingTimeMs: processingTime,
+                });
+            };
+
+            img.onerror = () => {
+                URL.revokeObjectURL(objectUrl);
+                reject(new Error("Failed to decode image locally"));
+            };
+
+            img.src = objectUrl;
+        });
+    }
+
+    // WEBP / OPTIMIZED MODE:
     return new Promise((resolve, reject) => {
         const img = new Image();
         const objectUrl = URL.createObjectURL(file);
@@ -112,11 +147,14 @@ export const processImageLocally = async (file, options = {}) => {
 
                         resolve({
                             file: optimizedFile,
+                            rawFile: file,
                             blob,
                             previewUrl,
                             originalSize,
                             processedSize,
                             savingsPercent,
+                            isHd: false,
+                            mode: "webp",
                             formattedOriginal: formatBytes(originalSize),
                             formattedProcessed: formatBytes(processedSize),
                             dimensions: { width: targetWidth, height: targetHeight },

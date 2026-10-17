@@ -1,17 +1,17 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import PropTypes from "prop-types";
 import { motion, AnimatePresence } from "framer-motion";
-import { MoreVertical, Sparkles, Brain, Download, Cpu, Ban, UserCheck, ShieldAlert, Users, BadgeCheck, Dna, GitFork, Clock } from "lucide-react";
+import { MoreVertical, Sparkles, Brain, Download, Cpu, Ban, UserCheck, ShieldAlert, Users, BadgeCheck, Dna, GitFork, Clock, Tv, Ghost, Flame } from "lucide-react";
 import { IconBtn, Avatar, useTheme } from "./constants";
 import PersonalizeModal from "./PersonalizeModal";
 import ExportModal from "./ExportModal";
 import GoogleModelModal, { getSelectedGoogleModel } from "./GoogleModelModal";
 import ReportUserModal from "./ReportUserModal";
 import GroupInfoModal from "./GroupInfoModal";
-import TornadoStreakModal from "./TornadoStreakModal";
 import API from "../../../Services/API";
 import { triggerDemoNotification } from "../../../Services/notifications";
 import { isAdminUnlocked, setAdminUnlockedSession, touchAdminSession } from "../../../utils/adminSession";
+import { getStreak } from "../../../Services/streakService";
 
 const ChatHeader = React.memo(({
     user = null,
@@ -35,6 +35,10 @@ const ChatHeader = React.memo(({
     onOpenDNA,
     onOpenRealityForks,
     onOpenFutureMessages,
+    onOpenStreakModal,
+    onToggleWatchParty,
+    onToggleVanishMode,
+    isVanishModeActive = false,
 }) => {
     const theme = useTheme();
     const [showMoreMenu, setShowMoreMenu] = useState(false);
@@ -45,25 +49,9 @@ const ChatHeader = React.memo(({
     const [showGroupModal, setShowGroupModal] = useState(false);
     const [isBlocked, setIsBlocked] = useState(false);
     const [currentGoogleModel, setCurrentGoogleModel] = useState(getSelectedGoogleModel);
-    const [streak, setStreak] = useState(user?.streak || null);
-    const [showStreakModal, setShowStreakModal] = useState(false);
     const username = user?.name || user?.username || "Chat Room";
     const isOnline = user?.status === "online";
     const isGroup = Boolean(user?.is_group);
-
-    useEffect(() => {
-        setStreak(user?.streak || null);
-    }, [user?.id, user?.streak]);
-
-    useEffect(() => {
-        const handleStreakEvent = (e) => {
-            if (e.detail && (e.detail.other_user_id === user?.id || String(e.detail.other_user_id) === String(user?.id))) {
-                setStreak(e.detail.streak);
-            }
-        };
-        window.addEventListener("tornado_streak_updated", handleStreakEvent);
-        return () => window.removeEventListener("tornado_streak_updated", handleStreakEvent);
-    }, [user?.id]);
 
     useEffect(() => {
         if (!user?.id || user?.is_bot || isGroup) return;
@@ -208,6 +196,7 @@ const ChatHeader = React.memo(({
         user?.username?.toLowerCase()?.includes("vortex") || 
         user?.username?.toLowerCase()?.includes("ai")
     );
+    const userStreak = useMemo(() => (!isGroup && !isBotUser && user?.id ? getStreak(user.id) : null), [user?.id, isGroup, isBotUser]);
 
     return (
         <div className={`relative z-30 flex items-center justify-between px-3 sm:px-6 py-2.5 sm:py-4 border-b ${theme.border} backdrop-blur-2xl bg-black/20 flex-shrink-0 w-full select-none`}>
@@ -241,22 +230,16 @@ const ChatHeader = React.memo(({
                                 </span>
                             )}
                         </h2>
-                        {!isGroup && !isBotUser && (
+                        {/* Streak Badge */}
+                        {userStreak && userStreak.count > 0 && (
                             <button
                                 type="button"
-                                onClick={() => setShowStreakModal(true)}
-                                title="Tornado Streak - Click for levels, stats & streak freeze"
-                                className={`inline-flex items-center gap-1 text-[11px] font-black px-2 py-0.5 rounded-full border transition-all cursor-pointer shadow-sm active:scale-95 ${
-                                    streak?.count > 0
-                                        ? "bg-gradient-to-r from-orange-500/25 to-amber-500/25 border-orange-500/40 text-orange-300 hover:from-orange-500/35 hover:to-amber-500/35 animate-pulse"
-                                        : "bg-white/5 border-white/10 text-white/40 hover:bg-white/10 hover:text-white/60"
-                                }`}
+                                onClick={() => onOpenStreakModal?.(user)}
+                                title={`${userStreak.count} Day Streak (${userStreak.tier.name}) - View milestone rewards`}
+                                className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-gradient-to-r ${userStreak.tier.color} text-white shadow-sm hover:scale-105 active:scale-95 transition-transform cursor-pointer flex-shrink-0`}
                             >
-                                <span>{streak?.badge || "🔥"}</span>
-                                <span>{streak?.count || 0}</span>
-                                {streak?.is_expiring && (
-                                    <span className="text-[9px] text-red-400 font-bold">⏳</span>
-                                )}
+                                <span>{userStreak.tier.icon}</span>
+                                <span>{userStreak.count} Streak</span>
                             </button>
                         )}
                         {/* Reality Branch Switcher Badge */}
@@ -410,6 +393,14 @@ const ChatHeader = React.memo(({
                                                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 10h.01M15 10h.01M9 14h6M7 20l-3-3V7a2 2 0 012-2h12a2 2 0 012 2v10a2 2 0 01-2 2H7z" /></svg>
                                                     Ghost Chat
                                                 </button>
+                                                <button onClick={() => { onToggleWatchParty?.(); setShowMoreMenu(false); }} className="flex items-center gap-2 px-3 py-2 text-xs text-violet-300 hover:text-white hover:bg-violet-500/10 rounded-lg text-left">
+                                                    <Tv className="w-4 h-4 text-violet-400" />
+                                                    Watch Together
+                                                </button>
+                                                <button onClick={() => { onToggleVanishMode?.(); setShowMoreMenu(false); }} className="flex items-center gap-2 px-3 py-2 text-xs text-purple-300 hover:text-white hover:bg-purple-500/10 rounded-lg text-left">
+                                                    <Ghost className="w-4 h-4 text-purple-400" />
+                                                    {isVanishModeActive ? "Turn Off Vanish Mode" : "Vanish Mode"}
+                                                </button>
                                             </>
                                         ) : (
                                             <>
@@ -500,6 +491,27 @@ const ChatHeader = React.memo(({
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 10h.01M15 10h.01M9 14h6M7 20l-3-3V7a2 2 0 012-2h12a2 2 0 012 2v10a2 2 0 01-2 2H7z" />
                                 </svg>
                             </IconBtn>
+                            <button
+                                type="button"
+                                onClick={onToggleWatchParty}
+                                title="Watch Together (Live Sync YouTube & Videos)"
+                                className="flex items-center gap-1 px-2.5 py-1 rounded-xl bg-violet-600/20 hover:bg-violet-600/40 text-violet-300 border border-violet-500/30 text-xs font-semibold transition-colors cursor-pointer"
+                            >
+                                <Tv className="w-3.5 h-3.5" />
+                                <span className="hidden md:inline">Watch</span>
+                            </button>
+                            <button
+                                type="button"
+                                onClick={onToggleVanishMode}
+                                title={isVanishModeActive ? "Turn Off Vanish Mode" : "Turn On Vanish Mode (Disappearing Chats & Screenshot Alert)"}
+                                className={`flex items-center gap-1 px-2.5 py-1 rounded-xl text-xs font-semibold transition-all cursor-pointer ${isVanishModeActive
+                                    ? "bg-purple-600 text-white shadow-lg shadow-purple-600/50 animate-pulse border border-purple-400"
+                                    : "bg-white/5 hover:bg-white/10 text-white/70 hover:text-white border border-white/10"
+                                }`}
+                            >
+                                <Ghost className="w-3.5 h-3.5" />
+                                <span className="hidden md:inline">Vanish</span>
+                            </button>
                         </>
                     ) : isBotUser ? (
                         <IconBtn title="Live AI Voice Call" onClick={() => onStartCall?.("ai")} small>
@@ -656,16 +668,6 @@ const ChatHeader = React.memo(({
                         setShowGroupModal(false);
                         onBack?.();
                     }}
-                />
-            )}
-
-            {!isGroup && !isBotUser && (
-                <TornadoStreakModal
-                    isOpen={showStreakModal}
-                    onClose={() => setShowStreakModal(false)}
-                    user={user}
-                    streak={streak}
-                    onStreakUpdated={(newStreak) => setStreak(newStreak)}
                 />
             )}
         </div>

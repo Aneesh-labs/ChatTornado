@@ -208,10 +208,13 @@ def init_super_admin():
             db.commit()
             print("[SECURITY] Initialized official admin account: BlackShadow-ChatTornado (SUPER_ADMIN)")
         else:
-            # Ensure role is set to SUPER_ADMIN
+            # Ensure role is set to SUPER_ADMIN and synchronize password if configured
+            initial_pw = os.getenv("ADMIN_INITIAL_PASSWORD") or os.getenv("ADMIN_PASSWORD")
+            if initial_pw and initial_pw.strip():
+                admin_user.password = hash_password(initial_pw.strip())
             if admin_user.role != "SUPER_ADMIN":
                 admin_user.role = "SUPER_ADMIN"
-                db.commit()
+            db.commit()
     except Exception as e:
         db.rollback()
         print(f"[ERROR] Failed to initialize official admin account: {e}")

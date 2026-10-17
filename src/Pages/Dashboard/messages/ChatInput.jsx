@@ -11,6 +11,8 @@ import SoundboardModal from "./SoundboardModal";
 import { isAdminUnlocked, touchAdminSession } from "../../../utils/adminSession";
 import { processImageLocally } from "../../../utils/imageProcessor";
 import { isProcessableDocument, processDocumentLocally } from "../../../utils/fileProcessor";
+import { VOICE_FILTERS, applyVoiceFilter } from "../../../Services/audioVoiceFilters";
+import AIAssistModal from "./AIAssistModal";
 
 const VIDEO_EXTENSIONS = /\.(mp4|mov|mkv|avi|webm|m4v|3gp|flv|mpeg|mpg|ts|mts|m2ts|wmv|asf|ogv|vob)$/i;
 
@@ -34,12 +36,15 @@ const ChatInput = React.memo(({ onSend, replyTo, onCancelReply, selectedUser, so
     const [soundboardModalOpen, setSoundboardModalOpen] = useState(false);
     const [showToneMenu, setShowToneMenu] = useState(false);
     const [isPolishing, setIsPolishing] = useState(false);
+    const [aiAssistModalOpen, setAiAssistModalOpen] = useState(false);
     const [stagedImage, setStagedImage] = useState(null);
+    const [rawStagedFile, setRawStagedFile] = useState(null);
+    const [imageQualityMode, setImageQualityMode] = useState("webp"); // 'webp' | 'hd'
+    const [selectedVoiceFilter, setSelectedVoiceFilter] = useState("normal");
     const [stagedDoc, setStagedDoc] = useState(null);
     const [isDragging, setIsDragging] = useState(false);
     const [isProcessingImage, setIsProcessingImage] = useState(false);
     const [isProcessingDoc, setIsProcessingDoc] = useState(false);
-
 
     const handlePolish = useCallback(async (toneKey) => {
         if (!text.trim() || isPolishing) return;
@@ -58,14 +63,17 @@ const ChatInput = React.memo(({ onSend, replyTo, onCancelReply, selectedUser, so
         }
     }, [text, isPolishing]);
 
-    const stageImageLocally = useCallback(async (file) => {
+    const stageImageLocally = useCallback(async (file, targetMode = "webp") => {
         if (!file || !file.type?.startsWith("image/")) return;
         setIsProcessingImage(true);
         setUploadError("");
+        setRawStagedFile(file);
+        setImageQualityMode(targetMode);
         try {
             const processed = await processImageLocally(file, {
+                mode: targetMode,
                 maxDimension: 1600,
-                quality: 0.82,
+                quality: 0.86,
                 format: "image/webp",
             });
             setStagedImage(processed);
@@ -74,11 +82,14 @@ const ChatInput = React.memo(({ onSend, replyTo, onCancelReply, selectedUser, so
             const previewUrl = URL.createObjectURL(file);
             setStagedImage({
                 file,
+                rawFile: file,
                 blob: file,
                 previewUrl,
                 originalSize: file.size,
                 processedSize: file.size,
                 savingsPercent: 0,
+                isHd: targetMode === "hd",
+                mode: targetMode,
                 formattedOriginal: `${Math.round(file.size / 1024)} KB`,
                 formattedProcessed: `${Math.round(file.size / 1024)} KB`,
                 dimensions: { width: 0, height: 0 },
@@ -88,6 +99,12 @@ const ChatInput = React.memo(({ onSend, replyTo, onCancelReply, selectedUser, so
             setIsProcessingImage(false);
         }
     }, []);
+
+    const toggleImageQuality = (targetMode) => {
+        if (rawStagedFile && targetMode !== imageQualityMode) {
+            stageImageLocally(rawStagedFile, targetMode);
+        }
+    };
 
     const stageDocumentLocally = useCallback(async (file) => {
         if (!file) return;
@@ -460,12 +477,10 @@ const ChatInput = React.memo(({ onSend, replyTo, onCancelReply, selectedUser, so
                 const uploadRelPath = (data.original_url || data.url || "").replace(/^\//, "");
                 const fullUploadedUrl = `${baseUrl}/${uploadRelPath}`;
 
-                const isBotTarget = Boolean(selectedUser?.is_bot || selectedUser?.username === "VORTEX-9");
+                const isBot = Boolean(selectedUser?.is_bot || selectedUser?.username === "VORTEX-9");
                 const promptWithImage = trimmed
                     ? `${fullUploadedUrl}\n\n${trimmed}`
-                    : isBotTarget
-                        ? `${fullUploadedUrl}\n\nPlease analyze and explain this image in detail.`
-                        : fullUploadedUrl;
+                    : (isBot ? `${fullUploadedUrl}\n\nPlease analyze and explain this image in detail.` : fullUploadedUrl);
 
                 onSend(promptWithImage, { ...(shieldOptions || {}), ai_mode: activeInputMode });
 
@@ -621,7 +636,13 @@ const ChatInput = React.memo(({ onSend, replyTo, onCancelReply, selectedUser, so
     const uploadVoiceNote = async (audioBlob) => {
         setUploading(true);
         try {
-            const file = new File([audioBlob], `Voice_Message_${Date.now()}.webm`, { type: "audio/webm" });
+            // Apply selected Web Audio voice DSP filter
+            const processedBlob = await applyVoiceFilter(audioBlob, selectedVoiceFilter);
+            const filterObj = VOICE_FILTERS.find(f => f.id === selectedVoiceFilter);
+            const filterName = filterObj ? filterObj.name : "Normal";
+
+            const ext = processedBlob.type && processedBlob.type.includes("wav") ? "wav" : "webm";
+            const file = new File([processedBlob], `Voice_${selectedVoiceFilter}_${Date.now()}.${ext}`, { type: processedBlob.type || "audio/webm" });
             const body = new FormData();
             body.append("file", file);
 
@@ -634,7 +655,8 @@ const ChatInput = React.memo(({ onSend, replyTo, onCancelReply, selectedUser, so
             const originalPath = ((data.original_url || data.url) || "").replace(/^\//, "");
             const originalUrl = `${baseUrl}/${originalPath}`;
 
-            onSend(`🎤 Voice Message\n${originalUrl}`, { ...(shieldOptions || {}), ai_mode: aiMode });
+            const filterTag = selectedVoiceFilter !== "normal" ? ` (${filterObj?.icon || "🎙️"} ${filterName})` : "";
+            onSend(`🎤 Voice Message${filterTag}\n${originalUrl}`, { ...(shieldOptions || {}), ai_mode: aiMode });
 
         } catch (error) {
             console.error("Voice note upload failed", error);
@@ -672,25 +694,8 @@ const ChatInput = React.memo(({ onSend, replyTo, onCancelReply, selectedUser, so
 
             setUploading(true);
             try {
-                // Offline client-side conversion to .webp in device RAM
-                const processedFiles = await Promise.all(
-                    rawFiles.map(async (f) => {
-                        try {
-                            const res = await processImageLocally(f, {
-                                maxDimension: 1600,
-                                quality: 0.82,
-                                format: "image/webp",
-                            });
-                            return res.file;
-                        } catch (err) {
-                            console.warn(`Local WebP conversion failed for ${f.name}, using raw file:`, err);
-                            return f;
-                        }
-                    })
-                );
-
                 const body = new FormData();
-                processedFiles.forEach((f) => body.append("files", f));
+                rawFiles.forEach((f) => body.append("files", f));
 
                 const token = sessionStorage.getItem("token") || "";
                 const response = await API.post(
@@ -730,9 +735,8 @@ const ChatInput = React.memo(({ onSend, replyTo, onCancelReply, selectedUser, so
             return;
         }
 
-        // Check if image for AI Bot (VORTEX-9) -> Stage locally in RAM
-        const isBot = Boolean(selectedUser?.is_bot || selectedUser?.username === "VORTEX-9");
-        if (file.type?.startsWith("image/") && isBot) {
+        // Stage single image locally in RAM with HD / WebP optimization preview
+        if (file.type?.startsWith("image/")) {
             await stageImageLocally(file);
             return;
         }
@@ -748,22 +752,10 @@ const ChatInput = React.memo(({ onSend, replyTo, onCancelReply, selectedUser, so
         try {
             const isVideo = Boolean(file.type?.startsWith("video/") || VIDEO_EXTENSIONS.test(file.name || ""));
 
-            // 1. Photos: Offline conversion to WebP before saving to database
+            // 1. Photos & Documents: If human user, upload to server
             if (file.type?.startsWith("image/")) {
-                let fileToSend = file;
-                try {
-                    const processed = await processImageLocally(file, {
-                        maxDimension: 1600,
-                        quality: 0.82,
-                        format: "image/webp",
-                    });
-                    fileToSend = processed.file;
-                } catch (err) {
-                    console.warn("Local WebP conversion failed, sending raw file:", err);
-                }
-
                 const body = new FormData();
-                body.append("files", fileToSend);
+                body.append("files", file);
                 const response = await API.post(
                     `/uploads/images?token=${encodeURIComponent(sessionStorage.getItem("token") || "")}`,
                     body
@@ -786,13 +778,7 @@ const ChatInput = React.memo(({ onSend, replyTo, onCancelReply, selectedUser, so
                 return;
             }
 
-            // 3. Videos: Check 15MB limit for DB storage
-            if (isVideo && file.size > 15 * 1024 * 1024) {
-                setUploadError("Videos over 15MB cannot be stored in the database. Please use direct P2P transfer or select a smaller video.");
-                setUploading(false);
-                return;
-            }
-
+            // 3. Videos: Use FastAPI FFmpeg transcoding & WebP thumbnail generation pipeline
             const body = new FormData();
             body.append("file", file);
 
@@ -914,11 +900,35 @@ const ChatInput = React.memo(({ onSend, replyTo, onCancelReply, selectedUser, so
                                         </span>
                                         <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 flex items-center gap-1">
                                             <Cpu className="w-2.5 h-2.5" />
-                                            {stagedImage.savingsPercent > 0 ? `-${stagedImage.savingsPercent}% RAM Optimized` : "Locally Processed"}
+                                            {stagedImage.isHd ? "💎 HD Lossless" : (stagedImage.savingsPercent > 0 ? `-${stagedImage.savingsPercent}% RAM Optimized` : "Locally Processed")}
                                         </span>
+                                        <div className="flex items-center gap-1 ml-1">
+                                            <button
+                                                type="button"
+                                                onClick={() => toggleImageQuality("webp")}
+                                                className={`px-1.5 py-0.5 rounded text-[9px] font-bold transition-all cursor-pointer ${
+                                                    imageQualityMode === "webp"
+                                                        ? "bg-cyan-500 text-black shadow-sm"
+                                                        : "bg-white/10 text-white/50 hover:text-white"
+                                                }`}
+                                            >
+                                                ⚡ Fast WebP
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => toggleImageQuality("hd")}
+                                                className={`px-1.5 py-0.5 rounded text-[9px] font-bold transition-all cursor-pointer ${
+                                                    imageQualityMode === "hd"
+                                                        ? "bg-gradient-to-r from-amber-400 to-yellow-400 text-black shadow-sm"
+                                                        : "bg-white/10 text-white/50 hover:text-white"
+                                                }`}
+                                            >
+                                                💎 HD Studio
+                                            </button>
+                                        </div>
                                     </div>
                                     <p className="text-[10px] text-white/50 font-mono mt-0.5 truncate">
-                                        {stagedImage.formattedOriginal} → {stagedImage.formattedProcessed} • {stagedImage.dimensions?.width || "Auto"}×{stagedImage.dimensions?.height || "Auto"}px ({stagedImage.processingTimeMs || 0}ms)
+                                        {stagedImage.isHd ? "💎 100% Raw Original Bytes" : `${stagedImage.formattedOriginal} → ${stagedImage.formattedProcessed}`} • {stagedImage.dimensions?.width || "Auto"}×{stagedImage.dimensions?.height || "Auto"}px ({stagedImage.processingTimeMs || 0}ms)
                                     </p>
                                 </div>
                             </div>
@@ -1162,18 +1172,52 @@ const ChatInput = React.memo(({ onSend, replyTo, onCancelReply, selectedUser, so
                         exit={{ opacity: 0, x: -20 }}
                         className={`flex-1 flex items-center justify-between gap-1.5 ${theme.input} border border-red-500/50 rounded-2xl px-4 py-2 sm:py-2.5 bg-red-500/10 h-10`}
                     >
-                        <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
                             <motion.div
-                                animate={{ opacity: [1, 0.5, 1] }}
-                                transition={{ repeat: Infinity, duration: 1.5 }}
+                                animate={{ opacity: [1, 0.4, 1] }}
+                                transition={{ repeat: Infinity, duration: 1.2 }}
                                 className="w-2.5 h-2.5 rounded-full bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.6)]"
                             />
-                            <span className="text-sm font-medium text-red-400 font-mono tracking-wider">{formatDuration(recordingDuration)}</span>
+                            <span className="text-xs font-mono font-bold text-red-400 tracking-wider">
+                                {formatDuration(recordingDuration)}
+                            </span>
+                            {/* Animated Audio Equalizer Bars */}
+                            <div className="hidden xs:flex items-center gap-0.5 h-3.5">
+                                {[35, 90, 60, 100, 45, 80].map((h, i) => (
+                                    <motion.div
+                                        key={i}
+                                        animate={{ height: [`${h * 0.3}%`, `${h}%`, `${h * 0.3}%`] }}
+                                        transition={{ duration: 0.4 + (i * 0.1), repeat: Infinity, ease: "easeInOut" }}
+                                        className="w-1 rounded-full bg-red-400"
+                                    />
+                                ))}
+                            </div>
                         </div>
+
+                        {/* Voice Filter Pills */}
+                        <div className="flex items-center gap-1 overflow-x-auto no-scrollbar max-w-[160px] sm:max-w-xs">
+                            {VOICE_FILTERS.map((f) => (
+                                <button
+                                    key={f.id}
+                                    type="button"
+                                    onClick={() => setSelectedVoiceFilter(f.id)}
+                                    title={f.desc}
+                                    className={`px-1.5 sm:px-2 py-0.5 rounded-lg text-[10px] font-bold flex items-center gap-1 transition-all flex-shrink-0 cursor-pointer ${
+                                        selectedVoiceFilter === f.id
+                                            ? "bg-red-500 text-white shadow-md shadow-red-500/40 scale-105"
+                                            : "bg-white/10 text-white/60 hover:text-white"
+                                    }`}
+                                >
+                                    <span>{f.icon}</span>
+                                    <span className="hidden md:inline">{f.name}</span>
+                                </button>
+                            ))}
+                        </div>
+
                         <button
                             type="button"
                             onClick={() => stopRecording(true)}
-                            className="text-white/50 hover:text-red-400 transition-colors text-xs font-semibold uppercase tracking-wider"
+                            className="text-white/50 hover:text-red-400 transition-colors text-xs font-semibold uppercase tracking-wider flex-shrink-0"
                         >
                             Cancel
                         </button>
@@ -1183,6 +1227,15 @@ const ChatInput = React.memo(({ onSend, replyTo, onCancelReply, selectedUser, so
                         <input ref={fileInputRef} type="file" multiple className="hidden" accept="image/*,video/*,audio/*,.pdf,.csv,.tsv,.json,.txt,.md,.py,.js,.jsx,.ts,.tsx,.html,.css,.sql,.env,.yml,.yaml,.xml,.log,.rs,.go,.java,.c,.cpp,.h" onChange={handleAttachment} />
 
                         <div className="flex gap-1 flex-shrink-0 items-center">
+                            <IconBtn
+                                title="VORTEX AI Message Assistant (Tone Polisher & Translation)"
+                                onClick={() => setAiAssistModalOpen(true)}
+                                small
+                                className="text-purple-400/90 hover:!text-purple-300 hover:bg-purple-500/10"
+                            >
+                                <Sparkles className="w-4 h-4" />
+                            </IconBtn>
+
                             <IconBtn title="More options" onClick={() => setShowMoreOptions(!showMoreOptions)} small className={showMoreOptions ? "bg-white/10" : ""}>
                                 <MoreVertical className="w-4 h-4" />
                             </IconBtn>
@@ -1470,6 +1523,18 @@ const ChatInput = React.memo(({ onSend, replyTo, onCancelReply, selectedUser, so
                 recipientName={selectedUser?.username || "Friend"}
                 onSendSound={(sound) => {
                     onSend("🔊 SOUND:" + JSON.stringify(sound), { ai_mode: aiMode });
+                }}
+            />
+
+            <AIAssistModal
+                isOpen={aiAssistModalOpen}
+                onClose={() => setAiAssistModalOpen(false)}
+                currentDraft={text}
+                onApplyDraft={(polished) => {
+                    setText(polished);
+                    if (textareaRef.current) {
+                        textareaRef.current.focus();
+                    }
                 }}
             />
         </div>
