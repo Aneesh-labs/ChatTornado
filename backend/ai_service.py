@@ -780,10 +780,18 @@ async def generate_ai_text(
         except Exception as list_e:
             print(f"[AI_SERVICE] Dynamic models.list() note: {list_e}", flush=True)
 
-        for model_name in models_to_try:
+        search_needed = bool(
+            not image_parts and (
+                search_query or
+                re.search(r'\b(?:search\s+(?:the\s+)?web|look\s+up|google|latest\s+news|current\s+price|today\'s\s+weather|weather\s+in)\b', clean_prompt, re.IGNORECASE)
+            )
+        )
+        search_quota_failed = False
 
-            # Try with Google Search tool first, fallback to standard generation if needed
-            for use_search in [True, False]:
+        for model_name in models_to_try:
+            tool_options = [True, False] if (search_needed and not search_quota_failed) else [False]
+
+            for use_search in tool_options:
                 try:
                     print(f"[AI_SERVICE] Calling Gemini SDK {model_name} (search={use_search})...", flush=True)
                     gen_config = types.GenerateContentConfig(
@@ -828,7 +836,11 @@ async def generate_ai_text(
                         print(f"[AI_SERVICE] Gemini SDK {model_name} succeeded (search={use_search})!", flush=True)
                         return result_text
                 except Exception as e:
-                    print(f"[AI_SERVICE] Gemini SDK {model_name} (search={use_search}) failed: {e}", flush=True)
+                    err_s = str(e)
+                    print(f"[AI_SERVICE] Gemini SDK {model_name} (search={use_search}) failed: {err_s}", flush=True)
+                    if "429" in err_s or "RESOURCE_EXHAUSTED" in err_s or "quota" in err_s.lower():
+                        if use_search:
+                            search_quota_failed = True
                     continue
 
     except Exception as exc:
@@ -1481,9 +1493,14 @@ async def generate_ai_text_stream(
     full_accumulated_text = ""
     grounding_citations = []
 
+    search_needed = bool(
+        not has_images and
+        re.search(r'\b(?:search\s+(?:the\s+)?web|look\s+up|google|latest\s+news|current\s+price|today\'s\s+weather|weather\s+in)\b', clean_prompt, re.IGNORECASE)
+    )
+    search_quota_failed = False
+
     for model_name in models_to_try:
-        # If images are attached, do not use google_search tool (causes multimodal streaming conflicts)
-        tool_options = [True, False] if not has_images else [False]
+        tool_options = [True, False] if (search_needed and not search_quota_failed) else [False]
 
         for use_search in tool_options:
             try:
@@ -1535,7 +1552,11 @@ async def generate_ai_text_stream(
                     return full_accumulated_text
 
             except Exception as stream_err:
-                print(f"[AI_STREAM] Model {model_name} (search={use_search}) error: {stream_err}", flush=True)
+                err_s = str(stream_err)
+                print(f"[AI_STREAM] Model {model_name} (search={use_search}) error: {err_s}", flush=True)
+                if "429" in err_s or "RESOURCE_EXHAUSTED" in err_s or "quota" in err_s.lower():
+                    if use_search:
+                        search_quota_failed = True
                 continue
 
     # Fallback to non-streaming generate_ai_text if all streams fail

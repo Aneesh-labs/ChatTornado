@@ -1229,10 +1229,15 @@ const Messages = () => {
                     }
                     if (packet.type === "message") {
                         const currentChat = selectedUserRef.current;
+                        const isAiChat = Boolean(
+                            currentChat &&
+                            (currentChat.is_bot || currentChat.username === "VORTEX-9" || areIdsEqual(currentChat.id, packet.sender_id) || areIdsEqual(currentChat.id, packet.receiver_id))
+                        );
                         const isCurrentDirectChat = Boolean(
                             currentChat &&
                             !currentChat.is_group &&
                             (
+                                (isAiChat && (areIdsEqual(packet.sender_id, currentChat.id) || areIdsEqual(packet.receiver_id, currentChat.id) || currentChat.is_bot || currentChat.username === "VORTEX-9")) ||
                                 (areIdsEqual(packet.sender_id, currentChat.id) && areIdsEqual(packet.receiver_id, myUserId.current)) ||
                                 (areIdsEqual(packet.sender_id, myUserId.current) && areIdsEqual(packet.receiver_id, currentChat.id)) ||
                                 (packet.temp_id && pendingTempIds.current.has(packet.temp_id))
@@ -1429,7 +1434,9 @@ const Messages = () => {
             activeAiMode = "DEFAULT";
         }
 
-        const activeAiModel = options.ai_model || (typeof window !== "undefined" ? localStorage.getItem("vortex_selected_google_model") : null) || "gemini-3.5-flash";
+        const storedGoogleModel = typeof window !== "undefined" ? localStorage.getItem("vortex_selected_google_model") : null;
+        const normalizedModel = (storedGoogleModel && storedGoogleModel !== "gemini-2.5-flash") ? storedGoogleModel : "gemini-3.8-flash";
+        const activeAiModel = options.ai_model || normalizedModel;
 
         const outgoingPayload = {
             temp_id,

@@ -188,7 +188,9 @@ export const STORAGE_KEY_GOOGLE_MODEL = "vortex_selected_google_model";
 
 export const getSelectedGoogleModel = () => {
     if (typeof window === "undefined") return "gemini-3.8-flash";
-    return localStorage.getItem(STORAGE_KEY_GOOGLE_MODEL) || "gemini-3.8-flash";
+    const saved = localStorage.getItem(STORAGE_KEY_GOOGLE_MODEL);
+    if (saved && saved !== "gemini-2.5-flash") return saved;
+    return "gemini-3.8-flash";
 };
 
 // Helper: Format raw context length integers into human-readable token strings

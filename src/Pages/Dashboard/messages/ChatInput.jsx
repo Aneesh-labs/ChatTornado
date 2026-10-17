@@ -519,7 +519,8 @@ const ChatInput = React.memo(({ onSend, replyTo, onCancelReply, selectedUser, so
         }
 
         try {
-            const activeAiModel = (typeof window !== "undefined" ? localStorage.getItem("vortex_selected_google_model") : null) || "gemini-3.5-flash";
+            const storedGoogleModel = typeof window !== "undefined" ? localStorage.getItem("vortex_selected_google_model") : null;
+            const activeAiModel = (storedGoogleModel && storedGoogleModel !== "gemini-2.5-flash") ? storedGoogleModel : "gemini-3.8-flash";
             const sent = onSend(trimmed, { ...(shieldOptions || {}), ai_mode: activeInputMode, ai_model: activeAiModel });
             if (!sent) {
                 isSendingRef.current = false;

@@ -698,18 +698,25 @@ async def websocket_endpoint(websocket: WebSocket):
             # Validate Packet
             # ==========================
 
-            receiver_id = data.get("receiver_id")
+            receiver_id_raw = data.get("receiver_id")
             message_text = str(
                 data.get("message", "")
             ).strip()
 
-            if receiver_id is None:
+            if receiver_id_raw is None:
                 continue
 
-            try:
-                receiver_id = int(receiver_id)
-            except (ValueError, TypeError):
-                continue
+            from ai_service import get_or_create_bot_user
+            bot_obj = get_or_create_bot_user(db)
+            bot_sys_id = bot_obj.id if bot_obj else 7
+
+            if str(receiver_id_raw).lower() in ("decoy-bot", "vortex-9", "vortex9", "bot", "vortex"):
+                receiver_id = bot_sys_id
+            else:
+                try:
+                    receiver_id = int(receiver_id_raw)
+                except (ValueError, TypeError):
+                    continue
 
             if not message_text:
                 continue
@@ -985,7 +992,7 @@ async def websocket_endpoint(websocket: WebSocket):
             from ai_service import get_or_create_bot_user, process_user_message_to_bot, process_user_message_to_bot_stream, execute_deep_research
             bot = get_or_create_bot_user(db)
             is_bot_target = False
-            if bot and receiver_id == bot.id:
+            if bot and (receiver_id == bot.id or str(receiver_id) == str(bot.id)):
                 is_bot_target = True
             else:
                 target_u = db.query(User).filter(User.id == receiver_id).first()
@@ -994,20 +1001,20 @@ async def websocket_endpoint(websocket: WebSocket):
                     bot = target_u
 
             if is_bot_target and bot:
-                async def handle_bot_reply(u_id: int, b_id: int, prompt_text: str):
+                async def handle_bot_reply(u_id: int, b_id: int, prompt_text: str, req_ai_mode: str = "DEFAULT", req_ai_model: Optional[str] = None):
                     await manager.send_personal_message(u_id, {
                         "type": "typing_start",
                         "sender_id": b_id
                     })
                     reply_db = SessionLocal()
                     try:
-                        print(f"[BOT_HANDLER] Starting reply generation for user {u_id} (Mode: {ai_mode}, Model: {ai_model}): {prompt_text}", flush=True)
+                        print(f"[BOT_HANDLER] Starting reply generation for user {u_id} (Mode: {req_ai_mode}, Model: {req_ai_model}): {prompt_text}", flush=True)
 
                         # DUAL-LAYER: 1. Direct prompt interception for Admin mode
                         direct_dispatched = False
                         reply_text = None  # will be set if we short-circuit
 
-                        if ai_mode.upper() == "ADMIN":
+                        if str(req_ai_mode).upper() == "ADMIN":
                             print(f"👑 [ADMIN_MODE] Received Admin request: '{prompt_text}'", flush=True)
 
                             # 1A. Capability inquiry check
@@ -1233,7 +1240,7 @@ async def websocket_endpoint(websocket: WebSocket):
                                 })
 
                             is_research = (
-                                str(ai_mode).upper() == "RESEARCH" or
+                                str(req_ai_mode).upper() == "RESEARCH" or
                                 prompt_text.strip().lower().startswith("/research") or
                                 prompt_text.strip().lower().startswith("!research")
                             )
@@ -1248,7 +1255,7 @@ async def websocket_endpoint(websocket: WebSocket):
                                         db=reply_db
                                     )
                                 else:
-                                    reply_text = await process_user_message_to_bot_stream(u_id, prompt_text, ai_mode, reply_db, on_chunk=on_stream_chunk, ai_model=ai_model)
+                                    reply_text = await process_user_message_to_bot_stream(u_id, prompt_text, req_ai_mode, reply_db, on_chunk=on_stream_chunk, ai_model=req_ai_model)
                             except Exception as stream_call_err:
                                 logger.exception("Streaming call exception: %s", stream_call_err)
                                 if accumulated_streamed_chunks:
@@ -1484,7 +1491,7 @@ async def websocket_endpoint(websocket: WebSocket):
                     finally:
                         reply_db.close()
 
-                asyncio.create_task(handle_bot_reply(user_id, bot.id, message_text))
+                asyncio.create_task(handle_bot_reply(user_id, bot.id, message_text, ai_mode, ai_model))
 
     except (WebSocketDisconnect, RuntimeError):
 

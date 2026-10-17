@@ -49,6 +49,11 @@ class TranslateRequest(BaseModel):
 class SmartRepliesRequest(BaseModel):
     context: List[str]
 
+class AIChatRequest(BaseModel):
+    prompt: str
+    mode: Optional[str] = "DEFAULT"
+    model: Optional[str] = None
+
 
 @router.post("/personalize")
 async def personalize_user(
@@ -128,6 +133,28 @@ async def smart_replies(
     }
 
 
+@router.post("/chat")
+async def ai_chat_direct(
+    req: AIChatRequest,
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(get_db)
+):
+    """Direct AI conversational analysis for assistants, debater, and plan summarizer."""
+    from ai_service import process_user_message_to_bot
+    reply = await process_user_message_to_bot(
+        user_id=user_id,
+        message_text=req.prompt,
+        ai_mode=req.mode or "DEFAULT",
+        db=db,
+        ai_model=req.model
+    )
+    return {
+        "status": "success",
+        "reply": reply,
+        "message": reply
+    }
+
+
 @router.get("/models/openrouter")
 async def get_openrouter_models(refresh: bool = False):
     """
@@ -159,12 +186,22 @@ async def get_all_ai_models(refresh: bool = False):
                 "has_api_key": bool(os.getenv("GEMINI_API_KEY", "").strip()),
                 "models": [
                     {
+                        "id": "gemini-3.8-flash",
+                        "name": "Gemini 3.8 Flash",
+                        "provider": "Google",
+                        "tag": "Flagship • Ultra-Fast & Grounded",
+                        "badge": "Recommended",
+                        "description": "Google's newest high-speed multimodal reasoning model with real-time response generation.",
+                        "context_length": 1000000,
+                        "pricing": {"is_free": True}
+                    },
+                    {
                         "id": "gemini-3.5-flash",
                         "name": "Gemini 3.5 Flash",
                         "provider": "Google",
-                        "tag": "Default • Smart & Fast",
-                        "badge": "Recommended",
-                        "description": "Google's flagship multimodal model with integrated Google Search grounding and balanced conversational depth.",
+                        "tag": "Smart & Balanced",
+                        "badge": "Popular",
+                        "description": "Google's balanced multimodal model with fast reasoning and deep conversational depth.",
                         "context_length": 1000000,
                         "pricing": {"is_free": True}
                     },
@@ -186,16 +223,6 @@ async def get_all_ai_models(refresh: bool = False):
                         "badge": "Deep Reasoning",
                         "description": "Google's most capable reasoning engine for intricate programming, mathematics, and structured payloads.",
                         "context_length": 2000000,
-                        "pricing": {"is_free": True}
-                    },
-                    {
-                        "id": "gemini-2.5-flash",
-                        "name": "Gemini 2.5 Flash",
-                        "provider": "Google",
-                        "tag": "Battle-Tested Production",
-                        "badge": "Ultra-Stable",
-                        "description": "Proven long-running production standard known for robust consistency.",
-                        "context_length": 1000000,
                         "pricing": {"is_free": True}
                     }
                 ]

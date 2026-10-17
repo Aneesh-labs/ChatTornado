@@ -39,7 +39,7 @@ Please provide:
 
     try {
         const token = sessionStorage.getItem("token") || "";
-        const res = await API.post(`/ai/chat?token=${encodeURIComponent(token)}`, {
+        const res = await API.post(`/api/ai/chat?token=${encodeURIComponent(token)}`, {
             prompt,
             mode: "ROAST",
         });
@@ -75,7 +75,7 @@ Extract any concrete plans, meetings, to-dos, locations, or decisions made. Outp
 
     try {
         const token = sessionStorage.getItem("token") || "";
-        const res = await API.post(`/ai/chat?token=${encodeURIComponent(token)}`, {
+        const res = await API.post(`/api/ai/chat?token=${encodeURIComponent(token)}`, {
             prompt,
             mode: "DEFAULT",
         });
@@ -115,7 +115,7 @@ export const polishTone = async (inputText, tone = "witty") => {
 
     try {
         const token = sessionStorage.getItem("token") || "";
-        const res = await API.post(`/ai/chat?token=${encodeURIComponent(token)}`, {
+        const res = await API.post(`/api/ai/chat?token=${encodeURIComponent(token)}`, {
             prompt,
             mode: tone === "roast" ? "ROAST" : "DEFAULT",
         });
@@ -141,7 +141,7 @@ export const translateText = async (inputText, targetLang = "Spanish") => {
 
     try {
         const token = sessionStorage.getItem("token") || "";
-        const res = await API.post(`/ai/chat?token=${encodeURIComponent(token)}`, { prompt, mode: "DEFAULT" });
+        const res = await API.post(`/api/ai/chat?token=${encodeURIComponent(token)}`, { prompt, mode: "DEFAULT" });
         const reply = res.data?.reply || res.data?.message;
         if (reply && reply.trim()) {
             return reply.trim().replace(/^["']|["']$/g, "");

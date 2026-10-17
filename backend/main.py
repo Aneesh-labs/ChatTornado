@@ -180,6 +180,19 @@ def root():
         "message": "Chat Tornado JWT Backend Online 🌪️"
     }
 
+from ai_routes import ai_chat_direct, AIChatRequest, get_current_user_id
+from database import get_db
+from sqlalchemy.orm import Session
+from fastapi import Depends
+
+@app.post("/ai/chat")
+async def compat_ai_chat(
+    req: AIChatRequest,
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(get_db)
+):
+    return await ai_chat_direct(req, user_id=user_id, db=db)
+
 # ============================================================================
 # Tor In-App Catch-All Proxy Handler
 # Intercepts relative searches/actions (e.g. YouTube /results, /watch, etc.)
@@ -194,7 +207,7 @@ from tor_daemon import get_tor_httpx_client
 @app.api_route("/{full_path:path}", methods=["GET", "POST", "PUT", "DELETE", "HEAD", "OPTIONS"])
 async def catchall_tor_proxy(request: Request, full_path: str):
     # Don't intercept API endpoints or uploaded files
-    if full_path.startswith("api/") or full_path.startswith("uploads/"):
+    if full_path.startswith("api/") or full_path.startswith("uploads/") or full_path.startswith("ai/"):
         return JSONResponse(status_code=404, content={"detail": "Not Found"})
 
     # 1. Check Cookie first
