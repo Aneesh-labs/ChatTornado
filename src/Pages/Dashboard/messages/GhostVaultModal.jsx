@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { ShieldAlert, Lock, Unlock, Eye, EyeOff, X } from "lucide-react";
 import { unlockVault, lockVault, isVaultUnlocked, isDecoyMode } from "../../../Services/vaultService";
@@ -10,7 +11,7 @@ export default function GhostVaultModal({ isOpen, onClose, onVaultStateChange })
     const unlocked = isVaultUnlocked();
     const decoy = isDecoyMode();
 
-    if (!isOpen) return null;
+    if (!isOpen || typeof document === "undefined") return null;
 
     const handleUnlock = (e) => {
         e.preventDefault();
@@ -31,9 +32,14 @@ export default function GhostVaultModal({ isOpen, onClose, onVaultStateChange })
         onClose();
     };
 
-    return (
+    return createPortal(
         <AnimatePresence>
-            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md">
+            <div 
+                className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/70 backdrop-blur-md"
+                onClick={(e) => {
+                    if (e.target === e.currentTarget) onClose();
+                }}
+            >
                 <motion.div
                     initial={{ opacity: 0, scale: 0.94 }}
                     animate={{ opacity: 1, scale: 1 }}
@@ -102,6 +108,7 @@ export default function GhostVaultModal({ isOpen, onClose, onVaultStateChange })
                     </div>
                 </motion.div>
             </div>
-        </AnimatePresence>
+        </AnimatePresence>,
+        document.body
     );
 }

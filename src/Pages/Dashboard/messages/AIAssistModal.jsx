@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { createPortal } from "react-dom";
 import PropTypes from "prop-types";
 import { motion, AnimatePresence } from "framer-motion";
 import { Sparkles, X, Languages, Wand2, Check } from "lucide-react";
@@ -58,9 +59,16 @@ export default function AIAssistModal({ isOpen, onClose, currentDraft, onApplyDr
         }
     };
 
-    return (
+    if (!isOpen || typeof document === "undefined") return null;
+
+    return createPortal(
         <AnimatePresence>
-            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md">
+            <div 
+                className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/70 backdrop-blur-md"
+                onClick={(e) => {
+                    if (e.target === e.currentTarget) onClose();
+                }}
+            >
                 <motion.div
                     initial={{ opacity: 0, scale: 0.95 }}
                     animate={{ opacity: 1, scale: 1 }}
@@ -167,7 +175,8 @@ export default function AIAssistModal({ isOpen, onClose, currentDraft, onApplyDr
                     )}
                 </motion.div>
             </div>
-        </AnimatePresence>
+        </AnimatePresence>,
+        document.body
     );
 }
 

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
+import { createPortal } from "react-dom";
 import PropTypes from "prop-types";
 import { motion, AnimatePresence } from "framer-motion";
 import { Plus, Music, X, Send, Sparkles, Trash2, Heart, MessageCircle } from "lucide-react";
@@ -159,180 +160,196 @@ export default function BubbleNotesBar({ onSelectUser, users = [], onSendDirectR
             </div>
 
             {/* Modal: Create or Edit My Note */}
-            <AnimatePresence>
-                {createModalOpen && (
-                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-                        <motion.div
-                            initial={{ opacity: 0, scale: 0.95, y: 10 }}
-                            animate={{ opacity: 1, scale: 1, y: 0 }}
-                            exit={{ opacity: 0, scale: 0.95, y: 10 }}
-                            className="relative w-full max-w-sm rounded-3xl bg-gradient-to-b from-[#141427] to-[#090912] border border-violet-500/30 p-5 shadow-2xl text-white"
+            {typeof document !== "undefined" && createPortal(
+                <AnimatePresence>
+                    {createModalOpen && (
+                        <div 
+                            className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
+                            onClick={(e) => {
+                                if (e.target === e.currentTarget) setCreateModalOpen(false);
+                            }}
                         >
-                            <button
-                                onClick={() => setCreateModalOpen(false)}
-                                className="absolute top-4 right-4 p-1.5 rounded-full bg-white/5 hover:bg-white/10 text-white/50 hover:text-white"
+                            <motion.div
+                                initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                                animate={{ opacity: 1, scale: 1, y: 0 }}
+                                exit={{ opacity: 0, scale: 0.95, y: 10 }}
+                                className="relative w-full max-w-sm rounded-3xl bg-gradient-to-b from-[#141427] to-[#090912] border border-violet-500/30 p-5 shadow-2xl text-white"
                             >
-                                <X className="w-4 h-4" />
-                            </button>
+                                <button
+                                    onClick={() => setCreateModalOpen(false)}
+                                    className="absolute top-4 right-4 p-1.5 rounded-full bg-white/5 hover:bg-white/10 text-white/50 hover:text-white"
+                                >
+                                    <X className="w-4 h-4" />
+                                </button>
 
-                            <div className="flex items-center gap-2 mb-3">
-                                <Sparkles className="w-4 h-4 text-violet-400" />
-                                <h3 className="text-sm font-bold text-white">
-                                    {myNote ? "Edit Your 24h Note" : "Share a 24-Hour Note"}
-                                </h3>
-                            </div>
+                                <div className="flex items-center gap-2 mb-3">
+                                    <Sparkles className="w-4 h-4 text-violet-400" />
+                                    <h3 className="text-sm font-bold text-white">
+                                        {myNote ? "Edit Your 24h Note" : "Share a 24-Hour Note"}
+                                    </h3>
+                                </div>
 
-                            <form onSubmit={handleCreateNote} className="space-y-3">
-                                {/* Mood Emoji Picker */}
-                                <div>
-                                    <label className="text-[11px] font-semibold text-white/50 mb-1.5 block">Select Mood</label>
-                                    <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar">
-                                        {MOOD_EMOJIS.map(emoji => (
+                                <form onSubmit={handleCreateNote} className="space-y-3">
+                                    {/* Mood Emoji Picker */}
+                                    <div>
+                                        <label className="text-[11px] font-semibold text-white/50 mb-1.5 block">Select Mood</label>
+                                        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar">
+                                            {MOOD_EMOJIS.map(emoji => (
+                                                <button
+                                                    key={emoji}
+                                                    type="button"
+                                                    onClick={() => setSelectedEmoji(emoji)}
+                                                    className={`text-lg p-1.5 rounded-xl transition-all ${selectedEmoji === emoji ? "bg-violet-600 scale-110 shadow-lg shadow-violet-600/50" : "bg-white/5 hover:bg-white/10"}`}
+                                                >
+                                                    {emoji}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+
+                                    {/* Text input */}
+                                    <div>
+                                        <label className="text-[11px] font-semibold text-white/50 mb-1 block">What's on your mind? (60 chars)</label>
+                                        <input
+                                            type="text"
+                                            maxLength={60}
+                                            value={noteText}
+                                            onChange={(e) => setNoteText(e.target.value)}
+                                            placeholder={myNote ? myNote.text : "e.g. Grinding late tonight 💻"}
+                                            className="w-full px-3.5 py-2.5 rounded-xl bg-white/5 border border-white/10 text-sm text-white placeholder-white/30 focus:outline-none focus:border-violet-500 transition-colors"
+                                        />
+                                        <div className="text-right text-[10px] text-white/40 mt-1">
+                                            {noteText.length}/60
+                                        </div>
+                                    </div>
+
+                                    {/* Optional Song Title */}
+                                    <div>
+                                        <label className="text-[11px] font-semibold text-white/50 mb-1 flex items-center gap-1.5">
+                                            <Music className="w-3 h-3 text-pink-400" />
+                                            Add Profile Track (Optional)
+                                        </label>
+                                        <div className="grid grid-cols-2 gap-2">
+                                            <input
+                                                type="text"
+                                                value={songTitle}
+                                                onChange={(e) => setSongTitle(e.target.value)}
+                                                placeholder="Song title"
+                                                className="px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-xs text-white placeholder-white/30 focus:outline-none focus:border-violet-500"
+                                            />
+                                            <input
+                                                type="text"
+                                                value={songArtist}
+                                                onChange={(e) => setSongArtist(e.target.value)}
+                                                placeholder="Artist"
+                                                className="px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-xs text-white placeholder-white/30 focus:outline-none focus:border-violet-500"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div className="flex items-center gap-2 pt-2">
+                                        {myNote && (
                                             <button
-                                                key={emoji}
                                                 type="button"
-                                                onClick={() => setSelectedEmoji(emoji)}
-                                                className={`text-lg p-1.5 rounded-xl transition-all ${selectedEmoji === emoji ? "bg-violet-600 scale-110 shadow-lg shadow-violet-600/50" : "bg-white/5 hover:bg-white/10"}`}
+                                                onClick={handleDeleteMyNote}
+                                                className="px-3 py-2 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 text-xs font-semibold flex items-center gap-1.5"
                                             >
-                                                {emoji}
+                                                <Trash2 className="w-3.5 h-3.5" />
+                                                Delete
                                             </button>
-                                        ))}
-                                    </div>
-                                </div>
-
-                                {/* Text input */}
-                                <div>
-                                    <label className="text-[11px] font-semibold text-white/50 mb-1 block">What's on your mind? (60 chars)</label>
-                                    <input
-                                        type="text"
-                                        maxLength={60}
-                                        value={noteText}
-                                        onChange={(e) => setNoteText(e.target.value)}
-                                        placeholder={myNote ? myNote.text : "e.g. Grinding late tonight 💻"}
-                                        className="w-full px-3.5 py-2.5 rounded-xl bg-white/5 border border-white/10 text-sm text-white placeholder-white/30 focus:outline-none focus:border-violet-500 transition-colors"
-                                    />
-                                    <div className="text-right text-[10px] text-white/40 mt-1">
-                                        {noteText.length}/60
-                                    </div>
-                                </div>
-
-                                {/* Optional Song Title */}
-                                <div>
-                                    <label className="text-[11px] font-semibold text-white/50 mb-1 flex items-center gap-1.5">
-                                        <Music className="w-3 h-3 text-pink-400" />
-                                        Add Profile Track (Optional)
-                                    </label>
-                                    <div className="grid grid-cols-2 gap-2">
-                                        <input
-                                            type="text"
-                                            value={songTitle}
-                                            onChange={(e) => setSongTitle(e.target.value)}
-                                            placeholder="Song title"
-                                            className="px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-xs text-white placeholder-white/30 focus:outline-none focus:border-violet-500"
-                                        />
-                                        <input
-                                            type="text"
-                                            value={songArtist}
-                                            onChange={(e) => setSongArtist(e.target.value)}
-                                            placeholder="Artist"
-                                            className="px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-xs text-white placeholder-white/30 focus:outline-none focus:border-violet-500"
-                                        />
-                                    </div>
-                                </div>
-
-                                <div className="flex items-center gap-2 pt-2">
-                                    {myNote && (
+                                        )}
                                         <button
-                                            type="button"
-                                            onClick={handleDeleteMyNote}
-                                            className="px-3 py-2 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 text-xs font-semibold flex items-center gap-1.5"
+                                            type="submit"
+                                            disabled={!noteText.trim()}
+                                            className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white font-bold text-xs shadow-lg shadow-violet-600/30 transition-all disabled:opacity-40 cursor-pointer"
                                         >
-                                            <Trash2 className="w-3.5 h-3.5" />
-                                            Delete
+                                            Share Note
                                         </button>
-                                    )}
-                                    <button
-                                        type="submit"
-                                        disabled={!noteText.trim()}
-                                        className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white font-bold text-xs shadow-lg shadow-violet-600/30 transition-all disabled:opacity-40 cursor-pointer"
-                                    >
-                                        Share Note
-                                    </button>
-                                </div>
-                            </form>
-                        </motion.div>
-                    </div>
-                )}
-            </AnimatePresence>
+                                    </div>
+                                </form>
+                            </motion.div>
+                        </div>
+                    )}
+                </AnimatePresence>,
+                document.body
+            )}
 
             {/* Modal: View Friend's Note & Quick Reply */}
-            <AnimatePresence>
-                {selectedNote && (
-                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-                        <motion.div
-                            initial={{ opacity: 0, scale: 0.95, y: 10 }}
-                            animate={{ opacity: 1, scale: 1, y: 0 }}
-                            exit={{ opacity: 0, scale: 0.95, y: 10 }}
-                            className="relative w-full max-w-sm rounded-3xl bg-gradient-to-b from-[#16162a] to-[#0a0a14] border border-cyan-500/30 p-5 shadow-2xl text-white"
+            {typeof document !== "undefined" && createPortal(
+                <AnimatePresence>
+                    {selectedNote && (
+                        <div 
+                            className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
+                            onClick={(e) => {
+                                if (e.target === e.currentTarget) setSelectedNote(null);
+                            }}
                         >
-                            <button
-                                onClick={() => setSelectedNote(null)}
-                                className="absolute top-4 right-4 p-1.5 rounded-full bg-white/5 hover:bg-white/10 text-white/50 hover:text-white"
+                            <motion.div
+                                initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                                animate={{ opacity: 1, scale: 1, y: 0 }}
+                                exit={{ opacity: 0, scale: 0.95, y: 10 }}
+                                className="relative w-full max-w-sm rounded-3xl bg-gradient-to-b from-[#16162a] to-[#0a0a14] border border-cyan-500/30 p-5 shadow-2xl text-white"
                             >
-                                <X className="w-4 h-4" />
-                            </button>
-
-                            {/* Author info */}
-                            <div className="flex items-center gap-3 mb-4">
-                                <div className="w-12 h-12 rounded-full bg-gradient-to-tr from-violet-500 to-cyan-400 p-0.5">
-                                    <div className="w-full h-full rounded-full bg-black flex items-center justify-center font-bold text-sm">
-                                        {selectedNote.username.slice(0, 2).toUpperCase()}
-                                    </div>
-                                </div>
-                                <div>
-                                    <h4 className="text-sm font-bold text-white">@{selectedNote.username}</h4>
-                                    <span className="text-[10px] text-white/40">24-hour Bubble Note</span>
-                                </div>
-                            </div>
-
-                            {/* Note content */}
-                            <div className="p-4 rounded-2xl bg-white/[0.04] border border-white/10 mb-4">
-                                <div className="text-3xl mb-1">{selectedNote.emoji}</div>
-                                <p className="text-base font-semibold text-white tracking-wide">
-                                    "{selectedNote.text}"
-                                </p>
-
-                                {selectedNote.songTitle && (
-                                    <div className="mt-3 flex items-center gap-2 p-2 rounded-xl bg-pink-500/10 border border-pink-500/20 text-pink-300">
-                                        <Music className="w-3.5 h-3.5 animate-spin" style={{ animationDuration: "4s" }} />
-                                        <span className="text-xs font-medium truncate">
-                                            {selectedNote.songTitle} {selectedNote.songArtist ? `• ${selectedNote.songArtist}` : ""}
-                                        </span>
-                                    </div>
-                                )}
-                            </div>
-
-                            {/* Quick Reply Form */}
-                            <form onSubmit={handleSendReply} className="flex items-center gap-2">
-                                <input
-                                    type="text"
-                                    value={replyText}
-                                    onChange={(e) => setReplyText(e.target.value)}
-                                    placeholder={`Reply to @${selectedNote.username}...`}
-                                    className="flex-1 px-3.5 py-2.5 rounded-xl bg-white/5 border border-white/10 text-xs text-white placeholder-white/30 focus:outline-none focus:border-cyan-400"
-                                />
                                 <button
-                                    type="submit"
-                                    disabled={!replyText.trim()}
-                                    className="p-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-black font-bold disabled:opacity-40 shadow transition-all cursor-pointer"
+                                    onClick={() => setSelectedNote(null)}
+                                    className="absolute top-4 right-4 p-1.5 rounded-full bg-white/5 hover:bg-white/10 text-white/50 hover:text-white"
                                 >
-                                    <Send className="w-4 h-4" />
+                                    <X className="w-4 h-4" />
                                 </button>
-                            </form>
-                        </motion.div>
-                    </div>
-                )}
-            </AnimatePresence>
+
+                                {/* Author info */}
+                                <div className="flex items-center gap-3 mb-4">
+                                    <div className="w-12 h-12 rounded-full bg-gradient-to-tr from-violet-500 to-cyan-400 p-0.5">
+                                        <div className="w-full h-full rounded-full bg-black flex items-center justify-center font-bold text-sm">
+                                            {selectedNote.username.slice(0, 2).toUpperCase()}
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <h4 className="text-sm font-bold text-white">@{selectedNote.username}</h4>
+                                        <span className="text-[10px] text-white/40">24-hour Bubble Note</span>
+                                    </div>
+                                </div>
+
+                                {/* Note content */}
+                                <div className="p-4 rounded-2xl bg-white/[0.04] border border-white/10 mb-4">
+                                    <div className="text-3xl mb-1">{selectedNote.emoji}</div>
+                                    <p className="text-base font-semibold text-white tracking-wide">
+                                        "{selectedNote.text}"
+                                    </p>
+
+                                    {selectedNote.songTitle && (
+                                        <div className="mt-3 flex items-center gap-2 p-2 rounded-xl bg-pink-500/10 border border-pink-500/20 text-pink-300">
+                                            <Music className="w-3.5 h-3.5 animate-spin" style={{ animationDuration: "4s" }} />
+                                            <span className="text-xs font-medium truncate">
+                                                {selectedNote.songTitle} {selectedNote.songArtist ? `• ${selectedNote.songArtist}` : ""}
+                                            </span>
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Quick Reply Form */}
+                                <form onSubmit={handleSendReply} className="flex items-center gap-2">
+                                    <input
+                                        type="text"
+                                        value={replyText}
+                                        onChange={(e) => setReplyText(e.target.value)}
+                                        placeholder={`Reply to @${selectedNote.username}...`}
+                                        className="flex-1 px-3.5 py-2.5 rounded-xl bg-white/5 border border-white/10 text-xs text-white placeholder-white/30 focus:outline-none focus:border-cyan-400"
+                                    />
+                                    <button
+                                        type="submit"
+                                        disabled={!replyText.trim()}
+                                        className="p-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-black font-bold disabled:opacity-40 shadow transition-all cursor-pointer"
+                                    >
+                                        <Send className="w-4 h-4" />
+                                    </button>
+                                </form>
+                            </motion.div>
+                        </div>
+                    )}
+                </AnimatePresence>,
+                document.body
+            )}
         </div>
     );
 }

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import PropTypes from "prop-types";
 import { motion, AnimatePresence } from "framer-motion";
 import { Flame, Shield, Sparkles, X, Trophy, Clock, CheckCircle2 } from "lucide-react";
@@ -14,7 +15,7 @@ export default function StreakModal({ isOpen, onClose, targetUser }) {
         }
     }, [targetUser?.id, isOpen]);
 
-    if (!isOpen || !targetUser) return null;
+    if (!isOpen || !targetUser || typeof document === "undefined") return null;
 
     const count = streakData?.count || 0;
     const tier = streakData?.tier || STREAK_TIERS[STREAK_TIERS.length - 1];
@@ -34,9 +35,14 @@ export default function StreakModal({ isOpen, onClose, targetUser }) {
     const nextTier = [...STREAK_TIERS].reverse().find(t => t.min > count) || null;
     const progressPercent = nextTier ? Math.min(100, Math.round((count / nextTier.min) * 100)) : 100;
 
-    return (
+    return createPortal(
         <AnimatePresence>
-            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
+            <div 
+                className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md"
+                onClick={(e) => {
+                    if (e.target === e.currentTarget) onClose();
+                }}
+            >
                 <motion.div
                     initial={{ opacity: 0, scale: 0.9, y: 20 }}
                     animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -170,7 +176,8 @@ export default function StreakModal({ isOpen, onClose, targetUser }) {
                     </p>
                 </motion.div>
             </div>
-        </AnimatePresence>
+        </AnimatePresence>,
+        document.body
     );
 }
 
