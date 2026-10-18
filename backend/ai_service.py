@@ -618,12 +618,14 @@ async def generate_openrouter_text(
 
 async def generate_ai_text(
     prompt: str,
-    chat_history: List[dict],
+    chat_history: Optional[List[dict]] = None,
     system_prompt: str = PROMPT_DEFAULT,
     preferred_model: Optional[str] = None
 ) -> str:
     """Generate conversational response using OpenRouter (for coding/custom models) or Gemini API with SDK and REST fallback."""
     clean_prompt = prompt.strip()
+    if chat_history is None:
+        chat_history = []
 
     # 0. Check OpenRouter delegation for coding mode or explicit OpenRouter models
     is_or = is_openrouter_model(preferred_model)
@@ -1377,7 +1379,7 @@ Format ONLY as clean bullet points starting with '• '. Keep it concise, observ
 
 async def generate_ai_text_stream(
     prompt: str,
-    chat_history: List[dict],
+    chat_history: Optional[List[dict]] = None,
     system_prompt: str = PROMPT_DEFAULT,
     on_chunk: Optional[Any] = None,
     user_id: Optional[int] = None,
@@ -1386,6 +1388,8 @@ async def generate_ai_text_stream(
 ) -> str:
     """Generate conversational response using OpenRouter (for coding/custom models) or Gemini API with real-time token streaming and Google Search grounding."""
     clean_prompt = prompt.strip()
+    if chat_history is None:
+        chat_history = []
 
     # 0. Check OpenRouter delegation for coding mode or explicit OpenRouter models
     is_or = is_openrouter_model(preferred_model)
@@ -1567,7 +1571,10 @@ async def generate_ai_text_stream(
 
             except Exception as stream_err:
                 err_s = str(stream_err)
-                print(f"[AI_STREAM] Model {model_name} (search={use_search}) error: {err_s}", flush=True)
+                try:
+                    print(f"[AI_STREAM] Model {model_name} (search={use_search}) error: {err_s}", flush=True)
+                except Exception:
+                    pass
                 if "429" in err_s or "RESOURCE_EXHAUSTED" in err_s or "quota" in err_s.lower():
                     if use_search:
                         search_quota_failed = True
