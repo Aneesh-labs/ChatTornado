@@ -14,7 +14,7 @@ npm run dev -- --host
 start "ChatTornado Backend" cmd /k ^
 cd /d "%~dp0backend" ^&^& ^
 call venv\Scripts\activate.bat ^&^& ^
-python -m uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+python -m uvicorn main:app --host 0.0.0.0 --port 8000 --reload --ws-ping-interval 20 --ws-ping-timeout 20
 
 echo.
 echo Frontend and Backend are starting...

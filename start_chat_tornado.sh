@@ -14,7 +14,7 @@ echo "Starting Backend..."
     if [ -d "venv" ]; then
         source venv/bin/activate
     fi
-    python -m uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+    python -m uvicorn main:app --host 0.0.0.0 --port 8000 --reload --ws-ping-interval 20 --ws-ping-timeout 20
 ) &
 BACKEND_PID=$!
 

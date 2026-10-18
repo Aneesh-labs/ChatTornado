@@ -768,6 +768,7 @@ const Messages = () => {
         let reconnectTimer = null;
         let heartbeatTimer = null;
         let disposed = false;
+        let reconnectAttempts = 0;
 
         const connect = () => {
             if (disposed || !validateToken()) return;
@@ -776,14 +777,23 @@ const Messages = () => {
             socketRef.current = ws;
 
             ws.onopen = () => {
+                reconnectAttempts = 0;
                 setSocketReady(true);
                 setSecurityStatus("SECURE");
-                setCallNotice("");
+                setCallNotice((prev) => (prev.includes("Real-time connection") ? "" : prev));
+
+                if (heartbeatTimer) clearInterval(heartbeatTimer);
                 heartbeatTimer = setInterval(() => {
-                    if (ws.readyState === WebSocket.OPEN) {
-                        ws.send(JSON.stringify({ type: "ping" }));
+                    if (ws && ws.readyState === WebSocket.OPEN) {
+                        try {
+                            ws.send(JSON.stringify({ type: "ping" }));
+                        } catch (err) {
+                            // ignore send error
+                        }
+                    } else if (ws && (ws.readyState === WebSocket.CLOSED || ws.readyState === WebSocket.CLOSING)) {
+                        if (!disposed) connect();
                     }
-                }, 30000);
+                }, 15000);
             };
 
             ws.onmessage = (event) => {
@@ -1313,16 +1323,28 @@ const Messages = () => {
                 setSocketReady(false);
                 setOnlineUserIds(new Set());
                 setTypingUsers(new Set());
-                clearInterval(heartbeatTimer);
+                if (heartbeatTimer) clearInterval(heartbeatTimer);
                 if (!disposed) {
-                    setCallNotice("Real-time connection interrupted. Reconnecting...");
-                    reconnectTimer = window.setTimeout(connect, 3000);
+                    reconnectAttempts += 1;
+                    // Only show warning banner if disconnected across multiple attempts (>6s)
+                    // so transient network blips and background wake-ups reconnect seamlessly without jarring the user
+                    if (reconnectAttempts >= 3) {
+                        setCallNotice("Real-time connection interrupted. Reconnecting...");
+                    }
+                    const delay = Math.min(1000 * Math.pow(1.3, reconnectAttempts - 1), 5000);
+                    reconnectTimer = window.setTimeout(connect, delay);
                 }
             };
 
             ws.onerror = () => {
                 setSecurityStatus("CONNECTION_ERROR");
-                ws?.close();
+                try {
+                    if (ws && ws.readyState === WebSocket.OPEN) {
+                        ws.close();
+                    }
+                } catch (e) {
+                    // ignore
+                }
             };
         };
 
@@ -1331,14 +1353,34 @@ const Messages = () => {
                 connect();
             }
         };
+
+        const handleVisibilityOrFocus = () => {
+            if (disposed) return;
+            if (document.visibilityState === "visible") {
+                if (!socketRef.current || socketRef.current.readyState === WebSocket.CLOSED || socketRef.current.readyState === WebSocket.CLOSING) {
+                    connect();
+                } else if (socketRef.current.readyState === WebSocket.OPEN) {
+                    try {
+                        socketRef.current.send(JSON.stringify({ type: "ping" }));
+                    } catch (e) {
+                        connect();
+                    }
+                }
+            }
+        };
+
         window.addEventListener("online", handleOnline);
+        document.addEventListener("visibilitychange", handleVisibilityOrFocus);
+        window.addEventListener("focus", handleVisibilityOrFocus);
 
         connect();
 
         return () => {
             disposed = true;
             window.removeEventListener("online", handleOnline);
-            clearInterval(heartbeatTimer);
+            document.removeEventListener("visibilitychange", handleVisibilityOrFocus);
+            window.removeEventListener("focus", handleVisibilityOrFocus);
+            if (heartbeatTimer) clearInterval(heartbeatTimer);
             if (reconnectTimer) window.clearTimeout(reconnectTimer);
             Object.values(typingTimeouts.current).forEach(clearTimeout);
             ws?.close();

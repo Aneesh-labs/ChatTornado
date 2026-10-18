@@ -62,7 +62,7 @@ async def websocket_endpoint(websocket: WebSocket):
             if not isinstance(data, dict):
                 continue
 
-            if data.get("type") == "ping":
+            if data.get("type") in ("ping", "heartbeat"):
                 await websocket.send_json({"type": "pong"})
                 continue
 
