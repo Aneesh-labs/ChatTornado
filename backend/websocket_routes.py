@@ -1032,7 +1032,7 @@ async def websocket_endpoint(websocket: WebSocket):
                 logger.warning("Recipient delivery network error (message safely saved in DB): %s", deliv_err)
 
             # Calculate and broadcast Tornado Streaks (between human users)
-            if not group_id and receiver_id:
+            if not data.get("group_id") and receiver_id:
                 try:
                     from ai_service import get_or_create_bot_user
                     bot_user = get_or_create_bot_user(db)
