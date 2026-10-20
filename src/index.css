@@ -9,6 +9,16 @@
     --glass-border: rgba(255, 255, 255, 0.08);
 }
 
+html,
+body,
+#root {
+    height: 100%;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+}
+
 html {
     color-scheme: dark;
     scroll-behavior: smooth;
@@ -17,10 +27,11 @@ html {
 }
 
 body {
+    position: fixed;
+    inset: 0;
     color-scheme: dark;
     background-color: #07090d;
     color: #f1f5f9;
-    overflow-x: hidden;
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
 }
 

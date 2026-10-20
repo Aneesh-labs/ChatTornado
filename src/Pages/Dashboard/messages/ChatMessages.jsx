@@ -1,3 +1,4 @@
+import { Bot, Sparkles, Code, Search, Lightbulb, MessageSquare } from "lucide-react";
 import React, { useCallback, useState } from "react";
 import PropTypes from "prop-types";
 import { AnimatePresence } from "framer-motion";
@@ -149,12 +150,12 @@ const ChatMessages = React.memo(({
             >
                 {!hasMessages && isAiChat && (
                     <div className="flex flex-col items-center justify-center h-full min-h-[300px] text-center px-4 py-8 select-none">
-                        <div className="w-16 h-16 rounded-3xl bg-gradient-to-tr from-cyan-500/20 to-blue-500/20 border border-cyan-400/30 flex items-center justify-center text-3xl mb-4 shadow-[0_0_30px_rgba(6,182,212,0.2)]">
-                            🤖
+                        <div className="w-16 h-16 rounded-3xl bg-gradient-to-tr from-cyan-500/20 via-sky-500/15 to-indigo-500/20 border border-cyan-400/35 flex items-center justify-center mb-4 shadow-[0_0_32px_rgba(6,182,212,0.25)]">
+                            <Bot className="w-8 h-8 text-cyan-300 drop-shadow-[0_0_12px_rgba(6,182,212,0.6)]" />
                         </div>
                         <h2 className="text-xl font-black tracking-tight text-white mb-1.5 flex items-center gap-2">
                             <span>VORTEX-9</span>
-                            <span className="text-[10px] uppercase font-bold tracking-widest px-2 py-0.5 rounded-full bg-cyan-500/20 border border-cyan-400/30 text-cyan-300">
+                            <span className="text-[10px] uppercase font-bold tracking-widest px-2.5 py-0.5 rounded-full bg-cyan-500/20 border border-cyan-400/40 text-cyan-300 shadow-[0_0_10px_rgba(6,182,212,0.25)]">
                                 Online
                             </span>
                         </h2>
@@ -163,36 +164,41 @@ const ChatMessages = React.memo(({
                         </p>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-w-md w-full">
                             {[
-                                { icon: "⚡", title: "What can you do?", prompt: "What can you help me with?" },
-                                { icon: "💻", title: "Coding & Architecture", prompt: "Can you help me design a fast, secure backend service?" },
-                                { icon: "🔬", title: "Deep Research", prompt: "/research Quantum error correction progress in 2026" },
-                                { icon: "💡", title: "Brainstorm Ideas", prompt: "Brainstorm 5 innovative startup ideas in AI devtools" }
-                            ].map((starter, sIdx) => (
-                                <button
-                                    key={sIdx}
-                                    type="button"
-                                    onClick={() => onSend?.(starter.prompt)}
-                                    className="flex items-start gap-2.5 p-3 rounded-2xl bg-white/[0.03] hover:bg-white/[0.08] border border-white/10 hover:border-cyan-500/30 text-left transition-all group active:scale-98 cursor-pointer"
-                                >
-                                    <span className="text-lg">{starter.icon}</span>
-                                    <div>
-                                        <div className="text-xs font-bold text-white/90 group-hover:text-cyan-300 transition-colors">
-                                            {starter.title}
+                                { Icon: Sparkles, iconColor: "text-amber-400", title: "What can you do?", prompt: "What can you help me with?" },
+                                { Icon: Code, iconColor: "text-cyan-400", title: "Coding & Architecture", prompt: "Can you help me design a fast, secure backend service?" },
+                                { Icon: Search, iconColor: "text-indigo-400", title: "Deep Research", prompt: "/research Quantum error correction progress in 2026" },
+                                { Icon: Lightbulb, iconColor: "text-violet-400", title: "Brainstorm Ideas", prompt: "Brainstorm 5 innovative startup ideas in AI devtools" }
+                            ].map((starter, sIdx) => {
+                                const StarterIcon = starter.Icon;
+                                return (
+                                    <button
+                                        key={sIdx}
+                                        type="button"
+                                        onClick={() => onSend?.(starter.prompt)}
+                                        className="flex items-start gap-2.5 p-3 rounded-2xl bg-white/[0.035] hover:bg-white/[0.08] border border-white/10 hover:border-cyan-400/35 text-left transition-all group active:scale-98 cursor-pointer shadow-sm hover:shadow-[0_0_16px_rgba(6,182,212,0.12)]"
+                                    >
+                                        <div className="p-1.5 rounded-xl bg-white/[0.05] border border-white/10 shrink-0 group-hover:scale-105 transition-transform">
+                                            <StarterIcon className={`w-4 h-4 ${starter.iconColor}`} />
                                         </div>
-                                        <div className="text-[10px] text-white/40 truncate max-w-[170px]">
-                                            {starter.prompt}
+                                        <div className="min-w-0 flex-1">
+                                            <div className="text-xs font-bold text-white/90 group-hover:text-cyan-300 transition-colors truncate">
+                                                {starter.title}
+                                            </div>
+                                            <div className="text-[10px] text-white/40 truncate">
+                                                {starter.prompt}
+                                            </div>
                                         </div>
-                                    </div>
-                                </button>
-                            ))}
+                                    </button>
+                                );
+                            })}
                         </div>
                     </div>
                 )}
 
                 {!hasMessages && !isAiChat && (
                     <div className="flex flex-col items-center justify-center h-full min-h-[260px] text-center px-4 py-8 select-none">
-                        <div className="w-14 h-14 rounded-2xl bg-white/[0.05] border border-white/10 flex items-center justify-center text-2xl mb-3 shadow-inner">
-                            💬
+                        <div className="w-14 h-14 rounded-2xl bg-white/[0.05] border border-white/10 flex items-center justify-center mb-3 shadow-inner">
+                            <MessageSquare className="w-6 h-6 text-white/40" />
                         </div>
                         <h3 className="text-sm font-bold text-white mb-1">
                             No messages yet

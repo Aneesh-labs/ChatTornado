@@ -59,7 +59,7 @@ export default function DashboardLayout() {
     };
 
     return (
-        <div className="relative flex h-dvh w-screen overflow-hidden bg-[#07090d] text-white selection:bg-sky-500/30 selection:text-white">
+        <div className="relative flex h-full w-full overflow-hidden bg-[#07090d] text-white selection:bg-sky-500/30 selection:text-white">
             <PortfolioOnboardingModal
                 isOpen={showOnboarding}
                 onClose={() => setShowOnboarding(false)}
@@ -73,7 +73,7 @@ export default function DashboardLayout() {
             <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.02)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.02)_1px,transparent_1px)] bg-[size:48px_48px]" />
 
             {/* Desktop Elevated Sidebar */}
-            <aside className="relative z-10 hidden w-[280px] shrink-0 border-r border-white/10 bg-[#090c14]/90 p-4.5 backdrop-blur-2xl lg:flex lg:flex-col shadow-[12px_0_48px_rgba(0,0,0,0.5)]">
+            <aside className="relative z-10 hidden w-[280px] shrink-0 border-r border-white/10 bg-[#090c14]/90 p-4 backdrop-blur-2xl lg:flex lg:flex-col shadow-[12px_0_48px_rgba(0,0,0,0.5)] h-full overflow-hidden">
                 {/* Brand Header */}
                 <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-white/[0.04] p-3.5 shadow-lg group">
                     <div className="absolute inset-0 bg-gradient-to-r from-sky-500/10 via-purple-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
@@ -106,7 +106,7 @@ export default function DashboardLayout() {
                 </div>
 
                 {/* Navigation Items */}
-                <nav className="mt-5 flex flex-1 flex-col gap-1.5" aria-label="Dashboard navigation">
+                <nav className="mt-4 flex flex-1 flex-col gap-1 min-h-0 overflow-y-auto custom-scrollbar pr-0.5" aria-label="Dashboard navigation">
                     {navItems.filter((item) => !item.mobileOnly).map(({ to, label, icon: Icon, badge }) => (
                         <NavLink
                             key={to}
@@ -165,7 +165,7 @@ export default function DashboardLayout() {
             </aside>
 
             {/* Main Stage Content */}
-            <main id="main-content" className="relative z-10 flex min-w-0 flex-1 flex-col overflow-hidden" role="main">
+            <main id="main-content" className="relative z-10 flex min-w-0 flex-1 flex-col overflow-hidden h-full" role="main">
                 {/* Mobile Top App Bar */}
                 <div className="flex items-center justify-between border-b border-white/10 bg-[#090c14]/90 px-4 py-3 backdrop-blur-2xl lg:hidden shadow-md">
                     <div className="flex items-center gap-2.5">
