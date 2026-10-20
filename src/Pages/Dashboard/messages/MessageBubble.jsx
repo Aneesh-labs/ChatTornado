@@ -1,3 +1,4 @@
+import { Volume2, VolumeX, Languages, GitFork, Reply, Trash2, X, Download, Check, RotateCw } from "lucide-react";
 import React, { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import PropTypes from "prop-types";
 import { motion, AnimatePresence } from "framer-motion";
@@ -166,9 +167,7 @@ const ImageLightbox = ({ imageUrl, onClose }) => {
                 onClick={onClose}
                 className="absolute top-4 right-4 z-10 flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white/70 backdrop-blur-xl transition hover:bg-white/20 hover:text-white"
             >
-                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                </svg>
+                <X className="h-5 w-5" />
             </motion.button>
 
             {/* Download button */}
@@ -179,10 +178,8 @@ const ImageLightbox = ({ imageUrl, onClose }) => {
                 onClick={(e) => { e.stopPropagation(); handleDownload(); }}
                 className="absolute top-4 right-16 z-10 flex h-10 items-center gap-2 rounded-full bg-white/10 px-4 text-xs font-bold text-white/70 backdrop-blur-xl transition hover:bg-white/20 hover:text-white"
             >
-                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                </svg>
-                Download
+                <Download className="h-4 w-4" />
+                <span>Download</span>
             </motion.button>
 
             {/* Image container */}
@@ -544,9 +541,7 @@ const P2PMediaPreview = ({ rawMessage, senderId, socket, onOpenLightbox }) => {
                     }}
                     className="w-full py-1.5 px-3 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 text-xs font-medium border border-emerald-500/30 flex items-center justify-center gap-1.5 transition-colors"
                 >
-                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                    </svg>
+                    <Check className="w-3.5 h-3.5 text-emerald-400" />
                     <span>Saved Locally</span>
                 </button>
             ) : (
@@ -1220,9 +1215,7 @@ const MessageBubble = React.memo(({
                                         </>
                                     ) : (
                                         <>
-                                            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
-                                            </svg>
+                                            <Volume2 className="w-3.5 h-3.5 text-cyan-400" />
                                             <span>Read</span>
                                         </>
                                     )}
@@ -1244,7 +1237,10 @@ const MessageBubble = React.memo(({
                                     {isTranslating ? (
                                         <span className="animate-spin text-xs">🌐</span>
                                     ) : (
-                                        <span>🌐 Translate</span>
+                                        <>
+                                            <Languages className="w-3.5 h-3.5 text-emerald-400" />
+                                            <span>Translate</span>
+                                        </>
                                     )}
                                 </motion.button>
                                 <div className="w-[1px] h-3.5 bg-white/10 mx-1" role="separator" />
@@ -1257,7 +1253,8 @@ const MessageBubble = React.memo(({
                                     aria-label="Fork reality from message"
                                     title="Fork conversation branch from here"
                                 >
-                                    <span>🔀 Fork</span>
+                                    <GitFork className="w-3.5 h-3.5 text-purple-400" />
+                                    <span>Fork</span>
                                 </motion.button>
                                 <div className="w-[1px] h-3.5 bg-white/10 mx-1" role="separator" />
                                 <motion.button
@@ -1265,10 +1262,11 @@ const MessageBubble = React.memo(({
                                     whileHover={{ scale: 1.1 }}
                                     whileTap={{ scale: 0.9 }}
                                     onClick={() => onReply?.(msg)}
-                                    className="text-[11px] text-white/50 hover:text-white/90 px-1.5 py-0.5 rounded-md hover:bg-white/[0.08] transition-colors font-medium"
+                                    className="text-[11px] text-white/60 hover:text-white px-1.5 py-0.5 rounded-md hover:bg-white/[0.08] transition-colors font-medium flex items-center gap-1 cursor-pointer"
                                     aria-label="Reply to message"
                                 >
-                                    Reply
+                                    <Reply className="w-3 h-3 text-sky-400" />
+                                    <span>Reply</span>
                                 </motion.button>
                                 <div className="w-[1px] h-3.5 bg-white/10 mx-1" role="separator" />
                                 <motion.button
@@ -1276,10 +1274,11 @@ const MessageBubble = React.memo(({
                                     whileHover={{ scale: 1.1 }}
                                     whileTap={{ scale: 0.9 }}
                                     onClick={handleDeleteClick}
-                                    className="text-[11px] text-red-400/60 hover:text-red-400 px-1.5 py-0.5 rounded-md hover:bg-red-500/10 transition-colors font-medium"
+                                    className="text-[11px] text-red-400/70 hover:text-red-400 px-1.5 py-0.5 rounded-md hover:bg-red-500/15 transition-colors font-medium flex items-center gap-1 cursor-pointer"
                                     aria-label="Delete message"
                                 >
-                                    Delete
+                                    <Trash2 className="w-3 h-3 text-red-400" />
+                                    <span>Delete</span>
                                 </motion.button>
                             </motion.div>
                         )}
@@ -1366,7 +1365,7 @@ const MessageBubble = React.memo(({
                                     className="text-[9px] text-rose-300 bg-rose-500/20 hover:bg-rose-500/30 border border-rose-500/40 px-1.5 py-0.5 rounded flex items-center gap-1 transition-colors cursor-pointer ml-1 active:scale-95 font-semibold"
                                     title="Click to retry sending message"
                                 >
-                                    <span>🔄</span>
+                                    <RotateCw className="w-3 h-3 text-rose-300" />
                                     <span>Retry</span>
                                 </button>
                             )}

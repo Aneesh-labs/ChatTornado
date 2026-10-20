@@ -20,8 +20,8 @@ import PortfolioOnboardingModal from "../../Components/PortfolioOnboardingModal"
 const navItems = [
     { to: "/home", label: "Home", icon: Home, badge: null },
     { to: "/messages", label: "Messages", icon: MessageSquareText, badge: "AI" },
-    { to: "/darkweb", label: "Dark Web 🧅", icon: Globe, mobileOnly: true },
-    { to: "/arcade", label: "Arcade 🎮", icon: Gamepad2, badge: null },
+    { to: "/darkweb", label: "Dark Web", icon: Globe, badge: "P2P", mobileOnly: true },
+    { to: "/arcade", label: "Arcade", icon: Gamepad2, badge: null },
     { to: "/insights", label: "Insights", icon: BarChart3, badge: null },
     { to: "/profile", label: "Profile", icon: UserRound, badge: null },
     { to: "/settings", label: "Settings", icon: Settings, badge: null },

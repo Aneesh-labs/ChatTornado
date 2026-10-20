@@ -1,3 +1,4 @@
+import { Zap, Bot, Sparkles } from "lucide-react";
 import React, { createContext, useContext } from "react";
 import PropTypes from "prop-types";
 import { motion } from "framer-motion";
@@ -243,7 +244,7 @@ export const Avatar = React.memo(({ user, size = "md", showStatus = true, classN
 
     return (
         <div className={`relative flex-shrink-0 ${sizes[size] || sizes.md} rounded-full border flex items-center justify-center select-none ${botRing} ${className}`}>
-            <span>{isBot ? "⚡" : (user?.avatar || "🧑")}</span>
+            {isBot ? <Zap className="w-4 h-4 text-cyan-300 drop-shadow-[0_0_8px_rgba(6,182,212,0.8)] fill-cyan-300 animate-pulse" /> : <span>{user?.avatar || "🧑"}</span>}
             {showStatus && (
                 <span className={`absolute ${dotPos[size] || dotPos.md} border sm:border-2 border-[#111114] bg-[#111114] rounded-full flex items-center justify-center`}>
                     <StatusDot status={isBot ? "online" : user?.status} size={dotSz[size] || "sm"} />
@@ -261,14 +262,15 @@ export const IconBtn = React.memo(({ children, onClick, active = false, title, d
         <motion.button
             type="button"
             title={title}
+            aria-label={title || "button"}
             onClick={onClick}
-            whileHover={window.innerWidth >= 640 ? { scale: 1.05 } : {}}
-            whileTap={{ scale: 0.95 }}
-            className={`${small ? "w-7 h-7 sm:w-8 sm:h-8 text-sm sm:text-base" : "w-8.5 h-8.5 sm:w-9 sm:h-9 text-base sm:text-lg"} rounded-lg sm:rounded-xl flex items-center justify-center transition-all duration-150 flex-shrink-0 focus:outline-none touch-manipulation select-none ${className} ${active
-                ? `bg-gradient-to-br ${theme.accent} text-white shadow-md`
+            whileHover={{ scale: 1.06 }}
+            whileTap={{ scale: 0.92 }}
+            className={`${small ? "w-8 h-8 text-sm" : "w-9 h-9 text-base"} rounded-xl flex items-center justify-center transition-all duration-200 flex-shrink-0 outline-none focus-visible:ring-2 focus-visible:ring-sky-400/60 touch-manipulation select-none cursor-pointer ${className} ${active
+                ? `bg-gradient-to-br from-sky-400 via-indigo-500 to-purple-600 text-white shadow-[0_0_16px_rgba(56,189,248,0.45)] border border-sky-300/40 font-bold`
                 : danger
-                    ? "hover:bg-red-500/10 text-red-400 focus:ring-2 focus:ring-red-500/20"
-                    : "hover:bg-white/[0.07] text-white/40 hover:text-white/80 focus:ring-2 focus:ring-white/10"
+                    ? "border border-red-500/20 bg-red-500/10 text-red-300 hover:bg-red-500/20 hover:border-red-500/40 hover:text-white shadow-sm"
+                    : "border border-white/8 bg-white/[0.03] text-white/60 hover:text-white hover:bg-white/[0.08] hover:border-white/18 shadow-sm hover:shadow-[0_0_12px_rgba(255,255,255,0.06)]"
                 }`}
         >
             {children}

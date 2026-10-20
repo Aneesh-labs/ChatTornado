@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { IconBtn, useTheme } from "./constants";
 import API from "../../../Services/API";
 import { prepareP2PFile } from "../../../Services/p2p";
-import { Shield, X, Gamepad2, Volume2, Mic, MicOff, MoreVertical, Sparkles, Wand2, RefreshCw, ImageIcon, Eye, Cpu, Zap, FileText, FileCode, Clock } from "lucide-react";
+import { Shield, X, Gamepad2, Volume2, Mic, MicOff, MoreVertical, Sparkles, Wand2, RefreshCw, ImageIcon, Eye, Cpu, Zap, FileText, FileCode, Clock, Paperclip, Smile, SendHorizonal, ArrowUp, Lightbulb, Code, Palette, Globe, Search } from "lucide-react";
 import CyberShieldModal from "./CyberShieldModal";
 import InChatGameModal from "./InChatGameModal";
 import SoundboardModal from "./SoundboardModal";
@@ -1100,9 +1100,9 @@ const ChatInput = React.memo(({ onSend, replyTo, onCancelReply, selectedUser, so
                             setText((prev) => prev.startsWith("/research ") ? prev : "/research ");
                             textareaRef.current?.focus();
                         }}
-                        className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-indigo-500/10 hover:bg-indigo-500/20 border border-indigo-500/30 text-indigo-300 font-medium transition-all hover:scale-105 active:scale-95 flex-shrink-0"
+                        className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-indigo-500/10 hover:bg-indigo-500/20 border border-indigo-400/30 text-indigo-300 font-semibold transition-all hover:scale-105 active:scale-95 flex-shrink-0 cursor-pointer shadow-sm"
                     >
-                        <span>🔬</span>
+                        <Search className="w-3.5 h-3.5 text-indigo-400" />
                         <span>/research</span>
                     </button>
                     <button
@@ -1111,9 +1111,9 @@ const ChatInput = React.memo(({ onSend, replyTo, onCancelReply, selectedUser, so
                             setText((prev) => prev.startsWith("/image ") ? prev : "/image ");
                             textareaRef.current?.focus();
                         }}
-                        className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/30 text-cyan-300 font-medium transition-all hover:scale-105 active:scale-95 flex-shrink-0"
+                        className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-400/30 text-cyan-300 font-semibold transition-all hover:scale-105 active:scale-95 flex-shrink-0 cursor-pointer shadow-sm"
                     >
-                        <span>🎨</span>
+                        <Palette className="w-3.5 h-3.5 text-cyan-400" />
                         <span>/image</span>
                     </button>
                     <button
@@ -1122,9 +1122,9 @@ const ChatInput = React.memo(({ onSend, replyTo, onCancelReply, selectedUser, so
                             setText("Search the web for ");
                             textareaRef.current?.focus();
                         }}
-                        className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-sky-500/10 hover:bg-sky-500/20 border border-sky-500/30 text-sky-300 font-medium transition-all hover:scale-105 active:scale-95 flex-shrink-0"
+                        className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-sky-500/10 hover:bg-sky-500/20 border border-sky-400/30 text-sky-300 font-semibold transition-all hover:scale-105 active:scale-95 flex-shrink-0 cursor-pointer shadow-sm"
                     >
-                        <span>🌐</span>
+                        <Globe className="w-3.5 h-3.5 text-sky-400" />
                         <span>Search Web</span>
                     </button>
                     <button
@@ -1133,9 +1133,9 @@ const ChatInput = React.memo(({ onSend, replyTo, onCancelReply, selectedUser, so
                             setText("Brainstorm 3 creative ideas for ");
                             textareaRef.current?.focus();
                         }}
-                        className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-violet-500/10 hover:bg-violet-500/20 border border-violet-500/30 text-violet-300 font-medium transition-all hover:scale-105 active:scale-95 flex-shrink-0"
+                        className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-violet-500/10 hover:bg-violet-500/20 border border-violet-400/30 text-violet-300 font-semibold transition-all hover:scale-105 active:scale-95 flex-shrink-0 cursor-pointer shadow-sm"
                     >
-                        <span>💡</span>
+                        <Lightbulb className="w-3.5 h-3.5 text-violet-400" />
                         <span>Brainstorm</span>
                     </button>
                     <button
@@ -1144,9 +1144,9 @@ const ChatInput = React.memo(({ onSend, replyTo, onCancelReply, selectedUser, so
                             setText("Explain simply how ");
                             textareaRef.current?.focus();
                         }}
-                        className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-300 font-medium transition-all hover:scale-105 active:scale-95 flex-shrink-0"
+                        className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 border border-amber-400/30 text-amber-300 font-semibold transition-all hover:scale-105 active:scale-95 flex-shrink-0 cursor-pointer shadow-sm"
                     >
-                        <span>⚡</span>
+                        <Zap className="w-3.5 h-3.5 text-amber-400" />
                         <span>Explain simply</span>
                     </button>
                     <button
@@ -1155,9 +1155,9 @@ const ChatInput = React.memo(({ onSend, replyTo, onCancelReply, selectedUser, so
                             setText("Write code for ");
                             textareaRef.current?.focus();
                         }}
-                        className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 text-emerald-300 font-medium transition-all hover:scale-105 active:scale-95 flex-shrink-0"
+                        className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-400/30 text-emerald-300 font-semibold transition-all hover:scale-105 active:scale-95 flex-shrink-0 cursor-pointer shadow-sm"
                     >
-                        <span>💻</span>
+                        <Code className="w-3.5 h-3.5 text-emerald-400" />
                         <span>Code</span>
                     </button>
                 </div>
@@ -1249,10 +1249,8 @@ const ChatInput = React.memo(({ onSend, replyTo, onCancelReply, selectedUser, so
                                         exit={{ opacity: 0, width: 0, x: -10 }}
                                         className="flex gap-1 overflow-hidden"
                                     >
-                                        <IconBtn title="Attach image, video, or media" onClick={() => fileInputRef.current?.click()} small className="shrink-0">
-                                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
-                                            </svg>
+                                        <IconBtn title="Attach image, video, or media" onClick={() => fileInputRef.current?.click()} small className="shrink-0 text-sky-400/80 hover:!text-sky-300 hover:bg-sky-500/10">
+                                            <Paperclip className="w-4 h-4" />
                                         </IconBtn>
 
                                         <IconBtn
@@ -1432,13 +1430,11 @@ const ChatInput = React.memo(({ onSend, replyTo, onCancelReply, selectedUser, so
 
                             <button
                                 type="button"
-                                className="text-white/25 hover:text-white/50 transition-colors flex-shrink-0 focus:outline-none touch-manipulation"
+                                className="text-white/40 hover:text-amber-300 p-1 rounded-lg hover:bg-white/[0.06] transition-all flex-shrink-0 focus:outline-none touch-manipulation cursor-pointer active:scale-95"
                                 aria-label="Insert emoji"
                                 onClick={() => setEmojiOpen((open) => !open)}
                             >
-                                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                </svg>
+                                <Smile className="w-4.5 h-4.5" />
                             </button>
                             {emojiOpen && (
                                 <div className="absolute bottom-14 right-0 z-30 flex gap-1 rounded-2xl border border-white/10 bg-neutral-900 p-2 shadow-2xl">
@@ -1461,9 +1457,7 @@ const ChatInput = React.memo(({ onSend, replyTo, onCancelReply, selectedUser, so
                         className={`w-10 h-10 rounded-xl bg-red-500/20 text-red-500 border border-red-500/50 flex items-center justify-center shadow-lg flex-shrink-0 focus:outline-none touch-manipulation`}
                         aria-label="Send audio message"
                     >
-                        <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-                            <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
-                        </svg>
+                        <SendHorizonal className="w-4.5 h-4.5 text-red-400 fill-red-400/20" />
                     </motion.button>
                 ) : canSend ? (
                     <motion.button
@@ -1478,9 +1472,7 @@ const ChatInput = React.memo(({ onSend, replyTo, onCancelReply, selectedUser, so
                         className={`w-10 h-10 rounded-xl bg-gradient-to-br from-sky-400 via-indigo-500 to-purple-600 flex items-center justify-center shadow-[0_4px_16px_rgba(56,189,248,0.35)] flex-shrink-0 focus:outline-none touch-manipulation transition-all hover:scale-105 active:scale-95 ${disabled || isSendingRef.current ? 'opacity-50 cursor-not-allowed' : ''}`}
                         aria-label="Send message"
                     >
-                        <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 10l7-7m0 0l7 7m-7-7v18" />
-                        </svg>
+                        <ArrowUp className="w-4.5 h-4.5 text-white stroke-[2.8]" />
                     </motion.button>
                 ) : (
                     <motion.button
@@ -1495,9 +1487,7 @@ const ChatInput = React.memo(({ onSend, replyTo, onCancelReply, selectedUser, so
                         className={`w-10 h-10 rounded-xl bg-white/10 hover:bg-white/20 flex items-center justify-center shadow-lg flex-shrink-0 focus:outline-none touch-manipulation transition-colors ${disabled || isSendingRef.current ? 'opacity-50 cursor-not-allowed' : ''}`}
                         aria-label="Record voice message"
                     >
-                        <svg className="w-5 h-5 text-white/80" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
-                        </svg>
+                        <Mic className="w-4.5 h-4.5 text-white/80" />
                     </motion.button>
                 )}
             </div>

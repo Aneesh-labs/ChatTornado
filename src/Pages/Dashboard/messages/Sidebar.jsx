@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import PropTypes from "prop-types";
-import { Users, Plus, BadgeCheck, Flame, Lock } from "lucide-react";
+import { Users, Plus, BadgeCheck, Flame, Lock, MessageSquare, Globe, Search, Settings, RotateCw, Sparkles, Shield, UserCheck, UserPlus } from "lucide-react";
 import { useTheme, Avatar, Badge, IconBtn, StatusDot, USER_STATUSES, areIdsEqual } from "./constants";
 import API from "../../../Services/API";
 import CreateGroupModal from "./CreateGroupModal";
@@ -424,10 +424,8 @@ const Sidebar = React.memo(({
             <div className={`flex flex-col gap-3 px-4 sm:px-5 pt-4 sm:pt-5 pb-3 sm:pb-4 border-b ${theme?.border || ""}`}>
                 <div className="flex items-center justify-between w-full">
                     <div className="flex items-center gap-2.5">
-                        <div className={`w-8 h-8 rounded-xl bg-gradient-to-br ${theme?.accent || "from-violet-500 to-indigo-500"} flex items-center justify-center shadow-lg`}>
-                            <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                            </svg>
+                        <div className="w-8.5 h-8.5 rounded-xl bg-gradient-to-br from-sky-400 via-indigo-500 to-purple-600 flex items-center justify-center shadow-[0_0_16px_rgba(56,189,248,0.4)] border border-sky-300/30">
+                            <MessageSquare className="w-4 h-4 text-white" />
                         </div>
                         <div>
                             <span className="text-sm font-bold text-white/90 tracking-tight block">Messages</span>
@@ -436,25 +434,18 @@ const Sidebar = React.memo(({
                         {totalUnread > 0 && <Badge count={totalUnread} />}
                     </div>
 
-                    <div className="flex items-center gap-1">
+                    <div className="flex items-center gap-1.5">
                         {onRefresh && (
-                            <IconBtn onClick={() => { onRefresh(); fetchGroups(); }} title="Refresh conversations" small className={isRefreshing ? "text-cyan-400 bg-white/[0.08]" : ""}>
-                                <svg className={`w-4 h-4 transition-transform duration-500 ${isRefreshing ? "animate-spin text-cyan-400" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                                </svg>
+                            <IconBtn onClick={() => { onRefresh(); fetchGroups(); }} title="Refresh conversations" small className={isRefreshing ? "text-cyan-400 bg-cyan-500/10 border-cyan-500/30" : ""}>
+                                <RotateCw className={`w-3.5 h-3.5 transition-transform duration-500 ${isRefreshing ? "animate-spin text-cyan-400" : ""}`} />
                             </IconBtn>
                         )}
-                        <IconBtn onClick={onOpenSearch} title="Search ⌘K" small>
-                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                            </svg>
+                        <IconBtn onClick={onOpenSearch} title="Search (Ctrl + K)" small>
+                            <Search className="w-3.5 h-3.5" />
                         </IconBtn>
 
                         <IconBtn onClick={onOpenSettings} title="Settings" small>
-                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                            </svg>
+                            <Settings className="w-3.5 h-3.5" />
                         </IconBtn>
 
                         <IconBtn
@@ -494,6 +485,7 @@ const Sidebar = React.memo(({
             <div className={`flex items-center gap-1.5 px-3 sm:px-4 py-2 border-b ${theme?.border || ""}`} role="tablist">
                 {MAIN_TABS.map(([key, label]) => {
                     const isTabActive = mainTab === key;
+                    const TabIcon = key === "chats" ? MessageSquare : key === "groups" ? Users : Globe;
                     return (
                         <button
                             key={key}
@@ -501,12 +493,13 @@ const Sidebar = React.memo(({
                             role="tab"
                             aria-selected={isTabActive}
                             onClick={() => setMainTab(key)}
-                            className={`flex-1 text-[12px] py-1.5 rounded-xl font-bold transition-all duration-150 outline-none focus-visible:ring-2 focus-visible:ring-white/20 touch-manipulation ${isTabActive
-                                ? `bg-white/10 text-white shadow`
-                                : "text-white/40 hover:text-white/70"
+                            className={`flex-1 flex items-center justify-center gap-1.5 text-[11px] py-1.5 rounded-xl font-bold transition-all duration-200 outline-none focus-visible:ring-2 focus-visible:ring-sky-400/50 touch-manipulation cursor-pointer ${isTabActive
+                                ? "bg-gradient-to-r from-white/15 to-white/8 border border-white/20 text-white shadow-md font-black"
+                                : "text-white/50 hover:text-white hover:bg-white/[0.04]"
                                 }`}
                         >
-                            {label}
+                            <TabIcon className="w-3 h-3 shrink-0" />
+                            <span>{label}</span>
                         </button>
                     );
                 })}

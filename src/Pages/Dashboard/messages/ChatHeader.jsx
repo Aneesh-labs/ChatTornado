@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import PropTypes from "prop-types";
 import { motion, AnimatePresence } from "framer-motion";
-import { MoreVertical, Sparkles, Brain, Download, Cpu, Ban, UserCheck, ShieldAlert, Users, BadgeCheck, Dna, GitFork, Clock, Tv, Ghost, Flame, Shield } from "lucide-react";
+import { MoreVertical, Sparkles, Brain, Download, Cpu, Ban, UserCheck, ShieldAlert, Users, BadgeCheck, Dna, GitFork, Clock, Tv, Ghost, Flame, Shield, Phone, PhoneCall, Video, Search, RotateCw, ChevronLeft, CheckSquare, ListChecks } from "lucide-react";
 import { IconBtn, Avatar, useTheme } from "./constants";
 import PersonalizeModal from "./PersonalizeModal";
 import ExportModal from "./ExportModal";
@@ -208,11 +208,9 @@ const ChatHeader = React.memo(({
                         type="button"
                         onClick={onBack}
                         aria-label="Back to conversations"
-                        className="lg:hidden w-8 h-8 flex items-center justify-center rounded-xl hover:bg-white/[0.06] text-white/60 hover:text-white transition-colors flex-shrink-0 touch-manipulation"
+                        className="lg:hidden w-8 h-8 flex items-center justify-center rounded-xl border border-white/8 bg-white/[0.03] hover:bg-white/[0.08] hover:border-white/18 text-white/70 hover:text-white transition-all active:scale-95 flex-shrink-0 touch-manipulation cursor-pointer"
                     >
-                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                        </svg>
+                        <ChevronLeft className="w-4.5 h-4.5" />
                     </button>
                 )}
                 {isGroup ? (
@@ -470,28 +468,20 @@ const ChatHeader = React.memo(({
                         </IconBtn>
                     )}
                     {onOpenSearch && (
-                        <IconBtn title="Search" onClick={onOpenSearch} small className="lg:hidden">
-                            <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                            </svg>
+                        <IconBtn title="Search (Ctrl + K)" onClick={onOpenSearch} small className="lg:hidden">
+                            <Search className="w-4 h-4" />
                         </IconBtn>
                     )}
                     {!isBotUser && !isGroup ? (
                         <>
-                            <IconBtn title="Voice call" onClick={() => onStartCall?.(false)} small>
-                                <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
-                                </svg>
+                            <IconBtn title="Voice call" onClick={() => onStartCall?.(false)} small className="hover:!text-emerald-300">
+                                <Phone className="w-4 h-4 text-emerald-400" />
                             </IconBtn>
-                            <IconBtn title="Video call" onClick={() => onStartCall?.(true)} small>
-                                <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.069A1 1 0 0121 8.867v6.266a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                                </svg>
+                            <IconBtn title="Video call" onClick={() => onStartCall?.(true)} small className="hover:!text-sky-300">
+                                <Video className="w-4 h-4 text-sky-400" />
                             </IconBtn>
-                            <IconBtn title="Ghost Chat" onClick={() => onStartGhostChat?.()} small>
-                                <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 10h.01M15 10h.01M9 14h6M7 20l-3-3V7a2 2 0 012-2h12a2 2 0 012 2v10a2 2 0 01-2 2H7z" />
-                                </svg>
+                            <IconBtn title="Ghost Chat" onClick={() => onStartGhostChat?.()} small className="hover:!text-purple-300">
+                                <Ghost className="w-4 h-4 text-purple-400" />
                             </IconBtn>
                             <button
                                 type="button"
@@ -520,10 +510,8 @@ const ChatHeader = React.memo(({
                             <IconBtn title="Zero-Knowledge Memory Vault" onClick={() => setShowMemoryVaultModal(true)} small className="hover:!text-emerald-300">
                                 <Shield className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-400" />
                             </IconBtn>
-                            <IconBtn title="Live AI Voice Call" onClick={() => onStartCall?.("ai")} small>
-                                <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
-                                </svg>
+                            <IconBtn title="Live AI Voice Call" onClick={() => onStartCall?.("ai")} small className="hover:!text-sky-300 bg-sky-500/10 border-sky-400/30">
+                                <PhoneCall className="w-4 h-4 text-sky-400 animate-pulse" />
                             </IconBtn>
                         </>
                     ) : null}
@@ -531,9 +519,7 @@ const ChatHeader = React.memo(({
                         <Download className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-cyan-400" />
                     </IconBtn>
                     <IconBtn title="Select messages" onClick={onToggleSelectionMode} small>
-                        <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                        </svg>
+                        <ListChecks className="w-4 h-4" />
                     </IconBtn>
 
                     {/* Three-dots menu for desktop and mobile */}
