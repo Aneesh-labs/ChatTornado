@@ -1,7 +1,61 @@
 @import "tailwindcss";
 
+:root {
+    color-scheme: dark;
+    --glow-brand: rgba(56, 189, 248, 0.25);
+    --glow-purple: rgba(168, 85, 247, 0.22);
+    --glow-emerald: rgba(52, 211, 153, 0.22);
+    --glass-bg: rgba(13, 17, 24, 0.78);
+    --glass-border: rgba(255, 255, 255, 0.08);
+}
+
+html {
+    color-scheme: dark;
+    scroll-behavior: smooth;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+    color-scheme: dark;
+    background-color: #07090d;
+    color: #f1f5f9;
+    overflow-x: hidden;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+}
+
+::selection {
+    background: rgba(56, 189, 248, 0.35);
+    color: #ffffff;
+}
+
+/* Cross-browser custom scrollbar */
+* {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.16) transparent;
+}
+
+*::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+
+*::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.14);
+    border-radius: 9999px;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.28);
+}
+
 @theme {
     --animate-blink: blink 0.8s step-start infinite;
+    --animate-pulse-slow: pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 
     @keyframes blink {
         0%, 100% { opacity: 1; }
@@ -10,8 +64,42 @@
 }
 
 @layer utilities {
+    .glass-panel {
+        background: var(--glass-bg);
+        border: 1px solid var(--glass-border);
+        backdrop-filter: blur(24px);
+        -webkit-backdrop-filter: blur(24px);
+    }
+
+    .glass-card {
+        background: rgba(17, 24, 39, 0.65);
+        border: 1px solid rgba(255, 255, 255, 0.09);
+        backdrop-filter: blur(16px);
+        -webkit-backdrop-filter: blur(16px);
+    }
+
+    .glass-card-hover {
+        transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .glass-card-hover:hover {
+        background: rgba(255, 255, 255, 0.06);
+        border-color: rgba(255, 255, 255, 0.18);
+        box-shadow: 0 12px 36px -8px rgba(0, 0, 0, 0.45);
+        transform: translateY(-1px);
+    }
+
+    .glow-border {
+        box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.1), 0 0 24px -4px var(--glow-brand);
+    }
+
+    .glow-subtle {
+        box-shadow: 0 8px 32px -4px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    }
+
     .custom-scrollbar::-webkit-scrollbar {
         width: 4px;
+        height: 4px;
     }
 
     .custom-scrollbar::-webkit-scrollbar-track {
@@ -19,11 +107,20 @@
     }
 
     .custom-scrollbar::-webkit-scrollbar-thumb {
-        background: rgba(255, 255, 255, 0.1);
+        background: rgba(255, 255, 255, 0.14);
         border-radius: 10px;
     }
 
     .custom-scrollbar::-webkit-scrollbar-thumb:hover {
         background: rgba(255, 255, 255, 0.3);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    *, ::before, ::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
     }
 }

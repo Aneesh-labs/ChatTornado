@@ -1309,7 +1309,7 @@ const ChatInput = React.memo(({ onSend, replyTo, onCancelReply, selectedUser, so
                             </AnimatePresence>
                         </div>
 
-                        <div className={`flex-1 flex items-end gap-1.5 ${theme.input} border rounded-2xl px-3 py-2 sm:py-2.5 focus-within:border-white/20 transition-all duration-200 min-w-0`}>
+                        <div className={`flex-1 flex items-end gap-1.5 ${theme.input} border border-white/10 rounded-2xl px-3.5 py-2 sm:py-2.5 bg-white/[0.035] backdrop-blur-xl focus-within:border-sky-400/40 focus-within:bg-white/[0.06] focus-within:shadow-[0_0_24px_rgba(56,189,248,0.2)] transition-all duration-200 min-w-0`}>
                             {/* AI Polish & Tone Rewrite Wand */}
                             {text.trim().length > 2 && (
                                 <div className="relative shrink-0 mb-1">
@@ -1475,7 +1475,7 @@ const ChatInput = React.memo(({ onSend, replyTo, onCancelReply, selectedUser, so
                         onClick={handleSend}
                         disabled={disabled || isSendingRef.current}
                         whileTap={{ scale: 0.92 }}
-                        className={`w-10 h-10 rounded-xl bg-gradient-to-br ${theme.accent} flex items-center justify-center shadow-lg flex-shrink-0 focus:outline-none touch-manipulation ${disabled || isSendingRef.current ? 'opacity-50 cursor-not-allowed' : ''}`}
+                        className={`w-10 h-10 rounded-xl bg-gradient-to-br from-sky-400 via-indigo-500 to-purple-600 flex items-center justify-center shadow-[0_4px_16px_rgba(56,189,248,0.35)] flex-shrink-0 focus:outline-none touch-manipulation transition-all hover:scale-105 active:scale-95 ${disabled || isSendingRef.current ? 'opacity-50 cursor-not-allowed' : ''}`}
                         aria-label="Send message"
                     >
                         <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">

@@ -201,7 +201,7 @@ const ChatHeader = React.memo(({
     const userStreak = useMemo(() => (!isGroup && !isBotUser && user?.id ? getStreak(user.id) : null), [user?.id, isGroup, isBotUser]);
 
     return (
-        <div className={`relative z-30 flex items-center justify-between px-3 sm:px-6 py-2.5 sm:py-4 border-b ${theme.border} backdrop-blur-2xl bg-black/20 flex-shrink-0 w-full select-none`}>
+        <div className={`relative z-30 flex items-center justify-between px-3 sm:px-6 py-2.5 sm:py-3.5 border-b border-white/10 backdrop-blur-2xl bg-[#090c14]/85 shadow-[0_4px_24px_rgba(0,0,0,0.35)] flex-shrink-0 w-full select-none`}>
             <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
                 {onBack && (
                     <button

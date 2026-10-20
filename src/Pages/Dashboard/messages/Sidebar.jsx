@@ -82,10 +82,10 @@ export const ConversationCard = React.memo(({
             role="button"
             tabIndex={0}
             aria-selected={selected}
-            className={`relative flex items-center gap-3 px-3 py-3 rounded-2xl transition-all duration-150 group outline-none focus-visible:ring-2 focus-visible:ring-violet-500/50 touch-manipulation ${canOpenChat ? "cursor-pointer active:scale-[0.99]" : "cursor-default"
+            className={`relative flex items-center gap-3 px-3 py-3 rounded-2xl transition-all duration-200 group outline-none focus-visible:ring-2 focus-visible:ring-sky-400/60 touch-manipulation ${canOpenChat ? "cursor-pointer active:scale-[0.99]" : "cursor-default"
                 } ${selected && canOpenChat
-                    ? `bg-gradient-to-r ${theme?.accent || "from-violet-600 to-indigo-600"} bg-opacity-20 border border-white/[0.12] shadow-lg`
-                    : `border border-transparent ${theme?.glassHover || "hover:bg-white/[0.02]"} hover:border-white/[0.06]`
+                    ? "bg-gradient-to-r from-sky-500/15 via-indigo-500/15 to-purple-500/10 border border-sky-400/35 shadow-[0_8px_24px_rgba(0,0,0,0.35)]"
+                    : "border border-white/5 bg-white/[0.02] hover:bg-white/[0.055] hover:border-white/12"
                 }`}
         >
             {selected && canOpenChat && (
@@ -329,9 +329,17 @@ const Sidebar = React.memo(({
         const handleVaultToggle = (e) => {
             setVaultState({ unlocked: e.detail?.unlocked, decoy: e.detail?.decoy });
         };
+        const handleGlobalKeyDown = (e) => {
+            if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
+                e.preventDefault();
+                onOpenSearch?.();
+            }
+        };
+        window.addEventListener("keydown", handleGlobalKeyDown);
         window.addEventListener("sessionStorageUpdate", handleStorageUpdate);
         window.addEventListener("vortex_vault_toggled", handleVaultToggle);
         return () => {
+            window.removeEventListener("keydown", handleGlobalKeyDown);
             window.removeEventListener("sessionStorageUpdate", handleStorageUpdate);
             window.removeEventListener("vortex_vault_toggled", handleVaultToggle);
         };
