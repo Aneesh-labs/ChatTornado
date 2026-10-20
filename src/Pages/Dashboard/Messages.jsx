@@ -572,8 +572,25 @@ const Messages = () => {
         requestNotificationPermission();
     }, []);
 
+    useEffect(() => {
+        window.scrollTo(0, 0);
+        const handleWindowScroll = () => {
+            if (window.scrollY !== 0 || window.scrollX !== 0) {
+                window.scrollTo(0, 0);
+            }
+        };
+        window.addEventListener("scroll", handleWindowScroll, { passive: true });
+        return () => window.removeEventListener("scroll", handleWindowScroll);
+    }, []);
+
     const scrollToBottom = useCallback((behavior = "smooth") => {
-        messagesEndRef.current?.scrollIntoView({ behavior });
+        const container = scrollContainerRef.current;
+        if (!container) return;
+        if (behavior === "auto") {
+            container.scrollTop = container.scrollHeight;
+        } else {
+            container.scrollTo({ top: container.scrollHeight, behavior: "smooth" });
+        }
     }, []);
 
     useEffect(() => {
@@ -1736,7 +1753,11 @@ const Messages = () => {
         setTimeout(() => {
             const el = document.getElementById(`msg-${msgId}`);
             if (el) {
-                el.scrollIntoView({ behavior: "smooth", block: "center" });
+                const container = scrollContainerRef.current;
+                if (container) {
+                    const topPos = el.offsetTop - container.clientHeight / 2 + el.clientHeight / 2;
+                    container.scrollTo({ top: Math.max(0, topPos), behavior: "smooth" });
+                }
                 el.classList.add("ring-2", "ring-cyan-400", "bg-cyan-500/20", "rounded-2xl", "transition-all", "duration-500");
                 setTimeout(() => {
                     el.classList.remove("ring-2", "ring-cyan-400", "bg-cyan-500/20");

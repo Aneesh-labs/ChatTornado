@@ -49,6 +49,17 @@ export default function DashboardLayout() {
         };
     }, []);
 
+    useEffect(() => {
+        window.scrollTo(0, 0);
+        const handleWindowScroll = () => {
+            if (window.scrollY !== 0 || window.scrollX !== 0) {
+                window.scrollTo(0, 0);
+            }
+        };
+        window.addEventListener("scroll", handleWindowScroll, { passive: true });
+        return () => window.removeEventListener("scroll", handleWindowScroll);
+    }, []);
+
     const initial = username.trim().charAt(0).toUpperCase() || "M";
 
     const handleLogout = () => {
@@ -59,7 +70,7 @@ export default function DashboardLayout() {
     };
 
     return (
-        <div className="relative flex h-full w-full overflow-hidden bg-[#07090d] text-white selection:bg-sky-500/30 selection:text-white">
+        <div className="relative flex h-screen h-[100dvh] w-full overflow-hidden bg-[#07090d] text-white selection:bg-sky-500/30 selection:text-white">
             <PortfolioOnboardingModal
                 isOpen={showOnboarding}
                 onClose={() => setShowOnboarding(false)}
