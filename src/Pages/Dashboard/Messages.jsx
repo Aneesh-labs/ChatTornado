@@ -388,7 +388,10 @@ const Messages = () => {
             { urls: "stun:stun.l.google.com:19302" },
             { urls: "stun:stun1.l.google.com:19302" },
             { urls: "stun:stun2.l.google.com:19302" },
+            { urls: "stun:stun3.l.google.com:19302" },
+            { urls: "stun:stun4.l.google.com:19302" },
             { urls: "stun:global.stun.twilio.com:3478" },
+            { urls: "stun:stun.services.mozilla.com" },
             ...(turnUrl ? [{
                 urls: turnUrl,
                 username: import.meta.env.VITE_TURN_USERNAME,
@@ -396,7 +399,12 @@ const Messages = () => {
             }] : [])
         ];
 
-        const peer = new RTCPeerConnection({ iceServers });
+        const peer = new RTCPeerConnection({
+            iceServers,
+            iceCandidatePoolSize: 10,
+            bundlePolicy: "max-bundle",
+            rtcpMuxPolicy: "require"
+        });
         if (stream) {
             stream.getTracks().forEach((track) => peer.addTrack(track, stream));
         }
@@ -408,10 +416,18 @@ const Messages = () => {
         };
 
         peer.ontrack = (event) => {
-            const remoteStream = event.streams?.[0] || new MediaStream([event.track]);
             setCall((current) => {
                 if (!current) return current;
                 callStartTimeRef.current = callStartTimeRef.current || Date.now();
+                let remoteStream = current.remoteStream;
+                if (event.streams && event.streams[0]) {
+                    remoteStream = event.streams[0];
+                } else {
+                    if (!remoteStream) remoteStream = new MediaStream();
+                    if (!remoteStream.getTracks().some((t) => t.id === event.track.id)) {
+                        remoteStream.addTrack(event.track);
+                    }
+                }
                 return { ...current, remoteStream, status: "connected" };
             });
         };
@@ -465,6 +481,10 @@ const Messages = () => {
             setCallNotice("Select a conversation before initiating a call.");
             return;
         }
+        if (enrichedSelected?.id === myUserId.current) {
+            setCallNotice("⚠️ Cannot call your own account. To test peer-to-peer calling, please open an Incognito window with another user (e.g. Priyanshu or Test), or start a Live AI Voice Call with VORTEX-9.");
+            return;
+        }
         if (!socketReady) {
             setCallNotice("Waiting for secure connection. Please try again shortly.");
             return;
@@ -484,7 +504,7 @@ const Messages = () => {
                         noiseSuppression: true,
                         autoGainControl: true,
                         sampleRate: 48000,
-                        channelCount: 2,
+                        channelCount: 1, // Mono channel ensures browser & hardware Acoustic Echo Cancellation (AEC)
                     },
                     video: video ? {
                         width: { ideal: 1280, max: 1920 },
@@ -545,7 +565,7 @@ const Messages = () => {
                         noiseSuppression: true,
                         autoGainControl: true,
                         sampleRate: 48000,
-                        channelCount: 2,
+                        channelCount: 1, // Mono channel ensures browser & hardware Acoustic Echo Cancellation (AEC)
                     },
                     video: call.video ? {
                         width: { ideal: 1280, max: 1920 },
@@ -563,6 +583,12 @@ const Messages = () => {
             const answer = await peer.createAnswer();
             await peer.setLocalDescription(answer);
             sendSignal(call.user.id, { type: "answer", answer });
+            setCall({
+                user: call.user,
+                video: call.video,
+                localStream: stream,
+                status: "connected"
+            });
         } catch (error) {
             console.error("Failed to answer call:", error);
             setCallNotice("Failed to answer call.");
@@ -592,6 +618,14 @@ const Messages = () => {
 
     const handleCallSignal = useCallback(async ({ sender_id, signal }) => {
         if (!signal) return;
+        if (sender_id === myUserId.current) {
+            return; // Discard any self loopback signal
+        }
+        if (signal.type === "offline" || signal.type === "error") {
+            setCallNotice(signal.message || "Call cannot be connected.");
+            closeCall(false);
+            return;
+        }
         if (signal.type === "offer") {
             const caller = users.find((u) => u.id === sender_id) || { id: sender_id, username: `User-${sender_id}` };
             const isCurrentlyInCall = Boolean(call && (call.status === "connected" || call.status === "calling" || call.status === "ringing"));
@@ -636,6 +670,7 @@ const Messages = () => {
             if (peerRef.current) {
                 await peerRef.current.setRemoteDescription(new RTCSessionDescription(signal.answer));
                 await drainQueuedCandidates(peerRef.current);
+                setCall((current) => current ? { ...current, status: "connected" } : current);
             }
             return;
         }
@@ -679,7 +714,7 @@ const Messages = () => {
                         noiseSuppression: true,
                         autoGainControl: true,
                         sampleRate: 48000,
-                        channelCount: 2,
+                        channelCount: 1, // Mono channel ensures browser & hardware Acoustic Echo Cancellation (AEC)
                     },
                     video: targetCall.video ? {
                         width: { ideal: 1280, max: 1920 },

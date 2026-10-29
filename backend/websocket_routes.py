@@ -76,12 +76,41 @@ async def websocket_endpoint(websocket: WebSocket):
                 except (ValueError, TypeError):
                     continue
 
+                # Prevent self-call loopback (prevents mic routing back to speaker)
+                if receiver_id == user_id:
+                    logger.warning("WebRTC signal loopback prevented for user %s", user_id)
+                    await manager.send_personal_message(user_id, {
+                        "type": "signal",
+                        "sender_id": user_id,
+                        "signal": {
+                            "type": "error",
+                            "message": "Cannot call your own account. Open an Incognito window or second device with another account (e.g. Priyanshu or Test), or start Live AI Voice with VORTEX-9."
+                        }
+                    })
+                    continue
+
                 # Block check: blocked users cannot call each other
                 if is_blocked_bidirectional(db, user_id, receiver_id):
                     continue
 
                 if isinstance(signal, dict):
-                    logger.info("WebRTC %s: %s -> %s", signal.get("type", "signal"), user_id, receiver_id)
+                    sig_type = signal.get("type", "signal")
+                    logger.info("WebRTC %s: %s -> %s", sig_type, user_id, receiver_id)
+                    
+                    # If recipient is offline when an offer is initiated, inform caller immediately
+                    rid = int(receiver_id)
+                    is_recipient_online = (rid in manager.active_connections) or (str(rid) in manager.active_connections)
+                    if not is_recipient_online and sig_type == "offer":
+                        await manager.send_personal_message(user_id, {
+                            "type": "signal",
+                            "sender_id": receiver_id,
+                            "signal": {
+                                "type": "offline",
+                                "message": "The person you are calling is currently offline."
+                            }
+                        })
+                        continue
+
                     await manager.send_personal_message(receiver_id, {
                         "type": "signal", "sender_id": user_id, "signal": signal,
                     })

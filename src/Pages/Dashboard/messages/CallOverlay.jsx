@@ -208,6 +208,7 @@ export default function CallOverlay({
     const [showConnected, setShowConnected] = useState(false);
     const [showEnded, setShowEnded] = useState(false);
     const [ringingSeconds, setRingingSeconds] = useState(0);
+    const [isSpeakerOn, setIsSpeakerOn] = useState(true);
 
     // Screen sharing
     const [isScreenSharing, setIsScreenSharing] = useState(false);
@@ -727,6 +728,25 @@ export default function CallOverlay({
                                         isActive={isMuted}
                                         activeColor="rose"
                                     />
+
+                                    {/* Speaker Toggle */}
+                                    {!call.video && (
+                                        <ActionButton
+                                            onClick={() => {
+                                                setIsSpeakerOn((prev) => {
+                                                    const next = !prev;
+                                                    if (remoteAudio.current) {
+                                                        remoteAudio.current.volume = next ? 1.0 : 0.35;
+                                                    }
+                                                    return next;
+                                                });
+                                            }}
+                                            icon={ICONS.speaker}
+                                            label={isSpeakerOn ? "Speaker" : "Earpiece"}
+                                            isActive={isSpeakerOn}
+                                            activeColor="emerald"
+                                        />
+                                    )}
 
                                     {/* Video Camera Toggle */}
                                     {call.video && (
