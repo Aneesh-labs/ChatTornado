@@ -185,7 +185,7 @@ export default function DashboardLayout() {
             </aside>
 
             {/* Main Stage Content */}
-            <main id="main-content" className="relative z-10 flex min-w-0 flex-1 flex-col overflow-hidden h-full" role="main">
+            <main id="main-content" className="relative z-10 flex min-w-0 flex-1 flex-col overflow-hidden h-full pb-[54px] lg:pb-0" role="main">
                 {/* Mobile Top App Bar (Hidden when in active mobile chat to maximize viewport) */}
                 {!isMobileChatActive && (
                     <div className="flex items-center justify-between border-b border-white/10 bg-[#090c14]/90 px-4 py-3 backdrop-blur-2xl lg:hidden shadow-md">
@@ -212,28 +212,32 @@ export default function DashboardLayout() {
 
                 <Outlet />
 
-                {/* Mobile Bottom Floating Navigation Dock (Hidden when inside active chat conversation) */}
-                {!isMobileChatActive && (
-                    <nav className="relative z-20 flex overflow-x-auto border-t border-white/10 bg-[#090c14]/95 px-2 py-2 backdrop-blur-2xl lg:hidden justify-between gap-1 shadow-2xl" aria-label="Mobile dashboard navigation">
-                        {navItems.map(({ to, label, icon: Icon }) => (
-                            <NavLink
-                                key={to}
-                                to={to}
-                                className={({ isActive }) =>
-                                    [
-                                        "flex min-h-[46px] min-w-[48px] shrink-0 flex-1 flex-col items-center justify-center gap-1 rounded-xl px-1 text-[10px] font-bold transition-all active:scale-95",
-                                        isActive
-                                            ? "bg-gradient-to-b from-white/15 to-white/5 border border-white/20 text-sky-300 shadow-md font-black"
-                                            : "text-white/50 hover:bg-white/[0.04] hover:text-white",
-                                    ].join(" ")
-                                }
-                            >
-                                <Icon className="h-4 w-4" />
-                                <span className="truncate max-w-[54px]">{label.split(" ")[0]}</span>
-                            </NavLink>
-                        ))}
-                    </nav>
-                )}
+                {/* Mobile Lower Small Menu (Always visible as bottom navigation bar) */}
+                <nav className="fixed bottom-0 inset-x-0 z-50 flex h-[54px] items-center justify-around border-t border-white/10 bg-[#090c14]/95 px-1 backdrop-blur-2xl lg:hidden shadow-[0_-4px_24px_rgba(0,0,0,0.6)]" aria-label="Mobile dashboard navigation">
+                    {navItems.filter(item => !item.mobileOnly || item.to === "/darkweb").map(({ to, label, icon: Icon }) => (
+                        <NavLink
+                            key={to}
+                            to={to}
+                            className={({ isActive }) =>
+                                [
+                                    "flex h-full flex-1 min-w-0 flex-col items-center justify-center gap-0.5 rounded-lg px-0.5 text-[9px] font-semibold transition-all active:scale-95 touch-manipulation",
+                                    isActive
+                                        ? "text-sky-300 font-bold"
+                                        : "text-white/50 hover:text-white hover:bg-white/[0.04]",
+                                ].join(" ")
+                            }
+                        >
+                            {({ isActive }) => (
+                                <>
+                                    <div className={`p-1 rounded-lg transition-colors ${isActive ? "bg-sky-500/20 text-sky-300" : ""}`}>
+                                        <Icon className="h-4 w-4 shrink-0" />
+                                    </div>
+                                    <span className="truncate max-w-[46px] leading-tight text-[8.5px]">{label.split(" ")[0]}</span>
+                                </>
+                            )}
+                        </NavLink>
+                    ))}
+                </nav>
             </main>
         </div>
     );
