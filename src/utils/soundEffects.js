@@ -280,6 +280,8 @@ class SoundEngine {
 }
 
 export const soundEngine = new SoundEngine();
+export const soundEffects = soundEngine;
+export default soundEngine;
 
 export const SOUND_EFFECTS_LIST = [
     { id: "tada", name: "Ta-da!", emoji: "🎉", desc: "Victory fanfare" },

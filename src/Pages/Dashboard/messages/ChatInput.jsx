@@ -18,6 +18,7 @@ const VIDEO_EXTENSIONS = /\.(mp4|mov|mkv|avi|webm|m4v|3gp|flv|mpeg|mpg|ts|mts|m2
 
 const ChatInput = React.memo(({ onSend, replyTo, onCancelReply, selectedUser, socket = null, disabled = false, socketReady = true, aiMode, onOpenFutureMessages }) => {
     const theme = useTheme();
+    const isBot = Boolean(selectedUser?.is_bot || selectedUser?.username === "VORTEX-9");
     const baseUrl = (API.defaults.baseURL || "").replace(/\/+$/, "");
     const [text, setText] = useState("");
     const [isTyping, setIsTyping] = useState(false);
@@ -477,7 +478,7 @@ const ChatInput = React.memo(({ onSend, replyTo, onCancelReply, selectedUser, so
                 const uploadRelPath = (data.original_url || data.url || "").replace(/^\//, "");
                 const fullUploadedUrl = `${baseUrl}/${uploadRelPath}`;
 
-                const isBot = Boolean(selectedUser?.is_bot || selectedUser?.username === "VORTEX-9");
+                // isBot determined at component scope
                 const promptWithImage = trimmed
                     ? `${fullUploadedUrl}\n\n${trimmed}`
                     : (isBot ? `${fullUploadedUrl}\n\nPlease analyze and explain this image in detail.` : fullUploadedUrl);
@@ -1405,7 +1406,7 @@ const ChatInput = React.memo(({ onSend, replyTo, onCancelReply, selectedUser, so
                                 placeholder={
                                     isListening
                                         ? "Listening… (speaking converts to text)"
-                                        : Boolean(selectedUser?.is_bot || selectedUser?.username === "VORTEX-9")
+                                        : isBot
                                             ? "Ask VORTEX-9 anything or type /image <prompt>..."
                                             : "Message…"
                                 }

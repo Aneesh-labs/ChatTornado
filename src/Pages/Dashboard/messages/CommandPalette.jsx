@@ -282,7 +282,7 @@ const CommandPalette = React.memo(({
                 e.preventDefault();
                 setFocused((prev) => Math.max(prev - 1, 0));
                 break;
-            case "Enter":
+            case "Enter": {
                 e.preventDefault();
                 const item = displayed[focused];
                 if (item) {
@@ -294,6 +294,7 @@ const CommandPalette = React.memo(({
                     onClose();
                 }
                 break;
+            }
             case "Escape":
                 e.preventDefault();
                 onClose();

@@ -8,11 +8,11 @@
 import React, { useMemo } from "react";
 
 export default function AntiLeakWatermark({ active = true, viewerName = "Member", showTimestamp = true }) {
-    if (!active) return null;
-
     const timeStr = useMemo(() => {
         return new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
     }, []);
+
+    if (!active) return null;
 
     const watermarkText = `CONFIDENTIAL • ${viewerName.toUpperCase()} • ${timeStr}`;
 

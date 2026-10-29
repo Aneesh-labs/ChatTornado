@@ -1,12 +1,34 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Bell, LogOut, Palette, Radio, ShieldCheck, SlidersHorizontal, Users, Trash2, AlertTriangle, Loader2 } from "lucide-react";
+import {
+    Bell,
+    LogOut,
+    Palette,
+    Radio,
+    ShieldCheck,
+    SlidersHorizontal,
+    Users,
+    Trash2,
+    AlertTriangle,
+    Loader2,
+    Volume2,
+    VolumeX,
+    Lock,
+    Eye,
+    EyeOff,
+    CheckCircle2,
+    UserX,
+    Megaphone,
+    Shield
+} from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import API from "../../Services/API";
 import { clearAdminSession } from "../../utils/adminSession";
+import { soundEffects } from "../../utils/soundEffects";
 
 export default function Settings() {
     const navigate = useNavigate();
+    const [activeTab, setActiveTab] = useState("general"); // 'general' | 'privacy' | 'security' | 'danger'
     const [pendingRequests, setPendingRequests] = useState([]);
     const [blockedUsers, setBlockedUsers] = useState([]);
     const [announcements, setAnnouncements] = useState([]);
@@ -14,6 +36,32 @@ export default function Settings() {
     const [deleteConfirmText, setDeleteConfirmText] = useState("");
     const [isDeleting, setIsDeleting] = useState(false);
     const [deleteError, setDeleteError] = useState("");
+
+    // Sound effects setting
+    const [soundEnabled, setSoundEnabled] = useState(() => {
+        return localStorage.getItem("chat_sound_enabled") !== "false";
+    });
+
+    // Notification permission status
+    const [notifPermission, setNotifPermission] = useState(() => {
+        return typeof window !== "undefined" && "Notification" in window ? Notification.permission : "default";
+    });
+
+    const toggleSound = () => {
+        const next = !soundEnabled;
+        setSoundEnabled(next);
+        localStorage.setItem("chat_sound_enabled", String(next));
+        if (next) {
+            soundEffects.play("pop");
+        }
+    };
+
+    const requestNotifications = async () => {
+        if ("Notification" in window) {
+            const perm = await Notification.requestPermission();
+            setNotifPermission(perm);
+        }
+    };
 
     const fetchSettingsData = async () => {
         try {
@@ -92,224 +140,196 @@ export default function Settings() {
     };
 
     return (
-        <main className="min-h-0 flex-1 overflow-y-auto p-4 text-white md:p-8">
-            <section className="mx-auto flex w-full max-w-7xl flex-col gap-6">
-                <header className="rounded-lg border border-white/10 bg-white/[0.055] p-6 backdrop-blur-2xl md:p-8">
-                    <div className="mb-4 inline-flex items-center gap-2 rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-xs font-bold uppercase tracking-[0.18em] text-white/55">
-                        <SlidersHorizontal className="h-4 w-4 text-sky-200" />
-                        Workspace controls
+        <main className="min-h-0 flex-1 overflow-y-auto p-3.5 sm:p-6 md:p-8 text-white custom-scrollbar overscroll-contain">
+            <section className="mx-auto flex w-full max-w-5xl flex-col gap-5 sm:gap-6 pb-12">
+                {/* Header */}
+                <header className="rounded-2xl border border-white/10 bg-gradient-to-r from-sky-950/20 via-indigo-950/20 to-black/40 p-5 sm:p-7 backdrop-blur-2xl shadow-xl">
+                    <div className="mb-2.5 inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider text-sky-300">
+                        <SlidersHorizontal className="h-3.5 w-3.5 text-sky-400" />
+                        <span>Workspace Controls & Preferences</span>
                     </div>
-                    <h1 className="text-[clamp(32px,5vw,64px)] font-black leading-none tracking-tight">Settings</h1>
-                    <p className="mt-4 max-w-2xl text-sm leading-7 text-white/58">
-                        Manage the local session and visible product preferences without touching the backend contract.
+                    <h1 className="text-2xl sm:text-3xl md:text-4xl font-black tracking-tight text-white">Settings</h1>
+                    <p className="mt-1.5 text-xs sm:text-sm text-white/60 max-w-xl">
+                        Manage your audio feedback, notifications, privacy permissions, and zero-knowledge encryption preferences.
                     </p>
+
+                    {/* Navigation Tabs */}
+                    <div className="flex flex-wrap items-center gap-2 mt-6 pt-4 border-t border-white/10">
+                        {[
+                            { id: "general", label: "Preferences & Audio", icon: Volume2 },
+                            { id: "privacy", label: "Connections & Privacy", icon: Users, badge: pendingRequests.length },
+                            { id: "security", label: "Zero-Knowledge Vault", icon: ShieldCheck },
+                            { id: "danger", label: "Danger Zone", icon: AlertTriangle },
+                        ].map((tab) => (
+                            <button
+                                key={tab.id}
+                                type="button"
+                                onClick={() => setActiveTab(tab.id)}
+                                className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all ${
+                                    activeTab === tab.id
+                                        ? "bg-white/15 border border-white/20 text-white shadow-md font-black"
+                                        : "text-white/50 hover:bg-white/[0.04] hover:text-white"
+                                }`}
+                            >
+                                <tab.icon className="h-3.5 w-3.5" />
+                                <span>{tab.label}</span>
+                                {tab.badge > 0 && (
+                                    <span className="bg-sky-500 text-white text-[10px] px-1.5 py-0.2 rounded-full font-bold ml-1">
+                                        {tab.badge}
+                                    </span>
+                                )}
+                            </button>
+                        ))}
+                    </div>
                 </header>
 
-                <div className="grid gap-4 xl:grid-cols-[1fr_0.72fr]">
-                    <section className="grid gap-4">
-                        {[
-                            {
-                                icon: Palette,
-                                title: "Visual system",
-                                body: "Premium dark interface with restrained accents, sharp spacing, and chat-first density.",
-                                value: "Aether Pro",
-                            },
-                            {
-                                icon: Bell,
-                                title: "Notifications",
-                                body: "Prepared for conversation alerts and unread count escalation.",
-                                value: "Ready",
-                            },
-                            {
-                                icon: Radio,
-                                title: "Realtime transport",
-                                body: "The dashboard keeps the existing WebSocket and API flow intact.",
-                                value: "Live",
-                            },
-                        ].map(({ icon: Icon, title, body, value }, index) => (
-                            <motion.div
-                                key={title}
-                                initial={{ opacity: 0, y: 14 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                transition={{ delay: index * 0.05 }}
-                                className="rounded-lg border border-white/10 bg-[#0d1118]/82 p-5 backdrop-blur-xl"
-                            >
-                                <div className="flex items-start justify-between gap-4">
-                                    <div className="flex items-start gap-4">
-                                        <div className="grid h-11 w-11 shrink-0 place-items-center rounded-lg bg-white text-[#07131d]">
-                                            <Icon className="h-5 w-5" />
-                                        </div>
-                                        <div>
-                                            <h2 className="text-lg font-black">{title}</h2>
-                                            <p className="mt-1 max-w-2xl text-sm leading-6 text-white/48">{body}</p>
-                                        </div>
-                                    </div>
-                                    <span className="rounded-lg border border-white/10 bg-white/[0.055] px-3 py-2 text-xs font-black text-white/72">
-                                        {value}
-                                    </span>
-                                </div>
-                            </motion.div>
-                        ))}
-
-                        {/* Connection Requests Section */}
-                        <motion.div
-                            initial={{ opacity: 0, y: 14 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            className="rounded-lg border border-white/10 bg-[#0d1118]/82 p-5 backdrop-blur-xl mt-4"
-                        >
-                            <div className="flex items-center gap-4 mb-4">
-                                <div className="grid h-11 w-11 shrink-0 place-items-center rounded-lg bg-violet-600 text-white">
-                                    <Users className="h-5 w-5" />
+                {/* Tab 1: Preferences & Audio */}
+                {activeTab === "general" && (
+                    <div className="grid gap-4">
+                        {/* Audio Feedback Toggle */}
+                        <div className="rounded-2xl border border-white/10 bg-[#090c14]/90 p-5 backdrop-blur-2xl shadow-xl flex items-center justify-between gap-4">
+                            <div className="flex items-start gap-3.5">
+                                <div className="grid h-10 w-10 place-items-center rounded-xl bg-purple-500/10 border border-purple-500/20 text-purple-400">
+                                    {soundEnabled ? <Volume2 className="h-5 w-5" /> : <VolumeX className="h-5 w-5" />}
                                 </div>
                                 <div>
-                                    <h2 className="text-lg font-black">Connection Requests</h2>
-                                    <p className="mt-1 text-sm text-white/48">Manage who can chat with you.</p>
+                                    <h3 className="text-sm font-bold text-white">Audio & Sound FX</h3>
+                                    <p className="text-xs text-white/50 mt-0.5">Play atmospheric sound effects for sends, receives, and game moves.</p>
                                 </div>
-                                {pendingRequests.length > 0 && (
-                                    <div className="ml-auto bg-violet-600 px-3 py-1 rounded-full text-xs font-bold">
-                                        {pendingRequests.length} Pending
-                                    </div>
-                                )}
                             </div>
+                            <button
+                                type="button"
+                                onClick={toggleSound}
+                                className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+                                    soundEnabled
+                                        ? "bg-purple-600 text-white shadow-[0_0_12px_rgba(168,85,247,0.4)]"
+                                        : "bg-white/10 text-white/40"
+                                }`}
+                            >
+                                {soundEnabled ? "Enabled" : "Muted"}
+                            </button>
+                        </div>
 
-                            {pendingRequests.length === 0 ? (
-                                <div className="text-sm text-white/40 italic py-4">No pending requests at this time.</div>
-                            ) : (
-                                <div className="grid gap-3">
-                                    {pendingRequests.map((req) => (
-                                        <div key={req.connection_id} className="flex items-center justify-between p-3 rounded-lg border border-white/5 bg-white/5">
-                                            <div className="flex items-center gap-3">
-                                                {req.sender.avatar_url ? (
-                                                    <img src={req.sender.avatar_url} alt="avatar" className="w-10 h-10 rounded-full" />
-                                                ) : (
-                                                    <div className="w-10 h-10 rounded-full bg-indigo-600 flex items-center justify-center font-bold">
-                                                        {req.sender.username.charAt(0).toUpperCase()}
-                                                    </div>
-                                                )}
-                                                <div>
-                                                    <div className="font-bold">{req.sender.username}</div>
-                                                    <div className="text-xs text-white/40">Wants to chat</div>
-                                                </div>
+                        {/* Push Notifications Toggle */}
+                        <div className="rounded-2xl border border-white/10 bg-[#090c14]/90 p-5 backdrop-blur-2xl shadow-xl flex items-center justify-between gap-4">
+                            <div className="flex items-start gap-3.5">
+                                <div className="grid h-10 w-10 place-items-center rounded-xl bg-sky-500/10 border border-sky-500/20 text-sky-400">
+                                    <Bell className="h-5 w-5" />
+                                </div>
+                                <div>
+                                    <h3 className="text-sm font-bold text-white">Desktop & Mobile Push Alerts</h3>
+                                    <p className="text-xs text-white/50 mt-0.5">Receive native system notifications when new messages arrive.</p>
+                                </div>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={requestNotifications}
+                                disabled={notifPermission === "granted"}
+                                className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+                                    notifPermission === "granted"
+                                        ? "bg-emerald-500/20 border border-emerald-500/30 text-emerald-300 cursor-default"
+                                        : "bg-sky-600 text-white hover:bg-sky-500 active:scale-95"
+                                }`}
+                            >
+                                {notifPermission === "granted" ? "Active" : "Allow Alerts"}
+                            </button>
+                        </div>
+
+                        {/* System Announcements */}
+                        {announcements.length > 0 && (
+                            <div className="rounded-2xl border border-white/10 bg-[#090c14]/90 p-5 backdrop-blur-2xl shadow-xl">
+                                <h3 className="text-sm font-bold text-white mb-3 flex items-center gap-2">
+                                    <Megaphone className="h-4 w-4 text-amber-400" />
+                                    System Announcements
+                                </h3>
+                                <div className="space-y-2">
+                                    {announcements.map((ann) => (
+                                        <div key={ann.id} className="flex items-start justify-between p-3 rounded-xl bg-white/[0.03] border border-white/5">
+                                            <div>
+                                                <p className="text-xs font-semibold text-white/90">{ann.title || "Notice"}</p>
+                                                <p className="text-[11px] text-white/50 mt-0.5">{ann.content}</p>
                                             </div>
-                                            <div className="flex gap-2">
+                                            {!ann.is_read && (
                                                 <button
+                                                    type="button"
+                                                    onClick={() => handleMarkAnnouncementRead(ann.id)}
+                                                    className="text-[10px] text-sky-400 hover:text-sky-300 font-bold px-2 py-1 rounded bg-sky-500/10"
+                                                >
+                                                    Dismiss
+                                                </button>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                )}
+
+                {/* Tab 2: Connections & Privacy */}
+                {activeTab === "privacy" && (
+                    <div className="grid gap-4">
+                        {/* Connection Requests */}
+                        <div className="rounded-2xl border border-white/10 bg-[#090c14]/90 p-5 backdrop-blur-2xl shadow-xl">
+                            <div className="flex items-center justify-between mb-4">
+                                <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                                    <Users className="h-4 w-4 text-indigo-400" />
+                                    Incoming Chat Requests
+                                </h3>
+                                <span className="text-xs text-white/40">{pendingRequests.length} pending</span>
+                            </div>
+                            {pendingRequests.length === 0 ? (
+                                <p className="text-xs text-white/40 italic py-3">No pending connection requests.</p>
+                            ) : (
+                                <div className="space-y-2.5">
+                                    {pendingRequests.map((req) => (
+                                        <div key={req.connection_id} className="flex items-center justify-between p-3 rounded-xl bg-white/[0.03] border border-white/5">
+                                            <div>
+                                                <p className="text-xs font-bold text-white">{req.requester_username}</p>
+                                                <p className="text-[10px] text-white/40">Wants to connect</p>
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                <button
+                                                    type="button"
                                                     onClick={() => handleAction(req.connection_id, "accept")}
-                                                    className="px-3 py-1.5 bg-green-500 hover:bg-green-400 text-black font-bold rounded-lg text-xs transition-colors"
+                                                    className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-xs font-bold text-white transition-colors"
                                                 >
                                                     Accept
                                                 </button>
                                                 <button
-                                                    onClick={() => handleAction(req.connection_id, "decline")}
-                                                    className="px-3 py-1.5 bg-white/10 hover:bg-white/20 text-white font-bold rounded-lg text-xs transition-colors"
+                                                    type="button"
+                                                    onClick={() => handleAction(req.connection_id, "reject")}
+                                                    className="px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/15 text-xs font-semibold text-white/60 transition-colors"
                                                 >
-                                                    Decline
+                                                    Ignore
                                                 </button>
                                             </div>
                                         </div>
                                     ))}
                                 </div>
                             )}
-                        </motion.div>
+                        </div>
 
-                        {/* Announcements Section */}
-                        <motion.div
-                            initial={{ opacity: 0, y: 14 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            className="rounded-lg border border-white/10 bg-[#0d1118]/82 p-5 backdrop-blur-xl mt-4"
-                        >
-                            <div className="flex items-center gap-4 mb-4">
-                                <div className="grid h-11 w-11 shrink-0 place-items-center rounded-lg bg-cyan-600 text-white">
-                                    <Radio className="h-5 w-5" />
-                                </div>
-                                <div>
-                                    <h2 className="text-lg font-black">Official Announcements</h2>
-                                    <p className="mt-1 text-sm text-white/48">Broadcasts from ChatTornado Administration.</p>
-                                </div>
-                                {announcements.filter((a) => !a.is_read).length > 0 && (
-                                    <div className="ml-auto bg-cyan-600 px-3 py-1 rounded-full text-xs font-bold">
-                                        {announcements.filter((a) => !a.is_read).length} Unread
-                                    </div>
-                                )}
+                        {/* Blocked Users */}
+                        <div className="rounded-2xl border border-white/10 bg-[#090c14]/90 p-5 backdrop-blur-2xl shadow-xl">
+                            <div className="flex items-center justify-between mb-4">
+                                <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                                    <UserX className="h-4 w-4 text-rose-400" />
+                                    Blocked Users
+                                </h3>
+                                <span className="text-xs text-white/40">{blockedUsers.length} blocked</span>
                             </div>
-
-                            {announcements.length === 0 ? (
-                                <div className="text-sm text-white/40 italic py-4">No active announcements.</div>
-                            ) : (
-                                <div className="grid gap-3">
-                                    {announcements.map((ann) => (
-                                        <div
-                                            key={ann.id}
-                                            className={`p-3.5 rounded-lg border transition-all ${
-                                                ann.is_read
-                                                    ? "border-white/5 bg-white/[0.02]"
-                                                    : "border-cyan-500/30 bg-cyan-950/20"
-                                            }`}
-                                        >
-                                            <div className="flex items-start justify-between gap-3">
-                                                <div>
-                                                    <div className="flex items-center gap-2">
-                                                        <h3 className="font-bold text-white text-sm">{ann.title}</h3>
-                                                        <span className="text-[10px] px-2 py-0.5 rounded bg-white/10 text-cyan-300 font-semibold uppercase">
-                                                            {ann.category}
-                                                        </span>
-                                                    </div>
-                                                    <p className="mt-1 text-xs text-white/70 leading-relaxed">{ann.content}</p>
-                                                    <p className="mt-2 text-[10px] text-white/30">
-                                                        Posted: {new Date(ann.created_at).toLocaleDateString()}
-                                                    </p>
-                                                </div>
-                                                {!ann.is_read && (
-                                                    <button
-                                                        onClick={() => handleMarkAnnouncementRead(ann.id)}
-                                                        className="px-2.5 py-1 rounded bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 text-xs font-semibold whitespace-nowrap transition-colors"
-                                                    >
-                                                        Mark as Read
-                                                    </button>
-                                                )}
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
-                        </motion.div>
-
-                        {/* Blocked Users Section */}
-                        <motion.div
-                            initial={{ opacity: 0, y: 14 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            className="rounded-lg border border-white/10 bg-[#0d1118]/82 p-5 backdrop-blur-xl mt-4"
-                        >
-                            <div className="flex items-center gap-4 mb-4">
-                                <div className="grid h-11 w-11 shrink-0 place-items-center rounded-lg bg-rose-600 text-white">
-                                    <AlertTriangle className="h-5 w-5" />
-                                </div>
-                                <div>
-                                    <h2 className="text-lg font-black">Blocked Users</h2>
-                                    <p className="mt-1 text-sm text-white/48">Users who cannot send messages or call you.</p>
-                                </div>
-                                <div className="ml-auto bg-white/10 px-3 py-1 rounded-full text-xs font-bold text-white/60">
-                                    {blockedUsers.length} Blocked
-                                </div>
-                            </div>
-
                             {blockedUsers.length === 0 ? (
-                                <div className="text-sm text-white/40 italic py-4">You have not blocked any users.</div>
+                                <p className="text-xs text-white/40 italic py-3">No users are currently blocked.</p>
                             ) : (
-                                <div className="grid gap-2">
+                                <div className="space-y-2">
                                     {blockedUsers.map((u) => (
-                                        <div
-                                            key={u.id}
-                                            className="flex items-center justify-between p-3 rounded-lg border border-white/5 bg-white/[0.02]"
-                                        >
-                                            <div className="flex items-center gap-2.5">
-                                                <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center font-bold text-xs text-white/80">
-                                                    {u.username?.charAt(0).toUpperCase()}
-                                                </div>
-                                                <span className="text-sm font-semibold text-white">@{u.username}</span>
-                                            </div>
+                                        <div key={u.id} className="flex items-center justify-between p-3 rounded-xl bg-white/[0.03] border border-white/5">
+                                            <p className="text-xs font-semibold text-white/80">{u.username}</p>
                                             <button
+                                                type="button"
                                                 onClick={() => handleUnblock(u.id)}
-                                                className="px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white text-xs font-semibold transition-colors"
+                                                className="text-xs text-rose-400 hover:text-rose-300 font-bold px-3 py-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/20"
                                             >
                                                 Unblock
                                             </button>
@@ -317,58 +337,60 @@ export default function Settings() {
                                     ))}
                                 </div>
                             )}
-                        </motion.div>
+                        </div>
+                    </div>
+                )}
 
-                    </section>
-
-                    <aside className="grid content-start gap-4">
-                        <section className="rounded-lg border border-emerald-300/18 bg-emerald-300/8 p-5 backdrop-blur-xl">
-                            <ShieldCheck className="h-6 w-6 text-emerald-200" />
-                            <h2 className="mt-5 text-xl font-black">Session healthy</h2>
-                            <p className="mt-2 text-sm leading-6 text-emerald-50/62">
-                                Authentication state is stored in session storage and verified by the existing protected route.
-                            </p>
-                        </section>
-
-                        <section className="rounded-lg border border-red-300/18 bg-red-500/8 p-5 backdrop-blur-xl" aria-label="Account session">
-                            <h2 className="text-xl font-black">Account session</h2>
-                            <p className="mt-2 text-sm leading-6 text-white/52">
-                                End this browser session and return to the login screen.
-                            </p>
-                            <button
-                                type="button"
-                                onClick={handleLogout}
-                                className="mt-5 flex min-h-[48px] w-full items-center justify-center gap-2 rounded-lg bg-red-400 px-4 text-sm font-black text-[#210607] transition hover:bg-red-300"
-                            >
-                                <LogOut className="h-4 w-4" />
-                                Logout securely
-                            </button>
-                        </section>
-
-                        {/* Danger Zone: Delete Account */}
-                        <section className="rounded-lg border border-red-600/30 bg-red-950/20 p-5 backdrop-blur-xl" aria-label="Danger Zone">
-                            <div className="flex items-center gap-2 text-red-400">
-                                <AlertTriangle className="h-5 w-5" />
-                                <h2 className="text-xl font-black text-red-400">Danger Zone</h2>
+                {/* Tab 3: Zero-Knowledge Security */}
+                {activeTab === "security" && (
+                    <div className="rounded-2xl border border-white/10 bg-[#090c14]/90 p-5 backdrop-blur-2xl shadow-xl space-y-4">
+                        <div className="flex items-start gap-3.5">
+                            <div className="grid h-10 w-10 place-items-center rounded-xl bg-purple-500/10 border border-purple-500/20 text-purple-400">
+                                <Lock className="h-5 w-5" />
                             </div>
-                            <p className="mt-2 text-sm leading-6 text-red-200/60">
-                                Permanently wipe your account, chats, and connections from the database. This cannot be undone.
-                            </p>
-                            <button
-                                type="button"
-                                onClick={() => {
-                                    setDeleteConfirmText("");
-                                    setDeleteError("");
-                                    setShowDeleteModal(true);
-                                }}
-                                className="mt-5 flex min-h-[48px] w-full items-center justify-center gap-2 rounded-lg border border-red-500/40 bg-red-500/10 px-4 text-sm font-black text-red-300 transition hover:bg-red-500/20 active:scale-[0.98]"
-                            >
-                                <Trash2 className="h-4 w-4 text-red-400" />
-                                Delete Account Permanently
-                            </button>
-                        </section>
-                    </aside>
-                </div>
+                            <div>
+                                <h3 className="text-sm font-bold text-white">VORTEX Zero-Knowledge Fortress</h3>
+                                <p className="text-xs text-white/50 mt-0.5">End-to-end client-side encryption. Keys never touch backend servers.</p>
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+                            <div className="p-3.5 rounded-xl border border-white/5 bg-white/[0.02]">
+                                <p className="text-xs font-bold text-white/90">Client-Side Cipher</p>
+                                <p className="text-xs text-white/50 mt-1 font-mono">AES-256 GCM + PBKDF2</p>
+                            </div>
+                            <div className="p-3.5 rounded-xl border border-white/5 bg-white/[0.02]">
+                                <p className="text-xs font-bold text-white/90">Decoy Passcode Protection</p>
+                                <p className="text-xs text-white/50 mt-1">Configured & Active</p>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* Tab 4: Danger Zone */}
+                {activeTab === "danger" && (
+                    <div className="rounded-2xl border border-red-500/20 bg-red-950/10 p-5 backdrop-blur-2xl shadow-xl">
+                        <div className="flex items-center gap-2.5 text-red-400 mb-2">
+                            <AlertTriangle className="h-5 w-5" />
+                            <h3 className="text-base font-bold text-red-400">Irreversible Actions</h3>
+                        </div>
+                        <p className="text-xs text-red-200/60 max-w-lg mb-5">
+                            Permanently erase your account, all message history, encrypted memories, and contacts from the database.
+                        </p>
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setDeleteConfirmText("");
+                                setDeleteError("");
+                                setShowDeleteModal(true);
+                            }}
+                            className="px-4 py-2.5 rounded-xl bg-red-600/20 border border-red-500/40 text-red-300 text-xs font-bold hover:bg-red-600 hover:text-white transition-all flex items-center gap-2 active:scale-95"
+                        >
+                            <Trash2 className="h-4 w-4" />
+                            Delete Account Permanently
+                        </button>
+                    </div>
+                )}
             </section>
 
             {/* Permanent Account Deletion Modal */}

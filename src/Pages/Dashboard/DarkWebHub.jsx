@@ -1,3 +1,4 @@
+import API from "../../Services/API";
 import React, { useState, useEffect, useMemo } from "react";
 import {
     Globe,

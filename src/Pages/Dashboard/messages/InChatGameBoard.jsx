@@ -73,6 +73,8 @@ const checkConnect4Winner = (board) => {
 
 export default function InChatGameBoard({ gameData, messageId, myUserId, senderId, receiverId, onUpdateGame }) {
     const [localGame, setLocalGame] = useState(gameData);
+    const [wordGuessInput, setWordGuessInput] = useState("");
+    const [numberGuessInput, setNumberGuessInput] = useState("");
     const isMovingRef = useRef(false);
     const lastMoveRef = useRef(gameData?.moves || 0);
 
@@ -671,7 +673,8 @@ export default function InChatGameBoard({ gameData, messageId, myUserId, senderI
         const { word, status, guesses, winner } = localGame;
         const maxWrongs = 6;
         const wrongs = guesses.filter(g => !word.includes(g)).length;
-        const [inputValue, setInputValue] = useState("");
+        const inputValue = wordGuessInput;
+        const setInputValue = setWordGuessInput;
 
         const isSetter = isMeSender; // For simplicity, initiator sets the word
 
@@ -686,6 +689,13 @@ export default function InChatGameBoard({ gameData, messageId, myUserId, senderI
             };
             setLocalGame(updated);
             onUpdateGame?.(updated);
+        };
+
+        const handleResetWord = () => {
+            soundEngine.play("whoosh");
+            const resetGame = { ...localGame, word: "", status: "setting", guesses: [], winner: null };
+            setLocalGame(resetGame);
+            onUpdateGame?.(resetGame);
         };
 
         const handleGuess = (letter) => {
@@ -711,13 +721,6 @@ export default function InChatGameBoard({ gameData, messageId, myUserId, senderI
             };
             setLocalGame(updated);
             onUpdateGame?.(updated);
-        };
-
-        const handleResetWord = () => {
-            soundEngine.play("whoosh");
-            const resetGame = { ...localGame, word: "", status: "setting", guesses: [], winner: null };
-            setLocalGame(resetGame);
-            onUpdateGame?.(resetGame);
         };
 
         return (
@@ -806,7 +809,8 @@ export default function InChatGameBoard({ gameData, messageId, myUserId, senderI
     // ==========================================
     if (localGame.game === "numberguesser") {
         const { number, status, guesses, winner } = localGame;
-        const [inputValue, setInputValue] = useState("");
+        const inputValue = numberGuessInput;
+        const setInputValue = setNumberGuessInput;
         const isSetter = isMeSender;
 
         const handleSetNumber = () => {
@@ -856,9 +860,13 @@ export default function InChatGameBoard({ gameData, messageId, myUserId, senderI
                         <span>🔢</span>
                         <span>Number Guesser</span>
                     </div>
-                    {winner && isSetter && (
-                        <button onClick={handleResetNum} className="text-[10px] bg-white/10 px-2 py-1 rounded-md text-white/80 hover:bg-white/20">
-                            New Game
+                    {winner && (
+                        <button
+                            type="button"
+                            onClick={handleResetNum}
+                            className="flex items-center gap-1 rounded-lg bg-indigo-600/50 px-2 py-1 text-[10px] font-bold text-white hover:bg-indigo-600 transition-colors"
+                        >
+                            <RefreshCw className="h-3 w-3" /> Rematch
                         </button>
                     )}
                 </div>

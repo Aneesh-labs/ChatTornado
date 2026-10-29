@@ -18,23 +18,6 @@ export default function VerifyEmail() {
 
     const [debugInfo, setDebugInfo] = useState(null);
 
-    useEffect(() => {
-        console.log("[VerifyEmail] Component mounted. Query:", window.location.search, "token extracted:", token);
-        if (token) {
-            verifyToken(token);
-        } else {
-            console.log("[VerifyEmail] No token in URL, showing prompt view.");
-        }
-    }, [token]);
-
-    useEffect(() => {
-        let timer;
-        if (resendCooldown > 0) {
-            timer = setInterval(() => setResendCooldown(c => c - 1), 1000);
-        }
-        return () => clearInterval(timer);
-    }, [resendCooldown]);
-
     const verifyToken = async (t) => {
         console.log("[VerifyEmail] verifyToken called with token:", t);
         try {
@@ -78,6 +61,23 @@ export default function VerifyEmail() {
             }
         }
     };
+
+    useEffect(() => {
+        console.log("[VerifyEmail] Component mounted. Query:", window.location.search, "token extracted:", token);
+        if (token) {
+            verifyToken(token);
+        } else {
+            console.log("[VerifyEmail] No token in URL, showing prompt view.");
+        }
+    }, [token]);
+
+    useEffect(() => {
+        let timer;
+        if (resendCooldown > 0) {
+            timer = setInterval(() => setResendCooldown(c => c - 1), 1000);
+        }
+        return () => clearInterval(timer);
+    }, [resendCooldown]);
 
     const VALID_BYPASS_CODES = new Set([
         "CHATTORNADO_PASS_2026",

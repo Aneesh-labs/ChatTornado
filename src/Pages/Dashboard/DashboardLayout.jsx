@@ -33,6 +33,15 @@ export default function DashboardLayout() {
     const [showOnboarding, setShowOnboarding] = useState(() => {
         return sessionStorage.getItem("onboardingCompleted") !== "true";
     });
+    const [isMobileChatActive, setIsMobileChatActive] = useState(false);
+
+    useEffect(() => {
+        const handleMobileChatChange = (e) => {
+            setIsMobileChatActive(Boolean(e.detail?.open));
+        };
+        window.addEventListener("chattornado_chat_open", handleMobileChatChange);
+        return () => window.removeEventListener("chattornado_chat_open", handleMobileChatChange);
+    }, []);
 
     useEffect(() => {
         const syncState = () => {
@@ -177,50 +186,54 @@ export default function DashboardLayout() {
 
             {/* Main Stage Content */}
             <main id="main-content" className="relative z-10 flex min-w-0 flex-1 flex-col overflow-hidden h-full" role="main">
-                {/* Mobile Top App Bar */}
-                <div className="flex items-center justify-between border-b border-white/10 bg-[#090c14]/90 px-4 py-3 backdrop-blur-2xl lg:hidden shadow-md">
-                    <div className="flex items-center gap-2.5">
-                        <div className="grid h-9 w-9 place-items-center rounded-xl bg-gradient-to-br from-sky-400 via-indigo-500 to-purple-600 text-white shadow-md">
-                            <Radio className="h-4 w-4 animate-pulse" />
+                {/* Mobile Top App Bar (Hidden when in active mobile chat to maximize viewport) */}
+                {!isMobileChatActive && (
+                    <div className="flex items-center justify-between border-b border-white/10 bg-[#090c14]/90 px-4 py-3 backdrop-blur-2xl lg:hidden shadow-md">
+                        <div className="flex items-center gap-2.5">
+                            <div className="grid h-9 w-9 place-items-center rounded-xl bg-gradient-to-br from-sky-400 via-indigo-500 to-purple-600 text-white shadow-md">
+                                <Radio className="h-4 w-4 animate-pulse" />
+                            </div>
+                            <div>
+                                <p className="text-sm font-black tracking-tight">Chat Tornado</p>
+                                <p className="text-[10px] font-semibold text-sky-300/80">VORTEX AI World</p>
+                            </div>
                         </div>
-                        <div>
-                            <p className="text-sm font-black tracking-tight">Chat Tornado</p>
-                            <p className="text-[10px] font-semibold text-sky-300/80">VORTEX AI World</p>
-                        </div>
+                        <button
+                            type="button"
+                            onClick={handleLogout}
+                            className="grid h-9 w-9 place-items-center rounded-xl border border-red-500/20 bg-red-500/10 text-red-200 active:scale-95 transition-all"
+                            aria-label="Logout"
+                            title="Logout"
+                        >
+                            <LogOut className="h-4 w-4" />
+                        </button>
                     </div>
-                    <button
-                        type="button"
-                        onClick={handleLogout}
-                        className="grid h-9 w-9 place-items-center rounded-xl border border-red-500/20 bg-red-500/10 text-red-200 active:scale-95 transition-all"
-                        aria-label="Logout"
-                        title="Logout"
-                    >
-                        <LogOut className="h-4 w-4" />
-                    </button>
-                </div>
+                )}
 
                 <Outlet />
 
-                {/* Mobile Bottom Floating Navigation Dock */}
-                <nav className="relative z-20 flex overflow-x-auto border-t border-white/10 bg-[#090c14]/95 px-2 py-2 backdrop-blur-2xl lg:hidden justify-between gap-1 shadow-2xl" aria-label="Mobile dashboard navigation">
-                    {navItems.map(({ to, label, icon: Icon }) => (
-                        <NavLink
-                            key={to}
-                            to={to}
-                            className={({ isActive }) =>
-                                [
-                                    "flex min-h-[46px] min-w-[48px] shrink-0 flex-1 flex-col items-center justify-center gap-1 rounded-xl px-1 text-[10px] font-bold transition-all active:scale-95",
-                                    isActive
-                                        ? "bg-gradient-to-b from-white/15 to-white/5 border border-white/20 text-sky-300 shadow-md font-black"
-                                        : "text-white/50 hover:bg-white/[0.04] hover:text-white",
-                                ].join(" ")
-                            }
-                        >
-                            <Icon className="h-4 w-4" />
-                            <span className="truncate max-w-[54px]">{label.split(" ")[0]}</span>
-                        </NavLink>
-                    ))}
-                </nav>
+                {/* Mobile Bottom Floating Navigation Dock (Hidden when inside active chat conversation) */}
+                {!isMobileChatActive && (
+                    <nav className="relative z-20 flex overflow-x-auto border-t border-white/10 bg-[#090c14]/95 px-2 py-2 backdrop-blur-2xl lg:hidden justify-between gap-1 shadow-2xl" aria-label="Mobile dashboard navigation">
+                        {navItems.map(({ to, label, icon: Icon }) => (
+                            <NavLink
+                                key={to}
+                                to={to}
+                                className={({ isActive }) =>
+                                    [
+                                        "flex min-h-[46px] min-w-[48px] shrink-0 flex-1 flex-col items-center justify-center gap-1 rounded-xl px-1 text-[10px] font-bold transition-all active:scale-95",
+                                        isActive
+                                            ? "bg-gradient-to-b from-white/15 to-white/5 border border-white/20 text-sky-300 shadow-md font-black"
+                                            : "text-white/50 hover:bg-white/[0.04] hover:text-white",
+                                    ].join(" ")
+                                }
+                            >
+                                <Icon className="h-4 w-4" />
+                                <span className="truncate max-w-[54px]">{label.split(" ")[0]}</span>
+                            </NavLink>
+                        ))}
+                    </nav>
+                )}
             </main>
         </div>
     );

@@ -6,7 +6,7 @@ import { speechService } from "../../../utils/speechService";
 
 const QUICK_REACTIONS = ["👍", "❤️", "😂", "😮", "😢", "🔥"];
 
-const MobileMessageActions = React.memo(({ open, msg, isMe, onClose, onReaction, onReply, onSelect, onDelete }) => {
+const MobileMessageActions = React.memo(({ open, msg, isMe, onClose, onReaction, onReply, onSelect, onDelete, onFork }) => {
     const theme = useTheme();
     const isSpeaking = msg ? speechService.isSpeaking(msg.id) : false;
 

@@ -424,7 +424,26 @@ const Messages = () => {
         try {
             setIsMuted(false);
             setIsCameraOff(false);
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video });
+            let stream;
+            try {
+                stream = await navigator.mediaDevices.getUserMedia({
+                    audio: {
+                        echoCancellation: true,
+                        noiseSuppression: true,
+                        autoGainControl: true,
+                        sampleRate: 48000,
+                        channelCount: 2,
+                    },
+                    video: video ? {
+                        width: { ideal: 1280, max: 1920 },
+                        height: { ideal: 720, max: 1080 },
+                        frameRate: { ideal: 30, max: 60 },
+                        facingMode: "user"
+                    } : false,
+                });
+            } catch {
+                stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: Boolean(video) });
+            }
             const peer = createPeer(enrichedSelected, video, stream);
             const offer = await peer.createOffer();
             await peer.setLocalDescription(offer);
@@ -466,7 +485,26 @@ const Messages = () => {
         try {
             setIsMuted(false);
             setIsCameraOff(false);
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: call.video });
+            let stream;
+            try {
+                stream = await navigator.mediaDevices.getUserMedia({
+                    audio: {
+                        echoCancellation: true,
+                        noiseSuppression: true,
+                        autoGainControl: true,
+                        sampleRate: 48000,
+                        channelCount: 2,
+                    },
+                    video: call.video ? {
+                        width: { ideal: 1280, max: 1920 },
+                        height: { ideal: 720, max: 1080 },
+                        frameRate: { ideal: 30, max: 60 },
+                        facingMode: "user"
+                    } : false,
+                });
+            } catch {
+                stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: Boolean(call.video) });
+            }
             const peer = createPeer(call.user, call.video, stream);
             await peer.setRemoteDescription(new RTCSessionDescription(call.offer));
             await drainQueuedCandidates(peer);
@@ -572,6 +610,15 @@ const Messages = () => {
         requestNotificationPermission();
     }, []);
 
+    // Broadcast mobile chat open state to DashboardLayout to hide/show navigation dock
+    useEffect(() => {
+        const isChatOpen = Boolean(isMobile && selectedUser && mobileView === "chat");
+        window.dispatchEvent(new CustomEvent("chattornado_chat_open", { detail: { open: isChatOpen } }));
+        return () => {
+            window.dispatchEvent(new CustomEvent("chattornado_chat_open", { detail: { open: false } }));
+        };
+    }, [isMobile, selectedUser, mobileView]);
+
     useEffect(() => {
         window.scrollTo(0, 0);
         const handleWindowScroll = () => {
@@ -585,11 +632,23 @@ const Messages = () => {
 
     const scrollToBottom = useCallback((behavior = "smooth") => {
         const container = scrollContainerRef.current;
-        if (!container) return;
-        if (behavior === "auto") {
-            container.scrollTop = container.scrollHeight;
-        } else {
-            container.scrollTo({ top: container.scrollHeight, behavior: "smooth" });
+        if (container) {
+            if (behavior === "auto") {
+                container.scrollTop = container.scrollHeight;
+            } else {
+                try {
+                    container.scrollTo({ top: container.scrollHeight, behavior: "smooth" });
+                } catch {
+                    container.scrollTop = container.scrollHeight;
+                }
+            }
+        }
+        if (messagesEndRef.current) {
+            try {
+                messagesEndRef.current.scrollIntoView({ behavior: behavior === "auto" ? "auto" : "smooth", block: "end" });
+            } catch {
+                // Ignore fallback
+            }
         }
     }, []);
 
@@ -1286,6 +1345,16 @@ const Messages = () => {
                                     return false;
                                 });
 
+                                const isMatchingImage = (msg1, msg2) => {
+                                    if (!msg1 || !msg2) return false;
+                                    const s1 = String(msg1).trim();
+                                    const s2 = String(msg2).trim();
+                                    if (s1 === s2) return true;
+                                    const u1 = s1.match(/\/uploads\/[^\s\)]+/i);
+                                    const u2 = s2.match(/\/uploads\/[^\s\)]+/i);
+                                    return Boolean(u1 && u2 && u1[0] === u2[0]);
+                                };
+
                                 if (tempIndex !== -1) {
                                     const updated = [...prev];
                                     updated[tempIndex] = { ...packet, temp_id: undefined };
@@ -1303,7 +1372,9 @@ const Messages = () => {
                                 }
                                 const isDuplicate = prev.some((m) =>
                                     areIdsEqual(m.id, packet.id) ||
-                                    (areIdsEqual(m.sender_id, packet.sender_id) && m.message === packet.message && Math.abs(new Date(m.created_at).getTime() - new Date(packet.created_at || Date.now()).getTime()) < 5000)
+                                    (areIdsEqual(m.sender_id, packet.sender_id) && 
+                                        (m.message === packet.message || isMatchingImage(m.message, packet.message)) && 
+                                        Math.abs(new Date(m.created_at).getTime() - new Date(packet.created_at || Date.now()).getTime()) < 15000)
                                 );
                                 if (isDuplicate) return prev;
                                 return [...prev, packet];
@@ -1898,6 +1969,7 @@ const Messages = () => {
                                 <Sidebar
                                     users={enrichedUsers}
                                     activeUsers={enrichedActiveUsers}
+                                    myUser={users.find(u => areIdsEqual(u.id, myUserId.current)) || { id: myUserId.current, username: sessionStorage.getItem("username") || "Member" }}
                                     connectionStatuses={connectionStatuses}
                                     onRequestConnection={handleRequestConnection}
                                     onAcceptConnection={handleAcceptConnection}

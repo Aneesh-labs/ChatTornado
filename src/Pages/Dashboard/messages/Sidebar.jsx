@@ -409,8 +409,16 @@ const Sidebar = React.memo(({
     }, [safeUnreadCounts]);
 
     const myUser = useMemo(() => {
-        return Array.isArray(users) ? users.find((u) => u?.id === myUserId) : null;
-    }, [users, myUserId]);
+        const found = Array.isArray(users) ? users.find((u) => areIdsEqual(u?.id, myUserId)) : null;
+        if (found) return found;
+        const storedUsername = sessionStorage.getItem("username") || "Member";
+        return {
+            id: myUserId,
+            username: storedUsername,
+            status: currentStatus,
+            custom_status: currentCustomStatus,
+        };
+    }, [users, myUserId, currentStatus, currentCustomStatus]);
 
     const displayedCount = mainTab === "chats" 
         ? (activeUsers?.length || 0) 
