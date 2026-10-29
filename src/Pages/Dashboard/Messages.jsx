@@ -36,6 +36,8 @@ import RightPanel from "./messages/RightPanel";
 import WallpaperLayer from "./messages/WallpaperLayer";
 import CommandPalette from "./messages/CommandPalette";
 import CallOverlay from "./messages/CallOverlay";
+import IncomingCallToasts from "./messages/IncomingCallToasts";
+import MediaPermissionModal from "./messages/MediaPermissionModal";
 import PerformanceMonitor, { usePerformanceMonitor } from "./messages/PerformanceMonitor";
 import ConversationDNAPanel from "./messages/ConversationDNAPanel";
 import RealityForksModal from "./messages/RealityForksModal";
@@ -130,6 +132,8 @@ const Messages = () => {
     const [showScrollBtn, setShowScrollBtn] = useState(false);
     const [socketReady, setSocketReady] = useState(false);
     const [call, setCall] = useState(null);
+    const [incomingCalls, setIncomingCalls] = useState([]);
+    const [mediaConsentModal, setMediaConsentModal] = useState({ open: false, isVideo: false, onGrant: null });
     const [isMuted, setIsMuted] = useState(false);
     const [isCameraOff, setIsCameraOff] = useState(false);
     const [aiMode, setAiMode] = useState(() => {
@@ -541,17 +545,43 @@ const Messages = () => {
     const handleCallSignal = useCallback(async ({ sender_id, signal }) => {
         if (!signal) return;
         if (signal.type === "offer") {
-            const caller = users.find((u) => u.id === sender_id);
-            setCall({
-                user: caller || { id: sender_id, username: "Incoming caller" },
-                video: !!signal.video,
+            const caller = users.find((u) => u.id === sender_id) || { id: sender_id, username: `User-${sender_id}` };
+            const isCurrentlyInCall = Boolean(call && (call.status === "connected" || call.status === "calling" || call.status === "ringing"));
+            
+            if (isCurrentlyInCall) {
+                // Send call waiting notice back to caller immediately
+                sendSignal(sender_id, {
+                    type: "call_waiting_notice",
+                    message: "The other person is on a call. A call request is sent to them and is waiting..."
+                });
+            }
+
+            const newIncomingCall = {
+                id: `call_${sender_id}_${Date.now()}`,
+                senderId: sender_id,
+                user: caller,
+                video: Boolean(signal.video),
                 offer: signal.offer,
-                status: "incoming"
-            });
+                timestamp: Date.now(),
+                expiresAt: Date.now() + 30000,
+                toastDismissed: false,
+                isCallWaiting: isCurrentlyInCall,
+            };
+
+            setIncomingCalls((prev) => [newIncomingCall, ...prev.filter((c) => c.senderId !== sender_id)]);
             return;
         }
-        if (signal.type === "hangup" || signal.type === "reject") {
-            closeCall(false);
+
+        if (signal.type === "call_waiting_notice") {
+            setCall((current) => current ? { ...current, isWaitingOnAnotherCall: true, status: "call_waiting" } : current);
+            return;
+        }
+
+        if (signal.type === "hangup" || signal.type === "reject" || signal.type === "call_cancelled") {
+            setIncomingCalls((prev) => prev.filter((c) => c.senderId !== sender_id));
+            if (call?.user?.id === sender_id) {
+                closeCall(false);
+            }
             return;
         }
         if (signal.type === "answer") {
@@ -576,6 +606,80 @@ const Messages = () => {
         }
     }, [closeCall, drainQueuedCandidates, users]);
     callSignalRef.current = handleCallSignal;
+
+    /* ── Incoming Call Waiting & Lift / Decline Actions ──────────────────── */
+    const liftIncomingCall = useCallback(async (callId) => {
+        const targetCall = incomingCalls.find((c) => c.id === callId);
+        if (!targetCall) return;
+
+        // If currently on an active call, terminate previous call first cleanly
+        if (call) {
+            closeCall(true);
+        }
+
+        // Remove from incoming queue
+        setIncomingCalls((prev) => prev.filter((c) => c.id !== callId));
+
+        try {
+            setIsMuted(false);
+            setIsCameraOff(false);
+            let stream;
+            try {
+                stream = await navigator.mediaDevices.getUserMedia({
+                    audio: {
+                        echoCancellation: true,
+                        noiseSuppression: true,
+                        autoGainControl: true,
+                        sampleRate: 48000,
+                        channelCount: 2,
+                    },
+                    video: targetCall.video ? {
+                        width: { ideal: 1280, max: 1920 },
+                        height: { ideal: 720, max: 1080 },
+                        frameRate: { ideal: 30, max: 60 },
+                        facingMode: "user"
+                    } : false,
+                });
+            } catch {
+                stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: Boolean(targetCall.video) });
+            }
+
+            const peer = createPeer(targetCall.user, targetCall.video, stream);
+            await peer.setRemoteDescription(new RTCSessionDescription(targetCall.offer));
+            await drainQueuedCandidates(peer);
+            const answer = await peer.createAnswer();
+            await peer.setLocalDescription(answer);
+            sendSignal(targetCall.user.id, { type: "answer", answer });
+            setCall({
+                user: targetCall.user,
+                video: targetCall.video,
+                localStream: stream,
+                status: "connected"
+            });
+        } catch (err) {
+            console.error("Failed to lift incoming call:", err);
+            setCallNotice("Failed to lift call. Please grant camera and microphone access.");
+            closeCall(false);
+        }
+    }, [incomingCalls, call, closeCall, createPeer, drainQueuedCandidates, sendSignal]);
+
+    const declineIncomingCall = useCallback((callId) => {
+        const targetCall = incomingCalls.find((c) => c.id === callId);
+        if (targetCall) {
+            sendSignal(targetCall.user.id, { type: "reject" });
+        }
+        setIncomingCalls((prev) => prev.filter((c) => c.id !== callId));
+    }, [incomingCalls, sendSignal]);
+
+    const dismissIncomingCallToast = useCallback((callId) => {
+        // Dismiss top-right toast notification after 30s, leaving in-chat live call banner active
+        setIncomingCalls((prev) => prev.map((c) => c.id === callId ? { ...c, toastDismissed: true } : c));
+    }, []);
+
+    const activeIncomingCallForCurrentChat = useMemo(() => {
+        if (!enrichedSelected?.id) return null;
+        return incomingCalls.find((c) => c.senderId === enrichedSelected.id) || null;
+    }, [incomingCalls, enrichedSelected?.id]);
 
     /* ── Keyboard Navigation ──────────────────────────────────────────────── */
     useEffect(() => {
@@ -2047,6 +2151,10 @@ const Messages = () => {
                                 onToggleWatchParty={() => setWatchPartyOpen((prev) => !prev)}
                                 onToggleVanishMode={() => setVanishModeActive((prev) => !prev)}
                                 isVanishModeActive={vanishModeActive}
+                                activeIncomingCall={activeIncomingCallForCurrentChat}
+                                onLiftIncomingCall={liftIncomingCall}
+                                onDeclineIncomingCall={declineIncomingCall}
+                                isAlreadyInCall={Boolean(call && (call.status === "connected" || call.status === "calling"))}
                             />
                         ) : (
                             <EmptyState onOpenSearch={handleOpenSearch} />
@@ -2115,6 +2223,13 @@ const Messages = () => {
                         messages={messages}
                         onJumpToMessage={handleJumpToMessage}
                     />
+                    <IncomingCallToasts
+                        incomingCalls={incomingCalls}
+                        onLiftCall={liftIncomingCall}
+                        onDeclineCall={declineIncomingCall}
+                        onDismissToast={dismissIncomingCallToast}
+                        isAlreadyInCall={Boolean(call && (call.status === "connected" || call.status === "calling"))}
+                    />
                     <CallOverlay
                         call={call}
                         onAccept={acceptCall}
@@ -2124,6 +2239,16 @@ const Messages = () => {
                         onToggleVideo={handleToggleVideo}
                         isMuted={isMuted}
                         isCameraOff={isCameraOff}
+                    />
+                    <MediaPermissionModal
+                        isOpen={mediaConsentModal.open}
+                        isVideo={mediaConsentModal.isVideo}
+                        onClose={() => setMediaConsentModal({ open: false, isVideo: false, onGrant: null })}
+                        onGrant={() => {
+                            const grantFn = mediaConsentModal.onGrant;
+                            setMediaConsentModal({ open: false, isVideo: false, onGrant: null });
+                            grantFn?.();
+                        }}
                     />
                     <GhostChatOverlay
                         ghostChat={ghostChat}

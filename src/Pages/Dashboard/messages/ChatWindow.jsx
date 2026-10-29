@@ -7,6 +7,7 @@ import ScrollBar from "./ScrollBar";
 import { isAdminUnlocked } from "../../../utils/adminSession";
 import ConversationHubBar from "./ConversationHubBar";
 import AntiLeakWatermark from "./AntiLeakWatermark";
+import InChatLiveCallBanner from "./InChatLiveCallBanner";
 
 const ChatWindow = React.memo(({
     enrichedSelected,
@@ -55,6 +56,10 @@ const ChatWindow = React.memo(({
     onToggleWatchParty,
     onToggleVanishMode,
     isVanishModeActive = false,
+    activeIncomingCall = null,
+    onLiftIncomingCall,
+    onDeclineIncomingCall,
+    isAlreadyInCall = false,
 }) => {
     const [localAiMode, setLocalAiMode] = useState(() => {
         return isAdminUnlocked() ? "ADMIN" : "DEFAULT";
@@ -103,6 +108,12 @@ const ChatWindow = React.memo(({
                 onToggleWatchParty={onToggleWatchParty}
                 onToggleVanishMode={onToggleVanishMode}
                 isVanishModeActive={isVanishModeActive}
+            />
+            <InChatLiveCallBanner
+                incomingCall={activeIncomingCall}
+                onLiftCall={onLiftIncomingCall}
+                onDeclineCall={onDeclineIncomingCall}
+                isAlreadyInCall={isAlreadyInCall}
             />
             <ConversationHubBar
                 conversationId={enrichedSelected?.id}

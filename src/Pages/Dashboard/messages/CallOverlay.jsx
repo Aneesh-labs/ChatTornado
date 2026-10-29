@@ -12,9 +12,12 @@ const getStatusText = (call, showConnected) => {
         case "incoming":
             return `Incoming ${call.video ? "Video" : "Voice"} Call`;
         case "outgoing":
+        case "calling":
             return "Calling...";
         case "ringing":
             return "Ringing...";
+        case "call_waiting":
+            return "🟡 On Another Call • Call Request Sent & Waiting...";
         case "connected":
             return "End-to-end encrypted";
         case "declined":
@@ -215,6 +218,19 @@ const CallOverlay = ({
     const [callDuration, setCallDuration] = useState(0);
     const [showConnected, setShowConnected] = useState(false);
     const [showEnded, setShowEnded] = useState(false);
+    const [ringingSeconds, setRingingSeconds] = useState(0);
+
+    /* ── Track ringing seconds for 30s timeout tender notice ─────────── */
+    useEffect(() => {
+        if (!call || call?.status === "connected" || call?.status === "ended" || call?.status === "declined") {
+            setRingingSeconds(0);
+            return;
+        }
+        const interval = setInterval(() => {
+            setRingingSeconds((prev) => prev + 1);
+        }, 1000);
+        return () => clearInterval(interval);
+    }, [call?.status, call]);
 
     /* ── Media stream attachment ──────────────────────────────────────── */
     useEffect(() => {
@@ -509,6 +525,40 @@ const CallOverlay = ({
                                     <span className="font-mono text-3xl font-semibold tabular-nums tracking-tight text-white">
                                         {formatDuration(callDuration)}
                                     </span>
+                                </motion.div>
+                            )}
+
+                            {/* Tender message if ringing for more than 30s without receiver lifting */}
+                            {ringingSeconds >= 30 && call?.status !== "connected" && call?.status !== "incoming" && (
+                                <motion.div
+                                    initial={{ opacity: 0, y: 10 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    className="mt-4 p-3 rounded-2xl bg-violet-950/50 border border-violet-500/30 text-center shadow-lg"
+                                >
+                                    <p className="text-xs text-violet-200 font-medium">
+                                        🌸 The person is not lifting right now.
+                                    </p>
+                                    <p className="text-[11px] text-white/50 mt-0.5">
+                                        You can wait a little longer or leave a message.
+                                    </p>
+                                    <button
+                                        type="button"
+                                        onClick={onHangup}
+                                        className="mt-2.5 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-semibold transition-all cursor-pointer"
+                                    >
+                                        <span>💬 Leave a Message</span>
+                                    </button>
+                                </motion.div>
+                            )}
+
+                            {/* Call waiting message if other person is currently on another call */}
+                            {(call?.isWaitingOnAnotherCall || call?.status === "call_waiting") && (
+                                <motion.div
+                                    initial={{ opacity: 0, scale: 0.95 }}
+                                    animate={{ opacity: 1, scale: 1 }}
+                                    className="mt-3 p-2.5 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-200 text-xs text-center leading-relaxed"
+                                >
+                                    <span>The other person is on a call. A call request has been sent and is waiting...</span>
                                 </motion.div>
                             )}
                         </div>
