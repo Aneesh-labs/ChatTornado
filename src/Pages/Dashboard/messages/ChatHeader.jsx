@@ -51,9 +51,31 @@ const ChatHeader = React.memo(({
     const [showMemoryVaultModal, setShowMemoryVaultModal] = useState(false);
     const [isBlocked, setIsBlocked] = useState(false);
     const [currentGoogleModel, setCurrentGoogleModel] = useState(getSelectedGoogleModel);
+    const [showStatusPopover, setShowStatusPopover] = useState(false);
     const username = user?.name || user?.username || "Chat Room";
     const isOnline = user?.status === "online";
     const isGroup = Boolean(user?.is_group);
+
+    const rawStatus = (user?.status || "offline").toLowerCase();
+    let statusDotColor = "bg-white/30";
+    let statusLabel = "Offline";
+
+    if (isOnline || rawStatus === "online" || rawStatus === "available") {
+        statusDotColor = "bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)]";
+        statusLabel = "Online";
+    } else if (rawStatus === "busy") {
+        statusDotColor = "bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.8)]";
+        statusLabel = "Busy";
+    } else if (rawStatus === "coding") {
+        statusDotColor = "bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.8)]";
+        statusLabel = "Coding 💻";
+    } else if (rawStatus === "off_duty") {
+        statusDotColor = "bg-violet-400 shadow-[0_0_8px_rgba(167,139,250,0.8)]";
+        statusLabel = "Off-Duty 🏖️";
+    } else if (rawStatus === "in_a_call") {
+        statusDotColor = "bg-blue-400 shadow-[0_0_8px_rgba(96,165,250,0.8)]";
+        statusLabel = "In a Call 📞";
+    }
 
     useEffect(() => {
         if (!user?.id || user?.is_bot || isGroup) return;
@@ -243,6 +265,59 @@ const ChatHeader = React.memo(({
                                 <span>{userStreak.tier.icon}</span>
                                 <span>{userStreak.count} Streak</span>
                             </button>
+                        )}
+                        {/* Status Indicator Dot Beside Fire Badge */}
+                        {!isGroup && !isBotUser && (
+                            <div className="relative inline-flex items-center">
+                                <button
+                                    type="button"
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        setShowStatusPopover((prev) => !prev);
+                                    }}
+                                    title={`Status: ${statusLabel}${user?.custom_status ? ` - "${user.custom_status}"` : ""}. Click to view status.`}
+                                    className="group relative flex items-center justify-center p-1 rounded-full hover:bg-white/10 active:scale-90 transition-all cursor-pointer flex-shrink-0"
+                                >
+                                    <span className={`w-2.5 h-2.5 rounded-full ${statusDotColor} ring-2 ring-black/80 transition-transform group-hover:scale-125`} />
+                                    <span className="sr-only">Status: {statusLabel}</span>
+                                </button>
+
+                                {showStatusPopover && (
+                                    <div 
+                                        onClick={(e) => e.stopPropagation()} 
+                                        className="absolute top-full left-0 mt-2 z-50 w-60 rounded-2xl border border-white/20 bg-neutral-900/95 p-3 shadow-2xl backdrop-blur-2xl animate-in fade-in zoom-in-95 duration-150"
+                                    >
+                                        <div className="flex items-center justify-between pb-2 mb-2 border-b border-white/10">
+                                            <div className="flex items-center gap-2">
+                                                <span className={`w-2.5 h-2.5 rounded-full ${statusDotColor}`} />
+                                                <span className="text-xs font-bold text-white capitalize">{statusLabel}</span>
+                                            </div>
+                                            <button
+                                                type="button"
+                                                onClick={() => setShowStatusPopover(false)}
+                                                className="text-white/40 hover:text-white text-xs p-1 rounded-md"
+                                            >
+                                                ✕
+                                            </button>
+                                        </div>
+                                        {user?.custom_status ? (
+                                            <div className="bg-white/5 rounded-lg p-2 border border-white/10 mb-2">
+                                                <p className="text-xs text-white/90 font-medium break-words leading-snug">
+                                                    "{user.custom_status}"
+                                                </p>
+                                            </div>
+                                        ) : (
+                                            <p className="text-[11px] text-white/40 italic mb-2">
+                                                No custom status message set.
+                                            </p>
+                                        )}
+                                        <div className="text-[10px] text-white/50 flex items-center justify-between pt-1">
+                                            <span className="font-medium text-white/70">@{user?.username || "user"}</span>
+                                            <span>{isOnline ? "Active right now" : "Currently offline"}</span>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
                         )}
                         {/* Reality Branch Switcher Badge */}
                         <button

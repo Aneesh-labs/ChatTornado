@@ -1492,7 +1492,7 @@ async def websocket_endpoint(websocket: WebSocket):
                     except Exception as bot_err:
                         print(f"[BOT_HANDLER] Exception during bot reply: {bot_err}", flush=True)
                         logger.exception("Error in bot reply task: %s", bot_err)
-                        fallback_final = "".join(accumulated_streamed_chunks) if accumulated_streamed_chunks else f"⚠️ **Neural Link Disruption**: {str(bot_err)}"
+                        fallback_final = "".join(accumulated_streamed_chunks) if accumulated_streamed_chunks else "🤖 **VORTEX-9 Intelligence Core**\n\nI experienced a brief neural link latency during inference. I am standing by—feel free to re-send your prompt or let me know what you would like assistance with!"
                         try:
                             if bot_message:
                                 bot_message.message = fallback_final

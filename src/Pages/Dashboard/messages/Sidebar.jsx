@@ -40,6 +40,21 @@ export const ConversationCard = React.memo(({
 }) => {
     const theme = useTheme();
     const streak = useMemo(() => (!user?.is_bot && !isGlobal && user?.id ? getStreak(user.id) : null), [user?.id, user?.is_bot, isGlobal]);
+    const [showStatusCard, setShowStatusCard] = useState(false);
+
+    const userRawStatus = (user?.status || "offline").toLowerCase();
+    let userDotColor = "bg-white/30";
+    if (userRawStatus === "online" || userRawStatus === "available") {
+        userDotColor = "bg-emerald-400";
+    } else if (userRawStatus === "busy") {
+        userDotColor = "bg-rose-500";
+    } else if (userRawStatus === "coding") {
+        userDotColor = "bg-cyan-400";
+    } else if (userRawStatus === "off_duty") {
+        userDotColor = "bg-violet-400";
+    } else if (userRawStatus === "in_a_call") {
+        userDotColor = "bg-blue-400";
+    }
 
     const canOpenChat = !isGlobal || connectionStatus === "accepted";
 
@@ -132,6 +147,52 @@ export const ConversationCard = React.memo(({
                             <span>{streak.tier.icon}</span>
                             <span>{streak.count}</span>
                         </span>
+                    )}
+                    {/* User Status Dot beside fire badge */}
+                    {!isGlobal && !user?.is_bot && (
+                        <div className="relative inline-flex items-center">
+                            <span
+                                role="button"
+                                tabIndex={0}
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    setShowStatusCard((prev) => !prev);
+                                }}
+                                title={`Status: ${user?.status || "offline"}${user?.custom_status ? ` - "${user.custom_status}"` : ""}. Click to view.`}
+                                className="relative inline-flex items-center justify-center p-0.5 rounded-full hover:bg-white/10 active:scale-95 transition-all cursor-pointer flex-shrink-0"
+                            >
+                                <span className={`w-2 h-2 rounded-full ${userDotColor} ring-1 ring-black/80`} />
+                            </span>
+                            {showStatusCard && (
+                                <div 
+                                    onClick={(e) => e.stopPropagation()} 
+                                    className="absolute top-full left-0 mt-1 z-50 w-44 rounded-xl border border-white/20 bg-neutral-900/95 p-2 shadow-2xl backdrop-blur-xl animate-in fade-in zoom-in-95"
+                                >
+                                    <div className="flex items-center justify-between pb-1 mb-1 border-b border-white/10">
+                                        <div className="flex items-center gap-1.5">
+                                            <span className={`w-1.5 h-1.5 rounded-full ${userDotColor}`} />
+                                            <span className="text-[10px] font-bold text-white capitalize">{user?.status || "Offline"}</span>
+                                        </div>
+                                        <button 
+                                            type="button"
+                                            onClick={() => setShowStatusCard(false)}
+                                            className="text-white/40 hover:text-white text-[10px]"
+                                        >
+                                            ✕
+                                        </button>
+                                    </div>
+                                    {user?.custom_status ? (
+                                        <p className="text-[10px] text-white/90 italic font-medium break-words leading-tight">
+                                            "{user.custom_status}"
+                                        </p>
+                                    ) : (
+                                        <p className="text-[9px] text-white/40 italic">
+                                            No custom status
+                                        </p>
+                                    )}
+                                </div>
+                            )}
+                        </div>
                     )}
                 </div>
 
