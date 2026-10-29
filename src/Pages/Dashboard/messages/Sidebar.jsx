@@ -370,6 +370,8 @@ const Sidebar = React.memo(({
     myUserId,
     onOpenStreakModal,
     onSendDirectReply,
+    onOpenCreateStory,
+    onOpenViewStory,
 }) => {
     const theme = useTheme();
     const [filter, setFilter] = useState("all");
@@ -709,8 +711,7 @@ const Sidebar = React.memo(({
 
             {/* Current user info with status */}
             {myUser && (
-                <button
-                    type="button"
+                <div
                     onClick={() => setShowStatusModal(true)}
                     className={`flex items-center gap-3 px-4 py-3 border-t ${theme?.border || ""} flex-shrink-0 w-full text-left hover:bg-white/[0.04] transition-colors cursor-pointer group`}
                     title="Change your online status & custom status"
@@ -730,7 +731,18 @@ const Sidebar = React.memo(({
                             {currentCustomStatus ? `"${currentCustomStatus}"` : "Set custom status…"}
                         </p>
                     </div>
-                </button>
+                    <button
+                        type="button"
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            onOpenCreateStory?.();
+                        }}
+                        className="p-1.5 rounded-xl bg-violet-600/20 hover:bg-violet-600/40 border border-violet-500/30 text-violet-300 hover:text-white transition-all active:scale-95 flex items-center gap-1 text-[10px] font-bold shrink-0 ml-auto"
+                        title="Add or update your 24h Ephemeral Status Story (up to 6 photos, 0% DB storage)"
+                    >
+                        <span>📸 Story +</span>
+                    </button>
+                </div>
             )}
 
             {/* Modals */}

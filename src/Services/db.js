@@ -5,7 +5,8 @@
  */
 
 const DB_NAME = "ChatTornadoVault";
-const DB_VERSION = 2;
+const DB_VERSION = 3;
+const STORE_STATUS = "ephemeral_status";
 const STORE_MEDIA = "p2p_media";
 const STORE_MESSAGES = "local_messages";
 const STORE_OFFLINE_QUEUE = "offline_queue";
@@ -32,6 +33,10 @@ function openDB() {
 
             if (!db.objectStoreNames.contains(STORE_OFFLINE_QUEUE)) {
                 db.createObjectStore(STORE_OFFLINE_QUEUE, { keyPath: "temp_id" });
+            }
+
+            if (!db.objectStoreNames.contains(STORE_STATUS)) {
+                db.createObjectStore(STORE_STATUS, { keyPath: "id" });
             }
         };
 
@@ -293,10 +298,80 @@ export async function flushOfflineQueue(sendFn) {
 /**
  * Clear all local media & cached messages from IndexedDB (Emergency Wipe).
  */
+
+/* ==========================================================================
+   EPHEMERAL P2P STATUS STORIES (0% Server Storage - Device Only)
+   ========================================================================== */
+
+/**
+ * Save user ephemeral status story locally on device (up to 6 images, 24h TTL).
+ * @param {Array} items - Array of { id, dataUrl, caption, timestamp }
+ */
+export async function saveLocalStatusStory(items = []) {
+    try {
+        const db = await openDB();
+        const tx = db.transaction(STORE_STATUS, "readwrite");
+        const store = tx.objectStore(STORE_STATUS);
+        const record = {
+            id: "my_status_story",
+            items: items.slice(0, 6), // Strictly max 6 images
+            updatedAt: Date.now(),
+            expiresAt: Date.now() + 24 * 60 * 60 * 1000,
+        };
+        store.put(record);
+        return new Promise((resolve) => {
+            tx.oncomplete = () => resolve(record);
+            tx.onerror = () => resolve(null);
+        });
+    } catch (err) {
+        console.warn("[IndexedDB] Failed to save status story:", err);
+        return null;
+    }
+}
+
+/**
+ * Retrieve user's own status story from local storage.
+ * @returns {Promise<Object|null>}
+ */
+export async function getLocalStatusStory() {
+    try {
+        const db = await openDB();
+        return new Promise((resolve) => {
+            const tx = db.transaction(STORE_STATUS, "readonly");
+            const store = tx.objectStore(STORE_STATUS);
+            const req = store.get("my_status_story");
+            req.onsuccess = (e) => {
+                const rec = e.target.result;
+                if (!rec) return resolve(null);
+                if (Date.now() > rec.expiresAt) {
+                    clearLocalStatusStory();
+                    return resolve(null);
+                }
+                resolve(rec);
+            };
+            req.onerror = () => resolve(null);
+        });
+    } catch (err) {
+        console.warn("[IndexedDB] Failed to read status story:", err);
+        return null;
+    }
+}
+
+/**
+ * Permanently delete local ephemeral status story.
+ */
+export async function clearLocalStatusStory() {
+    try {
+        const db = await openDB();
+        const tx = db.transaction(STORE_STATUS, "readwrite");
+        tx.objectStore(STORE_STATUS).delete("my_status_story");
+    } catch { }
+}
+
 export async function clearVault() {
     const db = await openDB();
     return new Promise((resolve, reject) => {
-        const stores = [STORE_MEDIA, STORE_MESSAGES, STORE_OFFLINE_QUEUE].filter(s => db.objectStoreNames.contains(s));
+        const stores = [STORE_MEDIA, STORE_MESSAGES, STORE_OFFLINE_QUEUE, STORE_STATUS].filter(s => db.objectStoreNames.contains(s));
         const tx = db.transaction(stores, "readwrite");
         stores.forEach(s => tx.objectStore(s).clear());
         tx.oncomplete = () => resolve(true);
@@ -315,5 +390,8 @@ export default {
     getOfflineQueue,
     removeOfflineQueuedMessage,
     flushOfflineQueue,
+    saveLocalStatusStory,
+    getLocalStatusStory,
+    clearLocalStatusStory,
     clearVault,
 };

@@ -134,6 +134,59 @@ async def websocket_endpoint(websocket: WebSocket):
                         logger.error("Error updating status: %s", st_err)
                 continue
 
+            # ---------- Ephemeral P2P Status Stories (Device-Only) ----------
+            if data.get("type") == "status_p2p_request":
+                target_id = data.get("target_user_id")
+                try:
+                    target_id = int(target_id)
+                except (ValueError, TypeError):
+                    continue
+
+                t_online = (target_id in manager.active_connections) or (str(target_id) in manager.active_connections)
+                if not t_online:
+                    await manager.send_personal_message(user_id, {
+                        "type": "status_p2p_response",
+                        "owner_id": target_id,
+                        "status": "offline",
+                        "items": [],
+                        "message": "User is currently offline. Their ephemeral status will be available once their app reconnects."
+                    })
+                else:
+                    await manager.send_personal_message(target_id, {
+                        "type": "status_p2p_request",
+                        "requester_id": user_id,
+                    })
+                continue
+
+            if data.get("type") == "status_p2p_response":
+                requester_id = data.get("requester_id")
+                items = data.get("items", [])
+                try:
+                    requester_id = int(requester_id)
+                except (ValueError, TypeError):
+                    continue
+
+                await manager.send_personal_message(requester_id, {
+                    "type": "status_p2p_response",
+                    "owner_id": user_id,
+                    "status": "online",
+                    "items": items,
+                })
+                continue
+
+            if data.get("type") == "status_story_beacon":
+                has_story = bool(data.get("has_story", False))
+                story_count = int(data.get("story_count", 0))
+                for active_uid in list(manager.online_users):
+                    if active_uid != user_id:
+                        await manager.send_personal_message(active_uid, {
+                            "type": "status_story_beacon",
+                            "user_id": user_id,
+                            "has_story": has_story,
+                            "story_count": story_count,
+                        })
+                continue
+
             # ---------- Group Message Event ----------
             if data.get("type") == "group_message":
                 group_id = data.get("group_id")

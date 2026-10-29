@@ -37,6 +37,7 @@ const ChatHeader = React.memo(({
     onOpenRealityForks,
     onOpenFutureMessages,
     onOpenStreakModal,
+    onOpenStatusStory,
     onToggleWatchParty,
     onToggleVanishMode,
     isVanishModeActive = false,
@@ -315,6 +316,16 @@ const ChatHeader = React.memo(({
                                             <span className="font-medium text-white/70">@{user?.username || "user"}</span>
                                             <span>{isOnline ? "Active right now" : "Currently offline"}</span>
                                         </div>
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setShowStatusPopover(false);
+                                                onOpenStatusStory?.(user);
+                                            }}
+                                            className="w-full mt-2.5 py-1.5 px-2 rounded-xl bg-gradient-to-r from-violet-600/30 to-fuchsia-600/30 hover:from-violet-600/50 hover:to-fuchsia-600/50 border border-violet-500/30 text-violet-200 text-xs font-semibold flex items-center justify-center gap-1.5 transition-all shadow-sm active:scale-95 cursor-pointer"
+                                        >
+                                            <span>📸 View Ephemeral Stories (P2P)</span>
+                                        </button>
                                     </div>
                                 )}
                             </div>

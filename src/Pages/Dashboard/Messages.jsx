@@ -45,6 +45,8 @@ import FutureMessagesModal from "./messages/FutureMessagesModal";
 import StreakModal from "./messages/StreakModal";
 import WatchTogetherOverlay from "./messages/WatchTogetherOverlay";
 import VanishModeOverlay from "./messages/VanishModeOverlay";
+import EphemeralStatusModal from "./messages/EphemeralStatusModal";
+import { getLocalStatusStory } from "../../Services/db";
 import { recordMessageSent } from "../../Services/streakService";
 import { VOICE_FILTERS, applyVoiceFilter } from "../../Services/audioVoiceFilters";
 import { cacheOfflineMessages, getOfflineMessages, queueOfflineMessage, flushOfflineQueue } from "../../Services/db";
@@ -183,6 +185,7 @@ const Messages = () => {
     const [streakModalUser, setStreakModalUser] = useState(null);
     const [watchPartyOpen, setWatchPartyOpen] = useState(false);
     const [vanishModeActive, setVanishModeActive] = useState(false);
+    const [statusStoryModal, setStatusStoryModal] = useState({ isOpen: false, mode: "view", targetUser: null });
 
     useEffect(() => {
         if (!callNotice) return;
@@ -210,6 +213,7 @@ const Messages = () => {
     const callStartTimeRef = useRef(null);
     const iceCandidateQueue = useRef([]);
     const callSignalRef = useRef(null);
+    const sendMessageRef = useRef(null);
     const rateLimiterRef = useRef(createRateLimiter(15, 60000));
     const token = sessionStorage.getItem("token");
 
@@ -370,7 +374,7 @@ const Messages = () => {
                 const mins = Math.floor(duration / 60);
                 const secs = duration % 60;
                 const durStr = mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
-                sendMessage(
+                sendMessageRef.current?.(
                     `📝 **VORTEX Call Debrief & Action Items**\n\n` +
                     `• **Duration**: ${durStr}\n` +
                     `• **Call Security**: WebRTC End-to-End Encrypted Session\n` +
@@ -380,7 +384,7 @@ const Messages = () => {
                 );
             }, 600);
         }
-    }, [call, sendSignal, sendMessage]);
+    }, [call, sendSignal]);
 
     const createPeer = useCallback((user, video, stream) => {
         const turnUrl = import.meta.env.VITE_TURN_URL;
@@ -1064,6 +1068,26 @@ const Messages = () => {
                 try {
                     const packet = JSON.parse(event.data);
                     if (packet.type === "pong") return;
+
+                    if (packet.type === "status_p2p_request") {
+                        const targetRequesterId = packet.requester_id;
+                        if (targetRequesterId && ws.readyState === WebSocket.OPEN) {
+                            getLocalStatusStory().then((story) => {
+                                ws.send(JSON.stringify({
+                                    type: "status_p2p_response",
+                                    requester_id: targetRequesterId,
+                                    items: story?.items || []
+                                }));
+                            }).catch(() => {
+                                ws.send(JSON.stringify({
+                                    type: "status_p2p_response",
+                                    requester_id: targetRequesterId,
+                                    items: []
+                                }));
+                            });
+                        }
+                        return;
+                    }
 
                     if (packet.type === "error") {
                         setCallNotice(packet.message || "Message delivery failed.");
@@ -1818,6 +1842,7 @@ const Messages = () => {
         setReplyingTo(null);
         return true;
     }, [selectedUser, aiMode, activeBranch]);
+    sendMessageRef.current = sendMessage;
 
     /* ── Message Retry (via WebSocket or Guaranteed REST Fallback) ─────── */
     const retryMessage = useCallback(async (failedMsg) => {
@@ -2215,6 +2240,9 @@ const Messages = () => {
                                     isRefreshing={isRefreshingSidebar}
                                     myUserId={myUserId.current}
                                     onOpenStreakModal={(user) => setStreakModalUser(user)}
+                                onOpenStatusStory={(user) => setStatusStoryModal({ isOpen: true, mode: "view", targetUser: user || enrichedSelected })}
+                                    onOpenCreateStory={() => setStatusStoryModal({ isOpen: true, mode: "create", targetUser: null })}
+                                    onOpenViewStory={(user) => setStatusStoryModal({ isOpen: true, mode: "view", targetUser: user })}
                                     onSendDirectReply={(targetUser, replyMsg) => {
                                         selectUser(targetUser);
                                         setTimeout(() => {
@@ -2273,6 +2301,9 @@ const Messages = () => {
                                 onOpenFutureMessages={handleOpenFutureMessages}
                                 onFork={handleForkFromMessage}
                                 onOpenStreakModal={(user) => setStreakModalUser(user)}
+                                onOpenStatusStory={(user) => setStatusStoryModal({ isOpen: true, mode: "view", targetUser: user || enrichedSelected })}
+                                    onOpenCreateStory={() => setStatusStoryModal({ isOpen: true, mode: "create", targetUser: null })}
+                                    onOpenViewStory={(user) => setStatusStoryModal({ isOpen: true, mode: "view", targetUser: user })}
                                 onToggleWatchParty={() => setWatchPartyOpen((prev) => !prev)}
                                 onToggleVanishMode={() => setVanishModeActive((prev) => !prev)}
                                 isVanishModeActive={vanishModeActive}
@@ -2395,6 +2426,16 @@ const Messages = () => {
                                 typing: false,
                             });
                         }}
+                    />
+
+                                        {/* Ephemeral P2P Status Stories Modal */}
+                    <EphemeralStatusModal
+                        isOpen={statusStoryModal.isOpen}
+                        onClose={() => setStatusStoryModal((prev) => ({ ...prev, isOpen: false }))}
+                        mode={statusStoryModal.mode}
+                        targetUser={statusStoryModal.targetUser}
+                        myUser={users.find(u => areIdsEqual(u.id, myUserId.current)) || { id: myUserId.current, username: sessionStorage.getItem("username") || "Member" }}
+                        socket={socketRef.current}
                     />
 
                     {/* Streak Milestones Modal */}

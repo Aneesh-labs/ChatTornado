@@ -53,6 +53,7 @@ const ChatWindow = React.memo(({
     onOpenFutureMessages,
     onFork,
     onOpenStreakModal,
+    onOpenStatusStory,
     onToggleWatchParty,
     onToggleVanishMode,
     isVanishModeActive = false,
@@ -105,6 +106,7 @@ const ChatWindow = React.memo(({
                 onOpenRealityForks={onOpenRealityForks}
                 onOpenFutureMessages={onOpenFutureMessages}
                 onOpenStreakModal={onOpenStreakModal}
+                onOpenStatusStory={onOpenStatusStory}
                 onToggleWatchParty={onToggleWatchParty}
                 onToggleVanishMode={onToggleVanishMode}
                 isVanishModeActive={isVanishModeActive}
