@@ -71,6 +71,138 @@ const checkConnect4Winner = (board) => {
     return null;
 };
 
+
+// ==========================================
+// CHESS LOGIC HELPERS
+// ==========================================
+const CHESS_PIECES = {
+    'K': '♔', 'Q': '♕', 'R': '♖', 'B': '♗', 'N': '♘', 'P': '♙',
+    'k': '♚', 'q': '♛', 'r': '♜', 'b': '♝', 'n': '♞', 'p': '♟'
+};
+
+const isWhitePiece = (p) => Boolean(p && p === p.toUpperCase() && p !== p.toLowerCase());
+const isBlackPiece = (p) => Boolean(p && p === p.toLowerCase() && p !== p.toUpperCase());
+
+const getChessMoves = (board, r, c) => {
+    const piece = board[r]?.[c];
+    if (!piece) return [];
+    const isWhite = isWhitePiece(piece);
+    const moves = [];
+
+    const addMove = (tr, tc) => {
+        if (tr < 0 || tr >= 8 || tc < 0 || tc >= 8) return false;
+        const target = board[tr][tc];
+        if (!target) {
+            moves.push([tr, tc]);
+            return true; // continue line
+        }
+        if (isWhite ? isBlackPiece(target) : isWhitePiece(target)) {
+            moves.push([tr, tc]); // capture
+        }
+        return false; // blocked
+    };
+
+    const type = piece.toUpperCase();
+
+    if (type === 'P') {
+        const dir = isWhite ? -1 : 1;
+        const startRow = isWhite ? 6 : 1;
+        // forward 1
+        if (board[r + dir] && board[r + dir][c] === null) {
+            moves.push([r + dir, c]);
+            // forward 2
+            if (r === startRow && board[r + 2 * dir] && board[r + 2 * dir][c] === null) {
+                moves.push([r + 2 * dir, c]);
+            }
+        }
+        // captures
+        for (const dc of [-1, 1]) {
+            const tr = r + dir;
+            const tc = c + dc;
+            if (tr >= 0 && tr < 8 && tc >= 0 && tc < 8) {
+                const target = board[tr][tc];
+                if (target && (isWhite ? isBlackPiece(target) : isWhitePiece(target))) {
+                    moves.push([tr, tc]);
+                }
+            }
+        }
+    } else if (type === 'N') {
+        const offsets = [[-2,-1],[-2,1],[-1,-2],[-1,2],[1,-2],[1,2],[2,-1],[2,1]];
+        for (const [dr, dc] of offsets) {
+            const tr = r + dr;
+            const tc = c + dc;
+            if (tr >= 0 && tr < 8 && tc >= 0 && tc < 8) {
+                const target = board[tr][tc];
+                if (!target || (isWhite ? isBlackPiece(target) : isWhitePiece(target))) {
+                    moves.push([tr, tc]);
+                }
+            }
+        }
+    } else if (type === 'B') {
+        const dirs = [[-1,-1],[-1,1],[1,-1],[1,1]];
+        for (const [dr, dc] of dirs) {
+            let tr = r + dr, tc = c + dc;
+            while (addMove(tr, tc)) {
+                tr += dr;
+                tc += dc;
+            }
+        }
+    } else if (type === 'R') {
+        const dirs = [[-1,0],[1,0],[0,-1],[0,1]];
+        for (const [dr, dc] of dirs) {
+            let tr = r + dr, tc = c + dc;
+            while (addMove(tr, tc)) {
+                tr += dr;
+                tc += dc;
+            }
+        }
+    } else if (type === 'Q') {
+        const dirs = [[-1,-1],[-1,1],[1,-1],[1,1],[-1,0],[1,0],[0,-1],[0,1]];
+        for (const [dr, dc] of dirs) {
+            let tr = r + dr, tc = c + dc;
+            while (addMove(tr, tc)) {
+                tr += dr;
+                tc += dc;
+            }
+        }
+    } else if (type === 'K') {
+        const dirs = [[-1,-1],[-1,1],[1,-1],[1,1],[-1,0],[1,0],[0,-1],[0,1]];
+        for (const [dr, dc] of dirs) {
+            addMove(r + dr, c + dc);
+        }
+    }
+
+    return moves;
+};
+
+const TRIVIA_BANK = [
+    {
+        q: "What does 'HTTP' stand for in web architecture?",
+        options: ["HyperText Transfer Protocol", "High-Tech Telecommunications Program", "Hyperlink Text Transmission Path", "Home Terminal Text Process"],
+        ans: 0,
+    },
+    {
+        q: "Which planet has the most confirmed natural moons?",
+        options: ["Jupiter", "Saturn", "Neptune", "Mars"],
+        ans: 1,
+    },
+    {
+        q: "What year was the original Python programming language released?",
+        options: ["1989", "1991", "1995", "2000"],
+        ans: 1,
+    },
+    {
+        q: "In cryptography, what does AES stand for?",
+        options: ["Advanced Encryption Standard", "Automated Electronic Signature", "Asymmetric Encrypted Stream", "Applied Entropy System"],
+        ans: 0,
+    },
+    {
+        q: "Which element has the highest electrical conductivity?",
+        options: ["Copper", "Gold", "Silver", "Aluminum"],
+        ans: 2,
+    },
+];
+
 export default function InChatGameBoard({ gameData, messageId, myUserId, senderId, receiverId, onUpdateGame }) {
     const [localGame, setLocalGame] = useState(gameData);
     const [wordGuessInput, setWordGuessInput] = useState("");
@@ -934,6 +1066,366 @@ export default function InChatGameBoard({ gameData, messageId, myUserId, senderI
                                 </div>
                             ))}
                             {guesses.length === 0 && <div className="text-xs text-white/40 text-center py-2">No guesses yet!</div>}
+                        </div>
+                    </div>
+                )}
+            </div>
+        );
+    }
+
+
+    // ==========================================
+    // 7. CHESS DUEL (8x8)
+    // ==========================================
+    if (localGame.game === "chess") {
+        const board = localGame.board || [
+            ["r", "n", "b", "q", "k", "b", "n", "r"],
+            ["p", "p", "p", "p", "p", "p", "p", "p"],
+            Array(8).fill(null),
+            Array(8).fill(null),
+            Array(8).fill(null),
+            Array(8).fill(null),
+            ["P", "P", "P", "P", "P", "P", "P", "P"],
+            ["R", "N", "B", "Q", "K", "B", "N", "R"],
+        ];
+        const turn = localGame.turn || "w";
+        const selected = localGame.selected || null; // [r, c]
+        const winner = localGame.winner;
+        const isMyTurn = (turn === "w" && isMeSender) || (turn === "b" && !isMeSender);
+        const myColor = isMeSender ? "w" : "b";
+
+        const validMoves = selected ? getChessMoves(board, selected[0], selected[1]) : [];
+
+        const handleSquareClick = (r, c) => {
+            if (winner || !isMyTurn || isMovingRef.current) return;
+            const piece = board[r][c];
+
+            // If already selected, check if clicked square is a valid destination
+            if (selected) {
+                const [sr, sc] = selected;
+                const isTarget = validMoves.some(([vr, vc]) => vr === r && vc === c);
+
+                if (isTarget) {
+                    isMovingRef.current = true;
+                    const movingPiece = board[sr][sc];
+                    const targetPiece = board[r][c];
+                    const newBoard = board.map(row => [...row]);
+                    newBoard[sr][sc] = null;
+
+                    // Pawn promotion
+                    let finalPiece = movingPiece;
+                    if (movingPiece === "P" && r === 0) finalPiece = "Q";
+                    if (movingPiece === "p" && r === 7) finalPiece = "q";
+                    newBoard[r][c] = finalPiece;
+
+                    // Check for king capture
+                    let newWinner = null;
+                    if (targetPiece === "k") newWinner = "White";
+                    if (targetPiece === "K") newWinner = "Black";
+
+                    if (targetPiece) {
+                        soundEngine.play("drum");
+                    } else {
+                        soundEngine.play("pop");
+                    }
+
+                    const updated = {
+                        ...localGame,
+                        board: newBoard,
+                        turn: turn === "w" ? "b" : "w",
+                        selected: null,
+                        winner: newWinner,
+                        moves: (localGame.moves || 0) + 1,
+                        lastMoveBy: myUserId,
+                        lastMove: { from: [sr, sc], to: [r, c] }
+                    };
+
+                    setLocalGame(updated);
+                    onUpdateGame?.(updated);
+                    setTimeout(() => { isMovingRef.current = false; }, 200);
+                    return;
+                }
+            }
+
+            // Otherwise, select own piece
+            if (piece) {
+                const pieceIsMine = (myColor === "w" && isWhitePiece(piece)) || (myColor === "b" && isBlackPiece(piece));
+                if (pieceIsMine) {
+                    soundEngine.play("pop");
+                    setLocalGame(prev => ({ ...prev, selected: [r, c] }));
+                    return;
+                }
+            }
+
+            // Deselect
+            if (selected) {
+                setLocalGame(prev => ({ ...prev, selected: null }));
+            }
+        };
+
+        const handleResetChess = () => {
+            soundEngine.play("whoosh");
+            const reset = {
+                ...localGame,
+                board: [
+                    ["r", "n", "b", "q", "k", "b", "n", "r"],
+                    ["p", "p", "p", "p", "p", "p", "p", "p"],
+                    Array(8).fill(null),
+                    Array(8).fill(null),
+                    Array(8).fill(null),
+                    Array(8).fill(null),
+                    ["P", "P", "P", "P", "P", "P", "P", "P"],
+                    ["R", "N", "B", "Q", "K", "B", "N", "R"],
+                ],
+                turn: "w",
+                selected: null,
+                winner: null,
+                moves: 0,
+                lastMove: null,
+            };
+            setLocalGame(reset);
+            onUpdateGame?.(reset);
+        };
+
+        return (
+            <div className="flex flex-col gap-2.5 rounded-2xl border border-white/15 bg-black/60 p-3.5 backdrop-blur-xl max-w-[320px] w-full">
+                {/* Header */}
+                <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1.5">
+                        <span className="text-base">♟️</span>
+                        <span className="text-xs font-black tracking-wide text-white">Chess Duel</span>
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/10 text-white/70 font-mono">
+                            {myColor === "w" ? "You: White ♔" : "You: Black ♚"}
+                        </span>
+                    </div>
+                    <button
+                        type="button"
+                        onClick={handleResetChess}
+                        className="rounded-lg p-1 text-white/40 hover:bg-white/10 hover:text-white transition-colors"
+                        title="Reset board"
+                    >
+                        <RefreshCw className="h-3.5 w-3.5" />
+                    </button>
+                </div>
+
+                {/* Status Bar */}
+                <div className="text-center py-1 px-2 rounded-lg bg-white/5 border border-white/5 text-xs">
+                    {winner ? (
+                        <span className="font-black text-amber-400 flex items-center justify-center gap-1">
+                            <Trophy className="h-3.5 w-3.5" /> {winner} Wins by Checkmate!
+                        </span>
+                    ) : isMyTurn ? (
+                        <span className="text-emerald-400 font-bold animate-pulse">Your Turn ({turn === "w" ? "White" : "Black"})</span>
+                    ) : (
+                        <span className="text-white/40">Opponent is thinking...</span>
+                    )}
+                </div>
+
+                {/* 8x8 Chessboard */}
+                <div className="grid grid-cols-8 gap-0 rounded-xl overflow-hidden border border-amber-900/40 shadow-inner">
+                    {board.map((row, r) =>
+                        row.map((cell, c) => {
+                            const isDark = (r + c) % 2 === 1;
+                            const isSelected = selected && selected[0] === r && selected[1] === c;
+                            const isTarget = validMoves.some(([vr, vc]) => vr === r && vc === c);
+                            const isLastMove = localGame.lastMove && ((localGame.lastMove.from[0] === r && localGame.lastMove.from[1] === c) || (localGame.lastMove.to[0] === r && localGame.lastMove.to[1] === c));
+
+                            return (
+                                <button
+                                    key={`${r}-${c}`}
+                                    type="button"
+                                    onClick={() => handleSquareClick(r, c)}
+                                    className={`relative h-8 w-8 sm:h-9 sm:w-9 flex items-center justify-center text-lg sm:text-xl font-bold transition-all ${
+                                        isSelected
+                                            ? "bg-amber-400/50 shadow-inner ring-2 ring-amber-300"
+                                            : isLastMove
+                                            ? "bg-yellow-500/25"
+                                            : isDark
+                                            ? "bg-[#4a3728]"
+                                            : "bg-[#c4a482]"
+                                    }`}
+                                >
+                                    {isTarget && (
+                                        <span className={`absolute h-2.5 w-2.5 rounded-full ${cell ? "bg-red-500 ring-2 ring-red-300 animate-pulse" : "bg-emerald-400/80"}`} />
+                                    )}
+                                    {cell && (
+                                        <span className={`select-none transition-transform active:scale-90 ${isWhitePiece(cell) ? "text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)]" : "text-black drop-shadow-[0_1px_1px_rgba(255,255,255,0.4)]"}`}>
+                                            {CHESS_PIECES[cell] || cell}
+                                        </span>
+                                    )}
+                                </button>
+                            );
+                        })
+                    )}
+                </div>
+
+                <div className="flex justify-between items-center text-[10px] text-white/40 pt-1">
+                    <span>Moves: {localGame.moves || 0}</span>
+                    <span className="font-mono">ChatTornado Grandmaster</span>
+                </div>
+            </div>
+        );
+    }
+
+    // ==========================================
+    // 8. SPEED TRIVIA DUEL
+    // ==========================================
+    if (localGame.game === "trivia") {
+        const round = localGame.round || 0;
+        const currentQ = TRIVIA_BANK[round] || TRIVIA_BANK[0];
+        const scores = localGame.scores || {};
+        const myScore = scores[myUserId] || 0;
+        const opponentId = isMeSender ? receiverId : senderId;
+        const opponentScore = scores[opponentId] || 0;
+        const winner = localGame.winner;
+        const myAnswers = localGame.answers?.[round]?.[myUserId];
+        const hasAnsweredCurrent = myAnswers !== undefined;
+
+        const handleAnswer = (optionIdx) => {
+            if (winner || hasAnsweredCurrent || isMovingRef.current) return;
+            isMovingRef.current = true;
+
+            const isCorrect = optionIdx === currentQ.ans;
+            if (isCorrect) {
+                soundEngine.play("coin");
+            } else {
+                soundEngine.play("whoosh");
+            }
+
+            const newScores = {
+                ...scores,
+                [myUserId]: myScore + (isCorrect ? 100 : 0)
+            };
+
+            const newAnswers = {
+                ...(localGame.answers || {}),
+                [round]: {
+                    ...((localGame.answers || {})[round] || {}),
+                    [myUserId]: optionIdx
+                }
+            };
+
+            let nextRound = round;
+            let finalWinner = null;
+
+            // If this was the last round (4), determine winner
+            if (round >= TRIVIA_BANK.length - 1) {
+                const finalMy = newScores[myUserId] || 0;
+                const finalOpp = newScores[opponentId] || 0;
+                if (finalMy > finalOpp) finalWinner = "You Win!";
+                else if (finalOpp > finalMy) finalWinner = "Opponent Wins!";
+                else finalWinner = "Draw Game!";
+            } else {
+                nextRound = round + 1;
+            }
+
+            const updated = {
+                ...localGame,
+                round: nextRound,
+                scores: newScores,
+                answers: newAnswers,
+                winner: finalWinner,
+                moves: (localGame.moves || 0) + 1,
+                lastMoveBy: myUserId,
+            };
+
+            setLocalGame(updated);
+            onUpdateGame?.(updated);
+            setTimeout(() => { isMovingRef.current = false; }, 300);
+        };
+
+        const handleResetTrivia = () => {
+            soundEngine.play("whoosh");
+            const reset = {
+                ...localGame,
+                round: 0,
+                scores: {},
+                answers: {},
+                winner: null,
+                moves: 0,
+            };
+            setLocalGame(reset);
+            onUpdateGame?.(reset);
+        };
+
+        return (
+            <div className="flex flex-col gap-3 rounded-2xl border border-white/15 bg-black/60 p-4 backdrop-blur-xl max-w-[310px] w-full">
+                {/* Header */}
+                <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1.5">
+                        <span className="text-base">⚡</span>
+                        <span className="text-xs font-black tracking-wide text-white">VORTEX Speed Trivia</span>
+                    </div>
+                    <button
+                        type="button"
+                        onClick={handleResetTrivia}
+                        className="rounded-lg p-1 text-white/40 hover:bg-white/10 hover:text-white transition-colors"
+                        title="Reset trivia"
+                    >
+                        <RefreshCw className="h-3.5 w-3.5" />
+                    </button>
+                </div>
+
+                {/* Scoreboard */}
+                <div className="grid grid-cols-2 gap-2 text-center text-xs">
+                    <div className="p-2 rounded-xl bg-violet-600/20 border border-violet-500/30">
+                        <span className="text-[10px] text-violet-300 block">Your Score</span>
+                        <span className="text-base font-black text-white">{myScore} pts</span>
+                    </div>
+                    <div className="p-2 rounded-xl bg-fuchsia-600/20 border border-fuchsia-500/30">
+                        <span className="text-[10px] text-fuchsia-300 block">Opponent</span>
+                        <span className="text-base font-black text-white">{opponentScore} pts</span>
+                    </div>
+                </div>
+
+                {/* Content */}
+                {winner ? (
+                    <div className="text-center py-4 px-2 rounded-xl bg-gradient-to-b from-amber-500/20 to-transparent border border-amber-500/30">
+                        <Trophy className="h-8 w-8 text-amber-400 mx-auto mb-2 animate-bounce" />
+                        <h4 className="text-sm font-black text-white">{winner}</h4>
+                        <p className="text-xs text-white/60 mt-1">Final Score: {myScore} - {opponentScore}</p>
+                        <button
+                            type="button"
+                            onClick={handleResetTrivia}
+                            className="mt-3 px-4 py-1.5 rounded-xl bg-violet-600 text-white text-xs font-bold hover:bg-violet-500 shadow-lg"
+                        >
+                            Play Again
+                        </button>
+                    </div>
+                ) : (
+                    <div className="flex flex-col gap-2.5">
+                        <div className="flex justify-between items-center text-[11px] text-white/50">
+                            <span>Round {round + 1} of {TRIVIA_BANK.length}</span>
+                            <span className="text-amber-400 font-bold">+100 pts</span>
+                        </div>
+                        <p className="text-xs font-bold text-white bg-white/5 p-2.5 rounded-xl border border-white/10 leading-snug">
+                            {currentQ.q}
+                        </p>
+                        <div className="grid grid-cols-1 gap-1.5">
+                            {currentQ.options.map((opt, idx) => {
+                                const isSelected = myAnswers === idx;
+                                const isCorrect = idx === currentQ.ans;
+                                return (
+                                    <button
+                                        key={idx}
+                                        type="button"
+                                        disabled={hasAnsweredCurrent}
+                                        onClick={() => handleAnswer(idx)}
+                                        className={`p-2 rounded-xl text-left text-xs font-medium border transition-all ${
+                                            hasAnsweredCurrent
+                                                ? isCorrect
+                                                    ? "bg-emerald-500/20 border-emerald-500/60 text-emerald-300 font-bold"
+                                                    : isSelected
+                                                    ? "bg-red-500/20 border-red-500/60 text-red-300"
+                                                    : "bg-white/5 border-white/5 text-white/40"
+                                                : "bg-white/5 border-white/10 text-white/80 hover:bg-white/15 hover:border-violet-500/50"
+                                        }`}
+                                    >
+                                        <span className="mr-1.5 opacity-60 font-mono">{String.fromCharCode(65 + idx)}.</span>
+                                        {opt}
+                                    </button>
+                                );
+                            })}
                         </div>
                     </div>
                 )}

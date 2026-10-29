@@ -79,6 +79,46 @@ const AVAILABLE_GAMES = [
         })
     },
     {
+        id: "chess",
+        name: "Chess Duel",
+        emoji: "♟️",
+        desc: "Classic 8x8 in-chat grandmaster duel!",
+        color: "from-amber-600 to-yellow-600",
+        initData: () => ({
+            game: "chess",
+            board: [
+                ["r", "n", "b", "q", "k", "b", "n", "r"],
+                ["p", "p", "p", "p", "p", "p", "p", "p"],
+                Array(8).fill(null),
+                Array(8).fill(null),
+                Array(8).fill(null),
+                Array(8).fill(null),
+                ["P", "P", "P", "P", "P", "P", "P", "P"],
+                ["R", "N", "B", "Q", "K", "B", "N", "R"],
+            ],
+            turn: "w",
+            selected: null,
+            winner: null,
+            moves: 0,
+            lastMove: null,
+        })
+    },
+    {
+        id: "trivia",
+        name: "VORTEX Speed Trivia",
+        emoji: "⚡",
+        desc: "5-round lightning brain battle!",
+        color: "from-violet-600 to-fuchsia-600",
+        initData: () => ({
+            game: "trivia",
+            round: 0,
+            scores: {},
+            answers: {},
+            winner: null,
+            moves: 0,
+        })
+    },
+    {
         id: "numberguesser",
         name: "Number Guesser",
         emoji: "🔢",

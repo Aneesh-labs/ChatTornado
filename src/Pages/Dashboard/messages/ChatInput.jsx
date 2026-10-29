@@ -4,10 +4,11 @@ import { motion, AnimatePresence } from "framer-motion";
 import { IconBtn, useTheme } from "./constants";
 import API from "../../../Services/API";
 import { prepareP2PFile } from "../../../Services/p2p";
-import { Shield, X, Gamepad2, Volume2, Mic, MicOff, MoreVertical, Sparkles, Wand2, RefreshCw, ImageIcon, Eye, Cpu, Zap, FileText, FileCode, Clock, Paperclip, Smile, SendHorizonal, ArrowUp, Lightbulb, Code, Palette, Globe, Search } from "lucide-react";
+import { Shield, X, Gamepad2, Volume2, Mic, MicOff, MoreVertical, Sparkles, Wand2, RefreshCw, ImageIcon, Eye, Cpu, Zap, FileText, FileCode, Clock, Paperclip, Smile, SendHorizonal, ArrowUp, Lightbulb, Code, Palette, Globe, Search, Flame } from "lucide-react";
 import CyberShieldModal from "./CyberShieldModal";
 import InChatGameModal from "./InChatGameModal";
 import SoundboardModal from "./SoundboardModal";
+import { soundEngine } from "../../../utils/soundEffects";
 import { isAdminUnlocked, touchAdminSession } from "../../../utils/adminSession";
 import { processImageLocally } from "../../../utils/imageProcessor";
 import { isProcessableDocument, processDocumentLocally } from "../../../utils/fileProcessor";
@@ -32,6 +33,7 @@ const ChatInput = React.memo(({ onSend, replyTo, onCancelReply, selectedUser, so
     const [showMoreOptions, setShowMoreOptions] = useState(false);
     const isSendingRef = useRef(false);
     const [shieldModalOpen, setShieldModalOpen] = useState(false);
+    const [isBurnMode, setIsBurnMode] = useState(false);
     const [shieldOptions, setShieldOptions] = useState(null);
     const [gameModalOpen, setGameModalOpen] = useState(false);
     const [soundboardModalOpen, setSoundboardModalOpen] = useState(false);
@@ -483,7 +485,9 @@ const ChatInput = React.memo(({ onSend, replyTo, onCancelReply, selectedUser, so
                     ? `${fullUploadedUrl}\n\n${trimmed}`
                     : (isBot ? `${fullUploadedUrl}\n\nPlease analyze and explain this image in detail.` : fullUploadedUrl);
 
-                onSend(promptWithImage, { ...(shieldOptions || {}), ai_mode: activeInputMode });
+                const burnOptImg = isBurnMode ? { is_burn: true, burn_seconds: 10 } : {};
+                onSend(promptWithImage, { ...(shieldOptions || {}), ...burnOptImg, ai_mode: activeInputMode });
+                if (isBurnMode) setIsBurnMode(false);
 
                 setStagedImage(null);
                 setText("");
@@ -509,7 +513,9 @@ const ChatInput = React.memo(({ onSend, replyTo, onCancelReply, selectedUser, so
                 ? `${docHeader}\n\n${trimmed}`
                 : `${docHeader}\n\nPlease analyze this document thoroughly and extract key points.`;
 
-            onSend(promptWithDoc, { ...(shieldOptions || {}), ai_mode: activeInputMode });
+            const burnOptDoc = isBurnMode ? { is_burn: true, burn_seconds: 10 } : {};
+            onSend(promptWithDoc, { ...(shieldOptions || {}), ...burnOptDoc, ai_mode: activeInputMode });
+            if (isBurnMode) setIsBurnMode(false);
 
             setStagedDoc(null);
             setText("");
@@ -522,7 +528,9 @@ const ChatInput = React.memo(({ onSend, replyTo, onCancelReply, selectedUser, so
         try {
             const storedGoogleModel = typeof window !== "undefined" ? localStorage.getItem("vortex_selected_google_model") : null;
             const activeAiModel = (storedGoogleModel && storedGoogleModel !== "gemini-2.5-flash") ? storedGoogleModel : "gemini-3.8-flash";
-            const sent = onSend(trimmed, { ...(shieldOptions || {}), ai_mode: activeInputMode, ai_model: activeAiModel });
+            const burnOptions = isBurnMode ? { is_burn: true, burn_seconds: 10 } : {};
+            const sent = onSend(trimmed, { ...(shieldOptions || {}), ...burnOptions, ai_mode: activeInputMode, ai_model: activeAiModel });
+            if (isBurnMode) setIsBurnMode(false);
             if (!sent) {
                 isSendingRef.current = false;
                 return;
@@ -1279,6 +1287,22 @@ const ChatInput = React.memo(({ onSend, replyTo, onCancelReply, selectedUser, so
                                             className="text-fuchsia-400/80 hover:!text-fuchsia-300 hover:bg-fuchsia-500/10 shrink-0"
                                         >
                                             <Volume2 className="w-4 h-4" />
+                                        </IconBtn>
+
+                                        
+                                        <IconBtn
+                                            title={isBurnMode ? "Self-Destruct (Burn After Reading: 10s active)" : "Burn After Reading (Self-destructs 10s after opening)"}
+                                            onClick={() => {
+                                                soundEngine.play(isBurnMode ? "whoosh" : "pop");
+                                                setIsBurnMode((prev) => !prev);
+                                            }}
+                                            small
+                                            className={`transition-all shrink-0 ${isBurnMode
+                                                ? "!text-orange-400 bg-orange-500/20 border border-orange-500/50 shadow-[0_0_12px_rgba(249,115,22,0.5)] animate-pulse"
+                                                : "text-orange-400/80 hover:!text-orange-300 hover:bg-orange-500/10"
+                                                }`}
+                                        >
+                                            <Flame className="w-4 h-4" />
                                         </IconBtn>
 
                                         <IconBtn

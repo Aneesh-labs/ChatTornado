@@ -1,4 +1,4 @@
-import { Volume2, VolumeX, Languages, GitFork, Reply, Trash2, X, Download, Check, RotateCw } from "lucide-react";
+import { Volume2, VolumeX, Languages, GitFork, Reply, Trash2, X, Download, Check, RotateCw, Flame, Eye } from "lucide-react";
 import React, { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import PropTypes from "prop-types";
 import { motion, AnimatePresence } from "framer-motion";
@@ -687,6 +687,122 @@ const SoundBubble = ({ rawMessage }) => {
 /* ═══════════════════════════════════════════════════════════════
    MAIN MESSAGE BUBBLE COMPONENT
    ═══════════════════════════════════════════════════════════════ */
+
+/* ==========================================================================
+   BURN AFTER READING & PRIVACY SHIELD BLUR
+   ========================================================================== */
+
+const BurnMessageCapsule = ({ message, onBurn, children }) => {
+    const [revealed, setRevealed] = useState(false);
+    const [timeLeft, setTimeLeft] = useState(message.burn_seconds || 10);
+    const [isBurned, setIsBurned] = useState(false);
+    const timerRef = useRef(null);
+
+    useEffect(() => {
+        if (!revealed || isBurned) return;
+        timerRef.current = setInterval(() => {
+            setTimeLeft((prev) => {
+                if (prev <= 1) {
+                    clearInterval(timerRef.current);
+                    setIsBurned(true);
+                    soundEngine.play("drum");
+                    onBurn?.();
+                    return 0;
+                }
+                return prev - 1;
+            });
+        }, 1000);
+
+        return () => clearInterval(timerRef.current);
+    }, [revealed, isBurned, onBurn]);
+
+    if (isBurned) {
+        return (
+            <motion.div
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                className="p-3 rounded-xl bg-red-950/40 border border-red-500/30 text-xs text-red-300 font-mono flex items-center gap-2 select-none"
+            >
+                <Flame className="w-4 h-4 text-red-500 animate-pulse" />
+                <span>💥 [Message Burned & Self-Destructed]</span>
+            </motion.div>
+        );
+    }
+
+    if (!revealed) {
+        return (
+            <button
+                type="button"
+                onClick={(e) => {
+                    e.stopPropagation();
+                    soundEngine.play("pop");
+                    setRevealed(true);
+                }}
+                className="w-full text-left p-3 rounded-xl bg-gradient-to-r from-orange-950/60 to-red-950/40 border border-orange-500/40 hover:border-orange-500/70 transition-all flex items-center gap-3 cursor-pointer group shadow-lg"
+            >
+                <div className="h-9 w-9 rounded-xl bg-orange-500/20 border border-orange-500/40 flex items-center justify-center text-orange-400 group-hover:scale-110 transition-transform">
+                    <Flame className="w-5 h-5 animate-pulse" />
+                </div>
+                <div>
+                    <span className="text-xs font-black text-orange-200 block group-hover:text-orange-100">
+                        🔥 Burn After Reading ({message.burn_seconds || 10}s)
+                    </span>
+                    <span className="text-[10px] text-orange-300/60 block">
+                        Tap to reveal secret message. Disintegrates once opened.
+                    </span>
+                </div>
+            </button>
+        );
+    }
+
+    const percent = Math.max(0, (timeLeft / (message.burn_seconds || 10)) * 100);
+
+    return (
+        <div className="relative overflow-hidden rounded-xl">
+            {/* Burning Fuse Bar */}
+            <div className="mb-2 p-1.5 rounded-lg bg-orange-950/70 border border-orange-500/40 flex items-center justify-between text-[10px] font-bold text-orange-300">
+                <span className="flex items-center gap-1">
+                    <Flame className="w-3.5 h-3.5 text-orange-400 animate-bounce" />
+                    Self-destructing in {timeLeft}s
+                </span>
+                <span className="font-mono text-orange-400">{timeLeft}s</span>
+            </div>
+            <div className="w-full bg-orange-950/50 h-1 rounded-full mb-2 overflow-hidden">
+                <motion.div
+                    className="bg-gradient-to-r from-orange-500 to-red-500 h-full"
+                    style={{ width: `${percent}%` }}
+                    transition={{ ease: "linear" }}
+                />
+            </div>
+            <div className="relative z-10">
+                {children}
+            </div>
+        </div>
+    );
+};
+
+const PrivacyShieldBlur = ({ children }) => {
+    const [unmasked, setUnmasked] = useState(false);
+    return (
+        <div
+            onMouseEnter={() => setUnmasked(true)}
+            onMouseLeave={() => setUnmasked(false)}
+            onClick={(e) => { e.stopPropagation(); setUnmasked((prev) => !prev); }}
+            className="relative cursor-pointer group"
+        >
+            <div className={`transition-all duration-200 ${!unmasked ? "filter blur-md select-none opacity-50" : ""}`}>
+                {children}
+            </div>
+            {!unmasked && (
+                <div className="absolute inset-0 flex items-center justify-center bg-black/40 backdrop-blur-sm rounded-xl border border-white/10 text-[10px] font-bold text-white/80 gap-1.5 shadow-lg pointer-events-none">
+                    <Eye className="w-3.5 h-3.5 text-cyan-400" />
+                    <span>Confidential • Hover or tap to unmask</span>
+                </div>
+            )}
+        </div>
+    );
+};
+
 const MessageBubble = React.memo(({
     msg,
     isMe,
@@ -1301,7 +1417,15 @@ const MessageBubble = React.memo(({
                                 <span>🕰️ Future Scheduled</span>
                             </div>
                         )}
-                        {msg.is_shielded ? (
+                        {msg.is_burn ? (
+                            <BurnMessageCapsule message={msg} onBurn={() => onDelete?.(msg.id)}>
+                                {renderMessageContent()}
+                            </BurnMessageCapsule>
+                        ) : (msg.is_shielded && msg.shield_mode === "blur") || msg.is_blurred ? (
+                            <PrivacyShieldBlur>
+                                {renderMessageContent()}
+                            </PrivacyShieldBlur>
+                        ) : msg.is_shielded ? (
                             <CyberShieldVault
                                 shieldMode={msg.shield_mode}
                                 unlockAt={msg.unlock_at}

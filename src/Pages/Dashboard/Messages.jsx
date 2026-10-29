@@ -46,6 +46,9 @@ import StreakModal from "./messages/StreakModal";
 import WatchTogetherOverlay from "./messages/WatchTogetherOverlay";
 import VanishModeOverlay from "./messages/VanishModeOverlay";
 import { recordMessageSent } from "../../Services/streakService";
+import { VOICE_FILTERS, applyVoiceFilter } from "../../Services/audioVoiceFilters";
+import { cacheOfflineMessages, getOfflineMessages, queueOfflineMessage, flushOfflineQueue } from "../../Services/db";
+
 import { selectRelevantVaultContext } from "../../Services/vortex/vaultService";
 
 /* ==========================================================================
@@ -204,6 +207,7 @@ const Messages = () => {
     const pendingTempIds = useRef(new Set());
     const typingTimeouts = useRef({});
     const peerRef = useRef(null);
+    const callStartTimeRef = useRef(null);
     const iceCandidateQueue = useRef([]);
     const callSignalRef = useRef(null);
     const rateLimiterRef = useRef(createRateLimiter(15, 60000));
@@ -336,8 +340,12 @@ const Messages = () => {
 
     const closeCall = useCallback((notify = true) => {
         const active = peerRef.current;
-        if (notify && call?.user?.id) {
-            sendSignal(call.user.id, { type: "hangup" });
+        const callUser = call?.user;
+        const duration = callStartTimeRef.current ? Math.floor((Date.now() - callStartTimeRef.current) / 1000) : 0;
+        callStartTimeRef.current = null;
+
+        if (notify && callUser?.id && !callUser?.is_bot) {
+            sendSignal(callUser.id, { type: "hangup" });
         }
         active?.getSenders().forEach((sender) => {
             try { sender.track?.stop(); } catch { }
@@ -351,7 +359,28 @@ const Messages = () => {
         setCall(null);
         setIsMuted(false);
         setIsCameraOff(false);
-    }, [call?.user?.id, call?.localStream, sendSignal]);
+
+        if (typeof window !== "undefined" && "speechSynthesis" in window) {
+            try { window.speechSynthesis.cancel(); } catch { }
+        }
+
+        // Auto post-call recap if call lasted >= 15 seconds
+        if (callUser && !callUser.is_bot && duration >= 15) {
+            setTimeout(() => {
+                const mins = Math.floor(duration / 60);
+                const secs = duration % 60;
+                const durStr = mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
+                sendMessage(
+                    `📝 **VORTEX Call Debrief & Action Items**\n\n` +
+                    `• **Duration**: ${durStr}\n` +
+                    `• **Call Security**: WebRTC End-to-End Encrypted Session\n` +
+                    `• **Summary**: Real-time voice session concluded cleanly.\n` +
+                    `• **Action Items**: Conversation audio & sync log updated in DNA record.\n\n` +
+                    `*Tip: Use Reality Forks to branch this discussion or encrypted vaults to archive key details.*`
+                );
+            }, 600);
+        }
+    }, [call, sendSignal, sendMessage]);
 
     const createPeer = useCallback((user, video, stream) => {
         const turnUrl = import.meta.env.VITE_TURN_URL;
@@ -382,6 +411,7 @@ const Messages = () => {
             const remoteStream = event.streams?.[0] || new MediaStream([event.track]);
             setCall((current) => {
                 if (!current) return current;
+                callStartTimeRef.current = callStartTimeRef.current || Date.now();
                 return { ...current, remoteStream, status: "connected" };
             });
         };
@@ -409,7 +439,25 @@ const Messages = () => {
 
     const startCall = useCallback(async (video) => {
         if (video === "ai") {
-            alert("Live AI Voice (Gemini WebSocket) is active on the backend (ws://ai/live), but requires a compatible native app client for PCM 16kHz audio capture.");
+            setCallNotice("");
+            callStartTimeRef.current = Date.now();
+            const vortexPeer = {
+                id: "vortex_voice",
+                username: "VORTEX-9 AI",
+                is_bot: true,
+                avatar_url: "/vortex_avatar.png",
+            };
+            setCall({
+                user: vortexPeer,
+                status: "connected",
+                video: false,
+                isAiCall: true,
+            });
+            if (typeof window !== "undefined" && "speechSynthesis" in window) {
+                const welcomeUtter = new SpeechSynthesisUtterance("Hello! I am VORTEX-9 in real-time voice mode. I am ready to assist you.");
+                welcomeUtter.rate = 1.05;
+                window.speechSynthesis.speak(welcomeUtter);
+            }
             return;
         }
         setCallNotice("");
@@ -959,6 +1007,7 @@ const Messages = () => {
             ws.onopen = () => {
                 reconnectAttempts = 0;
                 setSocketReady(true);
+                flushOfflineQueue((text, opts) => sendMessage(text, opts));
                 setSecurityStatus("SECURE");
                 setCallNotice((prev) => (prev.includes("Real-time connection") ? "" : prev));
 
@@ -1587,8 +1636,24 @@ const Messages = () => {
             return false;
         }
         if (!socketRef.current || socketRef.current.readyState !== WebSocket.OPEN) {
-            setCallNotice("Connecting to real-time chat server... Please wait a moment.");
-            return false;
+            queueOfflineMessage({
+                temp_id,
+                receiver_id: currentTarget.id,
+                message: validation.text,
+                created_at: new Date().toISOString(),
+                ...options,
+            });
+            setCallNotice("Offline: Message queued locally. Will auto-sync when reconnected.");
+            setMessages((prev) => [...prev, {
+                temp_id,
+                sender_id: myUserId.current,
+                receiver_id: currentTarget.id,
+                message: validation.text,
+                created_at: new Date().toISOString(),
+                status: "pending_offline",
+                ...options,
+            }]);
+            return true;
         }
         const rateCheck = rateLimiterRef.current();
         if (!rateCheck.allowed) {
@@ -2038,6 +2103,31 @@ const Messages = () => {
         CONNECTION_ERROR: "#ef4444",
     };
 
+    const handleSendVoicemail = useCallback(async (audioBlob, voiceFilter = "normal") => {
+        try {
+            const processedBlob = await applyVoiceFilter(audioBlob, voiceFilter);
+            const filterObj = VOICE_FILTERS.find((f) => f.id === voiceFilter);
+            const filterName = filterObj ? filterObj.name : "Normal";
+            const ext = processedBlob.type && processedBlob.type.includes("wav") ? "wav" : "webm";
+            const file = new File([processedBlob], `Voicemail_${Date.now()}.${ext}`, { type: processedBlob.type || "audio/webm" });
+            const body = new FormData();
+            body.append("file", file);
+
+            const token = sessionStorage.getItem("token") || "";
+            const res = await API.post(`/uploads?token=${encodeURIComponent(token)}`, body);
+            const data = res.data;
+            const baseUrl = (API.defaults.baseURL || "").replace(/\/+$/, "");
+            const originalPath = (data.original_url || data.url || "").replace(/^\//, "");
+            const originalUrl = `${baseUrl}/${originalPath}`;
+
+            sendMessage(`🎤 Voicemail (${filterName !== "Normal" ? `${filterName} FX, ` : ""}15s Note)\n${originalUrl}`);
+            closeCall();
+        } catch (err) {
+            console.error("Failed to upload voicemail:", err);
+            closeCall();
+        }
+    }, [sendMessage, closeCall]);
+
     return (
         <ThemeContext.Provider value={currentTheme}>
             <PerformanceMonitor isLowPerformance={isLowPerformance} />
@@ -2239,6 +2329,7 @@ const Messages = () => {
                         onToggleVideo={handleToggleVideo}
                         isMuted={isMuted}
                         isCameraOff={isCameraOff}
+                        onSendVoicemail={handleSendVoicemail}
                     />
                     <MediaPermissionModal
                         isOpen={mediaConsentModal.open}

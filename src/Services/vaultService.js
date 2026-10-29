@@ -46,6 +46,8 @@ export const lockVault = () => {
     window.dispatchEvent(new CustomEvent("vortex_vault_toggled", { detail: { unlocked: false, decoy: true } }));
 };
 
+export const enterDecoyMode = lockVault;
+
 export const isDecoyMode = () => {
     return sessionStorage.getItem(DECOY_MODE_KEY) === "true";
 };

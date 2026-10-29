@@ -25,6 +25,9 @@ import { motion, AnimatePresence } from "framer-motion";
 import API from "../../Services/API";
 import { clearAdminSession } from "../../utils/adminSession";
 import { soundEffects } from "../../utils/soundEffects";
+import { getVaultPin, setVaultPin, enterDecoyMode } from "../../Services/vaultService";
+import { KeyRound, ShieldAlert, Zap } from "lucide-react";
+
 
 export default function Settings() {
     const navigate = useNavigate();
@@ -38,6 +41,14 @@ export default function Settings() {
     const [deleteError, setDeleteError] = useState("");
 
     // Sound effects setting
+        // Cypherpunk Security & Duress Protection states
+    const [realPin, setRealPin] = useState(() => getVaultPin());
+    const [decoyPin, setDecoyPin] = useState(() => localStorage.getItem("vortex_decoy_pin") || "0000");
+    const [pinSavedNotice, setPinSavedNotice] = useState(false);
+    const [antiScreenshot, setAntiScreenshot] = useState(() => localStorage.getItem("vortex_anti_screenshot") !== "false");
+    const [panicKeyEnabled, setPanicKeyEnabled] = useState(() => localStorage.getItem("vortex_panic_key") === "true");
+    const [testNotifNotice, setTestNotifNotice] = useState("");
+
     const [soundEnabled, setSoundEnabled] = useState(() => {
         return localStorage.getItem("chat_sound_enabled") !== "false";
     });
@@ -46,6 +57,47 @@ export default function Settings() {
     const [notifPermission, setNotifPermission] = useState(() => {
         return typeof window !== "undefined" && "Notification" in window ? Notification.permission : "default";
     });
+
+        const handleSavePins = () => {
+        if (!/^\d{4}$/.test(realPin) || !/^\d{4}$/.test(decoyPin)) {
+            alert("Both PINs must be exactly 4 digits.");
+            return;
+        }
+        if (realPin === decoyPin) {
+            alert("Decoy PIN must be different from your real Secret Vault PIN.");
+            return;
+        }
+        setVaultPin(realPin);
+        localStorage.setItem("vortex_decoy_pin", decoyPin);
+        setPinSavedNotice(true);
+        soundEffects.play("coin");
+        setTimeout(() => setPinSavedNotice(false), 3000);
+    };
+
+    const handleTestDecoy = () => {
+        enterDecoyMode();
+        soundEffects.play("whoosh");
+        alert("🚨 Decoy Mode Activated! Confidential vaults hidden. Returning to Dashboard.");
+        navigate("/dashboard/messages");
+    };
+
+    const handleSendTestNotification = () => {
+        if ("Notification" in window && Notification.permission === "granted") {
+            try {
+                new Notification("ChatTornado", {
+                    body: "🚀 Real-time push alert operational! You're all set.",
+                    icon: "/favicon.ico",
+                });
+                soundEffects.play("pop");
+                setTestNotifNotice("Test alert dispatched!");
+                setTimeout(() => setTestNotifNotice(""), 3000);
+            } catch (err) {
+                console.warn("Notification error:", err);
+            }
+        } else {
+            requestNotifications();
+        }
+    };
 
     const toggleSound = () => {
         const next = !soundEnabled;
@@ -221,18 +273,29 @@ export default function Settings() {
                                     <p className="text-xs text-white/50 mt-0.5">Receive native system notifications when new messages arrive.</p>
                                 </div>
                             </div>
-                            <button
-                                type="button"
-                                onClick={requestNotifications}
-                                disabled={notifPermission === "granted"}
-                                className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
-                                    notifPermission === "granted"
-                                        ? "bg-emerald-500/20 border border-emerald-500/30 text-emerald-300 cursor-default"
-                                        : "bg-sky-600 text-white hover:bg-sky-500 active:scale-95"
-                                }`}
-                            >
-                                {notifPermission === "granted" ? "Active" : "Allow Alerts"}
-                            </button>
+                            <div className="flex items-center gap-2">
+                                {notifPermission === "granted" && (
+                                    <button
+                                        type="button"
+                                        onClick={handleSendTestNotification}
+                                        className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-white/10 hover:bg-white/15 text-white/80 transition-all border border-white/10 active:scale-95"
+                                    >
+                                        Test Alert
+                                    </button>
+                                )}
+                                <button
+                                    type="button"
+                                    onClick={requestNotifications}
+                                    disabled={notifPermission === "granted"}
+                                    className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+                                        notifPermission === "granted"
+                                            ? "bg-emerald-500/20 border border-emerald-500/30 text-emerald-300 cursor-default"
+                                            : "bg-sky-600 text-white hover:bg-sky-500 active:scale-95"
+                                    }`}
+                                >
+                                    {notifPermission === "granted" ? "Active" : "Allow Alerts"}
+                                </button>
+                            </div>
                         </div>
 
                         {/* System Announcements */}
@@ -341,27 +404,152 @@ export default function Settings() {
                     </div>
                 )}
 
-                {/* Tab 3: Zero-Knowledge Security */}
+                {/* Tab 3: Cypherpunk Security & Duress Protection */}
                 {activeTab === "security" && (
-                    <div className="rounded-2xl border border-white/10 bg-[#090c14]/90 p-5 backdrop-blur-2xl shadow-xl space-y-4">
-                        <div className="flex items-start gap-3.5">
-                            <div className="grid h-10 w-10 place-items-center rounded-xl bg-purple-500/10 border border-purple-500/20 text-purple-400">
+                    <div className="grid gap-4">
+                        {/* Overview Banner */}
+                        <div className="rounded-2xl border border-white/10 bg-[#090c14]/90 p-5 backdrop-blur-2xl shadow-xl flex items-start gap-3.5">
+                            <div className="grid h-10 w-10 place-items-center rounded-xl bg-purple-500/10 border border-purple-500/20 text-purple-400 shrink-0">
                                 <Lock className="h-5 w-5" />
                             </div>
                             <div>
                                 <h3 className="text-sm font-bold text-white">VORTEX Zero-Knowledge Fortress</h3>
-                                <p className="text-xs text-white/50 mt-0.5">End-to-end client-side encryption. Keys never touch backend servers.</p>
+                                <p className="text-xs text-white/50 mt-0.5">
+                                    End-to-end client-side encryption (AES-256 GCM + PBKDF2). Keys never touch remote servers.
+                                </p>
                             </div>
                         </div>
 
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
-                            <div className="p-3.5 rounded-xl border border-white/5 bg-white/[0.02]">
-                                <p className="text-xs font-bold text-white/90">Client-Side Cipher</p>
-                                <p className="text-xs text-white/50 mt-1 font-mono">AES-256 GCM + PBKDF2</p>
+                        {/* Duress & Decoy PIN Card */}
+                        <div className="rounded-2xl border border-white/10 bg-[#090c14]/90 p-5 backdrop-blur-2xl shadow-xl space-y-4">
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2.5">
+                                    <div className="grid h-9 w-9 place-items-center rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400">
+                                        <KeyRound className="h-4 w-4" />
+                                    </div>
+                                    <div>
+                                        <h4 className="text-sm font-bold text-white">Dual-PIN Duress & Decoy Protection</h4>
+                                        <p className="text-xs text-white/50">Configure alternate passcodes for forced unlock situations.</p>
+                                    </div>
+                                </div>
+                                {pinSavedNotice && (
+                                    <span className="text-xs font-bold text-emerald-400 flex items-center gap-1 animate-pulse">
+                                        <CheckCircle2 className="h-3.5 w-3.5" /> Saved!
+                                    </span>
+                                )}
                             </div>
-                            <div className="p-3.5 rounded-xl border border-white/5 bg-white/[0.02]">
-                                <p className="text-xs font-bold text-white/90">Decoy Passcode Protection</p>
-                                <p className="text-xs text-white/50 mt-1">Configured & Active</p>
+
+                            <p className="text-xs text-white/60 leading-relaxed">
+                                If forced to unlock your phone or account, enter your <strong className="text-amber-300">Decoy PIN</strong>.
+                                ChatTornado will instantly boot into an innocent Safe Mode with zero trace of your encrypted chats.
+                            </p>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                                <div className="p-3.5 rounded-xl border border-white/5 bg-white/[0.02]">
+                                    <label className="text-xs font-bold text-white/80 block mb-1.5">Secret Vault PIN (4 digits)</label>
+                                    <input
+                                        type="password"
+                                        maxLength={4}
+                                        value={realPin}
+                                        onChange={(e) => setRealPin(e.target.value.replace(/\D/g, ""))}
+                                        className="w-full px-3 py-2 rounded-lg bg-black/40 border border-white/10 text-white font-mono text-center tracking-widest text-sm focus:border-purple-500 focus:outline-none"
+                                        placeholder="••••"
+                                    />
+                                    <span className="text-[10px] text-white/40 mt-1 block">Unlocks true encrypted vault.</span>
+                                </div>
+
+                                <div className="p-3.5 rounded-xl border border-white/5 bg-white/[0.02]">
+                                    <label className="text-xs font-bold text-amber-300 block mb-1.5">Duress / Decoy PIN (4 digits)</label>
+                                    <input
+                                        type="password"
+                                        maxLength={4}
+                                        value={decoyPin}
+                                        onChange={(e) => setDecoyPin(e.target.value.replace(/\D/g, ""))}
+                                        className="w-full px-3 py-2 rounded-lg bg-black/40 border border-amber-500/20 text-amber-300 font-mono text-center tracking-widest text-sm focus:border-amber-500 focus:outline-none"
+                                        placeholder="0000"
+                                    />
+                                    <span className="text-[10px] text-white/40 mt-1 block">Boots innocent decoy state.</span>
+                                </div>
+                            </div>
+
+                            <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-white/5">
+                                <button
+                                    type="button"
+                                    onClick={handleSavePins}
+                                    className="px-4 py-2 rounded-xl text-xs font-bold bg-purple-600 hover:bg-purple-500 text-white shadow-lg transition-all active:scale-95"
+                                >
+                                    Save Passcodes
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={handleTestDecoy}
+                                    className="px-3.5 py-2 rounded-xl text-xs font-bold bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-300 transition-all active:scale-95"
+                                >
+                                    Simulate Decoy Trigger
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Anti-Screenshot & Emergency Panic Key */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div className="rounded-2xl border border-white/10 bg-[#090c14]/90 p-5 backdrop-blur-2xl shadow-xl flex flex-col justify-between">
+                                <div>
+                                    <div className="flex items-center gap-2 mb-2 text-sky-400">
+                                        <EyeOff className="h-4 w-4" />
+                                        <h4 className="text-sm font-bold text-white">Anti-Screenshot Guard</h4>
+                                    </div>
+                                    <p className="text-xs text-white/50 leading-relaxed">
+                                        Automatically masks messages when window focus is lost or screen capture tools are detected.
+                                    </p>
+                                </div>
+                                <div className="pt-4 flex justify-end">
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            const next = !antiScreenshot;
+                                            setAntiScreenshot(next);
+                                            localStorage.setItem("vortex_anti_screenshot", String(next));
+                                            soundEffects.play("pop");
+                                        }}
+                                        className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                                            antiScreenshot
+                                                ? "bg-sky-500/20 border border-sky-500/30 text-sky-300"
+                                                : "bg-white/10 text-white/40"
+                                        }`}
+                                    >
+                                        {antiScreenshot ? "Active" : "Disabled"}
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div className="rounded-2xl border border-white/10 bg-[#090c14]/90 p-5 backdrop-blur-2xl shadow-xl flex flex-col justify-between">
+                                <div>
+                                    <div className="flex items-center gap-2 mb-2 text-rose-400">
+                                        <ShieldAlert className="h-4 w-4" />
+                                        <h4 className="text-sm font-bold text-white">Triple-Esc Panic Key</h4>
+                                    </div>
+                                    <p className="text-xs text-white/50 leading-relaxed">
+                                        Pressing <kbd className="px-1.5 py-0.5 rounded bg-white/10 text-white font-mono text-[10px]">Esc</kbd> 3 times quickly wipes session RAM and instantly redirects to Wikipedia.
+                                    </p>
+                                </div>
+                                <div className="pt-4 flex justify-end">
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            const next = !panicKeyEnabled;
+                                            setPanicKeyEnabled(next);
+                                            localStorage.setItem("vortex_panic_key", String(next));
+                                            soundEffects.play("pop");
+                                        }}
+                                        className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                                            panicKeyEnabled
+                                                ? "bg-rose-500/20 border border-rose-500/30 text-rose-300"
+                                                : "bg-white/10 text-white/40"
+                                        }`}
+                                    >
+                                        {panicKeyEnabled ? "Armed" : "Disabled"}
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     </div>
