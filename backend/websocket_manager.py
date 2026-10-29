@@ -3,6 +3,26 @@ from starlette.websockets import WebSocketDisconnect
 import asyncio
 from database import SessionLocal
 from models import Message
+import os
+import httpx
+
+GO_RELAY_URL = os.getenv("REALTIME_ENGINE_URL", "http://127.0.0.1:8080/api/relay")
+
+async def _relay_to_go_engine(receiver_id=None, broadcast=False, payload=None):
+    if not payload:
+        return
+    try:
+        async with httpx.AsyncClient(timeout=0.08) as client:
+            await client.post(
+                GO_RELAY_URL,
+                json={
+                    "receiver_id": receiver_id,
+                    "broadcast": broadcast,
+                    "payload": payload
+                }
+            )
+    except Exception:
+        pass
 
 class ConnectionManager:
 
@@ -128,6 +148,12 @@ class ConnectionManager:
         if websocket is None and isinstance(rid, int):
             websocket = self.active_connections.get(str(rid))
 
+        # Forward to Go Realtime Engine asynchronously (zero-fallback reliability)
+        try:
+            asyncio.create_task(_relay_to_go_engine(receiver_id=rid, payload=message))
+        except Exception:
+            pass
+
         if websocket is None:
             return False
 
@@ -238,6 +264,10 @@ class ConnectionManager:
             "status": status,
             "custom_status": custom_status
         }
+        try:
+            asyncio.create_task(_relay_to_go_engine(broadcast=True, payload=packet))
+        except Exception:
+            pass
 
         for target_id, ws in list(self.active_connections.items()):
             try:

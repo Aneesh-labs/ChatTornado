@@ -86,9 +86,9 @@ class Message(Base):
     correlation_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True, index=True)
     
     # Reality Forks & Future Messages
-    branch_id: Mapped[Optional[int]] = mapped_column(ForeignKey("conversation_branches.id", ondelete="SET NULL"), nullable=True, index=True)
+    branch_id: Mapped[Optional[int]] = mapped_column(ForeignKey("conversation_branches.id", ondelete="SET NULL", use_alter=True, name="fk_messages_branch_id"), nullable=True, index=True)
     is_future_message: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
-    future_message_id: Mapped[Optional[int]] = mapped_column(ForeignKey("future_messages.id", ondelete="SET NULL"), nullable=True, index=True)
+    future_message_id: Mapped[Optional[int]] = mapped_column(ForeignKey("future_messages.id", ondelete="SET NULL", use_alter=True, name="fk_messages_future_message_id"), nullable=True, index=True)
     
     # Relationships
     sender: Mapped["User"] = relationship("User", foreign_keys=[sender_id], back_populates="sent_messages")
@@ -432,7 +432,7 @@ class ConversationBranch(Base):
     group_id: Mapped[Optional[int]] = mapped_column(ForeignKey("groups.id", ondelete="CASCADE"), nullable=True, index=True)
     dm_user1_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=True, index=True)
     dm_user2_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=True, index=True)
-    parent_branch_id: Mapped[Optional[int]] = mapped_column(ForeignKey("conversation_branches.id", ondelete="SET NULL"), nullable=True, index=True)
+    parent_branch_id: Mapped[Optional[int]] = mapped_column(ForeignKey("conversation_branches.id", ondelete="SET NULL", use_alter=True, name="fk_messages_branch_id"), nullable=True, index=True)
     fork_message_id: Mapped[int] = mapped_column(ForeignKey("messages.id", ondelete="CASCADE"), nullable=False, index=True)
     created_by: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
@@ -479,7 +479,7 @@ class FutureMessage(Base):
     sender_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     receiver_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=True, index=True)
     group_id: Mapped[Optional[int]] = mapped_column(ForeignKey("groups.id", ondelete="CASCADE"), nullable=True, index=True)
-    branch_id: Mapped[Optional[int]] = mapped_column(ForeignKey("conversation_branches.id", ondelete="SET NULL"), nullable=True, index=True)
+    branch_id: Mapped[Optional[int]] = mapped_column(ForeignKey("conversation_branches.id", ondelete="SET NULL", use_alter=True, name="fk_messages_branch_id"), nullable=True, index=True)
     message: Mapped[str] = mapped_column(Text, nullable=False)
     trigger_type: Mapped[str] = mapped_column(String(30), default="time", nullable=False)  # "time" | "condition"
     scheduled_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
@@ -616,4 +616,4 @@ class VortexSecurityAuditLog(Base):
 
 
 
-
+

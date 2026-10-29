@@ -848,7 +848,7 @@ const Messages = () => {
 
         const connect = () => {
             if (disposed || !validateToken()) return;
-            ws = createWebSocket();
+            ws = createWebSocket(reconnectAttempts);
             if (!ws) return;
             socketRef.current = ws;
 

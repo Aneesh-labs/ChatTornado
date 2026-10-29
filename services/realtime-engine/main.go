@@ -1,18 +1,21 @@
 package main
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/gorilla/websocket"
 )
 
-// Upgrader configures WebSocket connection parameters with relaxed CORS for fast local dev.
+// Upgrader configures WebSocket connection parameters with relaxed CORS for fast development.
 var upgrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool {
 		return true
@@ -30,6 +33,13 @@ type Client struct {
 	Hub    *Hub
 }
 
+// RelayPacket represents an inter-service communication packet from Python or other microservices.
+type RelayPacket struct {
+	ReceiverID interface{}            `json:"receiver_id,omitempty"`
+	Broadcast  bool                   `json:"broadcast,omitempty"`
+	Payload    map[string]interface{} `json:"payload"`
+}
+
 // Hub maintains active client connections and broadcasts messages.
 type Hub struct {
 	clients    map[string]*Client // Key: UserID
@@ -42,7 +52,7 @@ type Hub struct {
 func newHub() *Hub {
 	return &Hub{
 		clients:    make(map[string]*Client),
-		broadcast:  make(chan []byte, 1024),
+		broadcast:  make(chan []byte, 2048),
 		register:   make(chan *Client),
 		unregister: make(chan *Client),
 	}
@@ -102,13 +112,47 @@ func (h *Hub) run() {
 	}
 }
 
+// SendDirect sends a raw byte payload directly to a specific user ID or broadcasts to all.
+func (h *Hub) SendDirect(userID string, payload []byte) bool {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+
+	client, found := h.clients[userID]
+	if !found {
+		return false
+	}
+
+	select {
+	case client.Send <- payload:
+		return true
+	default:
+		return false
+	}
+}
+
+// BroadcastAll sends a payload to all connected clients.
+func (h *Hub) BroadcastAll(payload []byte) int {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+
+	count := 0
+	for _, client := range h.clients {
+		select {
+		case client.Send <- payload:
+			count++
+		default:
+		}
+	}
+	return count
+}
+
 func (c *Client) readPump() {
 	defer func() {
 		c.Hub.unregister <- c
 		c.Conn.Close()
 	}()
 
-	c.Conn.SetReadLimit(1024 * 512) // 512 KB
+	c.Conn.SetReadLimit(1024 * 1024) // 1 MB
 	c.Conn.SetReadDeadline(time.Now().Add(60 * time.Second))
 	c.Conn.SetPongHandler(func(string) error {
 		c.Conn.SetReadDeadline(time.Now().Add(60 * time.Second))
@@ -120,6 +164,20 @@ func (c *Client) readPump() {
 		if err != nil {
 			break
 		}
+
+		// Handle heartbeat ping from client
+		var peek map[string]interface{}
+		if err := json.Unmarshal(message, &peek); err == nil {
+			if msgType, ok := peek["type"].(string); ok && msgType == "ping" {
+				pongResp, _ := json.Marshal(map[string]interface{}{
+					"type":      "pong",
+					"timestamp": time.Now().UnixMilli(),
+				})
+				c.Send <- pongResp
+				continue
+			}
+		}
+
 		c.Hub.broadcast <- message
 	}
 }
@@ -157,15 +215,52 @@ func (c *Client) writePump() {
 	}
 }
 
+// extractUserID parses JWT token payload without signature verification (handled by Python Gateway).
+func extractUserID(token string) string {
+	parts := strings.Split(token, ".")
+	if len(parts) < 2 {
+		return ""
+	}
+	payloadB64 := parts[1]
+	// Pad base64 string
+	if l := len(payloadB64) % 4; l > 0 {
+		payloadB64 += strings.Repeat("=", 4-l)
+	}
+	data, err := base64.URLEncoding.DecodeString(payloadB64)
+	if err != nil {
+		data, err = base64.StdEncoding.DecodeString(payloadB64)
+		if err != nil {
+			return ""
+		}
+	}
+	var claims map[string]interface{}
+	if err := json.Unmarshal(data, &claims); err != nil {
+		return ""
+	}
+	if sub, ok := claims["sub"]; ok && sub != nil {
+		return fmt.Sprintf("%v", sub)
+	}
+	if uid, ok := claims["user_id"]; ok && uid != nil {
+		return fmt.Sprintf("%v", uid)
+	}
+	return ""
+}
+
 func serveWs(hub *Hub, w http.ResponseWriter, r *http.Request) {
 	userID := r.URL.Query().Get("user_id")
+	token := r.URL.Query().Get("token")
+
+	if userID == "" && token != "" {
+		userID = extractUserID(token)
+	}
+
 	if userID == "" {
 		userID = fmt.Sprintf("anon_%d", time.Now().UnixNano())
 	}
 
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		log.Println("[GO REALTIME WS ERROR]", err)
+		log.Println("[GO REALTIME WS UPGRADE ERROR]", err)
 		return
 	}
 
@@ -173,7 +268,7 @@ func serveWs(hub *Hub, w http.ResponseWriter, r *http.Request) {
 		ID:     fmt.Sprintf("%d", time.Now().UnixNano()),
 		UserID: userID,
 		Conn:   conn,
-		Send:   make(chan []byte, 256),
+		Send:   make(chan []byte, 512),
 		Hub:    hub,
 	}
 
@@ -192,25 +287,94 @@ func main() {
 	hub := newHub()
 	go hub.run()
 
+	// Health telemetry endpoint
 	http.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		json.NewEncoder(w).Encode(map[string]interface{}{
-			"status":    "healthy",
-			"engine":    "go-realtime-submillisecond",
-			"timestamp": time.Now().UTC().Format(time.RFC3339Nano),
-			"version":   "1.0.0",
+			"status":        "healthy",
+			"engine":        "go-realtime-submillisecond",
+			"timestamp":     time.Now().UTC().Format(time.RFC3339Nano),
+			"version":       "1.2.0",
+			"active_peers":  len(hub.clients),
 		})
 	})
 
+	// Presence endpoint
+	http.HandleFunc("/api/presence", func(w http.ResponseWriter, r *http.Request) {
+		hub.mu.RLock()
+		onlineUsers := make([]string, 0, len(hub.clients))
+		for uid := range hub.clients {
+			onlineUsers = append(onlineUsers, uid)
+		}
+		hub.mu.RUnlock()
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"online_users": onlineUsers,
+			"total":        len(onlineUsers),
+		})
+	})
+
+	// Inter-service Relay endpoint (called by Python FastAPI backend)
+	http.HandleFunc("/api/relay", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			http.Error(w, "Bad Request", http.StatusBadRequest)
+			return
+		}
+		defer r.Body.Close()
+
+		var packet RelayPacket
+		if err := json.Unmarshal(body, &packet); err != nil {
+			http.Error(w, "Invalid JSON", http.StatusBadRequest)
+			return
+		}
+
+		payloadBytes, err := json.Marshal(packet.Payload)
+		if err != nil {
+			http.Error(w, "Payload Error", http.StatusInternalServerError)
+			return
+		}
+
+		delivered := false
+		if packet.Broadcast {
+			count := hub.BroadcastAll(payloadBytes)
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"status":    "broadcasted",
+				"delivered": count,
+			})
+			return
+		}
+
+		if packet.ReceiverID != nil {
+			targetID := fmt.Sprintf("%v", packet.ReceiverID)
+			delivered = hub.SendDirect(targetID, payloadBytes)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"status":    "relayed",
+			"delivered": delivered,
+		})
+	})
+
+	// WebSocket handler
 	http.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
 		serveWs(hub, w, r)
 	})
 
 	log.Printf("==================================================")
-	log.Printf(" ChatTornado Ultra-Fast Go Realtime Engine")
+	log.Printf(" ChatTornado Ultra-Fast Go Realtime Engine v1.2.0")
 	log.Printf(" Listening on http://0.0.0.0:%s", port)
 	log.Printf(" WebSocket URL: ws://0.0.0.0:%s/ws", port)
+	log.Printf(" Inter-service Relay: http://0.0.0.0:%s/api/relay", port)
 	log.Printf("==================================================")
 
 	if err := http.ListenAndServe(":"+port, nil); err != nil {
