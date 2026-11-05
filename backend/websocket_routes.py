@@ -962,10 +962,13 @@ async def websocket_endpoint(websocket: WebSocket):
             unlock_at = None
             if data.get("unlock_at"):
                 try:
-                    from dateutil import parser
-                    unlock_at = parser.isoparse(data.get("unlock_at"))
+                    unlock_at = datetime.fromisoformat(data.get("unlock_at"))
                 except Exception:
-                    pass
+                    try:
+                        from dateutil import parser
+                        unlock_at = parser.isoparse(data.get("unlock_at"))
+                    except Exception:
+                        pass
 
             branch_id = data.get("branch_id")
             try:

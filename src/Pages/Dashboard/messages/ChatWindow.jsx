@@ -7,6 +7,8 @@ import ScrollBar from "./ScrollBar";
 import { isAdminUnlocked } from "../../../utils/adminSession";
 import ConversationHubBar from "./ConversationHubBar";
 import AntiLeakWatermark from "./AntiLeakWatermark";
+import PinnedMessagesBanner from "./PinnedMessagesBanner";
+import AntiSnoopShield from "./AntiSnoopShield";
 import InChatLiveCallBanner from "./InChatLiveCallBanner";
 
 const ChatWindow = React.memo(({
@@ -32,6 +34,7 @@ const ChatWindow = React.memo(({
     replyingTo,
     onBack,
     onOpenSearch,
+    onJumpToMessage,
     onToggleSelectionMode,
     onSelectMessage,
     isMobile = false,
@@ -126,11 +129,16 @@ const ChatWindow = React.memo(({
                 messages={messages}
                 onSendMessage={sendMessage}
             />
+            <PinnedMessagesBanner
+                conversationId={enrichedSelected?.id}
+                onJumpToMessage={onJumpToMessage}
+            />
             <div className="relative flex-1 overflow-hidden min-h-0 flex flex-col">
                 <AntiLeakWatermark
                     active={Boolean(isVanishModeActive || enrichedSelected?.is_confidential)}
                     viewerName={sessionStorage.getItem("username") || "Member"}
                 />
+                <AntiSnoopShield />
                 <ChatMessages
                     groupedMessages={groupedMessages}
                     typingUsers={typingUsers}

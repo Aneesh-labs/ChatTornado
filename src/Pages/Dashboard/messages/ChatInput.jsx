@@ -34,6 +34,13 @@ const ChatInput = React.memo(({ onSend, replyTo, onCancelReply, selectedUser, so
     const isSendingRef = useRef(false);
     const [shieldModalOpen, setShieldModalOpen] = useState(false);
     const [isBurnMode, setIsBurnMode] = useState(false);
+    const [deadDropModalOpen, setDeadDropModalOpen] = useState(false);
+
+    useEffect(() => {
+        const handleOpenDeadDrop = () => setDeadDropModalOpen(true);
+        window.addEventListener("vortex_open_deaddrop", handleOpenDeadDrop);
+        return () => window.removeEventListener("vortex_open_deaddrop", handleOpenDeadDrop);
+    }, []);
     const [shieldOptions, setShieldOptions] = useState(null);
     const [gameModalOpen, setGameModalOpen] = useState(false);
     const [soundboardModalOpen, setSoundboardModalOpen] = useState(false);
@@ -1280,6 +1287,15 @@ const ChatInput = React.memo(({ onSend, replyTo, onCancelReply, selectedUser, so
                                             className="text-amber-400/80 hover:!text-amber-300 hover:bg-amber-500/10 shrink-0"
                                         >
                                             <Gamepad2 className="w-4 h-4" />
+                                        </IconBtn>
+
+                                        <IconBtn
+                                            title="Classified Dead Drop (Timed Self-Destruct Transmission)"
+                                            onClick={() => setDeadDropModalOpen(true)}
+                                            small
+                                            className="text-amber-400/80 hover:!text-amber-300 hover:bg-amber-500/10 shrink-0"
+                                        >
+                                            <Zap className="w-4 h-4 text-amber-400" />
                                         </IconBtn>
 
                                         <IconBtn

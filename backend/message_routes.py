@@ -652,10 +652,13 @@ async def send_message_rest(
     unlock_at = None
     if data.unlock_at:
         try:
-            from dateutil import parser
-            unlock_at = parser.isoparse(data.unlock_at)
+            unlock_at = datetime.fromisoformat(data.unlock_at)
         except Exception:
-            pass
+            try:
+                from dateutil import parser
+                unlock_at = parser.isoparse(data.unlock_at)
+            except Exception:
+                pass
 
     try:
         new_message = Message(

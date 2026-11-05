@@ -266,6 +266,7 @@ const ChatMessages = React.memo(({
                 onSelect={handleSelectMessage}
                 onDelete={onDelete}
                 onFork={onFork}
+                conversationId={enrichedSelected?.id}
             />
         </>
     );

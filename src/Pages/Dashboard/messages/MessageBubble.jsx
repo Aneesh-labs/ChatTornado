@@ -1,4 +1,4 @@
-import { Volume2, VolumeX, Languages, GitFork, Reply, Trash2, X, Download, Check, RotateCw, Flame, Eye } from "lucide-react";
+import { Volume2, VolumeX, Languages, GitFork, Reply, Trash2, X, Download, Check, RotateCw, Flame, Eye, Pin, Zap } from "lucide-react";
 import React, { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import PropTypes from "prop-types";
 import { motion, AnimatePresence } from "framer-motion";
@@ -11,8 +11,10 @@ import { soundEngine } from "../../../utils/soundEffects";
 import { speechService } from "../../../utils/speechService";
 import InChatGameBoard from "./InChatGameBoard";
 import MathFormattedText from "./MathFormattedText";
+import DeadDropCanister from "./DeadDropCanister";
+import { togglePinMessage, isMessagePinned } from "../../../Services/pinnedMessagesService";
 
-const QUICK_REACTIONS = ["👍", "❤️", "😂", "😮", "😢", "🔥", "🥸", "👮🏿‍♀️"];
+const QUICK_REACTIONS = ["⚡", "🛸", "💀", "🛡️", "🔥", "❤️", "👍", "😂"];
 
 /* ═══════════════════════════════════════════════════════════════
    IMAGE, VIDEO & AUDIO DETECTION HELPERS
@@ -990,6 +992,7 @@ const MessageBubble = React.memo(({
     const actualMessage = typeof _rawPayload === "string" ? decodeHtmlEntities(_rawPayload) : _rawPayload;
     const isP2P = typeof actualMessage === "string" && actualMessage.startsWith('⚡ P2P_MEDIA');
     const isGame = typeof actualMessage === "string" && actualMessage.startsWith('🎮 GAME:');
+    const isDeadDrop = typeof actualMessage === "string" && actualMessage.startsWith('⚡ [DEAD DROP:');
     const isSound = typeof actualMessage === "string" && actualMessage.startsWith('🔊 SOUND:');
     const parsedGame = useMemo(() => {
         if (!isGame) return null;
@@ -1180,20 +1183,28 @@ const MessageBubble = React.memo(({
 
                     {/* ── BOT completed or historical message ── */}
                     {isBotMsg && !msg.is_streaming && (
-                        <MathFormattedText
-                            text={actualMessage}
-                            className="text-[13px] sm:text-[15px] leading-relaxed text-white/90 selection:bg-white/20"
-                            onOpenLightbox={setLightboxImage}
-                        />
+                        isDeadDrop ? (
+                            <DeadDropCanister rawMessage={actualMessage} onOpenLightbox={setLightboxImage} />
+                        ) : (
+                            <MathFormattedText
+                                text={actualMessage}
+                                className="text-[13px] sm:text-[15px] leading-relaxed text-white/90 selection:bg-white/20"
+                                onOpenLightbox={setLightboxImage}
+                            />
+                        )
                     )}
 
                     {/* ── NON-BOT messages: render normally ── */}
                     {!isBotMsg && actualMessage && (
-                        <MathFormattedText
-                            text={actualMessage}
-                            className="text-[13px] sm:text-[15px] leading-relaxed text-white/90 selection:bg-white/20"
-                            onOpenLightbox={setLightboxImage}
-                        />
+                        isDeadDrop ? (
+                            <DeadDropCanister rawMessage={actualMessage} onOpenLightbox={setLightboxImage} />
+                        ) : (
+                            <MathFormattedText
+                                text={actualMessage}
+                                className="text-[13px] sm:text-[15px] leading-relaxed text-white/90 selection:bg-white/20"
+                                onOpenLightbox={setLightboxImage}
+                            />
+                        )
                     )}
 
                     {translatedText && (
@@ -1358,6 +1369,26 @@ const MessageBubble = React.memo(({
                                             <span>Translate</span>
                                         </>
                                     )}
+                                </motion.button>
+                                <div className="w-[1px] h-3.5 bg-white/10 mx-1" role="separator" />
+                                <motion.button
+                                    type="button"
+                                    whileHover={{ scale: 1.1 }}
+                                    whileTap={{ scale: 0.9 }}
+                                    onClick={() => {
+                                        togglePinMessage(user?.id, msg);
+                                        soundEngine?.play?.("coin");
+                                    }}
+                                    className={`text-[11px] px-1.5 py-0.5 rounded-md transition-colors font-medium flex items-center gap-1 cursor-pointer ${
+                                        isMessagePinned(user?.id, msg?.id)
+                                            ? "text-cyan-300 bg-cyan-500/20"
+                                            : "text-white/60 hover:text-white hover:bg-white/[0.08]"
+                                    }`}
+                                    aria-label="Pin message"
+                                    title={isMessagePinned(user?.id, msg?.id) ? "Unpin transmission" : "Pin transmission to top"}
+                                >
+                                    <Pin className="w-3 h-3 text-cyan-400" />
+                                    <span className="hidden sm:inline">{isMessagePinned(user?.id, msg?.id) ? "Unpin" : "Pin"}</span>
                                 </motion.button>
                                 <div className="w-[1px] h-3.5 bg-white/10 mx-1" role="separator" />
                                 <motion.button

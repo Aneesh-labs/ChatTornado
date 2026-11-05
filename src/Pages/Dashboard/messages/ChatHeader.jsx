@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useMemo } from "react";
 import PropTypes from "prop-types";
 import { motion, AnimatePresence } from "framer-motion";
-import { Lock, MoreVertical, Sparkles, Brain, Download, Cpu, Ban, UserCheck, ShieldAlert, Users, BadgeCheck, Dna, GitFork, Clock, Tv, Ghost, Flame, Shield, Phone, PhoneCall, Video, Search, RotateCw, ChevronLeft, CheckSquare, ListChecks } from "lucide-react";
+import { Lock, MoreVertical, Sparkles, Brain, Download, Cpu, Ban, UserCheck, ShieldAlert, Users, BadgeCheck, Dna, GitFork, Clock, Tv, Ghost, Flame, Shield, Phone, PhoneCall, Video, Search, RotateCw, ChevronLeft, CheckSquare, ListChecks, Terminal, Zap } from "lucide-react";
+import { toggleShieldActive } from "../../../Services/privacyShieldService";
 import { IconBtn, Avatar, useTheme } from "./constants";
 import PersonalizeModal from "./PersonalizeModal";
 import VaultChatModal from "./VaultChatModal";
@@ -476,11 +477,33 @@ const ChatHeader = React.memo(({
                                             </button>
                                         )}
                                         {onOpenSearch && (
-                                            <button onClick={() => { onOpenSearch(); setShowMoreMenu(false); }} className="flex items-center gap-2 px-3 py-2 text-xs text-white/80 hover:text-white hover:bg-white/10 rounded-lg text-left">
-                                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
-                                                Search
+                                            <button onClick={() => { onOpenSearch(); setShowMoreMenu(false); }} className="flex items-center gap-2 px-3 py-2 text-xs text-cyan-300 hover:text-white hover:bg-cyan-500/15 rounded-lg text-left font-semibold cursor-pointer">
+                                                <Terminal className="w-4 h-4 text-cyan-400" />
+                                                <span>Cyber Terminal / HUD</span>
                                             </button>
                                         )}
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                toggleShieldActive();
+                                                setShowMoreMenu(false);
+                                            }}
+                                            className="flex items-center gap-2 px-3 py-2 text-xs text-cyan-300 hover:text-white hover:bg-cyan-500/15 rounded-lg text-left font-semibold cursor-pointer"
+                                        >
+                                            <Shield className="w-4 h-4 text-cyan-400" />
+                                            <span>Anti-Snoop Privacy Shield</span>
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                window.dispatchEvent(new CustomEvent("vortex_open_deaddrop"));
+                                                setShowMoreMenu(false);
+                                            }}
+                                            className="flex items-center gap-2 px-3 py-2 text-xs text-amber-300 hover:text-white hover:bg-amber-500/15 rounded-lg text-left font-semibold cursor-pointer"
+                                        >
+                                            <Zap className="w-4 h-4 text-amber-400" />
+                                            <span>Dead Drop (Timed Burn)</span>
+                                        </button>
                                         {isGroup ? (
                                             <button 
                                                 onClick={() => { setShowGroupModal(true); setShowMoreMenu(false); }} 

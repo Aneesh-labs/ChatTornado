@@ -19,7 +19,19 @@ class SoundEngine {
         return this.ctx;
     }
 
+    isMuted() {
+        return localStorage.getItem("vortex_sfx_muted") === "true";
+    }
+
+    toggleMute() {
+        const next = !this.isMuted();
+        localStorage.setItem("vortex_sfx_muted", next ? "true" : "false");
+        window.dispatchEvent(new CustomEvent("vortex_sfx_changed", { detail: { muted: next } }));
+        return next;
+    }
+
     play(soundType) {
+        if (this.isMuted()) return;
         try {
             const ctx = this.getAudioContext();
             if (!ctx) return;

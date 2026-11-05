@@ -2380,6 +2380,7 @@ const Messages = () => {
                                 replyingTo={replyingTo}
                                 onBack={isMobile ? handleBackToList : undefined}
                                 onOpenSearch={handleOpenSearch}
+                                onJumpToMessage={handleJumpToMessage}
                                 onToggleSelectionMode={handleToggleSelectionMode}
                                 onSelectMessage={handleSelectMessage}
                                 onStartCall={startCall}

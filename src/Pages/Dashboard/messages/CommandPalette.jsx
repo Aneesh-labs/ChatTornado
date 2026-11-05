@@ -1,9 +1,33 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import PropTypes from "prop-types";
 import { motion, AnimatePresence } from "framer-motion";
+import { useNavigate } from "react-router-dom";
 import API from "../../../Services/API.js";
 import { Glass, Avatar, StatusDot, useTheme } from "./constants";
-import { Search, MessageSquare, Image, Film, Link2, FileCode, FileText, User, Mic } from "lucide-react";
+import {
+    Search,
+    MessageSquare,
+    Image,
+    Film,
+    Link2,
+    FileCode,
+    User,
+    Mic,
+    Terminal,
+    AlertTriangle,
+    Shield,
+    EyeOff,
+    ShieldCheck,
+    Volume2,
+    Zap,
+    Trash2,
+    Globe,
+    Settings,
+} from "lucide-react";
+import { triggerPanicEscape } from "../../../utils/panicKey";
+import { toggleShieldActive } from "../../../Services/privacyShieldService";
+import { enterDecoyMode, unlockVault } from "../../../Services/vaultService";
+import soundEngine from "../../../utils/soundEffects";
 
 const URL_REGEX = /(https?:\/\/[^\s<>"']+|www\.[^\s<>"']+)/gi;
 const IMAGE_REGEX = /\.(jpeg|jpg|gif|png|webp|svg)(\?[^\s<>"']*)?$/i;
@@ -11,6 +35,7 @@ const VIDEO_REGEX = /\.(mp4|mov|mkv|avi|webm|m4v|3gp|flv|mpeg|mpg|ts|mts|m2ts|wm
 
 const FILTER_TABS = [
     { id: "all", label: "All", icon: Search },
+    { id: "commands", label: "Commands", icon: Terminal },
     { id: "messages", label: "Messages", icon: MessageSquare },
     { id: "media", label: "Media", icon: Image },
     { id: "links", label: "Links", icon: Link2 },
@@ -48,6 +73,7 @@ const CommandPalette = React.memo(({
     onJumpToMessage,
 }) => {
     const theme = useTheme();
+    const navigate = useNavigate();
     const [query, setQuery] = useState("");
     const [activeTab, setActiveTab] = useState("all");
     const [remoteUsers, setRemoteUsers] = useState([]);
@@ -76,7 +102,15 @@ const CommandPalette = React.memo(({
 
     // Remote search for users if query is entered
     useEffect(() => {
-        if (!query.trim() || activeTab === "messages" || activeTab === "media" || activeTab === "links" || activeTab === "files") {
+        if (
+            !query.trim() ||
+            query.startsWith("/") ||
+            activeTab === "commands" ||
+            activeTab === "messages" ||
+            activeTab === "media" ||
+            activeTab === "links" ||
+            activeTab === "files"
+        ) {
             setRemoteUsers([]);
             return;
         }
@@ -102,6 +136,126 @@ const CommandPalette = React.memo(({
         };
     }, [query, activeTab]);
 
+    // Cyber Slash Commands Registry
+    const CYBER_COMMANDS = useMemo(() => [
+        {
+            id: "cmd-panic",
+            type: "command",
+            title: "/panic — Emergency Diversion",
+            subtitle: "Triple-ESC trigger: Wipes session & escapes to Wikipedia",
+            icon: AlertTriangle,
+            badge: "OPSEC",
+            badgeColor: "bg-rose-500/20 text-rose-300 border-rose-500/30",
+            action: () => triggerPanicEscape(),
+        },
+        {
+            id: "cmd-shield",
+            type: "command",
+            title: "/shield or /blur — Anti-Snoop Shield",
+            subtitle: "Holographic blur against shoulder surfers & inactive tab leaks",
+            icon: Shield,
+            badge: "SHIELD",
+            badgeColor: "bg-cyan-500/20 text-cyan-300 border-cyan-500/30",
+            action: () => {
+                const active = toggleShieldActive();
+                soundEngine?.play?.(active ? "laser" : "cyber_chirp");
+            },
+        },
+        {
+            id: "cmd-deaddrop",
+            type: "command",
+            title: "/deaddrop — Launch Dead Drop",
+            subtitle: "Send a timed self-destructing secret transmission",
+            icon: Zap,
+            badge: "BURN",
+            badgeColor: "bg-amber-500/20 text-amber-300 border-amber-500/30",
+            action: () => {
+                window.dispatchEvent(new CustomEvent("vortex_open_deaddrop"));
+            },
+        },
+        {
+            id: "cmd-decoy",
+            type: "command",
+            title: "/decoy — Engage Decoy Duress Mode",
+            subtitle: "Boots innocent safe mode, completely hiding encrypted chats",
+            icon: EyeOff,
+            badge: "DURESS",
+            badgeColor: "bg-purple-500/20 text-purple-300 border-purple-500/30",
+            action: () => {
+                enterDecoyMode();
+                soundEngine?.play?.("quantum_ping");
+            },
+        },
+        {
+            id: "cmd-normal",
+            type: "command",
+            title: "/normal — Exit Decoy Mode",
+            subtitle: "Restore standard operational mode & vault access",
+            icon: ShieldCheck,
+            badge: "NORMAL",
+            badgeColor: "bg-emerald-500/20 text-emerald-300 border-emerald-500/30",
+            action: () => {
+                unlockVault("");
+                soundEngine?.play?.("cyber_chirp");
+            },
+        },
+        {
+            id: "cmd-sfx",
+            type: "command",
+            title: "/sfx — Toggle Cyber Audio Effects",
+            subtitle: "Enable or mute Web Audio API sound synthesizer",
+            icon: Volume2,
+            badge: "SFX",
+            badgeColor: "bg-violet-500/20 text-violet-300 border-violet-500/30",
+            action: () => {
+                soundEngine?.toggleMute();
+            },
+        },
+        {
+            id: "cmd-wipe",
+            type: "command",
+            title: "/wipe — Zeroize Session Data",
+            subtitle: "Purge sessionStorage & security credentials immediately",
+            icon: Trash2,
+            badge: "PURGE",
+            badgeColor: "bg-red-500/20 text-red-300 border-red-500/30",
+            action: () => {
+                sessionStorage.clear();
+                window.location.href = "/login";
+            },
+        },
+        {
+            id: "cmd-admin",
+            type: "command",
+            title: "/admin — Security & Moderation Center",
+            subtitle: "Navigate to administrative governance board",
+            icon: Terminal,
+            badge: "ADMIN",
+            badgeColor: "bg-sky-500/20 text-sky-300 border-sky-500/30",
+            action: () => navigate("/admin"),
+        },
+        {
+            id: "cmd-darkweb",
+            type: "command",
+            title: "/darkweb — DarkWeb Hub",
+            subtitle: "Explore classified forums, nodes & frequencies",
+            icon: Globe,
+            badge: "NODE",
+            badgeColor: "bg-fuchsia-500/20 text-fuchsia-300 border-fuchsia-500/30",
+            action: () => navigate("/darkweb"),
+        },
+        {
+            id: "cmd-settings",
+            type: "command",
+            title: "/settings — Security & Duress Settings",
+            subtitle: "Configure PINs, stealth options & interface settings",
+            icon: Settings,
+            badge: "CONFIG",
+            badgeColor: "bg-white/10 text-white/70 border-white/20",
+            action: () => navigate("/settings"),
+        },
+    ], [navigate]);
+
     // Extract searchable index from messages
     const messageIndex = useMemo(() => {
         if (!messages || !Array.isArray(messages)) return [];
@@ -117,7 +271,7 @@ const CommandPalette = React.memo(({
                 : "";
             const senderName = msg.sender?.username || (msg.is_bot ? "VORTEX-9" : "User");
 
-            // 1. Check for Media (Images / Videos / Voice Notes)
+            // 1. Check for Media
             const isVoice = raw.includes("🎤 Voice Message") || raw.includes(".webm") || raw.includes("/voice_notes/");
             const words = raw.split(/\s+/);
             const imgUrl = words.find((w) => IMAGE_REGEX.test(w) || w.includes("/uploads/ai/"));
@@ -165,7 +319,7 @@ const CommandPalette = React.memo(({
                 }
             }
 
-            // 3. Check for Code & Document Files
+            // 3. Check for Code & Documents
             const isCode = raw.includes("```") || raw.includes("<code>");
             const isDoc = raw.includes("📄 **Attached Document:") || raw.includes("📄 **Document Attached:") || raw.includes("📎");
             if (isCode || isDoc) {
@@ -198,29 +352,52 @@ const CommandPalette = React.memo(({
     const displayed = useMemo(() => {
         const q = query.trim().toLowerCase();
 
-        // 1. Gather People
+        // 1. Gather Matching Commands
+        let matchedCommands = [];
+        if (activeTab === "all" || activeTab === "commands") {
+            if (q) {
+                const searchQ = q.startsWith("/") ? q.slice(1) : q;
+                matchedCommands = CYBER_COMMANDS.filter(
+                    (cmd) =>
+                        cmd.title.toLowerCase().includes(searchQ) ||
+                        cmd.subtitle.toLowerCase().includes(searchQ)
+                );
+            } else if (activeTab === "commands") {
+                matchedCommands = CYBER_COMMANDS;
+            } else {
+                // In 'all' tab with empty query, show top cyber commands
+                matchedCommands = CYBER_COMMANDS.slice(0, 3);
+            }
+        }
+
+        if (activeTab === "commands") {
+            return matchedCommands;
+        }
+
+        // 2. Gather People
         let matchedPeople = [];
         if (activeTab === "all" || activeTab === "people") {
-            if (q) {
+            if (q && !q.startsWith("/")) {
                 const localMatches = users.filter(
                     (u) => u.username?.toLowerCase().includes(q) || u.email?.toLowerCase().includes(q)
                 );
                 const combined = [...localMatches, ...remoteUsers];
-                // Deduplicate by ID
                 const seen = new Set();
-                matchedPeople = combined.filter((u) => {
-                    if (seen.has(u.id)) return false;
-                    seen.add(u.id);
-                    return true;
-                }).map((u) => ({
-                    type: "person",
-                    id: `person-${u.id}`,
-                    user: u,
-                    title: u.username,
-                    subtitle: u.email || (u.status === "online" ? "Active now" : "Offline"),
-                }));
-            } else if (activeTab === "people" || activeTab === "all") {
-                matchedPeople = users.slice(0, 6).map((u) => ({
+                matchedPeople = combined
+                    .filter((u) => {
+                        if (seen.has(u.id)) return false;
+                        seen.add(u.id);
+                        return true;
+                    })
+                    .map((u) => ({
+                        type: "person",
+                        id: `person-${u.id}`,
+                        user: u,
+                        title: u.username,
+                        subtitle: u.email || (u.status === "online" ? "Active now" : "Offline"),
+                    }));
+            } else if ((activeTab === "people" || activeTab === "all") && !q.startsWith("/")) {
+                matchedPeople = users.slice(0, 5).map((u) => ({
                     type: "person",
                     id: `person-${u.id}`,
                     user: u,
@@ -230,9 +407,9 @@ const CommandPalette = React.memo(({
             }
         }
 
-        // 2. Gather Message Index Items
+        // 3. Gather Message Index Items
         let matchedItems = [];
-        if (activeTab !== "people") {
+        if (activeTab !== "people" && !q.startsWith("/")) {
             let pool = messageIndex;
             if (activeTab !== "all") {
                 pool = messageIndex.filter((it) => {
@@ -247,7 +424,6 @@ const CommandPalette = React.memo(({
             if (q) {
                 matchedItems = pool.filter((it) => it.rawText?.toLowerCase().includes(q));
             } else if (activeTab !== "all") {
-                // When empty query on specific tab, show recent items
                 matchedItems = pool.slice(-15).reverse();
             }
         }
@@ -258,15 +434,17 @@ const CommandPalette = React.memo(({
         }
 
         if (activeTab === "all") {
-            if (!q) {
-                return matchedPeople.slice(0, 8);
+            if (q.startsWith("/")) {
+                return matchedCommands;
             }
-            // Interleave people and messages
-            return [...matchedPeople.slice(0, 4), ...matchedItems.slice(0, 16)];
+            if (!q) {
+                return [...matchedCommands, ...matchedPeople.slice(0, 4)];
+            }
+            return [...matchedCommands, ...matchedPeople.slice(0, 3), ...matchedItems.slice(0, 12)];
         }
 
         return matchedItems.slice(0, 25);
-    }, [query, activeTab, users, remoteUsers, messageIndex]);
+    }, [query, activeTab, users, remoteUsers, messageIndex, CYBER_COMMANDS]);
 
     const handleKeyDown = (e) => {
         if (!displayed.length) {
@@ -286,12 +464,7 @@ const CommandPalette = React.memo(({
                 e.preventDefault();
                 const item = displayed[focused];
                 if (item) {
-                    if (item.type === "person" && item.user) {
-                        onSelectUser(item.user);
-                    } else if (item.msgId && onJumpToMessage) {
-                        onJumpToMessage(item.msgId);
-                    }
-                    onClose();
+                    handleItemClick(item);
                 }
                 break;
             }
@@ -304,16 +477,32 @@ const CommandPalette = React.memo(({
         }
     };
 
-    const handleItemClick = useCallback((item) => {
-        if (item.type === "person" && item.user) {
-            onSelectUser(item.user);
-        } else if (item.msgId && onJumpToMessage) {
-            onJumpToMessage(item.msgId);
-        }
-        onClose();
-    }, [onSelectUser, onJumpToMessage, onClose]);
+    const handleItemClick = useCallback(
+        (item) => {
+            if (item.type === "command" && item.action) {
+                item.action();
+                onClose();
+                return;
+            }
+            if (item.type === "person" && item.user) {
+                onSelectUser(item.user);
+            } else if (item.msgId && onJumpToMessage) {
+                onJumpToMessage(item.msgId);
+            }
+            onClose();
+        },
+        [onSelectUser, onJumpToMessage, onClose]
+    );
 
     const renderItemIcon = (item) => {
+        if (item.type === "command") {
+            const Icon = item.icon || Terminal;
+            return (
+                <div className="w-9 h-9 rounded-lg bg-cyan-500/20 border border-cyan-400/40 flex items-center justify-center text-cyan-300 flex-shrink-0">
+                    <Icon className="w-4 h-4" />
+                </div>
+            );
+        }
         if (item.type === "person") {
             return <Avatar user={item.user} size="sm" className="scale-90 sm:scale-100 flex-shrink-0" />;
         }
@@ -368,18 +557,18 @@ const CommandPalette = React.memo(({
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
                         onClick={onClose}
-                        className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 overscroll-contain"
+                        className="fixed inset-0 bg-black/70 backdrop-blur-md z-50 overscroll-contain"
                     />
                     <motion.div
                         initial={{ opacity: 0, scale: 0.96, y: window.innerWidth < 640 ? 0 : -16, x: "-50%" }}
                         animate={{ opacity: 1, scale: 1, y: 0, x: "-50%" }}
                         exit={{ opacity: 0, scale: 0.96, y: window.innerWidth < 640 ? 0 : -16, x: "-50%" }}
                         transition={{ type: "spring", stiffness: 420, damping: 30 }}
-                        className="fixed top-0 sm:top-[12%] left-1/2 w-full max-w-[580px] h-[100dvh] sm:h-auto z-50 px-0 sm:px-4 flex flex-col justify-end sm:justify-start"
+                        className="fixed top-0 sm:top-[10%] left-1/2 w-full max-w-[580px] h-[100dvh] sm:h-auto z-50 px-0 sm:px-4 flex flex-col justify-end sm:justify-start"
                     >
                         <Glass className="overflow-hidden shadow-2xl shadow-black/80 rounded-t-2xl sm:rounded-2xl max-h-[88vh] sm:max-h-[640px] flex flex-col w-full border-t border-white/10 sm:border-t-0 bg-[#0d121d]/95 backdrop-blur-2xl">
                             {/* Mobile Drag Indicator */}
-                            <div className="w-12 h-1 bg-white/10 rounded-full mx-auto mt-2.5 mb-1 sm:hidden flex-shrink-0" />
+                            <div className="w-12 h-1 bg-white/15 rounded-full mx-auto mt-2.5 mb-1 sm:hidden flex-shrink-0" />
 
                             {/* Search Input Bar */}
                             <div className={`flex items-center gap-2.5 sm:gap-3 px-4 sm:px-5 py-3 sm:py-3.5 border-b ${theme.border} flex-shrink-0`}>
@@ -393,8 +582,8 @@ const CommandPalette = React.memo(({
                                         setFocused(0);
                                     }}
                                     onKeyDown={handleKeyDown}
-                                    placeholder="Search messages, media, links, code, people…"
-                                    className="flex-1 bg-transparent text-white placeholder-white/30 text-xs sm:text-sm outline-none"
+                                    placeholder="Type / for commands, or search messages, people, code…"
+                                    className="flex-1 bg-transparent text-white placeholder-white/30 text-xs sm:text-sm outline-none font-mono"
                                 />
                                 {loading && (
                                     <motion.div
@@ -403,11 +592,13 @@ const CommandPalette = React.memo(({
                                         className="w-4 h-4 border-2 border-white/20 border-t-cyan-400 rounded-full flex-shrink-0"
                                     />
                                 )}
-                                <kbd className="hidden sm:flex text-[10px] text-white/30 border border-white/10 rounded px-1.5 py-0.5 select-none font-mono">ESC</kbd>
+                                <kbd className="hidden sm:flex text-[10px] text-white/30 border border-white/10 rounded px-1.5 py-0.5 select-none font-mono">
+                                    ESC
+                                </kbd>
                             </div>
 
                             {/* Universal Filter Tabs */}
-                            <div className="flex items-center gap-1 px-3 sm:px-4 py-2 border-b border-white/10 overflow-x-auto scrollbar-none flex-shrink-0 bg-black/20">
+                            <div className="flex items-center gap-1 px-3 sm:px-4 py-2 border-b border-white/10 overflow-x-auto no-scrollbar flex-shrink-0 bg-black/20">
                                 {FILTER_TABS.map((tab) => {
                                     const Icon = tab.icon;
                                     const isActive = activeTab === tab.id;
@@ -436,7 +627,7 @@ const CommandPalette = React.memo(({
                             <div className="overflow-y-auto py-1 sm:py-2 flex-1 overscroll-contain custom-scrollbar max-h-[460px]">
                                 {!query.trim() && activeTab === "all" && (
                                     <p className="px-4 sm:px-5 py-1.5 text-[9px] sm:text-[10px] font-semibold tracking-widest uppercase text-white/30 select-none">
-                                        Recent Contacts & Quick Search
+                                        ⚡ Quick Cyber Actions & Contacts
                                     </p>
                                 )}
 
@@ -466,8 +657,12 @@ const CommandPalette = React.memo(({
                                                     <p className="text-xs sm:text-sm font-medium text-white truncate">
                                                         <HighlightMatch text={item.title} query={query} />
                                                     </p>
-                                                    <span className="text-[9px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded bg-white/10 text-white/50 flex-shrink-0">
-                                                        {item.type}
+                                                    <span
+                                                        className={`text-[9px] uppercase font-mono font-bold tracking-wider px-1.5 py-0.5 rounded border flex-shrink-0 ${
+                                                            item.badgeColor || "bg-white/10 text-white/50 border-white/10"
+                                                        }`}
+                                                    >
+                                                        {item.badge || item.type}
                                                     </span>
                                                 </div>
                                                 <p className="text-[11px] sm:text-xs text-white/40 truncate mt-0.5">
@@ -492,14 +687,14 @@ const CommandPalette = React.memo(({
                             {/* Keyboard Shortcuts Footer */}
                             <div className={`hidden sm:flex items-center justify-between px-5 py-2.5 border-t ${theme.border} select-none flex-shrink-0 text-white/30`}>
                                 <div className="flex items-center gap-3">
-                                    {[["↑↓", "Navigate"], ["↵", "Jump to Item"], ["ESC", "Close"]].map(([key, label]) => (
+                                    {[["↑↓", "Navigate"], ["↵", "Execute / Jump"], ["ESC", "Close"]].map(([key, label]) => (
                                         <span key={key} className="flex items-center gap-1.5 text-[10px]">
                                             <kbd className="border border-white/10 rounded px-1 py-0.5 font-mono text-white/40">{key}</kbd>
                                             <span>{label}</span>
                                         </span>
                                     ))}
                                 </div>
-                                <span className="text-[10px] font-mono text-cyan-400/60">Universal Deep Search</span>
+                                <span className="text-[10px] font-mono text-cyan-400/60">Cyber Command Terminal</span>
                             </div>
                         </Glass>
                     </motion.div>
