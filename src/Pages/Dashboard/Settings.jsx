@@ -238,6 +238,35 @@ export default function Settings() {
                 {/* Tab 1: Preferences & Audio */}
                 {activeTab === "general" && (
                     <div className="grid gap-4">
+                        {/* Quick Guide & AI Personalization */}
+                        <div className="rounded-2xl border border-cyan-500/20 bg-gradient-to-r from-cyan-950/20 to-blue-950/10 p-5 backdrop-blur-2xl shadow-xl flex items-center justify-between gap-4 flex-wrap sm:flex-nowrap">
+                            <div className="flex items-start gap-3.5">
+                                <div className="grid h-10 w-10 place-items-center rounded-xl bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 shrink-0">
+                                    <Sparkles className="h-5 w-5" />
+                                </div>
+                                <div>
+                                    <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                                        <span>Guided Tutorial & AI Setup</span>
+                                        <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">
+                                            Interactive
+                                        </span>
+                                    </h3>
+                                    <p className="text-xs text-white/50 mt-0.5 leading-relaxed">
+                                        Re-open the interactive new-user walkthrough and update your AI callsign, role, and private memory preferences.
+                                    </p>
+                                </div>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    soundEffects.play("cyber_chirp");
+                                    window.dispatchEvent(new Event("openPortfolioOnboarding"));
+                                }}
+                                className="px-4 py-2 rounded-xl text-xs font-bold bg-gradient-to-r from-cyan-500 to-blue-600 hover:brightness-110 text-white shadow-md shadow-cyan-500/20 transition-all shrink-0 cursor-pointer active:scale-95"
+                            >
+                                Restart Guided Tour
+                            </button>
+                        </div>
                         {/* Audio Feedback Toggle */}
                         <div className="rounded-2xl border border-white/10 bg-[#090c14]/90 p-5 backdrop-blur-2xl shadow-xl flex items-center justify-between gap-4">
                             <div className="flex items-start gap-3.5">

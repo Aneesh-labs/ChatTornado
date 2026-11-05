@@ -218,6 +218,15 @@ export default function DashboardLayout() {
 
                     <button
                         type="button"
+                        onClick={() => setShowOnboarding(true)}
+                        className="flex min-h-[38px] w-full items-center justify-center gap-2 rounded-xl border border-cyan-500/25 bg-cyan-500/10 text-xs font-bold text-cyan-300 transition-all hover:border-cyan-400/40 hover:bg-cyan-500/20 active:scale-[0.98] outline-none cursor-pointer mb-2"
+                        title="Interactive Guided Tour & AI Setup"
+                    >
+                        <HelpCircle className="h-4 w-4" />
+                        <span>Quick Tour & AI Guide</span>
+                    </button>
+                    <button
+                        type="button"
                         onClick={handleLogout}
                         className="flex min-h-[42px] w-full items-center justify-center gap-2 rounded-xl border border-red-500/20 bg-red-500/10 text-xs font-bold text-red-200 transition-all hover:border-red-400/40 hover:bg-red-500/20 active:scale-[0.98] outline-none focus-visible:ring-2 focus-visible:ring-red-400"
                     >
@@ -241,15 +250,26 @@ export default function DashboardLayout() {
                                 <p className="text-[10px] font-semibold text-sky-300/80">VORTEX AI World</p>
                             </div>
                         </div>
-                        <button
-                            type="button"
-                            onClick={handleLogout}
-                            className="grid h-9 w-9 place-items-center rounded-xl border border-red-500/20 bg-red-500/10 text-red-200 active:scale-95 transition-all"
-                            aria-label="Logout"
-                            title="Logout"
-                        >
-                            <LogOut className="h-4 w-4" />
-                        </button>
+                        <div className="flex items-center gap-2">
+                            <button
+                                type="button"
+                                onClick={() => setShowOnboarding(true)}
+                                className="grid h-9 w-9 place-items-center rounded-xl border border-cyan-500/30 bg-cyan-500/15 text-cyan-300 active:scale-95 transition-all"
+                                aria-label="Guided Tour & Help"
+                                title="Guided Tour & Help"
+                            >
+                                <HelpCircle className="h-4 w-4" />
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleLogout}
+                                className="grid h-9 w-9 place-items-center rounded-xl border border-red-500/20 bg-red-500/10 text-red-200 active:scale-95 transition-all"
+                                aria-label="Logout"
+                                title="Logout"
+                            >
+                                <LogOut className="h-4 w-4" />
+                            </button>
+                        </div>
                     </div>
                 )}
 

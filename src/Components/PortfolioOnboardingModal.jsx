@@ -1,708 +1,648 @@
 import React, { useState, useEffect } from "react";
+import PropTypes from "prop-types";
 import { motion, AnimatePresence } from "framer-motion";
-import { 
-    Layers, 
-    Sparkles, 
-    Code2, 
-    Briefcase, 
-    UserRound, 
-    Mail, 
-    Check, 
-    ArrowRight, 
-    ArrowLeft, 
-    X, 
-    Plus, 
-    Trash2, 
-    ExternalLink, 
-    Globe, 
-    ShieldCheck, 
-    Laptop, 
-    Cpu, 
-    Palette, 
-    Brain, 
-    Terminal, 
-    Flame, 
+import {
+    Sparkles,
+    Shield,
     Zap,
-    Gamepad2,
-    Music,
-    PenTool,
-    TrendingUp,
+    Bot,
+    MessageSquare,
     Compass,
-    BookOpen
+    Radio,
+    Flame,
+    Eye,
+    EyeOff,
+    Check,
+    ArrowRight,
+    ArrowLeft,
+    X,
+    Lock,
+    Gamepad2,
+    Users,
+    Code,
+    Brain,
+    HelpCircle,
+    Sliders,
+    AlertTriangle,
 } from "lucide-react";
 import API from "../Services/API";
+import soundEngine from "../utils/soundEffects";
 
-const DOMAINS_LIST = [
-    { id: "gaming", label: "Gaming & Esports", icon: Gamepad2, desc: "Pro gamer, streamer, game developer, or guild master" },
-    { id: "music", label: "Music & Audio Production", icon: Music, desc: "Producer, beatmaker, DJ, composer, sound designer" },
-    { id: "arts", label: "Digital Arts & 3D Design", icon: Palette, desc: "Visual artist, 3D modeler, animator, concept designer" },
-    { id: "writing", label: "Writing & Content Creation", icon: PenTool, desc: "Author, YouTuber, podcaster, journalist, storyteller" },
-    { id: "business", label: "Business, Finance & Startups", icon: TrendingUp, desc: "Entrepreneur, investor, trader, growth strategist" },
-    { id: "science", label: "Science & Academia", icon: BookOpen, desc: "Researcher, scholar, student, data scientist" },
-    { id: "fullstack", label: "Full-Stack & Systems Engineering", icon: Layers, desc: "End-to-end architectures, modern web & APIs" },
-    { id: "ai_ml", label: "AI & Cognitive Systems", icon: Brain, desc: "Agentic AI, deep learning, prompt crafting" },
-    { id: "devops", label: "Cybersecurity & DevOps", icon: ShieldCheck, desc: "Ethical hacking, cloud infrastructure, resilience" },
-    { id: "explorer", label: "Lifestyle & Community Explorer", icon: Compass, desc: "Culture enthusiast, community leader, creator" }
+const ROLES = [
+    { id: "dev", label: "Software Engineer / Builder", icon: Code, desc: "Codes, builds apps, systems architecture" },
+    { id: "student", label: "Student / Researcher", icon: Brain, desc: "Learning, academic research, exploring topics" },
+    { id: "creator", label: "Gamer / Creative Creator", icon: Gamepad2, desc: "Gaming, digital arts, media, streaming" },
+    { id: "security", label: "Cybersecurity & Privacy", icon: Shield, desc: "OPSEC, cryptography, privacy tools" },
+    { id: "casual", label: "Casual / General Chatter", icon: MessageSquare, desc: "Connecting with friends, messaging" },
 ];
 
-const PRESET_SKILLS = [
-    // Tech & Code
-    "React", "TypeScript", "Python", "FastAPI", "Tailwind CSS", "Docker", "Node.js", "AI & LLMs",
-    // Gaming & Interactive
-    "Unreal Engine", "Unity", "Blender", "Streaming", "OBS Studio", "Esports", "Game Design",
-    // Audio & Music
-    "Ableton Live", "FL Studio", "Logic Pro", "Sound Design", "Mixing & Mastering", "Beatmaking",
-    // Design & Creative
-    "Figma", "Photoshop", "After Effects", "UI/UX", "3D Animation", "Digital Illustration",
-    // Writing & Media
-    "Storytelling", "Video Editing", "Content Creation", "Podcast Production", "SEO & Copywriting",
-    // Business & Strategy
-    "Product Management", "Growth Marketing", "Crypto & Trading", "Entrepreneurship"
+const POPULAR_INTERESTS = [
+    "Python", "React", "AI & LLMs", "Cybersecurity", "Gaming", "Web Development",
+    "Science", "Design & 3D", "Finance & Startups", "Music", "Linux / DevOps", "Philosophy"
 ];
-
-const GithubIcon = ({ className = "h-4 w-4" }) => (
-    <svg className={className} fill="currentColor" viewBox="0 0 24 24">
-        <path fillRule="evenodd" clipRule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.53 1.032 1.53 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z" />
-    </svg>
-);
 
 export default function PortfolioOnboardingModal({ isOpen, onClose, onComplete }) {
     const [step, setStep] = useState(1);
-    const [submitting, setSubmitting] = useState(false);
+    const totalSteps = 5;
 
-    // Form State
-    const [domain, setDomain] = useState("fullstack");
-    const [displayName, setDisplayName] = useState(() => sessionStorage.getItem("username") || "");
-    const [email, setEmail] = useState(() => sessionStorage.getItem("email") || "");
-    const [headline, setHeadline] = useState("");
-    const [bio, setBio] = useState("");
-    const [role, setRole] = useState("");
-    
-    // Skills
-    const [selectedSkills, setSelectedSkills] = useState(["React", "Python", "TypeScript", "Tailwind CSS"]);
-    const [customSkillInput, setCustomSkillInput] = useState("");
-
-    // Projects
-    const [projects, setProjects] = useState([
-        {
-            title: "ChatTornado",
-            description: "High-concurrency realtime messaging platform with agentic AI and moderation",
-            url: "https://chattornado.vercel.app",
-            repo: "https://github.com/Aneesh-labs/ChatTornado",
-            tags: "React, FastAPI, WebSockets"
+    // AI Personalization Form State
+    const defaultUser = sessionStorage.getItem("username") || "Member";
+    const [callsign, setCallsign] = useState(() => localStorage.getItem("vortex_ai_callsign") || defaultUser);
+    const [selectedRole, setSelectedRole] = useState(() => localStorage.getItem("vortex_ai_role") || "dev");
+    const [selectedInterests, setSelectedInterests] = useState(() => {
+        try {
+            const raw = localStorage.getItem("vortex_ai_interests");
+            return raw ? JSON.parse(raw) : ["AI & LLMs", "Web Development"];
+        } catch {
+            return ["AI & LLMs", "Web Development"];
         }
-    ]);
-    const [newProject, setNewProject] = useState({ title: "", description: "", url: "", repo: "", tags: "" });
-    const [showProjectForm, setShowProjectForm] = useState(false);
-
-    // Social Links
-    const [githubUrl, setGithubUrl] = useState("");
-    const [linkedinUrl, setLinkedinUrl] = useState("");
-    const [websiteUrl, setWebsiteUrl] = useState("");
+    });
+    const [aiMemoryConsent, setAiMemoryConsent] = useState(() => {
+        const val = localStorage.getItem("vortex_ai_consent");
+        return val === null ? true : val === "true";
+    });
+    const [isSaving, setIsSaving] = useState(false);
 
     useEffect(() => {
-        if (!displayName) {
-            setDisplayName(sessionStorage.getItem("username") || "");
+        if (isOpen) {
+            setStep(1);
         }
-        if (!email) {
-            setEmail(sessionStorage.getItem("email") || "");
-        }
-        // Auto default headline based on domain
-        const selected = DOMAINS_LIST.find(d => d.id === domain);
-        if (selected && !headline) {
-            setHeadline(`${selected.label} crafting high performance digital experiences`);
-            setRole(selected.label);
-        }
-    }, [domain]);
+    }, [isOpen]);
 
     if (!isOpen) return null;
 
-    const toggleSkill = (skill) => {
-        if (selectedSkills.includes(skill)) {
-            setSelectedSkills(selectedSkills.filter(s => s !== skill));
+    const toggleInterest = (tag) => {
+        setSelectedInterests((prev) => {
+            const exists = prev.includes(tag);
+            const next = exists ? prev.filter((t) => t !== tag) : [...prev, tag];
+            soundEngine?.play?.("pop");
+            return next;
+        });
+    };
+
+    const handleNext = () => {
+        if (step < totalSteps) {
+            soundEngine?.play?.("cyber_chirp");
+            setStep((s) => s + 1);
         } else {
-            setSelectedSkills([...selectedSkills, skill]);
+            handleFinish();
         }
     };
 
-    const addCustomSkill = (e) => {
-        if (e) e.preventDefault();
-        const trimmed = customSkillInput.trim();
-        if (trimmed && !selectedSkills.includes(trimmed)) {
-            setSelectedSkills([...selectedSkills, trimmed]);
-            setCustomSkillInput("");
+    const handleBack = () => {
+        if (step > 1) {
+            soundEngine?.play?.("pop");
+            setStep((s) => s - 1);
         }
     };
 
-    const addProject = (e) => {
-        if (e) e.preventDefault();
-        if (!newProject.title.trim()) return;
-        setProjects([...projects, { ...newProject }]);
-        setNewProject({ title: "", description: "", url: "", repo: "", tags: "" });
-        setShowProjectForm(false);
-    };
+    const handleFinish = async () => {
+        setIsSaving(true);
+        soundEngine?.play?.("win");
 
-    const removeProject = (index) => {
-        setProjects(projects.filter((_, idx) => idx !== index));
-    };
+        // Save preferences to localStorage
+        localStorage.setItem("vortex_ai_callsign", callsign.trim() || defaultUser);
+        localStorage.setItem("vortex_ai_role", selectedRole);
+        localStorage.setItem("vortex_ai_interests", JSON.stringify(selectedInterests));
+        localStorage.setItem("vortex_ai_consent", aiMemoryConsent ? "true" : "false");
+        localStorage.setItem("chattornado_onboarding_completed", "true");
+        sessionStorage.setItem("onboardingCompleted", "true");
 
-    const handleSave = async (isSkipping = false) => {
-        if (submitting) return;
-        setSubmitting(true);
-
-        const token = sessionStorage.getItem("token");
-        const defaultRole = DOMAINS_LIST.find(d => d.id === domain)?.label || "Developer";
-
-        const portfolioPayload = isSkipping ? {
-            domain: "fullstack",
-            displayName: displayName || sessionStorage.getItem("username") || "Member",
-            email: email || sessionStorage.getItem("email") || "",
-            headline: "Software Engineer & Builder",
-            bio: "Exploring and developing software on ChatTornado.",
-            role: "Software Engineer",
-            skills: ["React", "Python", "TypeScript", "Tailwind CSS"],
-            projects: [],
-            socials: { github: "", linkedin: "", website: "" },
-            is_private: true,
-            updated_at: new Date().toISOString()
-        } : {
-            domain,
-            displayName: displayName.trim() || sessionStorage.getItem("username") || "Member",
-            email: email.trim() || sessionStorage.getItem("email") || "",
-            headline: headline.trim() || `${defaultRole} building scalable web systems`,
-            bio: bio.trim() || "Passionate engineer focusing on modern tech and real-time platforms.",
-            role: role.trim() || defaultRole,
-            skills: selectedSkills,
-            projects: projects,
-            socials: {
-                github: githubUrl.trim(),
-                linkedin: linkedinUrl.trim(),
-                website: websiteUrl.trim()
-            },
-            is_private: true,
-            updated_at: new Date().toISOString()
-        };
-
+        // Sync with backend API
         try {
+            const token = sessionStorage.getItem("token") || "";
             if (token) {
-                await API.post("/user/portfolio", {
-                    token,
-                    portfolio: portfolioPayload,
-                    custom_status: headline.slice(0, 80) || undefined
+                const roleObj = ROLES.find((r) => r.id === selectedRole);
+                await API.post(
+                    `/api/ai/persona?token=${encodeURIComponent(token)}`,
+                    {
+                        callsign: callsign.trim() || defaultUser,
+                        role: roleObj ? roleObj.label : selectedRole,
+                        interests: selectedInterests.join(", "),
+                        ai_memory_consent: aiMemoryConsent,
+                        custom_instructions: `User prefers to be addressed as ${callsign.trim() || defaultUser}. Role: ${roleObj?.label}.`,
+                    }
+                );
+                // Also mark portfolio/onboarding completed
+                await API.post(`/user/portfolio?token=${encodeURIComponent(token)}`, {
+                    portfolio: {
+                        displayName: callsign.trim() || defaultUser,
+                        role: roleObj?.label,
+                        interests: selectedInterests,
+                        ai_consent: aiMemoryConsent,
+                    },
                 });
             }
-            sessionStorage.setItem("onboardingCompleted", "true");
-            sessionStorage.setItem("portfolioData", JSON.stringify(portfolioPayload));
-            if (portfolioPayload.displayName) {
-                sessionStorage.setItem("username", portfolioPayload.displayName);
-            }
-            window.dispatchEvent(new Event("sessionStorageUpdate"));
-
-            if (onComplete) onComplete(portfolioPayload);
-            if (onClose) onClose();
-        } catch (err) {
-            console.error("Failed to save portfolio:", err);
-            // Save locally so the user is never stuck
-            sessionStorage.setItem("onboardingCompleted", "true");
-            sessionStorage.setItem("portfolioData", JSON.stringify(portfolioPayload));
-            window.dispatchEvent(new Event("sessionStorageUpdate"));
-            if (onComplete) onComplete(portfolioPayload);
-            if (onClose) onClose();
+        } catch (e) {
+            console.warn("Could not sync AI persona to server, saved locally:", e);
         } finally {
-            setSubmitting(false);
+            setIsSaving(false);
+            window.dispatchEvent(new Event("sessionStorageUpdate"));
+            onComplete?.();
+            onClose?.();
         }
+    };
+
+    const handleSkip = () => {
+        soundEngine?.play?.("whoosh");
+        localStorage.setItem("chattornado_onboarding_completed", "true");
+        sessionStorage.setItem("onboardingCompleted", "true");
+        window.dispatchEvent(new Event("sessionStorageUpdate"));
+        onComplete?.();
+        onClose?.();
     };
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-xl">
-            <motion.div
-                initial={{ opacity: 0, scale: 0.95, y: 15 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.95, y: 15 }}
-                className="relative flex flex-col h-[90vh] max-h-[760px] w-full max-w-2xl overflow-hidden rounded-3xl border border-white/10 bg-[#0a0d14]/95 text-white shadow-2xl"
-            >
-                {/* Header Bar */}
-                <div className="flex items-center justify-between border-b border-white/10 px-6 py-4 bg-white/[0.02]">
-                    <div className="flex items-center gap-3">
-                        <div className="grid h-9 w-9 place-items-center rounded-xl bg-gradient-to-tr from-purple-600 to-sky-400 text-sm font-black shadow-md shadow-purple-500/20">
-                            ⚡
+        <AnimatePresence>
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/80 backdrop-blur-xl select-none overscroll-contain">
+                <motion.div
+                    initial={{ opacity: 0, scale: 0.95, y: 15 }}
+                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                    exit={{ opacity: 0, scale: 0.95, y: 15 }}
+                    transition={{ type: "spring", stiffness: 380, damping: 28 }}
+                    className="relative w-full max-w-xl rounded-2xl sm:rounded-3xl border border-cyan-500/30 bg-[#0a0d16] text-white shadow-2xl overflow-hidden flex flex-col max-h-[92vh] sm:max-h-[85vh]"
+                >
+                    {/* Top ambient holographic beam */}
+                    <div className="pointer-events-none absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-cyan-400 to-transparent opacity-80" />
+
+                    {/* Modal Header */}
+                    <div className="flex items-center justify-between px-5 pt-4 pb-3 border-b border-white/10 flex-shrink-0 bg-white/[0.02]">
+                        <div className="flex items-center gap-2.5">
+                            <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-cyan-500/20 to-blue-600/30 border border-cyan-400/40 flex items-center justify-center text-cyan-300">
+                                <Sparkles className="w-4 h-4" />
+                            </div>
+                            <div>
+                                <h3 className="text-sm sm:text-base font-bold text-white tracking-wide">
+                                    ChatTornado Quick Guide
+                                </h3>
+                                <p className="text-[10px] sm:text-[11px] text-cyan-300/70 font-mono">
+                                    Step {step} of {totalSteps}
+                                </p>
+                            </div>
                         </div>
-                        <div>
-                            <h2 className="text-base font-bold tracking-tight text-white">Create Your Profile Showcase</h2>
-                            <p className="text-xs text-white/40">Step {step} of 6 • Developer Showcase</p>
+
+                        <div className="flex items-center gap-2">
+                            <button
+                                type="button"
+                                onClick={handleSkip}
+                                className="text-[11px] font-semibold text-white/40 hover:text-white/80 transition-colors px-2 py-1 rounded-lg hover:bg-white/5 cursor-pointer"
+                            >
+                                Skip Tour
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleSkip}
+                                className="p-1 rounded-lg text-white/40 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+                                aria-label="Close"
+                            >
+                                <X className="w-4 h-4" />
+                            </button>
                         </div>
                     </div>
 
-                    <div className="flex items-center gap-2">
-                        <button
-                            type="button"
-                            onClick={() => handleSave(true)}
-                            className="rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-semibold text-white/50 transition hover:bg-white/10 hover:text-white"
-                        >
-                            Skip for now ↗
-                        </button>
+                    {/* Progress Bar */}
+                    <div className="w-full h-1 bg-white/5 flex-shrink-0">
+                        <div
+                            className="h-full bg-gradient-to-r from-cyan-400 to-blue-500 transition-all duration-300 ease-out"
+                            style={{ width: `${(step / totalSteps) * 100}%` }}
+                        />
                     </div>
-                </div>
 
-                {/* Stepper Progress Bar */}
-                <div className="h-1 w-full bg-white/5">
-                    <div 
-                        className="h-full bg-gradient-to-r from-sky-400 via-purple-500 to-emerald-400 transition-all duration-300 ease-out" 
-                        style={{ width: `${(step / 6) * 100}%` }}
-                    />
-                </div>
+                    {/* Scrollable Step Content */}
+                    <div className="flex-1 overflow-y-auto px-5 py-5 custom-scrollbar space-y-4">
+                        {/* STEP 1: WELCOME & OVERVIEW */}
+                        {step === 1 && (
+                            <motion.div
+                                key="step-1"
+                                initial={{ opacity: 0, x: 10 }}
+                                animate={{ opacity: 1, x: 0 }}
+                                exit={{ opacity: 0, x: -10 }}
+                                className="space-y-4"
+                            >
+                                <div className="text-center sm:text-left">
+                                    <span className="inline-block px-2.5 py-0.5 rounded-full bg-cyan-500/15 border border-cyan-400/30 text-cyan-300 text-[10px] font-mono font-bold uppercase tracking-widest mb-1.5">
+                                        Welcome Operative
+                                    </span>
+                                    <h4 className="text-lg sm:text-xl font-black text-white">
+                                        Welcome to ChatTornado 🌪️
+                                    </h4>
+                                    <p className="text-xs sm:text-sm text-white/60 mt-1 leading-relaxed">
+                                        ChatTornado is a high-security, cyberpunk communication network designed for ultra-fast messaging, cooperative tools, and integrated autonomous AI.
+                                    </p>
+                                </div>
 
-                {/* Step Body Content */}
-                <div className="flex-1 overflow-y-auto p-6 space-y-6">
-                    
-                    {/* STEP 1: FIELD / DOMAIN SELECTION */}
-                    {step === 1 && (
-                        <div className="space-y-4">
-                            <div>
-                                <h3 className="text-xl font-extrabold text-white">Which field do you match with?</h3>
-                                <p className="text-xs text-white/50 mt-1">Select the domain that best defines your focus or interests.</p>
-                            </div>
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1">
+                                    <div className="p-3.5 rounded-xl bg-white/[0.03] border border-white/10 hover:border-cyan-400/30 transition-colors">
+                                        <div className="w-7 h-7 rounded-lg bg-sky-500/20 text-sky-300 flex items-center justify-center mb-2">
+                                            <MessageSquare className="w-4 h-4" />
+                                        </div>
+                                        <h5 className="text-xs font-bold text-white">Instant Chats</h5>
+                                        <p className="text-[11px] text-white/50 mt-1 leading-normal">
+                                            Real-time direct messaging, squads, and media sharing with zero delay.
+                                        </p>
+                                    </div>
 
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
-                                {DOMAINS_LIST.map((item) => {
-                                    const Icon = item.icon;
-                                    const isSelected = domain === item.id;
-                                    return (
-                                        <button
-                                            key={item.id}
-                                            type="button"
-                                            onClick={() => {
-                                                setDomain(item.id);
-                                                setRole(item.label);
-                                            }}
-                                            className={`flex items-start gap-3.5 rounded-2xl p-4 text-left transition-all border ${
-                                                isSelected
-                                                    ? "border-purple-500/50 bg-gradient-to-br from-purple-500/15 to-sky-500/10 shadow-lg shadow-purple-500/10"
-                                                    : "border-white/5 bg-white/[0.02] hover:border-white/15 hover:bg-white/[0.04]"
-                                            }`}
-                                        >
-                                            <div className={`grid h-9 w-9 shrink-0 place-items-center rounded-xl ${isSelected ? "bg-purple-500 text-white" : "bg-white/5 text-white/60"}`}>
-                                                <Icon className="h-4 w-4" />
-                                            </div>
-                                            <div className="min-w-0 flex-1">
-                                                <div className="flex items-center justify-between">
-                                                    <span className={`text-sm font-bold ${isSelected ? "text-white" : "text-white/80"}`}>{item.label}</span>
-                                                    {isSelected && <Check className="h-4 w-4 text-purple-400 shrink-0" />}
-                                                </div>
-                                                <p className="text-xs text-white/45 mt-1 leading-snug">{item.desc}</p>
-                                            </div>
-                                        </button>
-                                    );
-                                })}
-                            </div>
-                        </div>
-                    )}
+                                    <div className="p-3.5 rounded-xl bg-white/[0.03] border border-white/10 hover:border-violet-400/30 transition-colors">
+                                        <div className="w-7 h-7 rounded-lg bg-violet-500/20 text-violet-300 flex items-center justify-center mb-2">
+                                            <Shield className="w-4 h-4" />
+                                        </div>
+                                        <h5 className="text-xs font-bold text-white">Ghost Stealth</h5>
+                                        <p className="text-[11px] text-white/50 mt-1 leading-normal">
+                                            Dead drops, anti-snoop shields, and panic escape keys for full privacy.
+                                        </p>
+                                    </div>
 
-                    {/* STEP 2: PROFILE & BIO */}
-                    {step === 2 && (
-                        <div className="space-y-4">
-                            <div>
-                                <h3 className="text-xl font-extrabold text-white">Tell us about your profile</h3>
-                                <p className="text-xs text-white/50 mt-1">Set your headline, bio, and identity details for your personal showcase.</p>
-                            </div>
+                                    <div className="p-3.5 rounded-xl bg-white/[0.03] border border-white/10 hover:border-amber-400/30 transition-colors">
+                                        <div className="w-7 h-7 rounded-lg bg-amber-500/20 text-amber-300 flex items-center justify-center mb-2">
+                                            <Bot className="w-4 h-4" />
+                                        </div>
+                                        <h5 className="text-xs font-bold text-white">VORTEX-9 AI</h5>
+                                        <p className="text-[11px] text-white/50 mt-1 leading-normal">
+                                            Your personal AI co-pilot for coding, deep research, and chat synthesis.
+                                        </p>
+                                    </div>
+                                </div>
 
-                            <div className="space-y-4 pt-2">
+                                <div className="p-3 rounded-xl bg-cyan-950/20 border border-cyan-500/20 text-[11px] text-cyan-200/80 flex items-center gap-2">
+                                    <Sparkles className="w-4 h-4 text-cyan-400 flex-shrink-0" />
+                                    <span>Takes less than 1 minute to complete. Click Next to learn the key shortcuts!</span>
+                                </div>
+                            </motion.div>
+                        )}
+
+                        {/* STEP 2: NAVIGATION & DISCOVERY */}
+                        {step === 2 && (
+                            <motion.div
+                                key="step-2"
+                                initial={{ opacity: 0, x: 10 }}
+                                animate={{ opacity: 1, x: 0 }}
+                                exit={{ opacity: 0, x: -10 }}
+                                className="space-y-3.5"
+                            >
                                 <div>
-                                    <label className="block text-xs font-bold text-white/70 uppercase tracking-wider mb-1.5">
-                                        Display Name
+                                    <span className="inline-block px-2.5 py-0.5 rounded-full bg-blue-500/15 border border-blue-400/30 text-blue-300 text-[10px] font-mono font-bold uppercase tracking-widest mb-1.5">
+                                        Exploration & Navigation
+                                    </span>
+                                    <h4 className="text-lg sm:text-xl font-black text-white">
+                                        How to Navigate ChatTornado 🗺️
+                                    </h4>
+                                    <p className="text-xs sm:text-sm text-white/60 mt-1">
+                                        Getting around is effortless across phone, tablet, and desktop.
+                                    </p>
+                                </div>
+
+                                <div className="space-y-2">
+                                    <div className="p-3 rounded-xl bg-white/[0.025] border border-white/10 flex items-start gap-3">
+                                        <div className="p-2 rounded-lg bg-sky-500/20 text-sky-300 flex-shrink-0 mt-0.5">
+                                            <Users className="w-4 h-4" />
+                                        </div>
+                                        <div>
+                                            <h5 className="text-xs font-bold text-white">Chats & The Global Directory</h5>
+                                            <p className="text-[11px] text-white/50 mt-0.5 leading-normal">
+                                                On the left sidebar (or bottom bar on phone), tap the <strong>Global</strong> tab to discover online members worldwide. Click any user to send an instant connection request!
+                                            </p>
+                                        </div>
+                                    </div>
+
+                                    <div className="p-3 rounded-xl bg-white/[0.025] border border-white/10 flex items-start gap-3">
+                                        <div className="p-2 rounded-lg bg-fuchsia-500/20 text-fuchsia-300 flex-shrink-0 mt-0.5">
+                                            <Radio className="w-4 h-4" />
+                                        </div>
+                                        <div>
+                                            <h5 className="text-xs font-bold text-white">24-Hour Status Notes</h5>
+                                            <p className="text-[11px] text-white/50 mt-0.5 leading-normal">
+                                                Tap <strong>"New Note"</strong> at the top of your chat list to post thoughts, activities, or music vibes that appear as floating status bubbles above your avatar.
+                                            </p>
+                                        </div>
+                                    </div>
+
+                                    <div className="p-3 rounded-xl bg-white/[0.025] border border-white/10 flex items-start gap-3">
+                                        <div className="p-2 rounded-lg bg-amber-500/20 text-amber-300 flex-shrink-0 mt-0.5">
+                                            <Gamepad2 className="w-4 h-4" />
+                                        </div>
+                                        <div>
+                                            <h5 className="text-xs font-bold text-white">In-Chat Hubs & Arcade</h5>
+                                            <p className="text-[11px] text-white/50 mt-0.5 leading-normal">
+                                                Split bills, track shared task checklists, set event countdowns, or play multiplayer mini-games (Tic-Tac-Toe, Connect 4, RPS) right inside your chats.
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </motion.div>
+                        )}
+
+                        {/* STEP 3: STEALTH & OPSEC SUPERPOWERS */}
+                        {step === 3 && (
+                            <motion.div
+                                key="step-3"
+                                initial={{ opacity: 0, x: 10 }}
+                                animate={{ opacity: 1, x: 0 }}
+                                exit={{ opacity: 0, x: -10 }}
+                                className="space-y-3.5"
+                            >
+                                <div>
+                                    <span className="inline-block px-2.5 py-0.5 rounded-full bg-violet-500/15 border border-violet-400/30 text-violet-300 text-[10px] font-mono font-bold uppercase tracking-widest mb-1.5">
+                                        Maximum Privacy
+                                    </span>
+                                    <h4 className="text-lg sm:text-xl font-black text-white">
+                                        Stealth & Security Controls 🛡️
+                                    </h4>
+                                    <p className="text-xs sm:text-sm text-white/60 mt-1">
+                                        You are in control of your privacy with state-of-the-art protections.
+                                    </p>
+                                </div>
+
+                                <div className="space-y-2">
+                                    <div className="p-3 rounded-xl bg-white/[0.025] border border-white/10 flex items-start gap-3">
+                                        <div className="p-2 rounded-lg bg-amber-500/20 text-amber-300 flex-shrink-0 mt-0.5">
+                                            <Zap className="w-4 h-4" />
+                                        </div>
+                                        <div>
+                                            <h5 className="text-xs font-bold text-white">⚡ Dead Drop (Timed Burners)</h5>
+                                            <p className="text-[11px] text-white/50 mt-0.5 leading-normal">
+                                                Send sensitive passcodes or confidential notes that automatically vaporize into digital ash after the recipient decrypts and reads them.
+                                            </p>
+                                        </div>
+                                    </div>
+
+                                    <div className="p-3 rounded-xl bg-white/[0.025] border border-white/10 flex items-start gap-3">
+                                        <div className="p-2 rounded-lg bg-cyan-500/20 text-cyan-300 flex-shrink-0 mt-0.5">
+                                            <EyeOff className="w-4 h-4" />
+                                        </div>
+                                        <div>
+                                            <h5 className="text-xs font-bold text-white">🛡️ Anti-Snoop Privacy Shield</h5>
+                                            <p className="text-[11px] text-white/50 mt-0.5 leading-normal">
+                                                In public or switching tabs? The shield automatically obfuscates chat text to prevent shoulder-surfers from reading your screen. Tap anywhere to de-blur.
+                                            </p>
+                                        </div>
+                                    </div>
+
+                                    <div className="p-3 rounded-xl bg-white/[0.025] border border-white/10 flex items-start gap-3">
+                                        <div className="p-2 rounded-lg bg-rose-500/20 text-rose-300 flex-shrink-0 mt-0.5">
+                                            <AlertTriangle className="w-4 h-4" />
+                                        </div>
+                                        <div>
+                                            <h5 className="text-xs font-bold text-white">🚨 Triple-ESC Panic Key</h5>
+                                            <p className="text-[11px] text-white/50 mt-0.5 leading-normal">
+                                                Press <kbd className="px-1.5 py-0.5 rounded bg-white/10 text-white font-mono text-[10px]">Esc</kbd> 3 times quickly (or type <code className="text-cyan-300">/panic</code> in terminal) to instantly wipe temporary RAM and divert to Wikipedia.
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </motion.div>
+                        )}
+
+                        {/* STEP 4: VORTEX-9 AI CO-PILOT */}
+                        {step === 4 && (
+                            <motion.div
+                                key="step-4"
+                                initial={{ opacity: 0, x: 10 }}
+                                animate={{ opacity: 1, x: 0 }}
+                                exit={{ opacity: 0, x: -10 }}
+                                className="space-y-3.5"
+                            >
+                                <div>
+                                    <span className="inline-block px-2.5 py-0.5 rounded-full bg-cyan-500/15 border border-cyan-400/30 text-cyan-300 text-[10px] font-mono font-bold uppercase tracking-widest mb-1.5">
+                                        Artificial Intelligence
+                                    </span>
+                                    <h4 className="text-lg sm:text-xl font-black text-white">
+                                        Meet VORTEX-9 (AI Co-Pilot) 🤖
+                                    </h4>
+                                    <p className="text-xs sm:text-sm text-white/60 mt-1">
+                                        Always available in your chat list. No subscriptions or external setup needed.
+                                    </p>
+                                </div>
+
+                                <div className="space-y-2.5">
+                                    <div className="p-3 rounded-xl bg-gradient-to-r from-cyan-950/30 to-blue-950/20 border border-cyan-500/25 flex items-start gap-3">
+                                        <div className="p-2 rounded-lg bg-cyan-500/20 text-cyan-300 flex-shrink-0">
+                                            <Code className="w-4 h-4" />
+                                        </div>
+                                        <div>
+                                            <h5 className="text-xs font-bold text-white">Interactive Code & Web Sandboxes</h5>
+                                            <p className="text-[11px] text-white/50 mt-0.5 leading-normal">
+                                                Ask VORTEX-9 to build HTML/JS apps, animations, or algorithms. Code blocks feature live runnable previews right inside your chat!
+                                            </p>
+                                        </div>
+                                    </div>
+
+                                    <div className="p-3 rounded-xl bg-gradient-to-r from-purple-950/30 to-indigo-950/20 border border-purple-500/25 flex items-start gap-3">
+                                        <div className="p-2 rounded-lg bg-purple-500/20 text-purple-300 flex-shrink-0">
+                                            <Brain className="w-4 h-4" />
+                                        </div>
+                                        <div>
+                                            <h5 className="text-xs font-bold text-white">Deep Research & Chat Summaries</h5>
+                                            <p className="text-[11px] text-white/50 mt-0.5 leading-normal">
+                                                Type <code className="text-purple-300">/research &lt;topic&gt;</code> to create exhaustive research dossiers, or click "Summarize Session" in any chat to condense 100s of messages into bullet points.
+                                            </p>
+                                        </div>
+                                    </div>
+
+                                    <div className="p-3 rounded-xl bg-gradient-to-r from-amber-950/30 to-orange-950/20 border border-amber-500/25 flex items-start gap-3">
+                                        <div className="p-2 rounded-lg bg-amber-500/20 text-amber-300 flex-shrink-0">
+                                            <Sparkles className="w-4 h-4" />
+                                        </div>
+                                        <div>
+                                            <h5 className="text-xs font-bold text-white">AI Arbiter & Image Generation</h5>
+                                            <p className="text-[11px] text-white/50 mt-0.5 leading-normal">
+                                                Debating with a friend? Let VORTEX-9 settle it with objective logic. Want art? Type <code className="text-amber-300">/image &lt;prompt&gt;</code> to synthesize images instantly.
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </motion.div>
+                        )}
+
+                        {/* STEP 5: AI PERSONALIZATION & INFO STORAGE CONSENT */}
+                        {step === 5 && (
+                            <motion.div
+                                key="step-5"
+                                initial={{ opacity: 0, x: 10 }}
+                                animate={{ opacity: 1, x: 0 }}
+                                exit={{ opacity: 0, x: -10 }}
+                                className="space-y-4"
+                            >
+                                <div>
+                                    <span className="inline-block px-2.5 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-400/30 text-emerald-300 text-[10px] font-mono font-bold uppercase tracking-widest mb-1.5">
+                                        Setup & Personalization
+                                    </span>
+                                    <h4 className="text-lg sm:text-xl font-black text-white">
+                                        AI Memory & Personalization 🧠
+                                    </h4>
+                                    <p className="text-xs text-white/60 mt-1">
+                                        Tell VORTEX-9 who you are and customize how your information is stored.
+                                    </p>
+                                </div>
+
+                                {/* Callsign Input */}
+                                <div>
+                                    <label className="block text-[11px] font-semibold text-white/70 uppercase tracking-wider mb-1.5">
+                                        What should VORTEX-9 call you? (Callsign / Nickname)
                                     </label>
                                     <input
                                         type="text"
-                                        value={displayName}
-                                        onChange={(e) => setDisplayName(e.target.value)}
-                                        placeholder="Your full name or handle"
-                                        className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white placeholder-white/30 outline-none focus:border-purple-400"
-                                        required
+                                        value={callsign}
+                                        onChange={(e) => setCallsign(e.target.value)}
+                                        placeholder="e.g. Alex, Commander, DevDan"
+                                        className="w-full bg-white/[0.04] border border-white/10 focus:border-cyan-400/60 rounded-xl px-3.5 py-2 text-xs sm:text-sm text-white placeholder-white/30 outline-none font-mono transition-colors"
                                     />
                                 </div>
 
+                                {/* Role Selector */}
                                 <div>
-                                    <label className="block text-xs font-bold text-white/70 uppercase tracking-wider mb-1.5">
-                                        Professional Headline
+                                    <label className="block text-[11px] font-semibold text-white/70 uppercase tracking-wider mb-1.5">
+                                        Your Primary Vibe & Focus
                                     </label>
-                                    <input
-                                        type="text"
-                                        value={headline}
-                                        onChange={(e) => setHeadline(e.target.value)}
-                                        placeholder="e.g. Full-Stack Engineer building high-scale real-time web applications"
-                                        className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white placeholder-white/30 outline-none focus:border-purple-400"
-                                    />
-                                </div>
-
-                                <div>
-                                    <label className="block text-xs font-bold text-white/70 uppercase tracking-wider mb-1.5">
-                                        Write About Yourself (Bio)
-                                    </label>
-                                    <textarea
-                                        rows={4}
-                                        value={bio}
-                                        onChange={(e) => setBio(e.target.value)}
-                                        placeholder="Write a few lines about your background, interests, technical passions, and what you're currently building..."
-                                        className="w-full rounded-xl border border-white/10 bg-white/5 p-4 text-sm text-white placeholder-white/30 outline-none focus:border-purple-400 resize-none leading-relaxed"
-                                    />
-                                </div>
-
-                                <div>
-                                    <label className="block text-xs font-bold text-white/70 uppercase tracking-wider mb-1.5">
-                                        Email ID
-                                    </label>
-                                    <input
-                                        type="email"
-                                        value={email}
-                                        onChange={(e) => setEmail(e.target.value)}
-                                        placeholder="your.email@example.com"
-                                        className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white placeholder-white/30 outline-none focus:border-purple-400 font-mono text-xs"
-                                    />
-                                </div>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* STEP 3: ROLE & CORE TECH STACK */}
-                    {step === 3 && (
-                        <div className="space-y-4">
-                            <div>
-                                <h3 className="text-xl font-extrabold text-white">Role & Core Tech Stack</h3>
-                                <p className="text-xs text-white/50 mt-1">Select the languages and tools that power your signature code banner.</p>
-                            </div>
-
-                            <div className="space-y-4 pt-2">
-                                <div>
-                                    <label className="block text-xs font-bold text-white/70 uppercase tracking-wider mb-1.5">
-                                        Specific Role / Title
-                                    </label>
-                                    <input
-                                        type="text"
-                                        value={role}
-                                        onChange={(e) => setRole(e.target.value)}
-                                        placeholder="e.g. Staff Software Engineer / Full-Stack Architect"
-                                        className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white placeholder-white/30 outline-none focus:border-purple-400"
-                                    />
-                                </div>
-
-                                <div>
-                                    <label className="block text-xs font-bold text-white/70 uppercase tracking-wider mb-2">
-                                        Select Core Skills ({selectedSkills.length} selected)
-                                    </label>
-                                    <div className="flex flex-wrap gap-2">
-                                        {PRESET_SKILLS.map((skill) => {
-                                            const active = selectedSkills.includes(skill);
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                        {ROLES.map((r) => {
+                                            const active = selectedRole === r.id;
+                                            const RoleIcon = r.icon;
                                             return (
                                                 <button
-                                                    key={skill}
+                                                    key={r.id}
                                                     type="button"
-                                                    onClick={() => toggleSkill(skill)}
-                                                    className={`rounded-xl px-3 py-1.5 text-xs font-semibold transition-all border ${
+                                                    onClick={() => {
+                                                        setSelectedRole(r.id);
+                                                        soundEngine?.play?.("pop");
+                                                    }}
+                                                    className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
                                                         active
-                                                            ? "border-purple-400 bg-purple-500/20 text-purple-200 shadow-sm shadow-purple-500/20"
-                                                            : "border-white/10 bg-white/5 text-white/60 hover:border-white/20 hover:text-white"
+                                                            ? "bg-cyan-500/20 border-cyan-400 text-white shadow-md shadow-cyan-500/15"
+                                                            : "bg-white/[0.02] border-white/10 text-white/60 hover:text-white hover:bg-white/[0.05]"
                                                     }`}
                                                 >
-                                                    {active && <span className="mr-1">✓</span>}
-                                                    {skill}
+                                                    <div className="flex items-center gap-2">
+                                                        <RoleIcon className={`w-3.5 h-3.5 ${active ? "text-cyan-300" : "text-white/40"}`} />
+                                                        <span className="text-xs font-bold truncate">{r.label}</span>
+                                                    </div>
                                                 </button>
                                             );
                                         })}
                                     </div>
                                 </div>
 
-                                <form onSubmit={addCustomSkill} className="flex gap-2 pt-1">
-                                    <input
-                                        type="text"
-                                        value={customSkillInput}
-                                        onChange={(e) => setCustomSkillInput(e.target.value)}
-                                        placeholder="Add custom skill (e.g. WebAssembly, Rust, AWS)"
-                                        className="flex-1 rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-xs text-white placeholder-white/30 outline-none focus:border-purple-400"
-                                    />
-                                    <button
-                                        type="submit"
-                                        className="flex items-center gap-1 rounded-xl bg-white/10 px-4 py-2 text-xs font-semibold text-white hover:bg-white/15 transition"
-                                    >
-                                        <Plus className="h-3.5 w-3.5" />
-                                        Add
-                                    </button>
-                                </form>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* STEP 4: PROJECTS TO TAG */}
-                    {step === 4 && (
-                        <div className="space-y-4">
-                            <div className="flex items-center justify-between">
+                                {/* Interests Tags */}
                                 <div>
-                                    <h3 className="text-xl font-extrabold text-white">Featured Projects</h3>
-                                    <p className="text-xs text-white/50 mt-1">Showcase your best builds, repositories, and applications.</p>
+                                    <label className="block text-[11px] font-semibold text-white/70 uppercase tracking-wider mb-1.5">
+                                        Topics You Love (Select Any)
+                                    </label>
+                                    <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto no-scrollbar">
+                                        {POPULAR_INTERESTS.map((tag) => {
+                                            const active = selectedInterests.includes(tag);
+                                            return (
+                                                <button
+                                                    key={tag}
+                                                    type="button"
+                                                    onClick={() => toggleInterest(tag)}
+                                                    className={`px-2.5 py-1 rounded-lg text-[10px] font-semibold border transition-all cursor-pointer ${
+                                                        active
+                                                            ? "bg-violet-500/25 border-violet-400 text-violet-200 shadow-sm"
+                                                            : "bg-white/[0.03] border-white/10 text-white/50 hover:text-white hover:bg-white/[0.06]"
+                                                    }`}
+                                                >
+                                                    {active ? `✓ ${tag}` : `+ ${tag}`}
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
                                 </div>
-                                {!showProjectForm && (
-                                    <button
-                                        type="button"
-                                        onClick={() => setShowProjectForm(true)}
-                                        className="flex items-center gap-1 rounded-xl border border-purple-500/30 bg-purple-500/10 px-3 py-1.5 text-xs font-bold text-purple-300 hover:bg-purple-500/20 transition"
-                                    >
-                                        <Plus className="h-3.5 w-3.5" />
-                                        Add Project
-                                    </button>
-                                )}
-                            </div>
 
-                            {/* New Project Inline Form */}
-                            {showProjectForm && (
-                                <form onSubmit={addProject} className="rounded-2xl border border-purple-500/30 bg-purple-500/5 p-4 space-y-3">
-                                    <div className="flex items-center justify-between border-b border-white/5 pb-2">
-                                        <span className="text-xs font-bold text-purple-300 uppercase font-mono">New Project Details</span>
-                                        <button type="button" onClick={() => setShowProjectForm(false)} className="text-white/40 hover:text-white">
-                                            <X className="h-4 w-4" />
-                                        </button>
-                                    </div>
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                        <input
-                                            type="text"
-                                            value={newProject.title}
-                                            onChange={(e) => setNewProject({ ...newProject, title: e.target.value })}
-                                            placeholder="Work / Project / Channel Name *"
-                                            className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs text-white outline-none"
-                                            required
-                                        />
-                                        <input
-                                            type="text"
-                                            value={newProject.tags}
-                                            onChange={(e) => setNewProject({ ...newProject, tags: e.target.value })}
-                                            placeholder="Genre / Tags (e.g. Unreal Engine, Ableton, 3D Art, React)"
-                                            className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs text-white outline-none"
-                                        />
-                                    </div>
-                                    <input
-                                        type="text"
-                                        value={newProject.description}
-                                        onChange={(e) => setNewProject({ ...newProject, description: e.target.value })}
-                                        placeholder="Short description / highlight of what you created or built..."
-                                        className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs text-white outline-none"
-                                    />
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                        <input
-                                            type="url"
-                                            value={newProject.url}
-                                            onChange={(e) => setNewProject({ ...newProject, url: e.target.value })}
-                                            placeholder="Live Demo / Stream / Portfolio URL (optional)"
-                                            className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs text-white outline-none font-mono text-[11px]"
-                                        />
-                                        <input
-                                            type="url"
-                                            value={newProject.repo}
-                                            onChange={(e) => setNewProject({ ...newProject, repo: e.target.value })}
-                                            placeholder="Platform Link (GitHub, Behance, SoundCloud, Steam) (optional)"
-                                            className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs text-white outline-none font-mono text-[11px]"
-                                        />
-                                    </div>
-                                    <div className="flex justify-end gap-2 pt-1">
+                                {/* AI Memory & Consent Toggle (Strict Privacy Standard) */}
+                                <div className="p-3.5 rounded-2xl bg-white/[0.03] border border-white/10 space-y-2">
+                                    <div className="flex items-center justify-between gap-3">
+                                        <div className="flex items-center gap-2">
+                                            <Brain className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+                                            <div>
+                                                <h5 className="text-xs font-bold text-white">AI Memory & Context Storage</h5>
+                                                <p className="text-[10px] text-white/40">
+                                                    Allow VORTEX-9 to remember your preferences for personalized answers.
+                                                </p>
+                                            </div>
+                                        </div>
                                         <button
                                             type="button"
-                                            onClick={() => setShowProjectForm(false)}
-                                            className="px-3 py-1.5 text-xs text-white/60 hover:text-white"
+                                            onClick={() => {
+                                                setAiMemoryConsent((prev) => !prev);
+                                                soundEngine?.play?.("pop");
+                                            }}
+                                            className={`relative w-11 h-6 rounded-full transition-colors p-0.5 cursor-pointer flex-shrink-0 ${
+                                                aiMemoryConsent ? "bg-emerald-500" : "bg-white/20"
+                                            }`}
                                         >
-                                            Cancel
-                                        </button>
-                                        <button
-                                            type="submit"
-                                            className="rounded-xl bg-purple-600 px-4 py-1.5 text-xs font-bold text-white hover:bg-purple-500"
-                                        >
-                                            Save to List
+                                            <div
+                                                className={`w-5 h-5 rounded-full bg-white transition-transform ${
+                                                    aiMemoryConsent ? "translate-x-5" : "translate-x-0"
+                                                }`}
+                                            />
                                         </button>
                                     </div>
-                                </form>
-                            )}
 
-                            {/* Existing Projects List */}
-                            <div className="space-y-3 pt-1">
-                                {projects.length === 0 ? (
-                                    <p className="text-center py-6 text-xs text-white/40 italic">
-                                        No projects tagged yet. Click "Add Project" above or skip to continue.
-                                    </p>
-                                ) : (
-                                    projects.map((proj, idx) => (
-                                        <div key={idx} className="flex items-start justify-between gap-3 rounded-xl border border-white/5 bg-white/[0.02] p-3.5">
-                                            <div className="min-w-0 flex-1">
-                                                <div className="flex items-center gap-2">
-                                                    <span className="font-bold text-sm text-white">{proj.title}</span>
-                                                    {proj.url && <ExternalLink className="h-3 w-3 text-sky-400" />}
-                                                </div>
-                                                <p className="text-xs text-white/55 mt-0.5 line-clamp-2">{proj.description}</p>
-                                                {proj.tags && (
-                                                    <span className="inline-block mt-1.5 text-[10px] font-mono text-purple-300/80 bg-purple-500/10 px-2 py-0.5 rounded border border-purple-500/20">
-                                                        {proj.tags}
-                                                    </span>
-                                                )}
-                                            </div>
-                                            <button
-                                                type="button"
-                                                onClick={() => removeProject(idx)}
-                                                className="text-white/30 hover:text-red-400 p-1 transition"
-                                                title="Remove Project"
-                                            >
-                                                <Trash2 className="h-4 w-4" />
-                                            </button>
-                                        </div>
-                                    ))
-                                )}
-                            </div>
-                        </div>
-                    )}
-
-                    {/* STEP 5: SOCIAL & GITHUB LINKS */}
-                    {step === 5 && (
-                        <div className="space-y-4">
-                            <div>
-                                <h3 className="text-xl font-extrabold text-white">Social & GitHub Presence</h3>
-                                <p className="text-xs text-white/50 mt-1">Connect your developer profiles and links for your action bar.</p>
-                            </div>
-
-                            <div className="space-y-4 pt-2">
-                                <div>
-                                    <label className="block text-xs font-bold text-white/70 uppercase tracking-wider mb-1.5 flex items-center gap-2">
-                                        <GithubIcon className="h-3.5 w-3.5 text-white" />
-                                        GitHub Profile Link
-                                    </label>
-                                    <input
-                                        type="url"
-                                        value={githubUrl}
-                                        onChange={(e) => setGithubUrl(e.target.value)}
-                                        placeholder="https://github.com/your-username"
-                                        className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white placeholder-white/30 outline-none focus:border-purple-400 font-mono text-xs"
-                                    />
-                                </div>
-
-                                <div>
-                                    <label className="block text-xs font-bold text-white/70 uppercase tracking-wider mb-1.5 flex items-center gap-2">
-                                        <Globe className="h-3.5 w-3.5 text-sky-400" />
-                                        Personal Website / Portfolio (Optional)
-                                    </label>
-                                    <input
-                                        type="url"
-                                        value={websiteUrl}
-                                        onChange={(e) => setWebsiteUrl(e.target.value)}
-                                        placeholder="https://yourwebsite.com"
-                                        className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white placeholder-white/30 outline-none focus:border-purple-400 font-mono text-xs"
-                                    />
-                                </div>
-
-                                <div>
-                                    <label className="block text-xs font-bold text-white/70 uppercase tracking-wider mb-1.5 flex items-center gap-2">
-                                        <Briefcase className="h-3.5 w-3.5 text-blue-400" />
-                                        LinkedIn / Professional Profile (Optional)
-                                    </label>
-                                    <input
-                                        type="url"
-                                        value={linkedinUrl}
-                                        onChange={(e) => setLinkedinUrl(e.target.value)}
-                                        placeholder="https://linkedin.com/in/your-profile"
-                                        className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white placeholder-white/30 outline-none focus:border-purple-400 font-mono text-xs"
-                                    />
-                                </div>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* STEP 6: PREVIEW & FINALIZE */}
-                    {step === 6 && (
-                        <div className="space-y-4">
-                            <div>
-                                <h3 className="text-xl font-extrabold text-white">Review Your Developer Portfolio</h3>
-                                <p className="text-xs text-white/50 mt-1">
-                                    This showcase is strictly private to your account. Only you can view it in your dashboard profile.
-                                </p>
-                            </div>
-
-                            {/* Live Miniature Preview */}
-                            <div className="rounded-2xl border border-white/10 bg-black/40 p-5 space-y-4">
-                                <div className="flex items-center gap-3">
-                                    <div className="grid h-12 w-12 place-items-center rounded-xl bg-gradient-to-tr from-purple-600 to-sky-400 text-lg font-black text-white">
-                                        {displayName ? displayName.charAt(0).toUpperCase() : "A"}
-                                    </div>
-                                    <div>
-                                        <h4 className="font-extrabold text-base text-white">{displayName || "Anonymous Architect"}</h4>
-                                        <p className="text-xs text-purple-300 font-mono">{role || "Developer"}</p>
+                                    <div className="text-[10px] text-white/50 leading-relaxed pl-6 border-t border-white/5 pt-2">
+                                        {aiMemoryConsent ? (
+                                            <span className="text-emerald-300 font-medium">
+                                                ✓ Memory Enabled: VORTEX-9 will remember your callsign & preferences. Stored safely in local encrypted storage. Never shared with third parties.
+                                            </span>
+                                        ) : (
+                                            <span className="text-amber-300/80 font-medium">
+                                                ⚪ Stateless Mode: VORTEX-9 will answer questions without retaining any personal history or session memory.
+                                            </span>
+                                        )}
                                     </div>
                                 </div>
-
-                                <p className="text-xs text-white/70 leading-relaxed italic">
-                                    "{bio || "Passionate engineer focusing on modern tech and real-time platforms."}"
-                                </p>
-
-                                {/* Signature code preview */}
-                                <div className="rounded-lg bg-black/50 p-2.5 font-mono text-[11px] text-purple-300 border border-white/5">
-                                    const &#123; {selectedSkills.slice(0, 5).join(", ")}, ...more &#125; = {displayName ? displayName.toLowerCase().replace(/\s+/g, '') : "user"}Profile;
-                                </div>
-
-                                <div className="flex flex-wrap gap-1.5">
-                                    {selectedSkills.slice(0, 8).map(s => (
-                                        <span key={s} className="rounded px-2 py-0.5 text-[10px] font-bold bg-white/5 text-white/60 border border-white/5">
-                                            {s}
-                                        </span>
-                                    ))}
-                                    {selectedSkills.length > 8 && (
-                                        <span className="text-[10px] text-white/40 self-center">
-                                            +{selectedSkills.length - 8} more
-                                        </span>
-                                    )}
-                                </div>
-                            </div>
-                        </div>
-                    )}
-
-                </div>
-
-                {/* Footer Controls */}
-                <div className="flex items-center justify-between border-t border-white/10 px-6 py-4 bg-white/[0.02]">
-                    {step > 1 ? (
-                        <button
-                            type="button"
-                            onClick={() => setStep(step - 1)}
-                            className="flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-xs font-semibold text-white/70 hover:bg-white/10 transition"
-                        >
-                            <ArrowLeft className="h-3.5 w-3.5" />
-                            Back
-                        </button>
-                    ) : (
-                        <div />
-                    )}
-
-                    <div className="flex items-center gap-3">
-                        {step < 6 ? (
-                            <button
-                                type="button"
-                                onClick={() => setStep(step + 1)}
-                                className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 px-5 py-2.5 text-xs font-bold text-white shadow-lg shadow-purple-600/20 hover:from-purple-500 hover:to-indigo-500 transition"
-                            >
-                                <span>Continue</span>
-                                <ArrowRight className="h-3.5 w-3.5" />
-                            </button>
-                        ) : (
-                            <button
-                                type="button"
-                                onClick={() => handleSave(false)}
-                                disabled={submitting}
-                                className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 px-6 py-2.5 text-xs font-bold text-black shadow-lg shadow-emerald-500/20 hover:from-emerald-400 hover:to-teal-400 transition disabled:opacity-50"
-                            >
-                                {submitting ? (
-                                    <span>Saving Portfolio...</span>
-                                ) : (
-                                    <>
-                                        <Check className="h-4 w-4" />
-                                        <span>Launch My Portfolio ⚡</span>
-                                    </>
-                                )}
-                            </button>
+                            </motion.div>
                         )}
                     </div>
-                </div>
 
-            </motion.div>
-        </div>
+                    {/* Modal Footer Controls */}
+                    <div className="flex items-center justify-between px-5 py-3.5 border-t border-white/10 bg-[#07090f] flex-shrink-0">
+                        <div>
+                            {step > 1 ? (
+                                <button
+                                    type="button"
+                                    onClick={handleBack}
+                                    className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold text-white/70 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+                                >
+                                    <ArrowLeft className="w-3.5 h-3.5" />
+                                    <span>Back</span>
+                                </button>
+                            ) : (
+                                <span className="text-[11px] text-white/30 hidden sm:inline">
+                                    Quick 1-Minute Walkthrough
+                                </span>
+                            )}
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                            {step < totalSteps ? (
+                                <button
+                                    type="button"
+                                    onClick={handleNext}
+                                    className="flex items-center gap-1.5 px-5 py-2 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:brightness-110 text-white font-bold text-xs shadow-lg shadow-cyan-500/25 transition-all active:scale-95 cursor-pointer"
+                                >
+                                    <span>Continue</span>
+                                    <ArrowRight className="w-3.5 h-3.5" />
+                                </button>
+                            ) : (
+                                <button
+                                    type="button"
+                                    disabled={isSaving}
+                                    onClick={handleFinish}
+                                    className="flex items-center gap-1.5 px-6 py-2 rounded-xl bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500 hover:brightness-110 text-black font-extrabold text-xs shadow-lg shadow-emerald-500/25 transition-all active:scale-95 cursor-pointer disabled:opacity-50"
+                                >
+                                    <Sparkles className="w-3.5 h-3.5" />
+                                    <span>{isSaving ? "Saving..." : "Launch ChatTornado 🚀"}</span>
+                                </button>
+                            )}
+                        </div>
+                    </div>
+                </motion.div>
+            </div>
+        </AnimatePresence>
     );
 }
+
+PortfolioOnboardingModal.propTypes = {
+    isOpen: PropTypes.bool.isRequired,
+    onClose: PropTypes.func.isRequired,
+    onComplete: PropTypes.func,
+};

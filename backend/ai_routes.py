@@ -6,7 +6,7 @@ from pydantic import BaseModel
 import os
 from auth import decode_token
 from database import get_db
-from models import User
+from models import User, UserAIPersona
 from ai_service import (
     personalize_user_from_history,
     get_user_persona,
@@ -70,6 +70,67 @@ async def personalize_user(
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+class SavePersonaRequest(BaseModel):
+    callsign: Optional[str] = None
+    role: Optional[str] = None
+    interests: Optional[str] = None
+    ai_memory_consent: bool = True
+    custom_instructions: Optional[str] = None
+
+
+@router.post("/persona")
+def save_user_persona(
+    req: SavePersonaRequest,
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(get_db)
+):
+    """Save user's AI persona, preferred callsign, and memory consent preferences."""
+    from datetime import datetime, timezone
+    now = datetime.now(timezone.utc)
+
+    parts = []
+    if req.callsign and req.callsign.strip():
+        parts.append(f"• Preferred Callsign: {req.callsign.strip()}")
+    if req.role and req.role.strip():
+        parts.append(f"• User Role: {req.role.strip()}")
+    if req.interests and req.interests.strip():
+        parts.append(f"• Interests: {req.interests.strip()}")
+
+    consent_str = "Enabled" if req.ai_memory_consent else "Disabled (Stateless)"
+    parts.append(f"• AI Memory Storage: {consent_str}")
+
+    if req.custom_instructions and req.custom_instructions.strip():
+        parts.append(f"• Preferences: {req.custom_instructions.strip()}")
+
+    summary = "\n".join(parts) or "• New user on ChatTornado."
+
+    record = db.query(UserAIPersona).filter(UserAIPersona.user_id == user_id).first()
+    if not record:
+        record = UserAIPersona(
+            user_id=user_id,
+            persona_summary=summary,
+            message_count_analyzed=0,
+            updated_at=now
+        )
+        db.add(record)
+    else:
+        record.persona_summary = summary
+        record.updated_at = now
+
+    user = db.query(User).filter(User.id == user_id).first()
+    if user:
+        user.onboarding_completed = True
+
+    db.commit()
+    db.refresh(record)
+    return {
+        "status": "success",
+        "message": "AI profile saved successfully.",
+        "persona": record.persona_summary,
+        "ai_memory_consent": req.ai_memory_consent
+    }
 
 
 @router.get("/persona")

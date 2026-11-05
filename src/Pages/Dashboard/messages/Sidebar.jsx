@@ -672,17 +672,38 @@ const Sidebar = React.memo(({
                     <AnimatePresence mode="popLayout">
                         {sortedUsers.length === 0 ? (
                             <motion.div
-                                initial={{ opacity: 0 }}
-                                animate={{ opacity: 1 }}
+                                initial={{ opacity: 0, scale: 0.96 }}
+                                animate={{ opacity: 1, scale: 1 }}
                                 exit={{ opacity: 0 }}
-                                className="flex flex-col items-center justify-center py-12 gap-3"
+                                className="flex flex-col items-center justify-center py-8 px-4 text-center select-none"
                             >
-                                <div role="img" aria-label="Blank box visual illustration" className="text-3xl opacity-20">💬</div>
-                                <p className="text-xs text-white/20 text-center px-4">
-                                    {mainTab === "chats"
-                                        ? (filter === "pinned" ? "No pinned chats yet" : filter === "unread" ? "All caught up!" : "No active chats yet. Connect in Global tab!")
-                                        : "No users found"}
-                                </p>
+                                {mainTab === "chats" && !filter ? (
+                                    <div className="flex flex-col items-center p-5 rounded-2xl bg-white/[0.025] border border-white/10 max-w-[250px] shadow-lg">
+                                        <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-cyan-500/20 to-blue-600/20 border border-cyan-400/30 text-cyan-300 flex items-center justify-center mb-3">
+                                            <Users className="w-5 h-5" />
+                                        </div>
+                                        <h5 className="text-xs font-bold text-white mb-1">Welcome to ChatTornado!</h5>
+                                        <p className="text-[11px] text-white/50 leading-relaxed mb-4">
+                                            Meet other online operatives in the Global tab, or try asking VORTEX-9 a question!
+                                        </p>
+                                        <button
+                                            type="button"
+                                            onClick={() => setMainTab("global")}
+                                            className="w-full py-2 px-3 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:brightness-110 text-white text-xs font-bold shadow-md shadow-cyan-500/20 transition-all active:scale-95 cursor-pointer"
+                                        >
+                                            Find Operatives →
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <div className="flex flex-col items-center py-6 gap-2">
+                                        <div role="img" aria-label="Blank box visual illustration" className="text-3xl opacity-25">💬</div>
+                                        <p className="text-xs text-white/40 text-center px-4">
+                                            {mainTab === "chats"
+                                                ? (filter === "pinned" ? "No pinned chats yet" : filter === "unread" ? "All caught up!" : "No active chats yet.")
+                                                : "No operatives found matching search"}
+                                        </p>
+                                    </div>
+                                )}
                             </motion.div>
                         ) : (
                             sortedUsers.map((user) => {
