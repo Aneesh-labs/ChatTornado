@@ -23,10 +23,22 @@ SERVER_START_TIME = time.time()
 
 # ── Strict RBAC Dependency ──────────────────────────────────────────────────
 def require_super_admin(
-    token: str = Query(...),
+    request: Request,
+    token: Optional[str] = Query(None),
     db: Session = Depends(get_db)
 ) -> User:
-    payload = decode_token(token)
+    raw_token = token
+    if not raw_token:
+        auth_header = request.headers.get("Authorization") or request.headers.get("authorization")
+        if auth_header and auth_header.startswith("Bearer "):
+            raw_token = auth_header[7:].strip()
+        elif auth_header:
+            raw_token = auth_header.strip()
+
+    if not raw_token:
+        raise HTTPException(status_code=401, detail="Authentication token required.")
+
+    payload = decode_token(raw_token)
     if not payload:
         raise HTTPException(status_code=401, detail="Invalid or expired authentication token.")
 
@@ -650,3 +662,60 @@ def get_admin_audit_logs(
         })
 
     return {"total": total, "logs": results}
+
+
+# ── Direct Endpoints for Frontend Admin Board Compatibility ────────────────
+
+class DirectRestrictRequest(BaseModel):
+    hours: Optional[int] = None
+    permanent: Optional[bool] = False
+    reason: Optional[str] = None
+
+
+@router.post("/users/{target_user_id}/restrict")
+def restrict_user_direct(
+    target_user_id: int,
+    payload: DirectRestrictRequest,
+    request: Request,
+    admin: User = Depends(require_super_admin),
+    db: Session = Depends(get_db)
+):
+    action = "permaban" if payload.permanent else "restrict"
+    duration = payload.hours or 48
+    req = UserRestrictionRequest(action=action, reason=payload.reason, duration_hours=duration)
+    return take_user_action(target_user_id, req, request, admin, db)
+
+
+@router.post("/users/{target_user_id}/unrestrict")
+def unrestrict_user_direct(
+    target_user_id: int,
+    request: Request,
+    admin: User = Depends(require_super_admin),
+    db: Session = Depends(get_db)
+):
+    req = UserRestrictionRequest(action="lift", reason="Restriction manually lifted by administrator.")
+    return take_user_action(target_user_id, req, request, admin, db)
+
+
+class ResolveCaseRequest(BaseModel):
+    action_taken: str
+    notes: Optional[str] = None
+
+
+@router.post("/moderation/cases/{case_id}/resolve")
+def resolve_case_direct(
+    case_id: int,
+    payload: ResolveCaseRequest,
+    request: Request,
+    admin: User = Depends(require_super_admin),
+    db: Session = Depends(get_db)
+):
+    action = payload.action_taken.lower()
+    if "dismiss" in action:
+        act = "dismiss"
+    elif "perma" in action:
+        act = "permaban"
+    else:
+        act = "confirm"
+    req = CaseActionRequest(action=act, reason=payload.notes)
+    return act_on_moderation_case(case_id, req, request, admin, db)

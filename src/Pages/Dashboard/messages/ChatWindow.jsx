@@ -57,6 +57,7 @@ const ChatWindow = React.memo(({
     onToggleWatchParty,
     onToggleVanishMode,
     isVanishModeActive = false,
+    isFriend = false,
     activeIncomingCall = null,
     onLiftIncomingCall,
     onDeclineIncomingCall,
@@ -110,6 +111,7 @@ const ChatWindow = React.memo(({
                 onToggleWatchParty={onToggleWatchParty}
                 onToggleVanishMode={onToggleVanishMode}
                 isVanishModeActive={isVanishModeActive}
+                isFriend={isFriend}
             />
             <InChatLiveCallBanner
                 incomingCall={activeIncomingCall}
@@ -205,6 +207,7 @@ ChatWindow.propTypes = {
     onOpenSearch: PropTypes.func,
     onToggleSelectionMode: PropTypes.func,
     onSelectMessage: PropTypes.func,
+    isFriend: PropTypes.bool,
     isMobile: PropTypes.bool,
     onStartCall: PropTypes.func,
     onStartGhostChat: PropTypes.func,

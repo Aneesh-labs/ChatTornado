@@ -1106,10 +1106,11 @@ const ChatInput = React.memo(({ onSend, replyTo, onCancelReply, selectedUser, so
                     <button
                         type="button"
                         onClick={() => {
+                            soundEngine.play("cyber_chirp");
                             setText((prev) => prev.startsWith("/research ") ? prev : "/research ");
                             textareaRef.current?.focus();
                         }}
-                        className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-indigo-500/10 hover:bg-indigo-500/20 border border-indigo-400/30 text-indigo-300 font-semibold transition-all hover:scale-105 active:scale-95 flex-shrink-0 cursor-pointer shadow-sm"
+                        className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-indigo-500/15 hover:bg-indigo-500/25 border border-indigo-400/40 text-indigo-300 font-semibold transition-all hover:scale-105 active:scale-95 flex-shrink-0 cursor-pointer shadow-[0_0_12px_rgba(99,102,241,0.2)]"
                     >
                         <Search className="w-3.5 h-3.5 text-indigo-400" />
                         <span>/research</span>
@@ -1117,10 +1118,11 @@ const ChatInput = React.memo(({ onSend, replyTo, onCancelReply, selectedUser, so
                     <button
                         type="button"
                         onClick={() => {
+                            soundEngine.play("cyber_chirp");
                             setText((prev) => prev.startsWith("/image ") ? prev : "/image ");
                             textareaRef.current?.focus();
                         }}
-                        className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-400/30 text-cyan-300 font-semibold transition-all hover:scale-105 active:scale-95 flex-shrink-0 cursor-pointer shadow-sm"
+                        className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-cyan-500/15 hover:bg-cyan-500/25 border border-cyan-400/40 text-cyan-300 font-semibold transition-all hover:scale-105 active:scale-95 flex-shrink-0 cursor-pointer shadow-[0_0_12px_rgba(6,182,212,0.2)]"
                     >
                         <Palette className="w-3.5 h-3.5 text-cyan-400" />
                         <span>/image</span>

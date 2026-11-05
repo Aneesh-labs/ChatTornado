@@ -78,7 +78,7 @@ export default function Settings() {
         enterDecoyMode();
         soundEffects.play("whoosh");
         alert("🚨 Decoy Mode Activated! Confidential vaults hidden. Returning to Dashboard.");
-        navigate("/dashboard/messages");
+        navigate("/messages");
     };
 
     const handleSendTestNotification = () => {

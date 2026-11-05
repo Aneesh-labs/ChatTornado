@@ -1,4 +1,4 @@
-import { Routes, Route } from "react-router-dom";
+import { Routes, Route, Navigate } from "react-router-dom";
 import ProtectedRoute from "./Components/ProtectedRoute";
 
 import Login from "./Pages/Login";
@@ -39,7 +39,11 @@ export default function App() {
         <Route path="profile" element={<Profile />} />
         <Route path="settings" element={<Settings />} />
         <Route path="admin" element={<AdminDashboard />} />
+        <Route path="dashboard/messages" element={<Navigate to="/messages" replace />} />
+        <Route path="dashboard" element={<Navigate to="/messages" replace />} />
       </Route>
+      <Route path="/dashboard/messages" element={<Navigate to="/messages" replace />} />
+      <Route path="/dashboard/*" element={<Navigate to="/messages" replace />} />
     </Routes>
   );
 }

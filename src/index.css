@@ -133,7 +133,92 @@ body {
     .custom-scrollbar::-webkit-scrollbar-thumb:hover {
         background: rgba(255, 255, 255, 0.3);
     }
+    /* --- SCI-FI & CYBERPUNK HUD ENHANCEMENTS --- */
+    .hud-panel {
+        position: relative;
+        background: linear-gradient(135deg, rgba(8, 14, 26, 0.85) 0%, rgba(13, 20, 36, 0.7) 100%);
+        border: 1px solid rgba(56, 189, 248, 0.2);
+        box-shadow: 0 0 25px rgba(56, 189, 248, 0.08), inset 0 0 15px rgba(56, 189, 248, 0.03);
+        backdrop-filter: blur(20px);
+    }
+
+    .hud-panel::before {
+        content: "";
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 8px;
+        height: 8px;
+        border-top: 2px solid #38bdf8;
+        border-left: 2px solid #38bdf8;
+        pointer-events: none;
+    }
+
+    .hud-panel::after {
+        content: "";
+        position: absolute;
+        bottom: 0;
+        right: 0;
+        width: 8px;
+        height: 8px;
+        border-bottom: 2px solid #a855f7;
+        border-right: 2px solid #a855f7;
+        pointer-events: none;
+    }
+
+    .text-glow-cyan {
+        text-shadow: 0 0 10px rgba(56, 189, 248, 0.7), 0 0 20px rgba(56, 189, 248, 0.3);
+    }
+
+    .text-glow-purple {
+        text-shadow: 0 0 10px rgba(168, 85, 247, 0.7), 0 0 20px rgba(168, 85, 247, 0.3);
+    }
+
+    .text-glow-emerald {
+        text-shadow: 0 0 10px rgba(52, 211, 153, 0.7), 0 0 20px rgba(52, 211, 153, 0.3);
+    }
+
+    .cyber-scanlines {
+        background: linear-gradient(
+            rgba(18, 16, 16, 0) 50%, 
+            rgba(0, 0, 0, 0.25) 50%
+        ), linear-gradient(
+            90deg,
+            rgba(255, 0, 0, 0.03),
+            rgba(0, 255, 0, 0.01),
+            rgba(0, 0, 255, 0.03)
+        );
+        background-size: 100% 3px, 6px 100%;
+        pointer-events: none;
+    }
+
+    .cyber-grid {
+        background-image: 
+            linear-gradient(rgba(56, 189, 248, 0.05) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(56, 189, 248, 0.05) 1px, transparent 1px);
+        background-size: 24px 24px;
+    }
+
+    @keyframes holoScan {
+        0% { transform: translateY(-100%); opacity: 0; }
+        50% { opacity: 0.8; }
+        100% { transform: translateY(1000%); opacity: 0; }
+    }
+
+    .animate-holo-scan {
+        animation: holoScan 4s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+    }
+
+    @keyframes quantumPulse {
+        0%, 100% { transform: scale(1); opacity: 0.8; }
+        50% { transform: scale(1.08); opacity: 1; filter: drop-shadow(0 0 12px rgba(56, 189, 248, 0.9)); }
+    }
+
+    .animate-quantum-pulse {
+        animation: quantumPulse 2.5s ease-in-out infinite;
+    }
 }
+
 
 @media (prefers-reduced-motion: reduce) {
     *, ::before, ::after {

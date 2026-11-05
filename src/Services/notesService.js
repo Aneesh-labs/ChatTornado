@@ -56,9 +56,16 @@ export function getActiveNotes() {
         }
 
         const now = Date.now();
-        // Filter out expired notes and ensure avatars are populated
+        // Filter out expired notes, purge invalid/orphan notes ("You" or null userId), and ensure avatars
         const active = list
-            .filter(n => n.expiresAt && n.expiresAt > now)
+            .filter(n => {
+                if (!n || !n.expiresAt || n.expiresAt <= now) return false;
+                // Discard stale test note named "You" or missing valid user identity
+                if (n.username === "You" || !n.userId || n.userId === "null" || n.userId === "undefined") {
+                    return false;
+                }
+                return true;
+            })
             .map(n => {
                 const sample = SAMPLE_NOTES.find(s => s.id === n.id);
                 if (sample && !n.avatar) {
@@ -84,10 +91,11 @@ export function saveUserNote({ userId, username, avatar, text, emoji, songTitle,
     // Remove previous note from this user
     const filtered = notes.filter(n => String(n.userId) !== String(userId));
 
+    const resolvedUsername = (username && username !== "You") ? username : (sessionStorage.getItem("username") || "Me");
     const newNote = {
         id: `note-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
         userId: String(userId),
-        username: username || "Me",
+        username: resolvedUsername,
         avatar: avatar || null,
         text: text.slice(0, 60),
         emoji: emoji || "💭",

@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useMemo } from "react";
 import PropTypes from "prop-types";
 import { motion, AnimatePresence } from "framer-motion";
-import { MoreVertical, Sparkles, Brain, Download, Cpu, Ban, UserCheck, ShieldAlert, Users, BadgeCheck, Dna, GitFork, Clock, Tv, Ghost, Flame, Shield, Phone, PhoneCall, Video, Search, RotateCw, ChevronLeft, CheckSquare, ListChecks } from "lucide-react";
+import { Lock, MoreVertical, Sparkles, Brain, Download, Cpu, Ban, UserCheck, ShieldAlert, Users, BadgeCheck, Dna, GitFork, Clock, Tv, Ghost, Flame, Shield, Phone, PhoneCall, Video, Search, RotateCw, ChevronLeft, CheckSquare, ListChecks } from "lucide-react";
 import { IconBtn, Avatar, useTheme } from "./constants";
 import PersonalizeModal from "./PersonalizeModal";
+import VaultChatModal from "./VaultChatModal";
+import { isVaultChat } from "../../../Services/vaultService";
 import ExportModal from "./ExportModal";
 import GoogleModelModal, { getSelectedGoogleModel } from "./GoogleModelModal";
 import ReportUserModal from "./ReportUserModal";
@@ -13,9 +15,11 @@ import API from "../../../Services/API";
 import { triggerDemoNotification } from "../../../Services/notifications";
 import { isAdminUnlocked, setAdminUnlockedSession, touchAdminSession } from "../../../utils/adminSession";
 import { getStreak } from "../../../Services/streakService";
+import { soundEngine } from "../../../utils/soundEffects";
 
 const ChatHeader = React.memo(({
     user = null,
+    isFriend = false,
     onTogglePanel,
     panelOpen = false,
     onBack,
@@ -50,6 +54,21 @@ const ChatHeader = React.memo(({
     const [showReportModal, setShowReportModal] = useState(false);
     const [showGroupModal, setShowGroupModal] = useState(false);
     const [showMemoryVaultModal, setShowMemoryVaultModal] = useState(false);
+    const [showVaultChatModal, setShowVaultChatModal] = useState(false);
+    const [isVaultProtected, setIsVaultProtected] = useState(() => isVaultChat(user?.id));
+
+    useEffect(() => {
+        setIsVaultProtected(isVaultChat(user?.id));
+        const handleVaultChats = (e) => {
+            if (e.detail?.changedId === String(user?.id)) {
+                setIsVaultProtected(Boolean(e.detail.isVault));
+            } else {
+                setIsVaultProtected(isVaultChat(user?.id));
+            }
+        };
+        window.addEventListener("vortex_vault_chats_changed", handleVaultChats);
+        return () => window.removeEventListener("vortex_vault_chats_changed", handleVaultChats);
+    }, [user?.id]);
     const [isBlocked, setIsBlocked] = useState(false);
     const [currentGoogleModel, setCurrentGoogleModel] = useState(getSelectedGoogleModel);
     const [showStatusPopover, setShowStatusPopover] = useState(false);
@@ -139,6 +158,7 @@ const ChatHeader = React.memo(({
     }, [setAiMode]);
 
     const handleModeChange = (newMode) => {
+        soundEngine.play("cyber_chirp");
         if (!adminUnlocked) {
             let nextHistory = [...modeHistory, newMode];
             if (nextHistory.length > 3) nextHistory = nextHistory.slice(-3);
@@ -226,7 +246,9 @@ const ChatHeader = React.memo(({
 
 
     return (
-        <div className={`relative z-30 flex items-center justify-between px-3 sm:px-6 py-2.5 sm:py-3.5 border-b border-white/10 backdrop-blur-2xl bg-[#090c14]/85 shadow-[0_4px_24px_rgba(0,0,0,0.35)] flex-shrink-0 w-full select-none`}>
+        <div className={`relative z-30 flex items-center justify-between px-3 sm:px-6 py-2.5 sm:py-3.5 border-b border-cyan-500/20 backdrop-blur-2xl bg-[#090c14]/90 shadow-[0_4px_24px_rgba(0,0,0,0.45)] flex-shrink-0 w-full select-none overflow-hidden`}>
+            {/* Sci-Fi Hologram Sweeper Beam */}
+            <div className="pointer-events-none absolute top-0 left-0 right-0 h-[1.5px] bg-gradient-to-r from-transparent via-cyan-400 to-transparent opacity-60 animate-pulse shadow-[0_0_8px_rgba(34,211,238,0.8)]" />
             <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
                 {onBack && (
                     <button
@@ -489,6 +511,12 @@ const ChatHeader = React.memo(({
                                                     <Ghost className="w-4 h-4 text-purple-400" />
                                                     {isVanishModeActive ? "Turn Off Vanish Mode" : "Vanish Mode"}
                                                 </button>
+                                                {(!isBotUser && !isGroup && (isFriend || isVaultProtected)) && (
+                                                    <button onClick={() => { setShowVaultChatModal(true); setShowMoreMenu(false); }} className="flex items-center gap-2 px-3 py-2 text-xs text-purple-300 hover:text-white hover:bg-purple-500/15 rounded-lg text-left font-semibold">
+                                                        <Lock className="w-4 h-4 text-purple-400" />
+                                                        <span>{isVaultProtected ? "Ghost Vault: Locked (Hidden in Decoy)" : "Lock in Ghost Vault"}</span>
+                                                    </button>
+                                                )}
                                             </>
                                         ) : (
                                             <>
@@ -528,13 +556,13 @@ const ChatHeader = React.memo(({
                 {/* --- DESKTOP ACTIONS --- */}
                 <div className="hidden sm:flex items-center gap-0.5 sm:gap-1">
                     {/* Integrated Features Desktop Quick Buttons */}
-                    <IconBtn title="Conversation DNA (Structural & State Telemetry)" onClick={onOpenDNA} small className="hover:!text-cyan-300">
+                    <IconBtn title="Conversation DNA (Structural & State Telemetry)" onClick={() => { soundEngine.play("data_scan"); onOpenDNA?.(); }} small className="hover:!text-cyan-300">
                         <Dna className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-cyan-400" />
                     </IconBtn>
-                    <IconBtn title="Reality Forks (Timeline Branches)" onClick={onOpenRealityForks} small className="hover:!text-purple-300">
+                    <IconBtn title="Reality Forks (Timeline Branches)" onClick={() => { soundEngine.play("warp_drive"); onOpenRealityForks?.(); }} small className="hover:!text-purple-300">
                         <GitFork className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-purple-400" />
                     </IconBtn>
-                    <IconBtn title="Future Messages (Scheduled Delivery)" onClick={() => onOpenFutureMessages?.()} small className="hover:!text-amber-300">
+                    <IconBtn title="Future Messages (Scheduled Delivery)" onClick={() => { soundEngine.play("quantum_ping"); onOpenFutureMessages?.(); }} small className="hover:!text-amber-300">
                         <Clock className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-400" />
                     </IconBtn>
 
@@ -592,6 +620,21 @@ const ChatHeader = React.memo(({
                                 <Ghost className="w-3.5 h-3.5" />
                                 <span className="hidden md:inline">Vanish</span>
                             </button>
+                            {(!isBotUser && !isGroup && (isFriend || isVaultProtected)) && (
+                                <button
+                                    type="button"
+                                    onClick={() => setShowVaultChatModal(true)}
+                                    title={isVaultProtected ? "Chat locked in Ghost Vault (Hidden in Decoy Mode). Click to change." : "Lock Chat in Ghost Vault (Hide in Decoy Mode)"}
+                                    className={`flex items-center gap-1 px-2.5 py-1 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+                                        isVaultProtected
+                                            ? "bg-purple-600/30 border border-purple-400 text-purple-200 shadow-[0_0_12px_rgba(168,85,247,0.4)] animate-pulse font-bold"
+                                            : "bg-white/5 hover:bg-white/10 text-white/70 hover:text-white border border-white/10"
+                                    }`}
+                                >
+                                    <Lock className="w-3.5 h-3.5 text-purple-400" />
+                                    <span className="hidden md:inline">{isVaultProtected ? "Vault: Locked" : "Ghost Vault"}</span>
+                                </button>
+                            )}
                         </>
                     ) : isBotUser ? (
                         <>
@@ -723,6 +766,14 @@ const ChatHeader = React.memo(({
                 </IconBtn>
             </div>
 
+            <VaultChatModal
+                isOpen={showVaultChatModal}
+                onClose={() => setShowVaultChatModal(false)}
+                user={user}
+                isFriend={isFriend}
+                onStatusChanged={(isLocked) => setIsVaultProtected(isLocked)}
+            />
+
             <PersonalizeModal
                 isOpen={showPersonalizeModal}
                 onClose={() => setShowPersonalizeModal(false)}
@@ -784,6 +835,7 @@ ChatHeader.propTypes = {
     onToggleSelectionMode: PropTypes.func,
     onCancelSelection: PropTypes.func,
     onStartCall: PropTypes.func,
+    isFriend: PropTypes.bool,
     onStartGhostChat: PropTypes.func,
     onDeleteSelected: PropTypes.func,
     onReloadChat: PropTypes.func,

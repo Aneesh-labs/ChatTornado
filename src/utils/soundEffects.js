@@ -71,6 +71,23 @@ class SoundEngine {
                 case "woof":
                     this.playWoof(ctx);
                     break;
+                case "cyber_chirp":
+                case "holo":
+                case "hologram":
+                    this.playCyberChirp(ctx);
+                    break;
+                case "warp_drive":
+                case "hyperspace":
+                    this.playWarpDrive(ctx);
+                    break;
+                case "quantum_ping":
+                case "radar":
+                    this.playQuantumPing(ctx);
+                    break;
+                case "data_scan":
+                case "matrix":
+                    this.playDataScan(ctx);
+                    break;
                 default:
                     this.playChime(ctx);
             }
@@ -277,6 +294,66 @@ class SoundEngine {
         osc.start(ctx.currentTime);
         osc.stop(ctx.currentTime + 0.17);
     }
+
+    playCyberChirp(ctx) {
+        const freqs = [1200, 1800, 2400];
+        freqs.forEach((freq, idx) => {
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.type = "sine";
+            osc.frequency.setValueAtTime(freq, ctx.currentTime + idx * 0.04);
+            gain.gain.setValueAtTime(0.12, ctx.currentTime + idx * 0.04);
+            gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + idx * 0.04 + 0.12);
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            osc.start(ctx.currentTime + idx * 0.04);
+            osc.stop(ctx.currentTime + idx * 0.04 + 0.13);
+        });
+    }
+
+    playWarpDrive(ctx) {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = "sawtooth";
+        osc.frequency.setValueAtTime(80, ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(1400, ctx.currentTime + 0.35);
+        gain.gain.setValueAtTime(0.05, ctx.currentTime);
+        gain.gain.linearRampToValueAtTime(0.2, ctx.currentTime + 0.2);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.38);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(ctx.currentTime);
+        osc.stop(ctx.currentTime + 0.4);
+    }
+
+    playQuantumPing(ctx) {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = "sine";
+        osc.frequency.setValueAtTime(2093, ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(523.25, ctx.currentTime + 0.25);
+        gain.gain.setValueAtTime(0.2, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.3);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(ctx.currentTime);
+        osc.stop(ctx.currentTime + 0.32);
+    }
+
+    playDataScan(ctx) {
+        [0, 0.03, 0.06, 0.09, 0.12].forEach((time, i) => {
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.type = "square";
+            osc.frequency.setValueAtTime(1200 + (i % 2 === 0 ? 400 : -200), ctx.currentTime + time);
+            gain.gain.setValueAtTime(0.06, ctx.currentTime + time);
+            gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + time + 0.04);
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            osc.start(ctx.currentTime + time);
+            osc.stop(ctx.currentTime + time + 0.05);
+        });
+    }
 }
 
 export const soundEngine = new SoundEngine();
@@ -296,4 +373,8 @@ export const SOUND_EFFECTS_LIST = [
     { id: "win", name: "Winner Fanfare", emoji: "🏆", desc: "Trophy sound" },
     { id: "meow", name: "Kitty Meow", emoji: "🐱", desc: "Cute cat" },
     { id: "woof", name: "Puppy Woof", emoji: "🐶", desc: "Friendly dog" },
+    { id: "cyber_chirp", name: "Cyber Chirp", emoji: "📡", desc: "Sci-fi holo chime" },
+    { id: "warp_drive", name: "Warp Drive", emoji: "🌀", desc: "Hyperspace jump" },
+    { id: "quantum_ping", name: "Quantum Ping", emoji: "⚡", desc: "Lattice telemetry ping" },
+    { id: "data_scan", name: "Matrix Scan", emoji: "🧬", desc: "Digital neural scanner" },
 ];

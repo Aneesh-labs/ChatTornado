@@ -48,6 +48,8 @@ import VanishModeOverlay from "./messages/VanishModeOverlay";
 import EphemeralStatusModal from "./messages/EphemeralStatusModal";
 import { getLocalStatusStory } from "../../Services/db";
 import { recordMessageSent } from "../../Services/streakService";
+import { soundEngine } from "../../utils/soundEffects";
+import { isDecoyMode, isVaultChat, getVaultChatIds } from "../../Services/vaultService";
 import { VOICE_FILTERS, applyVoiceFilter } from "../../Services/audioVoiceFilters";
 import { cacheOfflineMessages, getOfflineMessages, queueOfflineMessage, flushOfflineQueue } from "../../Services/db";
 
@@ -245,20 +247,28 @@ const Messages = () => {
     }, [onlineUserIds]);
 
     const enrichedUsers = useMemo(() => {
-        return users.map((u) => ({
+        const base = users.map((u) => ({
             ...u,
             avatar: u.avatar || avatarFor(u.id),
             status: isUserOnline(u) ? "online" : "offline",
         }));
-    }, [users, isUserOnline]);
+        if (decoyActive) {
+            return base.filter((u) => !isVaultChat(u.id));
+        }
+        return base;
+    }, [users, isUserOnline, decoyActive, vaultChatIds]);
 
     const enrichedActiveUsers = useMemo(() => {
-        return activeUsers.map((u) => ({
+        const base = activeUsers.map((u) => ({
             ...u,
             avatar: u.avatar || avatarFor(u.id),
             status: isUserOnline(u) ? "online" : "offline",
         }));
-    }, [activeUsers, isUserOnline]);
+        if (decoyActive) {
+            return base.filter((u) => !isVaultChat(u.id));
+        }
+        return base;
+    }, [activeUsers, isUserOnline, decoyActive, vaultChatIds]);
 
 
     const enrichedSelected = useMemo(() => {
@@ -267,6 +277,17 @@ const Messages = () => {
         const found = enrichedActiveUsers.find((u) => areIdsEqual(u.id, selectedUser.id)) || enrichedUsers.find((u) => areIdsEqual(u.id, selectedUser.id));
         return found || selectedUser;
     }, [enrichedActiveUsers, enrichedUsers, selectedUser]);
+
+    const isCurrentSelectedFriend = useMemo(() => {
+        if (!enrichedSelected || enrichedSelected.is_bot || enrichedSelected.is_group || enrichedSelected.username === "VORTEX-9") {
+            return false;
+        }
+        const conn = connectionStatuses && (connectionStatuses[enrichedSelected.id] || connectionStatuses[String(enrichedSelected.id)] || connectionStatuses[Number(enrichedSelected.id)]);
+        if (conn?.status === "accepted") return true;
+        if (enrichedSelected.is_friend || enrichedSelected.is_connected) return true;
+        if (activeUsers && activeUsers.some((u) => areIdsEqual(u.id, enrichedSelected.id))) return true;
+        return false;
+    }, [enrichedSelected, connectionStatuses, activeUsers]);
 
     const groupedMessages = useMemo(() => {
         const result = [];
@@ -967,10 +988,15 @@ const Messages = () => {
                 setConnectionStatuses(resStatuses.data || {});
 
                 setSelectedUser((prev) => {
-                    if (!prev && active.length > 0) return active[0];
+                    const decoy = isDecoyMode();
+                    const availableActive = decoy ? active.filter((u) => !isVaultChat(u.id)) : active;
+                    if (!prev && availableActive.length > 0) return availableActive[0];
                     if (!prev) return null;
-                    const stillExists = active.find((u) => u.id === prev.id);
-                    return stillExists ? prev : (active[0] || null);
+                    if (decoy && isVaultChat(prev.id)) {
+                        return availableActive[0] || null;
+                    }
+                    const stillExists = availableActive.find((u) => u.id === prev.id);
+                    return stillExists ? prev : (availableActive[0] || null);
                 });
             } catch (err) {
                 if (err.response?.status === 401) {
@@ -2007,6 +2033,11 @@ const Messages = () => {
     }, []);
 
     const selectUser = useCallback((user) => {
+        if (!user) return;
+        if (isDecoyMode() && isVaultChat(user.id)) {
+            setCallNotice("🔒 Protected conversation is hidden in Decoy Mode.");
+            return;
+        }
         setSelectedUser(user);
         setActiveBranch(null);
         setSelectionMode(false);
@@ -2155,6 +2186,55 @@ const Messages = () => {
 
     const showSidebar = !isMobile || mobileView === "list";
 
+    // Decoy Mode & Ghost Vault Real-Time Synchronization
+    const [decoyActive, setDecoyActive] = useState(() => isDecoyMode());
+    const [vaultChatIds, setVaultChatIds] = useState(() => getVaultChatIds());
+
+    useEffect(() => {
+        const handleVaultToggle = (e) => {
+            const isDecoy = Boolean(e.detail?.decoy);
+            setDecoyActive(isDecoy);
+            if (isDecoy) {
+                // Instantly switch away ONLY from secret vault chats if currently opened
+                if (selectedUserRef.current && isVaultChat(selectedUserRef.current.id)) {
+                    const safeFallback = activeUsers.find((u) => !isVaultChat(u.id)) || 
+                                         users.find((u) => !isVaultChat(u.id));
+                    setSelectedUser(safeFallback || null);
+                    setCallNotice("🚨 Decoy Mode Active: Secret vault chats concealed.");
+                }
+            }
+        };
+        const handleVaultChatsChange = () => {
+            setVaultChatIds(getVaultChatIds());
+        };
+        window.addEventListener("vortex_vault_toggled", handleVaultToggle);
+        window.addEventListener("vortex_vault_chats_changed", handleVaultChatsChange);
+        return () => {
+            window.removeEventListener("vortex_vault_toggled", handleVaultToggle);
+            window.removeEventListener("vortex_vault_chats_changed", handleVaultChatsChange);
+        };
+    }, [activeUsers, users]);
+
+    // Sci-Fi Holographic HUD Telemetry & Scanline Filter
+    const [holoScanlines, setHoloScanlines] = useState(() => localStorage.getItem("tornado_holo_scanlines") === "true");
+    const [quantumPing, setQuantumPing] = useState(14);
+
+    useEffect(() => {
+        const interval = setInterval(() => {
+            setQuantumPing(Math.floor(11 + Math.random() * 8));
+        }, 3500);
+        return () => clearInterval(interval);
+    }, []);
+
+    const toggleHoloScanlines = useCallback(() => {
+        soundEngine.play("cyber_chirp");
+        setHoloScanlines((prev) => {
+            const next = !prev;
+            localStorage.setItem("tornado_holo_scanlines", String(next));
+            return next;
+        });
+    }, []);
+
     // Security status color mapping
     const statusColors = {
         SECURE: "#22c55e",
@@ -2196,16 +2276,36 @@ const Messages = () => {
 
                     <WallpaperLayer wallpaper={wallpaper} isLowPerformance={isLowPerformance} />
 
-                    {/* Security Status Indicator */}
+                    {/* Sci-Fi Hologram Scanlines Overlay */}
+                    {holoScanlines && (
+                        <div className="pointer-events-none fixed inset-0 z-[55] cyber-scanlines opacity-30 mix-blend-screen" />
+                    )}
+
+                    {/* Quantum Lattice Telemetry & Cyber HUD Widget */}
                     {!isMobile && (
-                        <div className="hidden lg:flex fixed top-3 right-3 z-[60] items-center gap-2 rounded-full border border-white/10 bg-black/60 px-3 py-1.5 backdrop-blur-xl">
+                        <div className="hidden lg:flex fixed top-3 right-3 z-[60] items-center gap-2 rounded-full border border-cyan-500/30 bg-black/80 px-3 py-1.5 backdrop-blur-2xl shadow-[0_0_24px_rgba(6,182,212,0.25)] group transition-all hover:border-cyan-400">
                             <span className="relative flex h-2 w-2">
-                                <span className="absolute inline-flex h-full w-full animate-ping rounded-full opacity-60" style={{ background: statusColors[securityStatus] || "#ef4444" }} />
-                                <span className="relative inline-flex h-2 w-2 rounded-full" style={{ background: statusColors[securityStatus] || "#ef4444" }} />
+                                <span className="absolute inline-flex h-full w-full animate-ping rounded-full opacity-75" style={{ background: statusColors[securityStatus] || "#22c55e" }} />
+                                <span className="relative inline-flex h-2 w-2 rounded-full shadow-[0_0_8px_rgba(34,197,94,0.9)]" style={{ background: statusColors[securityStatus] || "#22c55e" }} />
                             </span>
-                            <span className="text-[9px] font-mono font-bold uppercase tracking-widest text-white/50">
+                            <span className="text-[10px] font-mono font-black uppercase tracking-wider text-cyan-300 drop-shadow-[0_0_8px_rgba(34,211,238,0.5)]">
                                 {securityStatus}
                             </span>
+                            <span className="text-[9px] font-mono text-cyan-400/70 border-l border-white/15 pl-1.5">
+                                {quantumPing}ms
+                            </span>
+                            <button
+                                type="button"
+                                onClick={toggleHoloScanlines}
+                                title={holoScanlines ? "Disable Holographic HUD Scanlines" : "Enable Sci-Fi Holographic HUD Scanlines"}
+                                className={`text-[8.5px] font-mono px-2 py-0.5 rounded-full border transition-all cursor-pointer ${
+                                    holoScanlines 
+                                        ? "bg-cyan-500/25 border-cyan-400 text-cyan-200 shadow-[0_0_12px_rgba(6,182,212,0.6)] font-bold animate-pulse" 
+                                        : "bg-white/5 border-white/10 text-white/50 hover:text-cyan-300 hover:border-cyan-500/40"
+                                }`}
+                            >
+                                HOLO {holoScanlines ? "ON" : "OFF"}
+                            </button>
                         </div>
                     )}
 
@@ -2311,6 +2411,7 @@ const Messages = () => {
                                 onLiftIncomingCall={liftIncomingCall}
                                 onDeclineIncomingCall={declineIncomingCall}
                                 isAlreadyInCall={Boolean(call && (call.status === "connected" || call.status === "calling"))}
+                                isFriend={isCurrentSelectedFriend}
                             />
                         ) : (
                             <EmptyState onOpenSearch={handleOpenSearch} />
@@ -2334,6 +2435,7 @@ const Messages = () => {
                         isOpen={rightPanelOpen}
                         onClose={handleCloseRightPanel}
                         onClearChat={clearConversation}
+                        isFriend={isCurrentSelectedFriend}
                     />
 
                     {/* Integrated Next-Gen System Overlays */}

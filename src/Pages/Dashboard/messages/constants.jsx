@@ -83,6 +83,25 @@ export const THEMES = {
             them: "bg-yellow-400/[0.03] border-yellow-400/[0.08]",
         },
     },
+    quantum: {
+        name: "Quantum Sci-Fi",
+        bg: "from-[#030712] via-[#080e21] to-[#030712]",
+        sidebar: "bg-[#060b18]/95",
+        chat: "bg-[#030712]/75",
+        glass: "bg-cyan-500/[0.03] border-cyan-400/[0.15]",
+        glassHover: "hover:bg-cyan-500/[0.07] hover:border-cyan-400/[0.3]",
+        accent: "from-cyan-400 via-sky-500 to-indigo-500",
+        accentSolid: "bg-cyan-400",
+        accentText: "text-cyan-300",
+        text: "text-white",
+        subtext: "text-cyan-200/50",
+        border: "border-cyan-500/[0.18]",
+        input: "bg-cyan-950/20 border-cyan-400/20",
+        bubble: {
+            me: "bg-gradient-to-br from-cyan-600/40 via-sky-600/30 to-indigo-600/25 border-cyan-400/30 shadow-[0_0_15px_rgba(6,182,212,0.15)]",
+            them: "bg-slate-900/60 border-cyan-500/15 shadow-[inset_0_0_12px_rgba(6,182,212,0.05)]",
+        },
+    },
 };
 
 export const WALLPAPERS = {
@@ -129,6 +148,33 @@ export const WALLPAPERS = {
                     backgroundSize: "200px 200px",
                 }}
             />
+        )),
+    },
+    quantum_lattice: {
+        name: "Quantum Lattice",
+        component: React.memo(() => (
+            <div className="absolute inset-0 overflow-hidden pointer-events-none z-0">
+                <div 
+                    className="absolute inset-0 opacity-[0.07]"
+                    style={{
+                        backgroundImage: `linear-gradient(rgba(56, 189, 248, 0.4) 1px, transparent 1px), linear-gradient(90deg, rgba(56, 189, 248, 0.4) 1px, transparent 1px)`,
+                        backgroundSize: "36px 36px",
+                    }}
+                />
+                <motion.div
+                    className="absolute -top-1/4 left-1/4 w-[700px] h-[700px] rounded-full opacity-15"
+                    style={{ background: "radial-gradient(circle, #06b6d4 0%, transparent 70%)" }}
+                    animate={{ scale: [1, 1.15, 1], rotate: [0, 90, 0] }}
+                    transition={{ duration: 18, repeat: Infinity, ease: "easeInOut" }}
+                />
+                <motion.div
+                    className="absolute -bottom-1/4 right-1/4 w-[600px] h-[600px] rounded-full opacity-15"
+                    style={{ background: "radial-gradient(circle, #8b5cf6 0%, transparent 70%)" }}
+                    animate={{ scale: [1.1, 1, 1.1], rotate: [0, -90, 0] }}
+                    transition={{ duration: 22, repeat: Infinity, ease: "easeInOut" }}
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-black/60" />
+            </div>
         )),
     },
 };

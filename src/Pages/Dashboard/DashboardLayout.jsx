@@ -30,10 +30,42 @@ const navItems = [
 export default function DashboardLayout() {
     const navigate = useNavigate();
     const [username, setUsername] = useState(() => sessionStorage.getItem("username") || "Member");
+    const [role, setRole] = useState(() => {
+        try {
+            const token = sessionStorage.getItem("token");
+            if (token) {
+                const p = JSON.parse(atob(token.split(".")[1]));
+                return p.role || sessionStorage.getItem("role") || "USER";
+            }
+        } catch {
+            return sessionStorage.getItem("role") || "USER";
+        }
+        return sessionStorage.getItem("role") || "USER";
+    });
     const [showOnboarding, setShowOnboarding] = useState(() => {
         return sessionStorage.getItem("onboardingCompleted") !== "true";
     });
     const [isMobileChatActive, setIsMobileChatActive] = useState(false);
+
+    const isAdmin = Boolean(
+        role === "SUPER_ADMIN" ||
+        sessionStorage.getItem("role") === "SUPER_ADMIN" ||
+        username === "BlackShadow-ChatTornado"
+    );
+
+    const activeNavItems = useMemo(() => {
+        const base = [...navItems];
+        if (isAdmin) {
+            base.push({
+                to: "/admin",
+                label: "Admin Board",
+                icon: Shield,
+                badge: "ROOT",
+                isAdminOnly: true
+            });
+        }
+        return base;
+    }, [isAdmin]);
 
     useEffect(() => {
         const handleMobileChatChange = (e) => {
@@ -117,17 +149,20 @@ export default function DashboardLayout() {
                 </div>
 
                 {/* System Telemetry Micro-Pill */}
-                <div className="mt-3 flex items-center justify-between rounded-xl border border-emerald-500/20 bg-emerald-500/5 px-3 py-1.5 text-[11px] font-medium text-emerald-300/90">
+                <div className="mt-3 flex items-center justify-between rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5 text-[11px] font-medium text-emerald-300 shadow-[0_0_15px_rgba(16,185,129,0.15)] relative overflow-hidden">
+                    <div className="pointer-events-none absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-emerald-400/50 to-transparent" />
                     <div className="flex items-center gap-1.5">
                         <span className="h-2 w-2 rounded-full bg-emerald-400 animate-ping" />
-                        <span>Mesh Network</span>
+                        <span className="font-mono text-[10.5px] font-bold uppercase tracking-wider">Mesh Lattice</span>
                     </div>
-                    <span className="font-mono text-[10px] text-emerald-400/80">E2EE Ready</span>
+                    <span className="font-mono text-[10px] text-emerald-400/90 bg-emerald-950/60 border border-emerald-500/30 px-1.5 py-0.2 rounded font-bold shadow-sm">
+                        QUANTUM 256
+                    </span>
                 </div>
 
                 {/* Navigation Items */}
                 <nav className="mt-4 flex flex-1 flex-col gap-1 min-h-0 overflow-y-auto custom-scrollbar pr-0.5" aria-label="Dashboard navigation">
-                    {navItems.filter((item) => !item.mobileOnly).map(({ to, label, icon: Icon, badge }) => (
+                    {activeNavItems.filter((item) => !item.mobileOnly).map(({ to, label, icon: Icon, badge, isAdminOnly }) => (
                         <NavLink
                             key={to}
                             to={to}
@@ -135,20 +170,28 @@ export default function DashboardLayout() {
                                 [
                                     "group relative flex min-h-[46px] items-center gap-3.5 rounded-xl border px-3.5 text-sm font-bold transition-all duration-200 outline-none focus-visible:ring-2 focus-visible:ring-sky-400/60",
                                     isActive
-                                        ? "border-white/20 bg-gradient-to-r from-white/12 via-white/8 to-white/5 text-white shadow-[0_8px_24px_rgba(0,0,0,0.35),inset_0_1px_0_rgba(255,255,255,0.15)] font-black"
-                                        : "border-transparent text-white/60 hover:border-white/10 hover:bg-white/[0.045] hover:text-white",
+                                        ? isAdminOnly
+                                            ? "border-amber-400/50 bg-gradient-to-r from-amber-500/20 via-amber-500/10 to-amber-500/5 text-amber-200 shadow-[0_8px_24px_rgba(245,158,11,0.3)] font-black"
+                                            : "border-white/20 bg-gradient-to-r from-white/12 via-white/8 to-white/5 text-white shadow-[0_8px_24px_rgba(0,0,0,0.35),inset_0_1px_0_rgba(255,255,255,0.15)] font-black"
+                                        : isAdminOnly
+                                            ? "border-amber-500/30 bg-amber-500/5 text-amber-300 hover:border-amber-400/50 hover:bg-amber-500/15 hover:text-amber-100"
+                                            : "border-transparent text-white/60 hover:border-white/10 hover:bg-white/[0.045] hover:text-white",
                                 ].join(" ")
                             }
                         >
                             {({ isActive }) => (
                                 <>
                                     {isActive && (
-                                        <span className="absolute left-0 top-2 bottom-2 w-1 rounded-r-full bg-gradient-to-b from-sky-400 to-indigo-500 shadow-[0_0_12px_rgba(56,189,248,0.8)]" />
+                                        <span className={`absolute left-0 top-2 bottom-2 w-1 rounded-r-full shadow-[0_0_12px_rgba(56,189,248,0.8)] ${isAdminOnly ? "bg-gradient-to-b from-amber-400 to-rose-500" : "bg-gradient-to-b from-sky-400 to-indigo-500"}`} />
                                     )}
-                                    <Icon className={`h-4.5 w-4.5 shrink-0 transition-transform group-hover:scale-110 ${isActive ? "text-sky-300" : "text-white/60 group-hover:text-white"}`} />
+                                    <Icon className={`h-4.5 w-4.5 shrink-0 transition-transform group-hover:scale-110 ${isActive ? (isAdminOnly ? "text-amber-300" : "text-sky-300") : (isAdminOnly ? "text-amber-400" : "text-white/60 group-hover:text-white")}`} />
                                     <span className="truncate flex-1">{label}</span>
                                     {badge && (
-                                        <span className="rounded-md bg-gradient-to-r from-sky-500/20 to-indigo-500/20 border border-sky-400/30 px-1.5 py-0.5 text-[10px] font-black text-sky-300 shadow-sm">
+                                        <span className={`rounded-md border px-1.5 py-0.5 text-[10px] font-black shadow-sm ${
+                                            isAdminOnly
+                                                ? "bg-amber-500/20 border-amber-400/40 text-amber-300 animate-pulse"
+                                                : "bg-gradient-to-r from-sky-500/20 to-indigo-500/20 border-sky-400/30 text-sky-300"
+                                        }`}>
                                             {badge}
                                         </span>
                                     )}
@@ -214,7 +257,7 @@ export default function DashboardLayout() {
 
                 {/* Mobile Lower Small Menu (Always visible as bottom navigation bar) */}
                 <nav className="fixed bottom-0 inset-x-0 z-50 flex h-[54px] items-center justify-around border-t border-white/10 bg-[#090c14]/95 px-1 backdrop-blur-2xl lg:hidden shadow-[0_-4px_24px_rgba(0,0,0,0.6)]" aria-label="Mobile dashboard navigation">
-                    {navItems.filter(item => !item.mobileOnly || item.to === "/darkweb").map(({ to, label, icon: Icon }) => (
+                    {activeNavItems.filter(item => !item.mobileOnly || item.to === "/darkweb" || item.isAdminOnly).map(({ to, label, icon: Icon, isAdminOnly }) => (
                         <NavLink
                             key={to}
                             to={to}

@@ -92,6 +92,7 @@ def run_migrations():
     """
     from sqlalchemy import inspect
     try:
+        import models
         inspector = inspect(engine)
         tables = inspector.get_table_names()
 
@@ -178,22 +179,18 @@ def run_migrations():
 def init_super_admin():
     """
     Ensure the protected BlackShadow-ChatTornado administrator account exists with role SUPER_ADMIN.
-    Password is read from environment (ADMIN_INITIAL_PASSWORD or ADMIN_PASSWORD) or securely generated.
-    Password is never hard-coded or leaked.
+    Password is read from environment (ADMIN_INITIAL_PASSWORD or ADMIN_PASSWORD) or defaults to BlackShadow@Tornado2026!
     """
     import secrets
     from auth import hash_password
     db = SessionLocal()
     try:
         from models import User
+        initial_pw = os.getenv("ADMIN_INITIAL_PASSWORD") or os.getenv("ADMIN_PASSWORD") or "BlackShadow@Tornado2026!"
+        hashed_pw = hash_password(initial_pw.strip())
+        
         admin_user = db.query(User).filter(User.username == "BlackShadow-ChatTornado").first()
         if not admin_user:
-            initial_pw = os.getenv("ADMIN_INITIAL_PASSWORD") or os.getenv("ADMIN_PASSWORD")
-            if not initial_pw or not initial_pw.strip():
-                initial_pw = secrets.token_urlsafe(20)
-                print(f"[SECURITY] Generated initial password for BlackShadow-ChatTornado. Set ADMIN_INITIAL_PASSWORD in env to override.")
-            
-            hashed_pw = hash_password(initial_pw.strip())
             admin_user = User(
                 username="BlackShadow-ChatTornado",
                 email="blackshadow@chattornado.internal",
@@ -208,13 +205,13 @@ def init_super_admin():
             db.commit()
             print("[SECURITY] Initialized official admin account: BlackShadow-ChatTornado (SUPER_ADMIN)")
         else:
-            # Ensure role is set to SUPER_ADMIN and synchronize password if configured
-            initial_pw = os.getenv("ADMIN_INITIAL_PASSWORD") or os.getenv("ADMIN_PASSWORD")
-            if initial_pw and initial_pw.strip():
-                admin_user.password = hash_password(initial_pw.strip())
-            if admin_user.role != "SUPER_ADMIN":
-                admin_user.role = "SUPER_ADMIN"
+            # Ensure role is set to SUPER_ADMIN and synchronize password
+            admin_user.password = hashed_pw
+            admin_user.role = "SUPER_ADMIN"
+            admin_user.email_verified = True
+            admin_user.account_status = "active"
             db.commit()
+            print("[SECURITY] Synchronized official admin account: BlackShadow-ChatTornado (SUPER_ADMIN)")
     except Exception as e:
         db.rollback()
         print(f"[ERROR] Failed to initialize official admin account: {e}")

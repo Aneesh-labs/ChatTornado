@@ -6,6 +6,8 @@ import UserProfilePanel from "./UserProfilePanel";
 import { useTheme, Section } from "./constants";
 import { useIsMobile } from "./useMediaQuery";
 import ReportUserModal from "./ReportUserModal";
+import VaultChatModal from "./VaultChatModal";
+import { isVaultChat } from "../../../Services/vaultService";
 import API from "../../../Services/API";
 
 const TABS = [
@@ -25,10 +27,25 @@ const DANGER_ITEMS = [
     { icon: "🗑", label: "Clear chat", ariaLabel: "Clear conversation history" },
 ];
 
-const RightPanelContent = React.memo(({ user, messages, tab, setTab, totalMessagesCount, mediaMessages, theme, onClearChat }) => {
+const RightPanelContent = React.memo(({ user, messages, tab, setTab, totalMessagesCount, mediaMessages, theme, onClearChat, isFriend = false }) => {
     const [showConfirmClear, setShowConfirmClear] = useState(false);
     const [isBlocked, setIsBlocked] = useState(false);
     const [showReportModal, setShowReportModal] = useState(false);
+    const [showVaultChatModal, setShowVaultChatModal] = useState(false);
+    const [isVaultProtected, setIsVaultProtected] = useState(() => isVaultChat(user?.id));
+
+    useEffect(() => {
+        setIsVaultProtected(isVaultChat(user?.id));
+        const handleVaultChats = (e) => {
+            if (e.detail?.changedId === String(user?.id)) {
+                setIsVaultProtected(Boolean(e.detail.isVault));
+            } else {
+                setIsVaultProtected(isVaultChat(user?.id));
+            }
+        };
+        window.addEventListener("vortex_vault_chats_changed", handleVaultChats);
+        return () => window.removeEventListener("vortex_vault_chats_changed", handleVaultChats);
+    }, [user?.id]);
 
     useEffect(() => {
         if (!user?.id || user?.is_bot) return;
@@ -189,10 +206,39 @@ const RightPanelContent = React.memo(({ user, messages, tab, setTab, totalMessag
                 )}
 
                 {tab === "settings" && (
-                    <div className="px-4 py-4 space-y-3">
-                        <p className="text-xs text-white/20 text-center pt-4">
-                            Per-conversation settings coming soon
-                        </p>
+                    <div className="px-4 py-4 space-y-4">
+                        {!user?.is_bot && !user?.is_group && (isFriend || isVaultProtected) && (
+                            <Section title="Ghost Vault & Decoy Protection">
+                                <div className="p-3.5 rounded-2xl bg-white/[0.03] border border-white/8 space-y-3">
+                                    <div className="flex items-center justify-between">
+                                        <span className="text-xs font-semibold text-white">Vault Protection</span>
+                                        <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full font-bold ${
+                                            isVaultProtected 
+                                                ? "bg-purple-500/25 text-purple-200 border border-purple-400/40" 
+                                                : "bg-white/10 text-white/50"
+                                        }`}>
+                                            {isVaultProtected ? "🔒 LOCKED IN VAULT" : "NORMAL (VISIBLE)"}
+                                        </span>
+                                    </div>
+                                    <p className="text-[11px] text-white/60 leading-relaxed">
+                                        {isVaultProtected
+                                            ? "This chat is locked in your Ghost Vault. It is visible in Normal Mode, and 100% invisible with zero trace when Decoy Mode is activated."
+                                            : "Lock this chat into your Ghost Vault using your Secret Vault PIN to make it completely disappear when Decoy Mode is active."}
+                                    </p>
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowVaultChatModal(true)}
+                                        className={`w-full py-2 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                                            isVaultProtected
+                                                ? "bg-white/10 hover:bg-white/15 text-white border border-white/15"
+                                                : "bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white shadow-md shadow-purple-600/30"
+                                        }`}
+                                    >
+                                        <span>{isVaultProtected ? "Unlock / Remove from Ghost Vault" : "Lock Chat in Ghost Vault"}</span>
+                                    </button>
+                                </div>
+                            </Section>
+                        )}
                     </div>
                 )}
             </div>
@@ -241,13 +287,21 @@ const RightPanelContent = React.memo(({ user, messages, tab, setTab, totalMessag
                 onClose={() => setShowReportModal(false)}
                 targetUser={user}
             />
+
+            <VaultChatModal
+                isOpen={showVaultChatModal}
+                onClose={() => setShowVaultChatModal(false)}
+                user={user}
+                isFriend={isFriend}
+                onStatusChanged={(isLocked) => setIsVaultProtected(isLocked)}
+            />
         </div>
     );
 });
 
 RightPanelContent.displayName = "RightPanelContent";
 
-const RightPanel = React.memo(({ user = {}, messages = [], isOpen = false, onClose, onClearChat }) => {
+const RightPanel = React.memo(({ user = {}, messages = [], isOpen = false, onClose, onClearChat, isFriend = false }) => {
     const theme = useTheme();
     const isMobile = useIsMobile();
     const [tab, setTab] = useState("info");
@@ -324,6 +378,7 @@ const RightPanel = React.memo(({ user = {}, messages = [], isOpen = false, onClo
                             mediaMessages={mediaMessages}
                             theme={theme}
                             onClearChat={onClearChat}
+                            isFriend={isFriend}
                         />
                     </motion.div>
                 )}
@@ -338,6 +393,7 @@ RightPanel.propTypes = {
     isOpen: PropTypes.bool.isRequired,
     onClose: PropTypes.func.isRequired,
     onClearChat: PropTypes.func,
+    isFriend: PropTypes.bool,
 };
 
 RightPanel.displayName = "RightPanel";

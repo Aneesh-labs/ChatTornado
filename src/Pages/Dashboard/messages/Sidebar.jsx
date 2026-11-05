@@ -9,7 +9,7 @@ import UserStatusModal from "./UserStatusModal";
 import BubbleNotesBar from "./BubbleNotesBar";
 import GhostVaultModal from "./GhostVaultModal";
 import { getStreak } from "../../../Services/streakService";
-import { isVaultUnlocked, isDecoyMode } from "../../../Services/vaultService";
+import { isVaultUnlocked, isDecoyMode, isVaultChat, getVaultChatIds } from "../../../Services/vaultService";
 
 const FILTER_TABS = [
     ["all", "All"],
@@ -128,6 +128,11 @@ export const ConversationCard = React.memo(({
                     {user?.is_bot && (
                         <span className="text-[10px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded-md bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 flex items-center gap-1 shadow-[0_0_8px_rgba(6,182,212,0.3)]">
                             ⚡ AI
+                        </span>
+                    )}
+                    {isVaultChat(user?.id) && !isGlobal && (
+                        <span title="Locked in Ghost Vault (Hidden in Decoy Mode)" className="text-[10px] text-purple-400 drop-shadow-[0_0_6px_rgba(168,85,247,0.5)] flex-shrink-0 font-bold">
+                            🔒
                         </span>
                     )}
                     {pinned && !isGlobal && !user?.is_bot && (
@@ -400,11 +405,16 @@ const Sidebar = React.memo(({
         };
         window.addEventListener("keydown", handleGlobalKeyDown);
         window.addEventListener("sessionStorageUpdate", handleStorageUpdate);
+        const handleVaultChats = () => {
+            setVaultState(prev => ({ ...prev, version: Date.now() }));
+        };
         window.addEventListener("vortex_vault_toggled", handleVaultToggle);
+        window.addEventListener("vortex_vault_chats_changed", handleVaultChats);
         return () => {
             window.removeEventListener("keydown", handleGlobalKeyDown);
             window.removeEventListener("sessionStorageUpdate", handleStorageUpdate);
             window.removeEventListener("vortex_vault_toggled", handleVaultToggle);
+            window.removeEventListener("vortex_vault_chats_changed", handleVaultChats);
         };
     }, []);
 
@@ -431,19 +441,16 @@ const Sidebar = React.memo(({
         const sourceList = mainTab === "chats" ? activeUsers : users;
         if (!Array.isArray(sourceList)) return [];
 
-        if (vaultState.decoy) {
-            // Decoy mode: show only innocent bot and safe decoy placeholder
-            const safeDecoyList = sourceList.filter((u) => u.is_bot || u.username === "VORTEX-9");
-            return safeDecoyList.length > 0
-                ? safeDecoyList
-                : [{ id: "decoy-bot", username: "VORTEX News & Daily Digest", is_bot: true, status: "online" }];
-        }
+        // In Decoy Mode: conceal all vault-locked chats across both Chats and Global tabs
+        const filteredSource = vaultState.decoy
+            ? sourceList.filter((u) => !isVaultChat(u.id))
+            : sourceList;
 
         const botList = [];
         const pinnedList = [];
         const unpinnedList = [];
 
-        sourceList.forEach((user) => {
+        filteredSource.forEach((user) => {
             if (!user || typeof user.id === "undefined") return;
 
             const isBot = Boolean(user.is_bot || user.username === "VORTEX-9");
@@ -464,8 +471,12 @@ const Sidebar = React.memo(({
             }
         });
 
-        return [...botList, ...pinnedList, ...unpinnedList];
-    }, [users, activeUsers, mainTab, safePinnedChats, safeUnreadCounts, filter]);
+        const result = [...botList, ...pinnedList, ...unpinnedList];
+        if (vaultState.decoy && result.length === 0 && mainTab === "chats") {
+            return [{ id: "decoy-bot", username: "VORTEX News & Daily Digest", is_bot: true, status: "online" }];
+        }
+        return result;
+    }, [users, activeUsers, mainTab, safePinnedChats, safeUnreadCounts, filter, vaultState.decoy, vaultState.version]);
 
     const totalUnread = useMemo(() => {
         return Object.values(safeUnreadCounts).reduce((acc, curr) => acc + (Number(curr) || 0), 0);
@@ -484,10 +495,10 @@ const Sidebar = React.memo(({
     }, [users, myUserId, currentStatus, currentCustomStatus]);
 
     const displayedCount = mainTab === "chats" 
-        ? (activeUsers?.length || 0) 
+        ? sortedUsers.length 
         : mainTab === "groups" 
             ? (groups?.length || 0) 
-            : (users?.length || 0);
+            : sortedUsers.length;
 
     return (
         <div className={`w-full h-full flex flex-col relative ${theme?.sidebar || ""} border-r ${theme?.border || ""} backdrop-blur-2xl overflow-hidden`}>
@@ -582,6 +593,8 @@ const Sidebar = React.memo(({
                     onSelectUser={onSelectUser}
                     users={users}
                     onSendDirectReply={onSendDirectReply}
+                    myUserId={myUserId}
+                    myUsername={myUser?.username}
                 />
             )}
 

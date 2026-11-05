@@ -4,11 +4,12 @@ import PropTypes from "prop-types";
 import { motion, AnimatePresence } from "framer-motion";
 import { Plus, Music, X, Send, Sparkles, Trash2, Heart, MessageCircle } from "lucide-react";
 import { getActiveNotes, saveUserNote, deleteUserNote } from "../../../Services/notesService";
-import { getMyUserId } from "./constants";
+import { getMyUserId, areIdsEqual } from "./constants";
+import { isDecoyMode, isVaultChat } from "../../../Services/vaultService";
 
 const MOOD_EMOJIS = ["✨", "🔥", "🎧", "😴", "🚀", "💡", "🍣", "☕", "💭", "🎮", "🏖️", "⚡"];
 
-export default function BubbleNotesBar({ onSelectUser, users = [], onSendDirectReply }) {
+export default function BubbleNotesBar({ onSelectUser, users = [], onSendDirectReply, myUserId: propMyUserId, myUsername: propMyUsername }) {
     const [notes, setNotes] = useState(() => getActiveNotes());
     const [createModalOpen, setCreateModalOpen] = useState(false);
     const [selectedNote, setSelectedNote] = useState(null);
@@ -18,22 +19,47 @@ export default function BubbleNotesBar({ onSelectUser, users = [], onSendDirectR
     const [songTitle, setSongTitle] = useState("");
     const [songArtist, setSongArtist] = useState("");
     const scrollContainerRef = useRef(null);
+    const [decoyActive, setDecoyActive] = useState(() => isDecoyMode());
 
-    const myUserId = getMyUserId();
+    const sessionUserId = getMyUserId();
+    const myUserId = propMyUserId || sessionUserId;
+    const myUsername = propMyUsername || sessionStorage.getItem("username") || "Member";
+
     const myNote = useMemo(() => {
-        return notes.find(n => String(n.userId) === String(myUserId));
-    }, [notes, myUserId]);
+        return notes.find(n => areIdsEqual(n.userId, myUserId) || (myUsername && myUsername !== "Member" && n.username === myUsername));
+    }, [notes, myUserId, myUsername]);
 
     const otherNotes = useMemo(() => {
-        return notes.filter(n => String(n.userId) !== String(myUserId));
-    }, [notes, myUserId]);
+        return notes.filter((n) => {
+            if (!n || !n.userId) return false;
+            // Never treat own note as another person's note
+            if (areIdsEqual(n.userId, myUserId)) return false;
+            // Never display orphan test notes labeled "You" or own username in friends notes
+            if (n.username === "You" || (myUsername && myUsername !== "Member" && n.username === myUsername)) return false;
+            if (n.userId === "null" || n.userId === "undefined") return false;
+            if (decoyActive && isVaultChat(n.userId)) return false;
+            return true;
+        });
+    }, [notes, myUserId, myUsername, decoyActive]);
 
     useEffect(() => {
         const handleUpdate = (e) => {
             if (e.detail) setNotes(e.detail);
         };
+        const handleVaultToggle = (e) => {
+            setDecoyActive(Boolean(e.detail?.decoy));
+        };
+        const handleVaultChats = () => {
+            setDecoyActive(isDecoyMode());
+        };
         window.addEventListener("chattornado_notes_updated", handleUpdate);
-        return () => window.removeEventListener("chattornado_notes_updated", handleUpdate);
+        window.addEventListener("vortex_vault_toggled", handleVaultToggle);
+        window.addEventListener("vortex_vault_chats_changed", handleVaultChats);
+        return () => {
+            window.removeEventListener("chattornado_notes_updated", handleUpdate);
+            window.removeEventListener("vortex_vault_toggled", handleVaultToggle);
+            window.removeEventListener("vortex_vault_chats_changed", handleVaultChats);
+        };
     }, []);
 
     const handleCreateNote = (e) => {
@@ -42,7 +68,7 @@ export default function BubbleNotesBar({ onSelectUser, users = [], onSendDirectR
 
         saveUserNote({
             userId: myUserId,
-            username: "You",
+            username: myUsername,
             text: noteText.trim(),
             emoji: selectedEmoji,
             songTitle: songTitle.trim(),
@@ -389,5 +415,7 @@ export default function BubbleNotesBar({ onSelectUser, users = [], onSendDirectR
 BubbleNotesBar.propTypes = {
     onSelectUser: PropTypes.func,
     users: PropTypes.array,
-    onSendDirectReply: PropTypes.func
+    onSendDirectReply: PropTypes.func,
+    myUserId: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
+    myUsername: PropTypes.string
 };
