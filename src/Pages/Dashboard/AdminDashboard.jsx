@@ -60,36 +60,52 @@ export default function AdminDashboard() {
     const fetchModerationCases = async () => {
         try {
             const res = await API.get("/api/admin/moderation/cases", { params: { token } });
-            setModerationCases(res.data || []);
+            const list = Array.isArray(res.data)
+                ? res.data
+                : (Array.isArray(res.data?.cases) ? res.data.cases : []);
+            setModerationCases(list);
         } catch (err) {
             console.error("Failed to load moderation cases:", err);
+            setModerationCases([]);
         }
     };
 
     const fetchAnnouncements = async () => {
         try {
             const res = await API.get("/api/admin/announcements", { params: { token } });
-            setAnnouncements(res.data || []);
+            const list = Array.isArray(res.data)
+                ? res.data
+                : (Array.isArray(res.data?.announcements) ? res.data.announcements : []);
+            setAnnouncements(list);
         } catch (err) {
             console.error("Failed to load announcements:", err);
+            setAnnouncements([]);
         }
     };
 
     const fetchLoginHistory = async () => {
         try {
             const res = await API.get("/api/admin/logins", { params: { token } });
-            setLoginHistory(res.data || []);
+            const list = Array.isArray(res.data)
+                ? res.data
+                : (Array.isArray(res.data?.records) ? res.data.records : []);
+            setLoginHistory(list);
         } catch (err) {
             console.error("Failed to load login history:", err);
+            setLoginHistory([]);
         }
     };
 
     const fetchAuditLogs = async () => {
         try {
             const res = await API.get("/api/admin/audit-logs", { params: { token } });
-            setAuditLogs(res.data || []);
+            const list = Array.isArray(res.data)
+                ? res.data
+                : (Array.isArray(res.data?.logs) ? res.data.logs : []);
+            setAuditLogs(list);
         } catch (err) {
             console.error("Failed to load audit logs:", err);
+            setAuditLogs([]);
         }
     };
 
@@ -109,9 +125,11 @@ export default function AdminDashboard() {
         if (!userQuery.trim()) return;
         try {
             const res = await API.get(`/search-users?q=${encodeURIComponent(userQuery.trim())}`, { params: { token } });
-            setSearchedUsers(res.data || []);
+            const list = Array.isArray(res.data) ? res.data : (Array.isArray(res.data?.users) ? res.data.users : []);
+            setSearchedUsers(list);
         } catch (err) {
             setErrorMsg("User search failed.");
+            setSearchedUsers([]);
         }
     };
 
@@ -370,7 +388,7 @@ export default function AdminDashboard() {
 
                             {searchedUsers.length > 0 && (
                                 <div className="mt-4 space-y-2">
-                                    {searchedUsers.map((u) => (
+                                    {(Array.isArray(searchedUsers) ? searchedUsers : []).map((u) => (
                                         <div
                                             key={u.id}
                                             className="p-3.5 rounded-xl bg-white/[0.02] border border-white/10 flex items-center justify-between"
@@ -464,7 +482,7 @@ export default function AdminDashboard() {
                     <div className="space-y-4">
                         <div className="flex items-center justify-between">
                             <h3 className="text-sm font-bold uppercase tracking-wider text-white/70">
-                                Incident Reports & AI Severity Classifications ({moderationCases.length})
+                                Incident Reports & AI Severity Classifications ({(Array.isArray(moderationCases) ? moderationCases : []).length})
                             </h3>
                             <button
                                 onClick={fetchModerationCases}
@@ -474,7 +492,7 @@ export default function AdminDashboard() {
                             </button>
                         </div>
 
-                        {moderationCases.length === 0 ? (
+                        {(Array.isArray(moderationCases) ? moderationCases : []).length === 0 ? (
                             <div className="py-16 text-center rounded-2xl bg-white/[0.02] border border-white/10">
                                 <CheckCircle className="w-10 h-10 text-emerald-400 mx-auto mb-2 opacity-50" />
                                 <p className="text-sm font-semibold text-white/70">Moderation Queue Clear</p>
@@ -482,7 +500,7 @@ export default function AdminDashboard() {
                             </div>
                         ) : (
                             <div className="space-y-3">
-                                {moderationCases.map((c) => (
+                                {(Array.isArray(moderationCases) ? moderationCases : []).map((c) => (
                                     <div
                                         key={c.id}
                                         className="p-5 rounded-2xl bg-white/[0.03] border border-white/10 space-y-3"
@@ -650,7 +668,7 @@ export default function AdminDashboard() {
                         {/* Recent announcements list */}
                         <div className="space-y-3">
                             <h4 className="text-xs font-bold uppercase tracking-wider text-white/60">Published History</h4>
-                            {announcements.map((a) => (
+                            {(Array.isArray(announcements) ? announcements : []).map((a) => (
                                 <div key={a.id} className="p-4 rounded-xl bg-white/[0.02] border border-white/10 flex items-start justify-between gap-4">
                                     <div>
                                         <div className="flex items-center gap-2 mb-1">
@@ -690,7 +708,7 @@ export default function AdminDashboard() {
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-white/5">
-                                    {loginHistory.map((l) => (
+                                    {(Array.isArray(loginHistory) ? loginHistory : []).map((l) => (
                                         <tr key={l.id} className="hover:bg-white/[0.02]">
                                             <td className="py-2.5 px-3 font-semibold text-white">{l.user_id}</td>
                                             <td className="py-2.5 px-3 font-mono text-cyan-300">{l.ip_address || "—"}</td>
@@ -724,7 +742,7 @@ export default function AdminDashboard() {
                         </div>
 
                         <div className="space-y-2">
-                            {auditLogs.map((log) => (
+                            {(Array.isArray(auditLogs) ? auditLogs : []).map((log) => (
                                 <div key={log.id} className="p-3 rounded-xl bg-black/40 border border-white/5 flex items-center justify-between text-xs">
                                     <div>
                                         <div className="flex items-center gap-2">
