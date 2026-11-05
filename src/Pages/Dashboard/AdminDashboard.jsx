@@ -391,13 +391,13 @@ export default function AdminDashboard() {
                                     {(Array.isArray(searchedUsers) ? searchedUsers : []).map((u) => (
                                         <div
                                             key={u.id}
-                                            className="p-3.5 rounded-xl bg-white/[0.02] border border-white/10 flex items-center justify-between"
+                                            className="p-3.5 rounded-xl bg-white/[0.02] border border-white/10 flex items-center justify-between flex-wrap gap-2.5"
                                         >
                                             <div>
                                                 <p className="text-sm font-bold text-white">{u.username}</p>
                                                 <p className="text-xs text-white/40">{u.email || "No email"} • ID: {u.id}</p>
                                             </div>
-                                            <div className="flex items-center gap-2">
+                                            <div className="flex items-center gap-2 flex-wrap">
                                                 <button
                                                     onClick={() => setSelectedUserForRestrict(u)}
                                                     className="px-3 py-1.5 rounded-lg bg-rose-500/20 text-rose-300 border border-rose-500/30 text-xs font-semibold hover:bg-rose-500/30 transition-colors"

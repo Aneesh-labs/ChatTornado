@@ -63,7 +63,7 @@ export default function VaultChatModal({ isOpen, onClose, user, onStatusChanged,
                     initial={{ opacity: 0, scale: 0.93, y: 10 }}
                     animate={{ opacity: 1, scale: 1, y: 0 }}
                     exit={{ opacity: 0, scale: 0.93, y: 10 }}
-                    className="relative w-full max-w-sm rounded-2xl border border-purple-500/30 bg-[#0b0e17]/95 p-6 shadow-2xl text-white select-none overflow-hidden"
+                    className="relative w-full max-w-sm rounded-2xl border border-purple-500/30 bg-[#0b0e17]/95 p-5 sm:p-6 shadow-2xl text-white select-none overflow-hidden"
                 >
                     {/* Top ambient holographic beam */}
                     <div className="pointer-events-none absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-purple-400 to-transparent opacity-75" />

@@ -228,7 +228,7 @@ export default function DashboardLayout() {
             </aside>
 
             {/* Main Stage Content */}
-            <main id="main-content" className="relative z-10 flex min-w-0 flex-1 flex-col overflow-hidden h-full pb-[54px] lg:pb-0" role="main">
+            <main id="main-content" className={`relative z-10 flex min-w-0 flex-1 flex-col overflow-hidden h-full ${isMobileChatActive ? "pb-0" : "pb-[54px]"} lg:pb-0`} role="main">
                 {/* Mobile Top App Bar (Hidden when in active mobile chat to maximize viewport) */}
                 {!isMobileChatActive && (
                     <div className="flex items-center justify-between border-b border-white/10 bg-[#090c14]/90 px-4 py-3 backdrop-blur-2xl lg:hidden shadow-md">
@@ -255,15 +255,16 @@ export default function DashboardLayout() {
 
                 <Outlet />
 
-                {/* Mobile Lower Small Menu (Always visible as bottom navigation bar) */}
-                <nav className="fixed bottom-0 inset-x-0 z-50 flex h-[54px] items-center justify-around border-t border-white/10 bg-[#090c14]/95 px-1 backdrop-blur-2xl lg:hidden shadow-[0_-4px_24px_rgba(0,0,0,0.6)]" aria-label="Mobile dashboard navigation">
-                    {activeNavItems.filter(item => !item.mobileOnly || item.to === "/darkweb" || item.isAdminOnly).map(({ to, label, icon: Icon, isAdminOnly }) => (
-                        <NavLink
-                            key={to}
-                            to={to}
-                            className={({ isActive }) =>
-                                [
-                                    "flex h-full flex-1 min-w-0 flex-col items-center justify-center gap-0.5 rounded-lg px-0.5 text-[9px] font-semibold transition-all active:scale-95 touch-manipulation",
+                {/* Mobile Lower Navigation Bar (Hidden in active chat to maximize typing & message area) */}
+                {!isMobileChatActive && (
+                    <nav className="fixed bottom-0 inset-x-0 z-50 flex h-[54px] items-center justify-around overflow-x-auto no-scrollbar border-t border-white/10 bg-[#090c14]/95 px-1 backdrop-blur-2xl lg:hidden shadow-[0_-4px_24px_rgba(0,0,0,0.6)]" aria-label="Mobile dashboard navigation">
+                        {activeNavItems.filter(item => !item.mobileOnly || item.to === "/darkweb" || item.isAdminOnly).map(({ to, label, icon: Icon, isAdminOnly }) => (
+                            <NavLink
+                                key={to}
+                                to={to}
+                                className={({ isActive }) =>
+                                    [
+                                        "flex h-full flex-1 min-w-[44px] flex-col items-center justify-center gap-0.5 rounded-lg px-0.5 text-[9px] font-semibold transition-all active:scale-95 touch-manipulation",
                                     isActive
                                         ? "text-sky-300 font-bold"
                                         : "text-white/50 hover:text-white hover:bg-white/[0.04]",
@@ -280,7 +281,8 @@ export default function DashboardLayout() {
                             )}
                         </NavLink>
                     ))}
-                </nav>
+                    </nav>
+                )}
             </main>
         </div>
     );
