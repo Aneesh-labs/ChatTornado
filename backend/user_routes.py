@@ -132,6 +132,22 @@ def save_user_portfolio(
     }
 
 
+import json
+
+def parse_game_stats(raw_stats) -> dict:
+    if not raw_stats:
+        return {}
+    if isinstance(raw_stats, dict):
+        return raw_stats
+    if isinstance(raw_stats, str):
+        try:
+            parsed = json.loads(raw_stats)
+            return parsed if isinstance(parsed, dict) else {}
+        except Exception:
+            return {}
+    return {}
+
+
 @router.post("/user/game-score")
 def save_game_score(
     data: dict,
@@ -153,7 +169,7 @@ def save_game_score(
     if not game:
         raise HTTPException(status_code=400, detail="Game name is required.")
         
-    current_stats = dict(user.game_stats or {})
+    current_stats = parse_game_stats(user.game_stats)
     current_high = int(current_stats.get(game, 0))
     if score > current_high:
         current_stats[game] = score
@@ -192,8 +208,9 @@ def get_user_stats(
     if not user:
         raise HTTPException(status_code=404, detail="User not found.")
         
-    game_stats = user.game_stats or {}
-    highest_score = max(game_stats.values()) if game_stats else 0
+    game_stats = parse_game_stats(user.game_stats)
+    numeric_scores = [int(v) for v in game_stats.values() if isinstance(v, (int, float)) or (isinstance(v, str) and v.isdigit())]
+    highest_score = max(numeric_scores) if numeric_scores else 0
     total_messages_sent = db.query(Message).filter(Message.sender_id == user.id).count()
     total_messages_received = db.query(Message).filter(Message.receiver_id == user.id).count()
     total_messages_all = db.query(Message).count()
@@ -229,8 +246,9 @@ def get_specific_user_stats(
     if not user:
         raise HTTPException(status_code=404, detail="User not found.")
         
-    game_stats = user.game_stats or {}
-    highest_score = max(game_stats.values()) if game_stats else 0
+    game_stats = parse_game_stats(user.game_stats)
+    numeric_scores = [int(v) for v in game_stats.values() if isinstance(v, (int, float)) or (isinstance(v, str) and v.isdigit())]
+    highest_score = max(numeric_scores) if numeric_scores else 0
     total_messages_sent = db.query(Message).filter(Message.sender_id == user.id).count()
     total_messages_received = db.query(Message).filter(Message.receiver_id == user.id).count()
     total_messages_all = db.query(Message).count()

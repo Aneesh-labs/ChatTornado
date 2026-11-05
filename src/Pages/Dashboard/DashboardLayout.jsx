@@ -13,6 +13,7 @@ import {
     Sparkles,
     UserRound,
     Zap,
+    HelpCircle,
 } from "lucide-react";
 import { clearAdminSession } from "../../utils/adminSession";
 import PortfolioOnboardingModal from "../../Components/PortfolioOnboardingModal";

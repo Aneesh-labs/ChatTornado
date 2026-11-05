@@ -19,7 +19,8 @@ import {
     CheckCircle2,
     UserX,
     Megaphone,
-    Shield
+    Shield,
+    Sparkles
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import API from "../../Services/API";

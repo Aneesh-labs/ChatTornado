@@ -92,6 +92,16 @@ app.add_middleware(
 # Request Logger Middleware
 # ============================================================================
 
+@app.exception_handler(Exception)
+async def global_cors_exception_handler(request: Request, exc: Exception):
+    import traceback
+    traceback.print_exc()
+    return JSONResponse(
+        status_code=500,
+        content={"detail": f"Internal Server Error: {str(exc)}"},
+        headers={"Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "*", "Access-Control-Allow-Methods": "*"}
+    )
+
 @app.middleware("http")
 async def log_requests_middleware(request, call_next):
     origin = request.headers.get("origin", "no-origin")
