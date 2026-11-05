@@ -46,7 +46,7 @@ export default function Settings() {
     const [decoyPin, setDecoyPin] = useState(() => localStorage.getItem("vortex_decoy_pin") || "0000");
     const [pinSavedNotice, setPinSavedNotice] = useState(false);
     const [antiScreenshot, setAntiScreenshot] = useState(() => localStorage.getItem("vortex_anti_screenshot") !== "false");
-    const [panicKeyEnabled, setPanicKeyEnabled] = useState(() => localStorage.getItem("vortex_panic_key") === "true");
+    const [panicKeyEnabled, setPanicKeyEnabled] = useState(() => localStorage.getItem("vortex_panic_key") !== "false");
     const [testNotifNotice, setTestNotifNotice] = useState("");
 
     const [soundEnabled, setSoundEnabled] = useState(() => {

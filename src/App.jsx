@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
 import ProtectedRoute from "./Components/ProtectedRoute";
 
@@ -14,8 +15,14 @@ import Arcade from "./Pages/Dashboard/Arcade";
 import VerifyEmail from "./Pages/VerifyEmail";
 import AdminDashboard from "./Pages/Dashboard/AdminDashboard";
 import DarkWebHub from "./Pages/Dashboard/DarkWebHub";
+import { setupPanicKeyListener } from "./utils/panicKey";
 
 export default function App() {
+  useEffect(() => {
+    const cleanup = setupPanicKeyListener();
+    return cleanup;
+  }, []);
+
   return (
     <Routes>
       {/* PUBLIC ROUTE */}
