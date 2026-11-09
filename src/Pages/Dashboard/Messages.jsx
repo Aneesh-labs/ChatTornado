@@ -189,6 +189,14 @@ const Messages = () => {
     const [vanishModeActive, setVanishModeActive] = useState(false);
     const [statusStoryModal, setStatusStoryModal] = useState({ isOpen: false, mode: "view", targetUser: null });
 
+    // ── Decoy Mode & Ghost Vault Real-Time Synchronization ─────────────────────
+    const [decoyActive, setDecoyActive] = useState(() => isDecoyMode());
+    const [vaultChatIds, setVaultChatIds] = useState(() => getVaultChatIds());
+
+    // ── Sci-Fi Holographic HUD Telemetry & Scanline Filter ─────────────────────
+    const [holoScanlines, setHoloScanlines] = useState(() => localStorage.getItem("tornado_holo_scanlines") === "true");
+    const [quantumPing, setQuantumPing] = useState(14);
+
     useEffect(() => {
         if (!callNotice) return;
         const timer = setTimeout(() => {
@@ -197,14 +205,16 @@ const Messages = () => {
         return () => clearTimeout(timer);
     }, [callNotice]);
 
+    useEffect(() => {
+        const interval = setInterval(() => {
+            setQuantumPing(Math.floor(11 + Math.random() * 8));
+        }, 3500);
+        return () => clearInterval(interval);
+    }, []);
+
     // ── Operational Refs ───────────────────────────────────────────────────────
     const myUserId = useRef(getMyUserId());
     const socketRef = useRef(null);
-    useEffect(() => {
-        usersRef.current = users;
-    }, [users]);
-
-
     const usersRef = useRef([]);
     const ghostUserRef = useRef(null);
     const messagesEndRef = useRef(null);
@@ -221,9 +231,39 @@ const Messages = () => {
 
     const activeUserRef = useRef(selectedUser);
     const selectedUserRef = activeUserRef;
+
+    useEffect(() => {
+        usersRef.current = users;
+    }, [users]);
+
     useEffect(() => {
         activeUserRef.current = selectedUser;
     }, [selectedUser]);
+
+    useEffect(() => {
+        const handleVaultToggle = (e) => {
+            const isDecoy = Boolean(e.detail?.decoy);
+            setDecoyActive(isDecoy);
+            if (isDecoy) {
+                // Instantly switch away ONLY from secret vault chats if currently opened
+                if (selectedUserRef.current && isVaultChat(selectedUserRef.current.id)) {
+                    const safeFallback = activeUsers.find((u) => !isVaultChat(u.id)) || 
+                                         users.find((u) => !isVaultChat(u.id));
+                    setSelectedUser(safeFallback || null);
+                    setCallNotice("🚨 Decoy Mode Active: Secret vault chats concealed.");
+                }
+            }
+        };
+        const handleVaultChatsChange = () => {
+            setVaultChatIds(getVaultChatIds());
+        };
+        window.addEventListener("vortex_vault_toggled", handleVaultToggle);
+        window.addEventListener("vortex_vault_chats_changed", handleVaultChatsChange);
+        return () => {
+            window.removeEventListener("vortex_vault_toggled", handleVaultToggle);
+            window.removeEventListener("vortex_vault_chats_changed", handleVaultChatsChange);
+        };
+    }, [activeUsers, users]);
 
     const currentTheme = useMemo(() => THEMES[theme] || THEMES.dark, [theme]);
 
@@ -2186,45 +2226,7 @@ const Messages = () => {
 
     const showSidebar = !isMobile || mobileView === "list";
 
-    // Decoy Mode & Ghost Vault Real-Time Synchronization
-    const [decoyActive, setDecoyActive] = useState(() => isDecoyMode());
-    const [vaultChatIds, setVaultChatIds] = useState(() => getVaultChatIds());
 
-    useEffect(() => {
-        const handleVaultToggle = (e) => {
-            const isDecoy = Boolean(e.detail?.decoy);
-            setDecoyActive(isDecoy);
-            if (isDecoy) {
-                // Instantly switch away ONLY from secret vault chats if currently opened
-                if (selectedUserRef.current && isVaultChat(selectedUserRef.current.id)) {
-                    const safeFallback = activeUsers.find((u) => !isVaultChat(u.id)) || 
-                                         users.find((u) => !isVaultChat(u.id));
-                    setSelectedUser(safeFallback || null);
-                    setCallNotice("🚨 Decoy Mode Active: Secret vault chats concealed.");
-                }
-            }
-        };
-        const handleVaultChatsChange = () => {
-            setVaultChatIds(getVaultChatIds());
-        };
-        window.addEventListener("vortex_vault_toggled", handleVaultToggle);
-        window.addEventListener("vortex_vault_chats_changed", handleVaultChatsChange);
-        return () => {
-            window.removeEventListener("vortex_vault_toggled", handleVaultToggle);
-            window.removeEventListener("vortex_vault_chats_changed", handleVaultChatsChange);
-        };
-    }, [activeUsers, users]);
-
-    // Sci-Fi Holographic HUD Telemetry & Scanline Filter
-    const [holoScanlines, setHoloScanlines] = useState(() => localStorage.getItem("tornado_holo_scanlines") === "true");
-    const [quantumPing, setQuantumPing] = useState(14);
-
-    useEffect(() => {
-        const interval = setInterval(() => {
-            setQuantumPing(Math.floor(11 + Math.random() * 8));
-        }, 3500);
-        return () => clearInterval(interval);
-    }, []);
 
     const toggleHoloScanlines = useCallback(() => {
         soundEngine.play("cyber_chirp");
