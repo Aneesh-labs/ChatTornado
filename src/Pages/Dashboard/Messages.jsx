@@ -2296,8 +2296,8 @@ const Messages = () => {
                         <div className="pointer-events-none fixed inset-0 z-[55] cyber-scanlines opacity-30 mix-blend-screen" />
                     )}
 
-                    {/* Quantum Lattice Telemetry & Cyber HUD Widget */}
-                    {!isMobile && (
+                    {/* Quantum Lattice Telemetry & Cyber HUD Widget (Only floating when no chat is open) */}
+                    {!isMobile && !enrichedSelected && (
                         <div className="hidden lg:flex fixed top-3 right-3 z-[60] items-center gap-2 rounded-full border border-cyan-500/30 bg-black/80 px-3 py-1.5 backdrop-blur-2xl shadow-[0_0_24px_rgba(6,182,212,0.25)] group transition-all hover:border-cyan-400">
                             <span className="relative flex h-2 w-2">
                                 <span className="absolute inline-flex h-full w-full animate-ping rounded-full opacity-75" style={{ background: statusColors[securityStatus] || "#22c55e" }} />
@@ -2428,6 +2428,13 @@ const Messages = () => {
                                 onDeclineIncomingCall={declineIncomingCall}
                                 isAlreadyInCall={Boolean(call && (call.status === "connected" || call.status === "calling"))}
                                 isFriend={isCurrentSelectedFriend}
+                                quantumHud={{
+                                    securityStatus,
+                                    quantumPing,
+                                    holoScanlines,
+                                    toggleHoloScanlines,
+                                    color: statusColors[securityStatus] || "#22c55e"
+                                }}
                             />
                         ) : (
                             <EmptyState onOpenSearch={handleOpenSearch} />

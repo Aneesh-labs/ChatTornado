@@ -65,6 +65,7 @@ const ChatWindow = React.memo(({
     onLiftIncomingCall,
     onDeclineIncomingCall,
     isAlreadyInCall = false,
+    quantumHud,
 }) => {
     const [localAiMode, setLocalAiMode] = useState(() => {
         return isAdminUnlocked() ? "ADMIN" : "DEFAULT";
@@ -111,6 +112,7 @@ const ChatWindow = React.memo(({
                 onOpenFutureMessages={onOpenFutureMessages}
                 onOpenStreakModal={onOpenStreakModal}
                 onOpenStatusStory={onOpenStatusStory}
+                quantumHud={quantumHud}
                 onToggleWatchParty={onToggleWatchParty}
                 onToggleVanishMode={onToggleVanishMode}
                 isVanishModeActive={isVanishModeActive}
