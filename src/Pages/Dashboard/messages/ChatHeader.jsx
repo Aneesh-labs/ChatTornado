@@ -422,9 +422,38 @@ const ChatHeader = React.memo(({
                 </div>
             </div>
 
-            <div className="flex items-center gap-0.5 sm:gap-1 flex-shrink-0">
+            <div className="flex items-center gap-1 sm:gap-1.5 flex-shrink-0">
                 {/* --- MOBILE ACTIONS --- */}
-                <div className="flex sm:hidden items-center gap-0.5">
+                <div className="flex sm:hidden items-center gap-1">
+                    {!isBotUser && !isGroup ? (
+                        <>
+                            <IconBtn 
+                                title="Voice call" 
+                                onClick={() => onStartCall?.(false)} 
+                                small 
+                                className="!text-emerald-400 !bg-emerald-500/10 hover:!bg-emerald-500/20 border border-emerald-500/20"
+                            >
+                                <Phone className="w-3.5 h-3.5" />
+                            </IconBtn>
+                            <IconBtn 
+                                title="Video call" 
+                                onClick={() => onStartCall?.(true)} 
+                                small 
+                                className="!text-sky-400 !bg-sky-500/10 hover:!bg-sky-500/20 border border-sky-500/20"
+                            >
+                                <Video className="w-3.5 h-3.5" />
+                            </IconBtn>
+                        </>
+                    ) : isBotUser ? (
+                        <IconBtn 
+                            title="Live AI Voice Call" 
+                            onClick={() => onStartCall?.("ai")} 
+                            small 
+                            className="!text-cyan-400 !bg-cyan-500/10 hover:!bg-cyan-500/20 border border-cyan-500/20"
+                        >
+                            <PhoneCall className="w-3.5 h-3.5" />
+                        </IconBtn>
+                    ) : null}
                     {onReloadChat && (
                         <IconBtn 
                             title="Reload chat messages" 
@@ -451,14 +480,14 @@ const ChatHeader = React.memo(({
                             {showMoreMenu && (
                                 <>
                                     <div 
-                                        className="fixed inset-0 z-40" 
+                                        className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm" 
                                         onClick={() => setShowMoreMenu(false)} 
                                     />
                                     <motion.div
                                         initial={{ opacity: 0, scale: 0.95, y: -5 }}
                                         animate={{ opacity: 1, scale: 1, y: 0 }}
                                         exit={{ opacity: 0, scale: 0.95, y: -5 }}
-                                        className="absolute top-full right-0 mt-2 bg-[#0e121b]/95 backdrop-blur-2xl border border-white/15 rounded-xl shadow-2xl flex flex-col p-1.5 z-50 min-w-[160px]"
+                                        className="fixed top-14 right-2 z-50 bg-[#0c101c]/98 backdrop-blur-2xl border border-cyan-500/30 rounded-2xl shadow-2xl flex flex-col p-2 space-y-1 w-[min(92vw,320px)] max-h-[75vh] overflow-y-auto custom-scrollbar"
                                     >
                                         {isBotUser && (
                                             <button 
