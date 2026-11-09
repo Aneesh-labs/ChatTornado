@@ -8,8 +8,6 @@ import {
     User,
     ArrowRight,
     X,
-    CheckCircle2,
-    Lock,
     Radio,
     Copy,
     Check
