@@ -28,6 +28,9 @@ API.interceptors.request.use(
 API.interceptors.response.use(
     (response) => {
         console.log(`[API RESPONSE SUCCESS] ${response.status} ${response.config.url}`, response.data);
+        if (response.data?.requires_demo_name && typeof window !== "undefined") {
+            window.dispatchEvent(new CustomEvent("vortex_prompt_demo_name", { detail: response.data }));
+        }
         return response;
     },
     (error) => {
