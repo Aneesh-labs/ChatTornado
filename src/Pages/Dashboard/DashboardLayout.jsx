@@ -85,9 +85,11 @@ export default function DashboardLayout() {
 
         window.addEventListener("sessionStorageUpdate", syncState);
         window.addEventListener("openPortfolioOnboarding", handleOpenOnboarding);
+        window.addEventListener("vortex_open_tour", handleOpenOnboarding);
         return () => {
             window.removeEventListener("sessionStorageUpdate", syncState);
             window.removeEventListener("openPortfolioOnboarding", handleOpenOnboarding);
+            window.removeEventListener("vortex_open_tour", handleOpenOnboarding);
         };
     }, []);
 
@@ -220,11 +222,14 @@ export default function DashboardLayout() {
                     <button
                         type="button"
                         onClick={() => setShowOnboarding(true)}
-                        className="flex min-h-[38px] w-full items-center justify-center gap-2 rounded-xl border border-cyan-500/25 bg-cyan-500/10 text-xs font-bold text-cyan-300 transition-all hover:border-cyan-400/40 hover:bg-cyan-500/20 active:scale-[0.98] outline-none cursor-pointer mb-2"
-                        title="Interactive Guided Tour & AI Setup"
+                        className="interactive-shimmer-btn flex min-h-[40px] w-full items-center justify-center gap-2 rounded-xl text-xs font-bold text-white shadow-lg transition-all active:scale-[0.98] outline-none cursor-pointer mb-2 group"
+                        title="Interactive Guided Tour & Live Demo"
                     >
-                        <HelpCircle className="h-4 w-4" />
-                        <span>Quick Tour & AI Guide</span>
+                        <Sparkles className="h-4 w-4 text-amber-300 group-hover:rotate-12 transition-transform" />
+                        <span>Interactive Demo & Tour</span>
+                        <span className="rounded-full bg-white/20 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wider text-amber-200">
+                            DEMO
+                        </span>
                     </button>
                     <button
                         type="button"
@@ -255,11 +260,11 @@ export default function DashboardLayout() {
                             <button
                                 type="button"
                                 onClick={() => setShowOnboarding(true)}
-                                className="grid h-9 w-9 place-items-center rounded-xl border border-cyan-500/30 bg-cyan-500/15 text-cyan-300 active:scale-95 transition-all"
-                                aria-label="Guided Tour & Help"
-                                title="Guided Tour & Help"
+                                className="interactive-shimmer-btn grid h-9 w-9 place-items-center rounded-xl text-white active:scale-95 transition-all"
+                                aria-label="Guided Tour & Demo"
+                                title="Guided Tour & Demo"
                             >
-                                <HelpCircle className="h-4 w-4" />
+                                <Sparkles className="h-4 w-4 text-amber-300 animate-pulse" />
                             </button>
                             <button
                                 type="button"

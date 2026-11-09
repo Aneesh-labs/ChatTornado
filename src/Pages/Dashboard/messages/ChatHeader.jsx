@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import PropTypes from "prop-types";
 import { motion, AnimatePresence } from "framer-motion";
-import { Lock, MoreVertical, Sparkles, Brain, Download, Cpu, Ban, UserCheck, ShieldAlert, Users, BadgeCheck, Dna, GitFork, Clock, Tv, Ghost, Flame, Shield, Phone, PhoneCall, Video, Search, RotateCw, ChevronLeft, CheckSquare, ListChecks, Terminal, Zap } from "lucide-react";
+import { Lock, MoreVertical, Sparkles, Brain, Download, Cpu, Ban, UserCheck, ShieldAlert, Users, BadgeCheck, Dna, GitFork, Clock, Tv, Ghost, Flame, Shield, Phone, PhoneCall, Video, Search, RotateCw, ChevronLeft, ChevronDown, CheckSquare, ListChecks, Terminal, Zap } from "lucide-react";
 import { toggleShieldActive } from "../../../Services/privacyShieldService";
 import { IconBtn, Avatar, useTheme } from "./constants";
 import PersonalizeModal from "./PersonalizeModal";
@@ -49,6 +49,7 @@ const ChatHeader = React.memo(({
 }) => {
     const theme = useTheme();
     const [showMoreMenu, setShowMoreMenu] = useState(false);
+    const [showQuantumMenu, setShowQuantumMenu] = useState(false);
     const [showPersonalizeModal, setShowPersonalizeModal] = useState(false);
     const [showExportModal, setShowExportModal] = useState(false);
     const [showGoogleModelModal, setShowGoogleModelModal] = useState(false);
@@ -577,72 +578,16 @@ const ChatHeader = React.memo(({
                 </div>
 
                 {/* --- DESKTOP ACTIONS --- */}
-                <div className="hidden sm:flex items-center gap-0.5 sm:gap-1">
-                    {/* Integrated Features Desktop Quick Buttons */}
-                    <IconBtn title="Conversation DNA (Structural & State Telemetry)" onClick={() => { soundEngine.play("data_scan"); onOpenDNA?.(); }} small className="hover:!text-cyan-300">
-                        <Dna className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-cyan-400" />
-                    </IconBtn>
-                    <IconBtn title="Reality Forks (Timeline Branches)" onClick={() => { soundEngine.play("warp_drive"); onOpenRealityForks?.(); }} small className="hover:!text-purple-300">
-                        <GitFork className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-purple-400" />
-                    </IconBtn>
-                    <IconBtn title="Future Messages (Scheduled Delivery)" onClick={() => { soundEngine.play("quantum_ping"); onOpenFutureMessages?.(); }} small className="hover:!text-amber-300">
-                        <Clock className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-400" />
-                    </IconBtn>
-
-                    {onReloadChat && (
-                        <IconBtn 
-                            title="Reload chat messages" 
-                            onClick={onReloadChat} 
-                            small 
-                            className={isReloading ? "text-cyan-400 bg-white/[0.08]" : ""}
-                        >
-                            <svg 
-                                className={`w-3.5 h-3.5 sm:w-4 sm:h-4 transition-transform duration-500 ${isReloading ? "animate-spin text-cyan-400" : ""}`} 
-                                fill="none" 
-                                viewBox="0 0 24 24" 
-                                stroke="currentColor"
-                            >
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                            </svg>
-                        </IconBtn>
-                    )}
-                    {onOpenSearch && (
-                        <IconBtn title="Search (Ctrl + K)" onClick={onOpenSearch} small className="lg:hidden">
-                            <Search className="w-4 h-4" />
-                        </IconBtn>
-                    )}
+                <div className="hidden sm:flex items-center gap-1 sm:gap-1.5">
+                    {/* Primary Direct Communication */}
                     {!isBotUser && !isGroup ? (
                         <>
-                            <IconBtn title="Voice call" onClick={() => onStartCall?.(false)} small className="hover:!text-emerald-300">
+                            <IconBtn title="Voice call" onClick={() => onStartCall?.(false)} small className="hover:!text-emerald-300 hover:!bg-emerald-500/15">
                                 <Phone className="w-4 h-4 text-emerald-400" />
                             </IconBtn>
-                            <IconBtn title="Video call" onClick={() => onStartCall?.(true)} small className="hover:!text-sky-300">
+                            <IconBtn title="Video call" onClick={() => onStartCall?.(true)} small className="hover:!text-sky-300 hover:!bg-sky-500/15">
                                 <Video className="w-4 h-4 text-sky-400" />
                             </IconBtn>
-                            <IconBtn title="Ghost Chat" onClick={() => onStartGhostChat?.()} small className="hover:!text-purple-300">
-                                <Ghost className="w-4 h-4 text-purple-400" />
-                            </IconBtn>
-                            <button
-                                type="button"
-                                onClick={onToggleWatchParty}
-                                title="Watch Together (Live Sync YouTube & Videos)"
-                                className="flex items-center gap-1 px-2.5 py-1 rounded-xl bg-violet-600/20 hover:bg-violet-600/40 text-violet-300 border border-violet-500/30 text-xs font-semibold transition-colors cursor-pointer"
-                            >
-                                <Tv className="w-3.5 h-3.5" />
-                                <span className="hidden md:inline">Watch</span>
-                            </button>
-                            <button
-                                type="button"
-                                onClick={onToggleVanishMode}
-                                title={isVanishModeActive ? "Turn Off Vanish Mode" : "Turn On Vanish Mode (Disappearing Chats & Screenshot Alert)"}
-                                className={`flex items-center gap-1 px-2.5 py-1 rounded-xl text-xs font-semibold transition-all cursor-pointer ${isVanishModeActive
-                                    ? "bg-purple-600 text-white shadow-lg shadow-purple-600/50 animate-pulse border border-purple-400"
-                                    : "bg-white/5 hover:bg-white/10 text-white/70 hover:text-white border border-white/10"
-                                }`}
-                            >
-                                <Ghost className="w-3.5 h-3.5" />
-                                <span className="hidden md:inline">Vanish</span>
-                            </button>
                             {(!isBotUser && !isGroup && (isFriend || isVaultProtected)) && (
                                 <button
                                     type="button"
@@ -661,20 +606,145 @@ const ChatHeader = React.memo(({
                         </>
                     ) : isBotUser ? (
                         <>
-                            <IconBtn title="Zero-Knowledge Memory Vault" onClick={() => setShowMemoryVaultModal(true)} small className="hover:!text-emerald-300">
-                                <Shield className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-400" />
-                            </IconBtn>
                             <IconBtn title="Live AI Voice Call" onClick={() => onStartCall?.("ai")} small className="hover:!text-sky-300 bg-sky-500/10 border-sky-400/30">
                                 <PhoneCall className="w-4 h-4 text-sky-400 animate-pulse" />
                             </IconBtn>
+                            <IconBtn title="Switch AI Model" onClick={() => setShowGoogleModelModal(true)} small className="hover:!text-cyan-300">
+                                <Cpu className="w-4 h-4 text-cyan-400" />
+                            </IconBtn>
                         </>
                     ) : null}
-                    <IconBtn title="Export chat transcript (.md, .html, .txt)" onClick={() => setShowExportModal(true)} small className="hover:!text-cyan-300">
-                        <Download className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-cyan-400" />
-                    </IconBtn>
-                    <IconBtn title="Select messages" onClick={onToggleSelectionMode} small>
-                        <ListChecks className="w-4 h-4" />
-                    </IconBtn>
+
+                    {/* Quantum Lab Dropdown (Consolidated Hi-Fi Features) */}
+                    <div className="relative">
+                        <button
+                            type="button"
+                            onClick={() => setShowQuantumMenu(!showQuantumMenu)}
+                            title="Explore Futuristic Chat Features"
+                            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs font-semibold transition-all cursor-pointer border ${
+                                showQuantumMenu
+                                    ? "bg-cyan-500/20 text-cyan-300 border-cyan-400/40 shadow-[0_0_12px_rgba(56,189,248,0.3)]"
+                                    : "bg-white/[0.04] hover:bg-white/[0.08] text-white/80 border-white/10 hover:border-white/20"
+                            }`}
+                        >
+                            <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
+                            <span className="hidden md:inline">Quantum Lab</span>
+                            <ChevronDown className="w-3 h-3 opacity-60" />
+                        </button>
+                        <AnimatePresence>
+                            {showQuantumMenu && (
+                                <>
+                                    <div className="fixed inset-0 z-40" onClick={() => setShowQuantumMenu(false)} />
+                                    <motion.div
+                                        initial={{ opacity: 0, scale: 0.95, y: -5 }}
+                                        animate={{ opacity: 1, scale: 1, y: 0 }}
+                                        exit={{ opacity: 0, scale: 0.95, y: -5 }}
+                                        className="absolute top-full right-0 mt-2 bg-[#0d121f]/95 backdrop-blur-2xl border border-white/15 rounded-2xl shadow-2xl flex flex-col p-2 z-50 min-w-[220px] space-y-1"
+                                    >
+                                        <div className="px-2.5 py-1 text-[10px] font-mono uppercase tracking-wider text-white/40 border-b border-white/10 mb-1">
+                                            ⚡ Quantum Chat Utilities
+                                        </div>
+                                        <button
+                                            onClick={() => { soundEngine.play("data_scan"); onOpenDNA?.(); setShowQuantumMenu(false); }}
+                                            className="flex items-center gap-2.5 px-2.5 py-1.5 text-xs font-medium text-cyan-300 hover:text-white hover:bg-cyan-500/15 rounded-xl text-left cursor-pointer transition-colors"
+                                        >
+                                            <Dna className="w-4 h-4 text-cyan-400 shrink-0" />
+                                            <div>
+                                                <p className="font-semibold">Conversation DNA</p>
+                                                <p className="text-[10px] text-white/40">Structural & state telemetry</p>
+                                            </div>
+                                        </button>
+                                        <button
+                                            onClick={() => { soundEngine.play("warp_drive"); onOpenRealityForks?.(); setShowQuantumMenu(false); }}
+                                            className="flex items-center gap-2.5 px-2.5 py-1.5 text-xs font-medium text-purple-300 hover:text-white hover:bg-purple-500/15 rounded-xl text-left cursor-pointer transition-colors"
+                                        >
+                                            <GitFork className="w-4 h-4 text-purple-400 shrink-0" />
+                                            <div>
+                                                <p className="font-semibold">Reality Forks</p>
+                                                <p className="text-[10px] text-white/40">Branch timeline dimensions</p>
+                                            </div>
+                                        </button>
+                                        <button
+                                            onClick={() => { soundEngine.play("quantum_ping"); onOpenFutureMessages?.(); setShowQuantumMenu(false); }}
+                                            className="flex items-center gap-2.5 px-2.5 py-1.5 text-xs font-medium text-amber-300 hover:text-white hover:bg-amber-500/15 rounded-xl text-left cursor-pointer transition-colors"
+                                        >
+                                            <Clock className="w-4 h-4 text-amber-400 shrink-0" />
+                                            <div>
+                                                <p className="font-semibold">Future Delivery</p>
+                                                <p className="text-[10px] text-white/40">Scheduled future message drops</p>
+                                            </div>
+                                        </button>
+                                        {!isBotUser && !isGroup && (
+                                            <>
+                                                <button
+                                                    onClick={() => { onToggleWatchParty?.(); setShowQuantumMenu(false); }}
+                                                    className="flex items-center gap-2.5 px-2.5 py-1.5 text-xs font-medium text-violet-300 hover:text-white hover:bg-violet-500/15 rounded-xl text-left cursor-pointer transition-colors"
+                                                >
+                                                    <Tv className="w-4 h-4 text-violet-400 shrink-0" />
+                                                    <div>
+                                                        <p className="font-semibold">Watch Together</p>
+                                                        <p className="text-[10px] text-white/40">Synchronized video viewing</p>
+                                                    </div>
+                                                </button>
+                                                <button
+                                                    onClick={() => { onToggleVanishMode?.(); setShowQuantumMenu(false); }}
+                                                    className="flex items-center gap-2.5 px-2.5 py-1.5 text-xs font-medium text-pink-300 hover:text-white hover:bg-pink-500/15 rounded-xl text-left cursor-pointer transition-colors"
+                                                >
+                                                    <Ghost className="w-4 h-4 text-pink-400 shrink-0" />
+                                                    <div>
+                                                        <p className="font-semibold">Vanish Mode</p>
+                                                        <p className="text-[10px] text-white/40">{isVanishModeActive ? "Active (turn off)" : "Self-destructing messages"}</p>
+                                                    </div>
+                                                </button>
+                                            </>
+                                        )}
+                                        <button
+                                            onClick={() => { setShowExportModal(true); setShowQuantumMenu(false); }}
+                                            className="flex items-center gap-2.5 px-2.5 py-1.5 text-xs font-medium text-emerald-300 hover:text-white hover:bg-emerald-500/15 rounded-xl text-left cursor-pointer transition-colors"
+                                        >
+                                            <Download className="w-4 h-4 text-emerald-400 shrink-0" />
+                                            <div>
+                                                <p className="font-semibold">Export Transcript</p>
+                                                <p className="text-[10px] text-white/40">Download as Markdown / HTML</p>
+                                            </div>
+                                        </button>
+                                    </motion.div>
+                                </>
+                            )}
+                        </AnimatePresence>
+                    </div>
+
+                    {/* Shining Interactive Demo Button */}
+                    <button
+                        type="button"
+                        onClick={() => {
+                            soundEngine.play("quantum_ping");
+                            window.dispatchEvent(new CustomEvent("vortex_open_tour"));
+                        }}
+                        title="Open Interactive Demo & Feature Guide"
+                        className="interactive-shimmer-btn flex items-center gap-1.5 px-2.5 sm:px-3 py-1 rounded-xl text-xs font-bold text-white shadow-lg cursor-pointer"
+                    >
+                        <Sparkles className="w-3.5 h-3.5 text-amber-300 animate-pulse" />
+                        <span className="hidden md:inline">Demo</span>
+                    </button>
+
+                    {onReloadChat && (
+                        <IconBtn 
+                            title="Reload chat messages" 
+                            onClick={onReloadChat} 
+                            small 
+                            className={isReloading ? "text-cyan-400 bg-white/[0.08]" : ""}
+                        >
+                            <svg 
+                                className={`w-3.5 h-3.5 sm:w-4 sm:h-4 transition-transform duration-500 ${isReloading ? "animate-spin text-cyan-400" : ""}`} 
+                                fill="none" 
+                                viewBox="0 0 24 24" 
+                                stroke="currentColor"
+                            >
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                            </svg>
+                        </IconBtn>
+                    )}
 
                     {/* Three-dots menu for desktop and mobile */}
                     <div className="relative flex items-center">

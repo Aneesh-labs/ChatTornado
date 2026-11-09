@@ -51,6 +51,15 @@ export default function ConversationHubBar({
     const [countdownDate, setCountdownDate] = useState("");
 
     const [isAiLoading, setIsAiLoading] = useState(false);
+    const [isBarMinimized, setIsBarMinimized] = useState(() => localStorage.getItem("vortex_hub_minimized") === "true");
+
+    const toggleMinimized = () => {
+        setIsBarMinimized(prev => {
+            const next = !prev;
+            localStorage.setItem("vortex_hub_minimized", String(next));
+            return next;
+        });
+    };
 
     // Sync state
     useEffect(() => {
@@ -185,6 +194,26 @@ export default function ConversationHubBar({
         }
     };
 
+    if (isBarMinimized && !activeTab) {
+        return (
+            <div className="relative z-20 w-full border-b border-white/[0.06] bg-black/30 backdrop-blur-md select-none px-3 sm:px-6 py-1 flex items-center justify-between">
+                <button
+                    type="button"
+                    onClick={toggleMinimized}
+                    className="flex items-center gap-2 text-white/50 hover:text-white/90 transition-colors cursor-pointer group"
+                    title="Click to expand Co-Op Supertools"
+                >
+                    <span className="p-0.5 rounded bg-amber-500/10 text-amber-400 group-hover:bg-amber-500/20">
+                        <Sparkles className="w-3 h-3" />
+                    </span>
+                    <span className="text-[11px] font-semibold tracking-wide text-white/70">Co-Op Tools:</span>
+                    <span className="text-[10px] text-white/40 hidden sm:inline">Split Bill • Tasks Checklist • Countdown Timer • AI Co-Pilot</span>
+                    <span className="text-[10px] text-cyan-400/80 group-hover:text-cyan-300 font-mono">(Tap to expand)</span>
+                </button>
+            </div>
+        );
+    }
+
     return (
         <div className="relative z-20 w-full border-b border-white/[0.08] bg-black/40 backdrop-blur-xl select-none">
             {/* Top Hub Bar - 4 Action Pills */}
@@ -273,15 +302,27 @@ export default function ConversationHubBar({
                 </div>
 
                 {/* Collapse / Expand Toggle */}
-                {activeTab && (
-                    <button
-                        type="button"
-                        onClick={() => setActiveTab(null)}
-                        className="p-1 rounded-lg hover:bg-white/10 text-white/40 hover:text-white transition"
-                    >
-                        <ChevronUp className="w-4 h-4" />
-                    </button>
-                )}
+                <div className="flex items-center gap-1">
+                    {activeTab ? (
+                        <button
+                            type="button"
+                            onClick={() => setActiveTab(null)}
+                            className="p-1 rounded-lg hover:bg-white/10 text-white/40 hover:text-white transition cursor-pointer"
+                            title="Close tab"
+                        >
+                            <ChevronUp className="w-4 h-4" />
+                        </button>
+                    ) : (
+                        <button
+                            type="button"
+                            onClick={toggleMinimized}
+                            className="p-1 rounded-lg hover:bg-white/10 text-white/40 hover:text-white transition cursor-pointer"
+                            title="Minimize Co-Op bar"
+                        >
+                            <ChevronUp className="w-3.5 h-3.5" />
+                        </button>
+                    )}
+                </div>
             </div>
 
             {/* Expanded Drawer Area */}

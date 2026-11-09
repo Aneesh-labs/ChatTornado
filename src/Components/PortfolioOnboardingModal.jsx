@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import PropTypes from "prop-types";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -42,6 +43,7 @@ const POPULAR_INTERESTS = [
 ];
 
 export default function PortfolioOnboardingModal({ isOpen, onClose, onComplete }) {
+    const navigate = useNavigate();
     const [step, setStep] = useState(1);
     const totalSteps = 5;
 
@@ -260,6 +262,70 @@ export default function PortfolioOnboardingModal({ isOpen, onClose, onComplete }
                                         <p className="text-[11px] text-white/50 mt-1 leading-normal">
                                             Your personal AI co-pilot for coding, deep research, and chat synthesis.
                                         </p>
+                                    </div>
+                                </div>
+
+                                {/* Live Interactive Demo Playground */}
+                                <div className="p-3.5 rounded-2xl bg-gradient-to-r from-violet-950/40 via-indigo-950/30 to-cyan-950/40 border border-violet-500/30 space-y-2.5 shadow-lg">
+                                    <div className="flex items-center justify-between">
+                                        <span className="flex items-center gap-1.5 text-xs font-bold text-violet-300">
+                                            <Zap className="w-3.5 h-3.5 text-amber-300 animate-pulse" />
+                                            <span>Interactive Demo Playground (Show Friends!)</span>
+                                        </span>
+                                        <span className="text-[10px] text-amber-300 font-mono font-bold bg-amber-500/15 border border-amber-500/30 px-2 py-0.5 rounded-full">
+                                            1-Click Live Test
+                                        </span>
+                                    </div>
+                                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                soundEngine?.play?.("cyber_chirp");
+                                                navigate("/arcade");
+                                                onClose?.();
+                                            }}
+                                            className="flex flex-col items-center justify-center p-2.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 hover:border-pink-400/50 text-center transition-all cursor-pointer group hover:scale-[1.02]"
+                                        >
+                                            <Gamepad2 className="w-5 h-5 text-pink-400 group-hover:scale-110 transition-transform mb-1" />
+                                            <span className="text-[11px] font-bold text-white">Play Arcade</span>
+                                            <span className="text-[9px] text-white/40">Retro Mini-Games</span>
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                soundEngine?.play?.("quantum_ping");
+                                                window.dispatchEvent(new CustomEvent("vortex_select_bot"));
+                                                onClose?.();
+                                            }}
+                                            className="flex flex-col items-center justify-center p-2.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 hover:border-cyan-400/50 text-center transition-all cursor-pointer group hover:scale-[1.02]"
+                                        >
+                                            <Bot className="w-5 h-5 text-cyan-400 group-hover:scale-110 transition-transform mb-1" />
+                                            <span className="text-[11px] font-bold text-white">VORTEX-9 AI</span>
+                                            <span className="text-[9px] text-white/40">Neural Co-Pilot</span>
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                soundEngine?.play?.("warp_drive");
+                                                alert("🚨 Ghost Panic Triggered! In real mode, pressing ESC 3 times instantly redirects to Wikipedia.");
+                                            }}
+                                            className="flex flex-col items-center justify-center p-2.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 hover:border-amber-400/50 text-center transition-all cursor-pointer group hover:scale-[1.02]"
+                                        >
+                                            <AlertTriangle className="w-5 h-5 text-amber-400 group-hover:scale-110 transition-transform mb-1" />
+                                            <span className="text-[11px] font-bold text-white">Ghost Panic</span>
+                                            <span className="text-[9px] text-white/40">Press Esc 3x</span>
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                soundEngine?.play?.("data_scan");
+                                            }}
+                                            className="flex flex-col items-center justify-center p-2.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 hover:border-emerald-400/50 text-center transition-all cursor-pointer group hover:scale-[1.02]"
+                                        >
+                                            <Radio className="w-5 h-5 text-emerald-400 group-hover:scale-110 transition-transform mb-1" />
+                                            <span className="text-[11px] font-bold text-white">Sci-Fi Sound</span>
+                                            <span className="text-[9px] text-white/40">Holo SFX Chime</span>
+                                        </button>
                                     </div>
                                 </div>
 

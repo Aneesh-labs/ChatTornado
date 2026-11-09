@@ -265,6 +265,19 @@ const Messages = () => {
         };
     }, [activeUsers, users]);
 
+    useEffect(() => {
+        const handleSelectBot = () => {
+            const bot = (Array.isArray(users) ? users : []).find((u) => u.is_bot || u.username === "VORTEX-9") || 
+                        (Array.isArray(activeUsers) ? activeUsers : []).find((u) => u.is_bot || u.username === "VORTEX-9");
+            if (bot) {
+                setSelectedUser(bot);
+                setCallNotice("🤖 VORTEX-9 Neural AI selected for live demonstration.");
+            }
+        };
+        window.addEventListener("vortex_select_bot", handleSelectBot);
+        return () => window.removeEventListener("vortex_select_bot", handleSelectBot);
+    }, [users, activeUsers]);
+
     const currentTheme = useMemo(() => THEMES[theme] || THEMES.dark, [theme]);
 
     /* ── Security: Token validation ───────────────────────────────────────── */
