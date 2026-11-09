@@ -248,7 +248,7 @@ const ChatHeader = React.memo(({
 
 
     return (
-        <div className={`relative z-30 flex items-center justify-between px-3 sm:px-6 py-2.5 sm:py-3.5 border-b border-cyan-500/20 backdrop-blur-2xl bg-[#090c14]/90 shadow-[0_4px_24px_rgba(0,0,0,0.45)] flex-shrink-0 w-full select-none overflow-hidden`}>
+        <div className={`relative z-30 flex items-center justify-between px-3 sm:px-6 py-2.5 sm:py-3.5 border-b border-cyan-500/20 backdrop-blur-2xl bg-[#090c14]/90 shadow-[0_4px_24px_rgba(0,0,0,0.45)] flex-shrink-0 w-full select-none`}>
             {/* Sci-Fi Hologram Sweeper Beam */}
             <div className="pointer-events-none absolute top-0 left-0 right-0 h-[1.5px] bg-gradient-to-r from-transparent via-cyan-400 to-transparent opacity-60 animate-pulse shadow-[0_0_8px_rgba(34,211,238,0.8)]" />
             <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
@@ -270,8 +270,8 @@ const ChatHeader = React.memo(({
                     <Avatar user={user} size="md" className="flex-shrink-0 scale-90 sm:scale-100 origin-left" />
                 )}
                 <div className="min-w-0 flex-1 flex flex-col justify-center">
-                    <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
-                        <h2 className="text-xs sm:text-sm font-semibold text-white leading-tight truncate tracking-wide max-w-[120px] sm:max-w-none flex items-center gap-1.5">
+                    <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
+                        <h2 className="text-xs sm:text-sm font-semibold text-white leading-tight truncate tracking-wide flex items-center gap-1 min-w-0">
                             <span>{username}</span>
                             {!isGroup && (Boolean(user?.is_verified) || Boolean(user?.email_verified)) && (
                                 <span title="Verified User" className="inline-flex items-center text-sky-400">
@@ -285,7 +285,7 @@ const ChatHeader = React.memo(({
                                 type="button"
                                 onClick={() => onOpenStreakModal?.(user)}
                                 title={`${userStreak.count} Day Streak (${userStreak.tier.name}) - View milestone rewards`}
-                                className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-gradient-to-r ${userStreak.tier.color} text-white shadow-sm hover:scale-105 active:scale-95 transition-transform cursor-pointer flex-shrink-0`}
+                                className={`hidden sm:inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-gradient-to-r ${userStreak.tier.color} text-white shadow-sm hover:scale-105 active:scale-95 transition-transform cursor-pointer shrink-0`}
                             >
                                 <span>{userStreak.tier.icon}</span>
                                 <span>{userStreak.count} Streak</span>
@@ -359,7 +359,7 @@ const ChatHeader = React.memo(({
                             type="button"
                             onClick={onOpenRealityForks}
                             title="Reality Forks - Click to switch or create conversation branches"
-                            className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-purple-500/15 hover:bg-purple-500/25 border border-purple-500/30 text-purple-300 transition-all cursor-pointer shadow-sm active:scale-95"
+                            className="hidden sm:inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-purple-500/15 hover:bg-purple-500/25 border border-purple-500/30 text-purple-300 transition-all cursor-pointer shadow-sm active:scale-95 shrink-0"
                         >
                             <GitFork className="w-2.5 h-2.5 text-purple-400" />
                             <span>{activeBranch ? activeBranch.name : "main"}</span>

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Sparkles, Key } from "lucide-react";
+import { Sparkles } from "lucide-react";
 
 import LoginDesktop1 from "./LoginDesktop";
 import LoginDesktop2 from "./LoginDesktop2";
@@ -54,8 +54,8 @@ export default function Login() {
 
   return (
     <div className="relative min-h-screen w-full">
-      {/* Floating 3-Day Shared Demo Quick Launcher */}
-      <div className="fixed top-3 right-3 sm:top-5 sm:right-6 z-40 flex items-center gap-2">
+      {/* Floating 3-Day Shared Demo Quick Launcher (Positioned top-left to avoid telemetry pill on top-right) */}
+      <div className="fixed top-3 left-3 sm:top-5 sm:left-6 z-40 flex items-center gap-2">
         <button
           type="button"
           onClick={() => {
@@ -66,7 +66,7 @@ export default function Login() {
           title="Try ChatTornado with instant 3-Day Demo Account"
         >
           <Sparkles className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-300 animate-spin" style={{ animationDuration: '6s' }} />
-          <span className="tracking-wide">🚀 3-Day Demo Access</span>
+          <span className="tracking-wide">🚀 3-Day Demo</span>
           <span className="hidden md:inline-block px-1.5 py-0.5 rounded-full bg-cyan-400/20 text-cyan-200 text-[10px] font-mono uppercase">
             No Signup
           </span>
