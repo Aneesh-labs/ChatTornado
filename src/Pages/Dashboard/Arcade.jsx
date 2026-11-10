@@ -22,6 +22,7 @@ import TornadoSurfersGame from "../../Components/games/TornadoSurfersGame";
 import VortexBastionGame from "../../Components/games/vortexBastion/VortexBastionGame";
 import NeonBladeGame from "../../Components/games/NeonBladeGame";
 import NullNorthGame from "../../Components/games/nullNorth/NullNorthGame";
+import AfterspaceGame from "../../Components/games/afterspace/AfterspaceGame";
 import {
     SNAKE_GRID,
     queueSnakeDirection,
@@ -1675,6 +1676,14 @@ export default function Arcade() {
             tag: "3D Strategy TD",
             color: "from-sky-500 to-indigo-700",
             desc: "Real-time 3D WebGL A* maze tower defense with branching upgrades & synergies!"
+        },
+        {
+            id: "afterspace",
+            title: "AFTERSPACE",
+            emoji: "◈",
+            tag: "4D Observatory",
+            color: "from-stone-500 to-neutral-800",
+            desc: "Echoes of the Fourth Dimension — Quiet Cosmic Minimalism, 4D tesseract & temporal shifts."
         }
     ];
 
@@ -1745,6 +1754,8 @@ export default function Arcade() {
                     <NeonDodge onBack={handleBack} isMuted={isMuted} />
                 ) : selectedGame === "neonblade" ? (
                     <NeonBladeGame onBack={handleBack} isMuted={isMuted} onSaveScore={saveBackendGameScore} />
+                ) : selectedGame === "afterspace" ? (
+                    <AfterspaceGame onBack={handleBack} isMuted={isMuted} onSaveScore={saveBackendGameScore} />
                 ) : (
                     <div className="space-y-5">
                         {/* Featured Multiplayer Flagship: NULL//NORTH */}

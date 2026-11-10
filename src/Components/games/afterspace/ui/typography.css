@@ -1,0 +1,88 @@
+/* AFTERSPACE — Editorial + Technical Typography System */
+
+.afterspace-root {
+  --as-font-serif: "Instrument Serif", "Cormorant Garamond", Georgia, "Times New Roman", serif;
+  --as-font-sans: "Inter", "Manrope", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  --as-font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  font-family: var(--as-font-sans);
+  --as-text-scale: 1;
+}
+
+.afterspace-root[data-text-scale="large"] {
+  --as-text-scale: 1.12;
+}
+
+.as-serif {
+  font-family: var(--as-font-serif);
+  font-weight: 400;
+  letter-spacing: -0.01em;
+}
+
+.as-sans {
+  font-family: var(--as-font-sans);
+}
+
+.as-mono {
+  font-family: var(--as-font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.as-display-title {
+  font-family: var(--as-font-serif);
+  font-size: clamp(3.25rem, 6.2vw, 6.25rem);
+  line-height: 0.96;
+  letter-spacing: -0.015em;
+  font-weight: 400;
+}
+
+.as-chapter-title {
+  font-family: var(--as-font-serif);
+  font-size: clamp(2.15rem, 4vw, 4rem);
+  line-height: 1.04;
+  font-weight: 400;
+}
+
+.as-region-heading {
+  font-family: var(--as-font-serif);
+  font-size: clamp(1.85rem, 3.2vw, 3.1rem);
+  line-height: 1.08;
+  font-weight: 400;
+}
+
+.as-section-heading {
+  font-family: var(--as-font-serif);
+  font-size: calc(1.65rem * var(--as-text-scale));
+  line-height: 1.15;
+  font-weight: 400;
+}
+
+.as-panel-heading {
+  font-family: var(--as-font-sans);
+  font-size: calc(1.125rem * var(--as-text-scale));
+  line-height: 1.3;
+  font-weight: 500;
+}
+
+.as-body {
+  font-family: var(--as-font-sans);
+  font-size: calc(0.9375rem * var(--as-text-scale));
+  line-height: 1.6;
+}
+
+.as-secondary {
+  font-family: var(--as-font-sans);
+  font-size: calc(0.8125rem * var(--as-text-scale));
+  line-height: 1.45;
+}
+
+.as-tech-label {
+  font-family: var(--as-font-mono);
+  font-size: calc(0.75rem * var(--as-text-scale));
+  letter-spacing: 0.1em;
+  line-height: 1.35;
+}
+
+.as-direct-shadow {
+  text-shadow: 0 1px 10px rgba(10, 14, 13, 0.78);
+}

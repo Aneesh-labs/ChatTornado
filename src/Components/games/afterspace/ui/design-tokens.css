@@ -1,0 +1,114 @@
+/* AFTERSPACE — Quiet Cosmic Minimalism Design Tokens */
+
+.afterspace-root {
+  /* Light surfaces */
+  --as-ivory: #EDEAE1;
+  --as-chalk: #F5F3ED;
+  --as-stone: #D5D2C8;
+  --as-sand: #BEBDB2;
+  --as-ash: #8F938C;
+
+  /* Dark surfaces */
+  --as-ink: #151A19;
+  --as-charcoal: #202625;
+  --as-graphite: #303735;
+  --as-smoke: #636C66;
+  --as-soft-white: #E8E9E2;
+
+  /* Environmental accents */
+  --as-sage: #89988A;
+  --as-dusty-blue: #8496A1;
+  --as-gold: #B99A70;
+  --as-terracotta: #A97C69;
+  --as-plum: #847A85;
+
+  /* Atmospheric surface treatments (Types A, B, C) */
+  --as-surface-solid: #151A19;
+  --as-surface-secondary: #202625;
+  --as-surface-raised: #303735;
+  --as-surface-atmospheric: rgba(21, 26, 25, 0.78);
+  --as-surface-atmospheric-soft: rgba(32, 38, 37, 0.72);
+  --as-border-subtle: rgba(232, 233, 226, 0.12);
+  --as-border-strong: rgba(232, 233, 226, 0.28);
+
+  /* Radii (strictly restrained: 2px, 4px, 6px) */
+  --as-radius-sm: 2px;
+  --as-radius-md: 4px;
+  --as-radius-lg: 6px;
+
+  /* Motion durations */
+  --as-dur-hover: 150ms;
+  --as-dur-select: 190ms;
+  --as-dur-panel: 260ms;
+  --as-dur-journal: 360ms;
+  --as-dur-menu: 640ms;
+  --as-dur-temporal: 1000ms;
+  --as-ease-calm: cubic-bezier(0.22, 1, 0.36, 1);
+
+  color: var(--as-soft-white);
+  background-color: var(--as-ink);
+}
+
+.afterspace-root[data-biome="desert"] {
+  --as-surface-atmospheric: rgba(38, 34, 29, 0.78);
+  --as-border-subtle: rgba(237, 234, 225, 0.16);
+}
+
+.afterspace-root[data-biome="monolith"] {
+  --as-surface-atmospheric: rgba(24, 29, 28, 0.8);
+}
+
+.afterspace-root[data-biome="observatory"] {
+  --as-surface-atmospheric: rgba(19, 24, 26, 0.8);
+}
+
+.afterspace-root[data-contrast="high"] {
+  --as-border-subtle: rgba(245, 243, 237, 0.32);
+  --as-surface-atmospheric: rgba(14, 18, 17, 0.92);
+}
+
+.afterspace-root[data-reduced-motion="true"] * {
+  transition-duration: 1ms !important;
+  animation-duration: 1ms !important;
+}
+
+.as-surface-solid {
+  background-color: var(--as-surface-solid);
+  border: 1px solid var(--as-border-subtle);
+  border-radius: var(--as-radius-md);
+}
+
+.as-surface-atmospheric {
+  background-color: var(--as-surface-atmospheric);
+  border: 1px solid var(--as-border-subtle);
+  border-radius: var(--as-radius-md);
+}
+
+.as-paper-surface {
+  background-color: var(--as-ivory);
+  color: var(--as-ink);
+  border: 1px solid var(--as-sand);
+  border-radius: var(--as-radius-md);
+}
+
+.as-paper-surface-dark {
+  background-color: var(--as-charcoal);
+  color: var(--as-soft-white);
+  border: 1px solid var(--as-border-subtle);
+  border-radius: var(--as-radius-md);
+}
+
+.as-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: var(--as-smoke) transparent;
+}
+
+.as-scroll::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+.as-scroll::-webkit-scrollbar-thumb {
+  background: var(--as-smoke);
+  border-radius: 2px;
+}
