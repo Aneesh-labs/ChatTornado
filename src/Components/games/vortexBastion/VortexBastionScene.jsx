@@ -661,6 +661,48 @@ const VortexBastionScene = ({
         }
       }
 
+      // Render 3D Floating Combat Popups (+credits⚡, SHATTER!, OVERCHARGE!)
+      if (sim.popups?.length) {
+        if (!scene.userData.popupCache) scene.userData.popupCache = new Map();
+        const cache = scene.userData.popupCache;
+        for (const pop of sim.popups) {
+          const key = `${pop.text}_${pop.color}`;
+          let tex = cache.get(key);
+          if (!tex) {
+            if (cache.size > 40) {
+              const firstKey = cache.keys().next().value;
+              cache.get(firstKey)?.dispose();
+              cache.delete(firstKey);
+            }
+            const c = document.createElement("canvas");
+            c.width = 256;
+            c.height = 64;
+            const pctx = c.getContext("2d");
+            pctx.font = "900 32px system-ui, sans-serif";
+            pctx.textAlign = "center";
+            pctx.textBaseline = "middle";
+            pctx.strokeStyle = "#020617";
+            pctx.lineWidth = 7;
+            pctx.strokeText(pop.text, 128, 32);
+            pctx.fillStyle = pop.color || "#fbbf24";
+            pctx.fillText(pop.text, 128, 32);
+            tex = new THREE.CanvasTexture(c);
+            tex.colorSpace = THREE.SRGBColorSpace;
+            cache.set(key, tex);
+          }
+          const spMat = new THREE.SpriteMaterial({
+            map: tex,
+            transparent: true,
+            opacity: Math.max(0, Math.min(1, pop.life / Math.max(0.01, pop.maxLife))),
+            depthWrite: false,
+          });
+          const sprite = new THREE.Sprite(spMat);
+          sprite.position.set(pop.x, pop.y, pop.z);
+          sprite.scale.set(1.4, 0.35, 1);
+          fxLayer.add(sprite);
+        }
+      }
+
       renderer.render(scene, camera);
       rafId = requestAnimationFrame(animate);
     };
@@ -677,6 +719,10 @@ const VortexBastionScene = ({
       tileTex.dispose();
       monolithTex.dispose();
       portalTex.dispose();
+      if (scene.userData.popupCache) {
+        for (const t of scene.userData.popupCache.values()) t.dispose();
+        scene.userData.popupCache.clear();
+      }
       if (renderer.domElement.parentNode === container) {
         container.removeChild(renderer.domElement);
       }

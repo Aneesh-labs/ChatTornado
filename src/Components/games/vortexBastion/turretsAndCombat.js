@@ -650,6 +650,18 @@ export function applyEnemyDamage(state, enemy, rawDmg, sourceTower, damageType =
       life: 0.4,
       maxLife: 0.4,
     });
+    if (state.popups) {
+      state.popups.push({
+        id: `pop_${state.nextId++}`,
+        text: `+${enemy.reward}⚡`,
+        color: "#fbbf24",
+        x: enemy.wx,
+        y: 0.85,
+        z: enemy.wz,
+        life: 0.85,
+        maxLife: 0.85,
+      });
+    }
   }
   return remaining;
 }
@@ -678,6 +690,18 @@ function triggerThermalShatter(state, epicEnemy, sourceTower) {
     life: 0.45,
     maxLife: 0.45,
   });
+  if (state.popups) {
+    state.popups.push({
+      id: `pop_${state.nextId++}`,
+      text: "SHATTER!",
+      color: "#38bdf8",
+      x: epicEnemy.wx,
+      y: 1.1,
+      z: epicEnemy.wz,
+      life: 1.0,
+      maxLife: 1.0,
+    });
+  }
   state.lastBanner = { text: "THERMAL SHATTER! ARMOR SHREDDED", color: "#38bdf8", life: 1.8 };
 }
 
@@ -698,6 +722,18 @@ function triggerOverchargeDischarge(state, enemy, sourceTower) {
     life: 0.35,
     maxLife: 0.35,
   });
+  if (state.popups) {
+    state.popups.push({
+      id: `pop_${state.nextId++}`,
+      text: "OVERCHARGE!",
+      color: "#facc15",
+      x: enemy.wx,
+      y: 1.1,
+      z: enemy.wz,
+      life: 1.0,
+      maxLife: 1.0,
+    });
+  }
   state.lastBanner = { text: "OVERCHARGE! +ARMOR SHRED", color: "#facc15", life: 1.8 };
 }
 
@@ -1051,6 +1087,14 @@ export function stepCombat(state, rawDt) {
   for (let i = state.effects.length - 1; i >= 0; i--) {
     state.effects[i].life -= dt;
     if (state.effects[i].life <= 0) state.effects.splice(i, 1);
+  }
+  if (state.popups) {
+    for (let i = state.popups.length - 1; i >= 0; i--) {
+      const pop = state.popups[i];
+      pop.life -= rawDt;
+      pop.y += rawDt * 0.85;
+      if (pop.life <= 0) state.popups.splice(i, 1);
+    }
   }
 
   // 6. Wave Clear -> Award 10% Compound Interest (capped at +60⚡) + Wave Bonus

@@ -16,6 +16,7 @@ import {
   Crosshair,
   Flame,
   Radio,
+  HelpCircle,
 } from "lucide-react";
 import { soundEngine } from "../../../utils/soundEffects";
 import {
@@ -44,6 +45,7 @@ const VortexBastionGame = ({ onBack, isMuted, onSaveScore }) => {
   const savedScoreRef = useRef(false);
 
   const [selectedBuildType, setSelectedBuildType] = useState("pulse");
+  const [showGuide, setShowGuide] = useState(false);
   const [activeAbilityMode, setActiveAbilityMode] = useState(null); // "ion" | "emp" | null
   const [previewCell, setPreviewCell] = useState(null);
   const [previewInfo, setPreviewInfo] = useState(null);
@@ -311,6 +313,14 @@ const VortexBastionGame = ({ onBack, isMuted, onSaveScore }) => {
           >
             <Camera className="w-3.5 h-3.5" /> {cameraPreset}
           </button>
+          <button
+            type="button"
+            onClick={() => setShowGuide((g) => !g)}
+            title="Tactical Field Guide"
+            className="p-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-cyan-200 cursor-pointer"
+          >
+            <HelpCircle className="w-4 h-4" />
+          </button>
         </div>
       </div>
 
@@ -384,16 +394,21 @@ const VortexBastionGame = ({ onBack, isMuted, onSaveScore }) => {
           </div>
         )}
 
-        {/* Top-Right Send Wave CTA Pill */}
+        {/* Top-Right Send Wave CTA Pill + Next Wave Threat Forecast */}
         {!hud.gameOver && (
-          <div className="absolute top-3 right-3 flex items-center gap-2">
+          <div className="absolute top-3 right-3 flex items-center gap-1.5">
+            {(hud.wave + 1) % 5 === 0 && (
+              <span className="px-2 py-1 rounded-lg bg-rose-500/25 border border-rose-400/50 text-rose-200 text-[10px] font-black animate-pulse">
+                BOSS W{hud.wave + 1}
+              </span>
+            )}
             <button
               type="button"
               onClick={handleSendWave}
               className="px-3.5 py-2 rounded-2xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-black text-xs shadow-[0_0_20px_rgba(6,182,212,0.45)] flex items-center gap-1.5 cursor-pointer active:scale-95"
             >
               <Play className="w-3.5 h-3.5 fill-current" />
-              {hud.enemiesLeft > 0 ? `Next Wave (${hud.enemiesLeft} left)` : `Send Wave ${hud.wave + 1}`}
+              {hud.enemiesLeft > 0 ? `+25⚡ Wave (${hud.enemiesLeft})` : `Wave ${hud.wave + 1}`}
             </button>
           </div>
         )}
@@ -502,22 +517,71 @@ const VortexBastionGame = ({ onBack, isMuted, onSaveScore }) => {
           </div>
         )}
 
-        {/* Game Over Overlay */}
+        {/* Tactical Field Guide Overlay */}
+        {showGuide && (
+          <div className="absolute inset-0 bg-slate-950/92 backdrop-blur-md p-4 flex flex-col justify-between overflow-y-auto custom-scrollbar z-20">
+            <div className="space-y-3 text-left">
+              <div className="flex items-center justify-between border-b border-white/10 pb-2">
+                <h4 className="text-sm font-black text-cyan-300">TACTICAL COMMAND BRIEF</h4>
+                <button
+                  type="button"
+                  onClick={() => setShowGuide(false)}
+                  className="p-1 rounded-lg bg-white/10 text-white cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+              <div className="space-y-1.5 text-[11px] text-white/80 leading-relaxed">
+                <p><strong className="text-cyan-300">A* Maze Routing:</strong> Enemies take the shortest path dynamically. Sculpt choke-points & detours without completely sealing corridors.</p>
+                <p><strong className="text-amber-300">Elemental Synergies:</strong></p>
+                <ul className="list-disc pl-4 space-y-1 text-white/75">
+                  <li><strong>Cryo + Siege Mortar (Pulse T3-B):</strong> Triggers <strong>THERMAL SHATTER</strong> AoE blast + shreds Armor!</li>
+                  <li><strong>Tesla + Rail Spire:</strong> Triggers <strong>OVERCHARGE</strong> bonus burst + Armor Shred!</li>
+                </ul>
+                <p><strong className="text-fuchsia-300">Squad Counters:</strong> Tesla deals <strong>2.5×</strong> vs Energy Shields; Cryo & Rail Orbital Marker reveal <strong>Stealth Cloakers</strong>; focus Healers first.</p>
+                <p><strong className="text-emerald-300">Economy:</strong> Earn <strong>+10% Interest</strong> (up to +60⚡) per cleared wave, or call waves early for instant <strong>+25⚡</strong>.</p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowGuide(false)}
+              className="mt-3 w-full py-2.5 rounded-xl bg-cyan-400 text-slate-950 font-black text-xs cursor-pointer"
+            >
+              Return to Command
+            </button>
+          </div>
+        )}
+
+        {/* Game Over Battle Report Overlay */}
         {hud.gameOver && (
-          <div className="absolute inset-0 bg-black/85 backdrop-blur-md flex flex-col items-center justify-center p-6 text-center gap-3">
-            <span className="text-5xl">💥</span>
+          <div className="absolute inset-0 bg-black/85 backdrop-blur-md flex flex-col items-center justify-center p-5 text-center gap-3 z-20">
+            <span className="text-4xl">💥</span>
             <h3 className="text-2xl font-black text-rose-400">BASTION BREACHED</h3>
-            <p className="text-xs text-white/75">
-              Survived <strong>{hud.wave}</strong> waves • Score{" "}
-              <strong className="text-cyan-300">{hud.score}</strong>
-            </p>
+            <div className="grid grid-cols-2 gap-2 w-full max-w-xs text-left">
+              <div className="p-2.5 rounded-xl bg-white/5 border border-white/10">
+                <p className="text-[10px] text-white/55">WAVES</p>
+                <p className="text-base font-black text-white">{hud.wave}</p>
+              </div>
+              <div className="p-2.5 rounded-xl bg-white/5 border border-white/10">
+                <p className="text-[10px] text-white/55">KILLS</p>
+                <p className="text-base font-black text-lime-300">{hud.kills}</p>
+              </div>
+              <div className="p-2.5 rounded-xl bg-white/5 border border-white/10">
+                <p className="text-[10px] text-white/55">SYNERGIES</p>
+                <p className="text-base font-black text-fuchsia-300">{hud.reactions}</p>
+              </div>
+              <div className="p-2.5 rounded-xl bg-white/5 border border-white/10">
+                <p className="text-[10px] text-white/55">SCORE</p>
+                <p className="text-base font-black text-cyan-300">{hud.score}</p>
+              </div>
+            </div>
             <div className="flex items-center gap-1.5 text-xs text-amber-300 font-bold">
-              <Trophy className="w-4 h-4" /> Best: {Math.max(highScore, hud.score)}
+              <Trophy className="w-4 h-4" /> Personal Best: {Math.max(highScore, hud.score)}
             </div>
             <button
               type="button"
               onClick={handleReset}
-              className="mt-2 px-7 py-3 rounded-2xl bg-cyan-400 text-slate-950 font-black text-sm flex items-center gap-2 cursor-pointer active:scale-95"
+              className="mt-1 px-7 py-3 rounded-2xl bg-cyan-400 text-slate-950 font-black text-sm flex items-center gap-2 cursor-pointer active:scale-95"
             >
               <RotateCcw className="w-4 h-4" /> Rebuild Defense
             </button>
