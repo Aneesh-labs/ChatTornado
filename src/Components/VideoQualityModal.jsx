@@ -43,7 +43,7 @@ export const VideoQualityModal = ({ isOpen, file, onClose, onConfirm }) => {
                     initial={{ opacity: 0, scale: 0.95, y: 10 }}
                     animate={{ opacity: 1, scale: 1, y: 0 }}
                     exit={{ opacity: 0, scale: 0.95, y: 10 }}
-                    className="relative w-full max-w-md rounded-3xl border border-cyan-500/30 bg-[#0a0f1d] p-5 sm:p-6 shadow-[0_0_40px_rgba(6,182,212,0.25)] text-white"
+                    className="relative w-full max-w-md max-h-[88dvh] overflow-y-auto overflow-x-hidden custom-scrollbar rounded-3xl border border-cyan-500/30 bg-[#0a0f1d] p-5 sm:p-6 shadow-[0_0_40px_rgba(6,182,212,0.25)] text-white"
                 >
                     {/* Header */}
                     <div className="flex items-center justify-between pb-3 border-b border-white/10">

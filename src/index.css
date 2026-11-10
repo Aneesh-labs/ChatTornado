@@ -48,10 +48,10 @@ body {
     color: #ffffff;
 }
 
-/* Cross-browser custom scrollbar */
+/* Cross-browser & mobile WebView touch-friendly scrollbars */
 * {
     scrollbar-width: thin;
-    scrollbar-color: rgba(255, 255, 255, 0.16) transparent;
+    scrollbar-color: rgba(56, 189, 248, 0.38) rgba(255, 255, 255, 0.03);
 }
 
 *::-webkit-scrollbar {
@@ -60,16 +60,18 @@ body {
 }
 
 *::-webkit-scrollbar-track {
-    background: transparent;
-}
-
-*::-webkit-scrollbar-thumb {
-    background: rgba(255, 255, 255, 0.14);
+    background: rgba(255, 255, 255, 0.03);
     border-radius: 9999px;
 }
 
-*::-webkit-scrollbar-thumb:hover {
-    background: rgba(255, 255, 255, 0.28);
+*::-webkit-scrollbar-thumb {
+    background: rgba(56, 189, 248, 0.32);
+    border-radius: 9999px;
+}
+
+*::-webkit-scrollbar-thumb:hover,
+*::-webkit-scrollbar-thumb:active {
+    background: rgba(56, 189, 248, 0.65);
 }
 
 @theme {
@@ -116,22 +118,38 @@ body {
         box-shadow: 0 8px 32px -4px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.1);
     }
 
+    .custom-scrollbar {
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: thin;
+        scrollbar-color: rgba(56, 189, 248, 0.5) rgba(255, 255, 255, 0.04);
+    }
+
     .custom-scrollbar::-webkit-scrollbar {
-        width: 4px;
-        height: 4px;
+        width: 5px;
+        height: 5px;
     }
 
     .custom-scrollbar::-webkit-scrollbar-track {
-        background: transparent;
+        background: rgba(255, 255, 255, 0.04);
+        border-radius: 9999px;
     }
 
     .custom-scrollbar::-webkit-scrollbar-thumb {
-        background: rgba(255, 255, 255, 0.14);
-        border-radius: 10px;
+        background: linear-gradient(180deg, rgba(56, 189, 248, 0.5), rgba(168, 85, 247, 0.45));
+        border-radius: 9999px;
     }
 
-    .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-        background: rgba(255, 255, 255, 0.3);
+    .custom-scrollbar::-webkit-scrollbar-thumb:hover,
+    .custom-scrollbar::-webkit-scrollbar-thumb:active {
+        background: linear-gradient(180deg, rgba(56, 189, 248, 0.8), rgba(168, 85, 247, 0.75));
+    }
+
+    .no-scrollbar::-webkit-scrollbar {
+        display: none;
+    }
+    .no-scrollbar {
+        -ms-overflow-style: none;
+        scrollbar-width: none;
     }
     /* --- SCI-FI & CYBERPUNK HUD ENHANCEMENTS --- */
     .hud-panel {

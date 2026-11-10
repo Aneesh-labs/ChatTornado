@@ -25,7 +25,7 @@ export const AndroidAppDownloadModal = ({ isOpen, onClose }) => {
                     initial={{ opacity: 0, scale: 0.95, y: 15 }}
                     animate={{ opacity: 1, scale: 1, y: 0 }}
                     exit={{ opacity: 0, scale: 0.95, y: 15 }}
-                    className="relative w-full max-w-md rounded-3xl border border-cyan-500/30 bg-[#090d18] p-6 shadow-[0_0_50px_rgba(6,182,212,0.25)] text-white select-none"
+                    className="relative w-full max-w-md max-h-[88dvh] overflow-y-auto overflow-x-hidden custom-scrollbar rounded-3xl border border-cyan-500/30 bg-[#090d18] p-5 sm:p-6 shadow-[0_0_50px_rgba(6,182,212,0.25)] text-white select-none"
                 >
                     {/* Glowing Header Beam */}
                     <div className="pointer-events-none absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-cyan-400 to-transparent opacity-80" />

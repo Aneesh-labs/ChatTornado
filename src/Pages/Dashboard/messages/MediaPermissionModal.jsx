@@ -22,7 +22,7 @@ export default function MediaPermissionModal({
                     initial={{ opacity: 0, scale: 0.95, y: 10 }}
                     animate={{ opacity: 1, scale: 1, y: 0 }}
                     exit={{ opacity: 0, scale: 0.95, y: 10 }}
-                    className="relative w-full max-w-md overflow-hidden rounded-3xl border border-white/20 bg-neutral-900/95 p-6 shadow-2xl backdrop-blur-2xl text-white"
+                    className="relative w-full max-w-md max-h-[88dvh] overflow-y-auto overflow-x-hidden custom-scrollbar rounded-3xl border border-white/20 bg-neutral-900/95 p-5 sm:p-6 shadow-2xl backdrop-blur-2xl text-white"
                 >
                     <button
                         type="button"

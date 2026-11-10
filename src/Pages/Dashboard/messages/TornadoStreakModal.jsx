@@ -77,7 +77,7 @@ export const TornadoStreakModal = ({ isOpen, onClose, user, streak, onStreakUpda
                     animate={{ opacity: 1, scale: 1, y: 0 }}
                     exit={{ opacity: 0, scale: 0.9, y: 20 }}
                     transition={{ type: "spring", damping: 25, stiffness: 350 }}
-                    className="relative w-full max-w-sm rounded-3xl bg-neutral-950/90 border border-orange-500/30 shadow-[0_0_50px_rgba(249,115,22,0.25)] overflow-hidden text-white"
+                    className="relative w-full max-w-sm max-h-[88dvh] overflow-y-auto overflow-x-hidden custom-scrollbar rounded-3xl bg-neutral-950/90 border border-orange-500/30 shadow-[0_0_50px_rgba(249,115,22,0.25)] text-white"
                 >
                     {/* Background Ambient Glow */}
                     <div className="absolute -top-24 left-1/2 -translate-x-1/2 w-64 h-64 bg-gradient-to-br from-orange-500/30 via-amber-500/20 to-purple-600/20 rounded-full blur-3xl pointer-events-none" />

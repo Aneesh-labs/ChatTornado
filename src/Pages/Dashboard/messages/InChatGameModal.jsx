@@ -163,7 +163,7 @@ export default function InChatGameModal({ isOpen, onClose, onStartGame, recipien
                     exit={{ scale: 0.9, y: 20 }}
                     transition={{ type: "spring", stiffness: 400, damping: 28 }}
                     onClick={(e) => e.stopPropagation()}
-                    className="relative w-full max-w-md overflow-hidden rounded-3xl border border-white/15 bg-gradient-to-b from-[#18132c] to-[#0d091a] p-6 shadow-2xl"
+                    className="relative w-full max-w-md max-h-[88dvh] overflow-y-auto overflow-x-hidden custom-scrollbar rounded-3xl border border-white/15 bg-gradient-to-b from-[#18132c] to-[#0d091a] p-5 sm:p-6 shadow-2xl"
                     style={{ boxShadow: "0 0 50px rgba(139,92,246,0.3)" }}
                 >
                     {/* Header */}

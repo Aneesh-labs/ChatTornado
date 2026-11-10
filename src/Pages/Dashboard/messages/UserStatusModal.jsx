@@ -52,7 +52,7 @@ export default function UserStatusModal({ isOpen, onClose, currentStatus, curren
                     initial={{ opacity: 0, scale: 0.95, y: 10 }}
                     animate={{ opacity: 1, scale: 1, y: 0 }}
                     exit={{ opacity: 0, scale: 0.95, y: 10 }}
-                    className="relative w-full max-w-sm bg-[#0e121b] border border-white/10 rounded-2xl p-6 shadow-2xl text-white overflow-hidden"
+                    className="relative w-full max-w-sm max-h-[88dvh] overflow-y-auto overflow-x-hidden custom-scrollbar bg-[#0e121b] border border-white/10 rounded-2xl p-5 sm:p-6 shadow-2xl text-white"
                 >
                     <div className="flex items-center justify-between pb-4 border-b border-white/10">
                         <div className="flex items-center gap-2">

@@ -149,7 +149,7 @@ const ChatMessages = React.memo(({
                 className="flex-1 overflow-y-auto px-2 sm:px-6 py-3 sm:py-6 space-y-1 sm:space-y-3 min-h-0 custom-scrollbar overscroll-contain select-none"
             >
                 {!hasMessages && isAiChat && (
-                    <div className="flex flex-col items-center justify-center h-full min-h-[300px] text-center px-4 py-8 select-none">
+                    <div className="flex flex-col items-center justify-center min-h-full text-center px-3 sm:px-4 py-6 sm:py-8 select-none">
                         <div className="w-16 h-16 rounded-3xl bg-gradient-to-tr from-cyan-500/20 via-sky-500/15 to-indigo-500/20 border border-cyan-400/35 flex items-center justify-center mb-4 shadow-[0_0_32px_rgba(6,182,212,0.25)]">
                             <Bot className="w-8 h-8 text-cyan-300 drop-shadow-[0_0_12px_rgba(6,182,212,0.6)]" />
                         </div>
@@ -196,7 +196,7 @@ const ChatMessages = React.memo(({
                 )}
 
                 {!hasMessages && !isAiChat && (
-                    <div className="flex flex-col items-center justify-center h-full min-h-[260px] text-center px-4 py-8 select-none">
+                    <div className="flex flex-col items-center justify-center min-h-full text-center px-4 py-6 sm:py-8 select-none">
                         <div className="w-14 h-14 rounded-2xl bg-white/[0.05] border border-white/10 flex items-center justify-center mb-3 shadow-inner">
                             <MessageSquare className="w-6 h-6 text-white/40" />
                         </div>

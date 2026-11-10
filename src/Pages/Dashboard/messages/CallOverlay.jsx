@@ -538,7 +538,7 @@ export default function CallOverlay({
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.95, y: 10 }}
                 transition={{ type: "spring", stiffness: 300, damping: 30 }}
-                className="relative z-10 w-full max-w-sm mx-4"
+                className="relative z-10 w-full max-w-sm mx-4 max-h-[90dvh] overflow-y-auto custom-scrollbar"
             >
                 <div
                     className="relative overflow-hidden rounded-[2.5rem] border backdrop-blur-2xl p-8 sm:p-10 text-center"

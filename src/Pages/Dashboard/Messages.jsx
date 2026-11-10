@@ -2804,7 +2804,7 @@ const Messages = () => {
                                     animate={{ y: 0, opacity: 1, scale: 1 }}
                                     exit={{ y: 40, opacity: 0, scale: 0.95 }}
                                     transition={{ type: "spring", stiffness: 400, damping: 30 }}
-                                    className="relative overflow-hidden rounded-t-3xl sm:rounded-3xl border border-white/[0.08] bg-[#0a0a12]/95 w-full max-w-lg shadow-2xl max-h-[85vh] overflow-y-auto"
+                                    className="relative overflow-y-auto overflow-x-hidden custom-scrollbar rounded-t-3xl sm:rounded-3xl border border-white/[0.08] bg-[#0a0a12]/95 w-full max-w-lg shadow-2xl max-h-[88dvh]"
                                     style={{ boxShadow: "0 0 60px rgba(139,92,246,0.08), 0 25px 50px -12px rgba(0,0,0,0.8)" }}
                                 >
                                     <div className="h-1 bg-gradient-to-r from-violet-500 via-fuchsia-500 to-cyan-500" />

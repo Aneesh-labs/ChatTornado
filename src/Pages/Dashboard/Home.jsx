@@ -95,7 +95,7 @@ export default function Home() {
     );
 
     return (
-        <main className="min-h-0 flex-1 overflow-y-auto p-4 text-white md:p-8 custom-scrollbar">
+        <main className="min-h-0 flex-1 overflow-y-auto p-4 pb-20 text-white md:p-8 custom-scrollbar">
             <section className="mx-auto flex w-full max-w-7xl flex-col gap-6">
                 {/* Hero Command Banner */}
                 <motion.div

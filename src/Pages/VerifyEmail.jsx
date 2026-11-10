@@ -164,10 +164,10 @@ export default function VerifyEmail() {
     };
 
     return (
-        <div className="flex h-screen w-screen items-center justify-center bg-[#07090d] text-white">
+        <div className="flex h-[100dvh] w-full overflow-y-auto overflow-x-hidden custom-scrollbar p-4 items-center justify-center bg-[#07090d] text-white">
             <div className="absolute inset-0 bg-[linear-gradient(135deg,rgba(125,211,252,0.08),transparent_34%,rgba(248,196,113,0.07)_68%,transparent)]" />
             
-            <div className="relative z-10 w-full max-w-md rounded-2xl border border-white/10 bg-[#090c12]/88 p-8 shadow-2xl backdrop-blur-2xl">
+            <div className="relative z-10 my-auto w-full max-w-md rounded-2xl border border-white/10 bg-[#090c12]/88 p-6 sm:p-8 shadow-2xl backdrop-blur-2xl max-h-[90dvh] overflow-y-auto custom-scrollbar">
                 
                 {status === "verifying" && (
                     <div className="flex flex-col items-center text-center">

@@ -380,7 +380,7 @@ export default function DarkWebHub() {
     };
 
     return (
-        <div className="flex h-full w-full flex-col overflow-y-auto bg-[#07090d] text-white">
+        <div className="flex h-full w-full flex-col overflow-y-auto custom-scrollbar pb-16 lg:pb-6 bg-[#07090d] text-white">
             {/* Top Command Banner with Extra Top Padding to Prevent Clipping */}
             <div className="relative border-b border-white/10 bg-[#090c14]/95 px-6 pt-7 pb-5 sm:px-8 sm:pt-8 backdrop-blur-2xl">
                 <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">

@@ -44,7 +44,7 @@ export default function GhostVaultModal({ isOpen, onClose, onVaultStateChange })
                     initial={{ opacity: 0, scale: 0.94 }}
                     animate={{ opacity: 1, scale: 1 }}
                     exit={{ opacity: 0, scale: 0.94 }}
-                    className="relative w-full max-w-sm rounded-2xl border border-white/10 bg-[#0c1017] p-6 shadow-2xl text-white select-none"
+                    className="relative w-full max-w-sm max-h-[88dvh] overflow-y-auto overflow-x-hidden custom-scrollbar rounded-2xl border border-white/10 bg-[#0c1017] p-5 sm:p-6 shadow-2xl text-white select-none"
                 >
                     <button
                         onClick={onClose}

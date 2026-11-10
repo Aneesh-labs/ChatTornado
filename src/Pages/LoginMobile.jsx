@@ -1348,7 +1348,7 @@ export default function LoginMobile() {
 
     return (
         <InteractionContext.Provider value={{ systemStateStep, vortexVelocityIntensity }}>
-            <div className="relative min-h-[100dvh] w-full text-white overflow-hidden flex flex-col items-center justify-start font-sans p-6 select-none touch-manipulation selection:bg-purple-500/30">
+            <div className="relative h-[100dvh] w-full text-white overflow-y-auto overflow-x-hidden custom-scrollbar flex flex-col items-center justify-start font-sans p-6 pb-16 select-none touch-manipulation selection:bg-purple-500/30">
 
                 {/* Living Ambient Computational Grids */}
                 <PremiumAmbientAtmosphere

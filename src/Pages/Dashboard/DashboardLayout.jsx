@@ -10,6 +10,7 @@ import {
     Radio,
     Settings,
     Shield,
+    Smartphone,
     Sparkles,
     UserRound,
     Zap,
@@ -17,6 +18,7 @@ import {
 } from "lucide-react";
 import { clearAdminSession } from "../../utils/adminSession";
 import PortfolioOnboardingModal from "../../Components/PortfolioOnboardingModal";
+import AndroidAppDownloadModal from "../../Components/AndroidAppDownloadModal";
 
 const navItems = [
     { to: "/home", label: "Home", icon: Home, badge: null },
@@ -47,6 +49,7 @@ export default function DashboardLayout() {
         return sessionStorage.getItem("onboardingCompleted") !== "true";
     });
     const [isMobileChatActive, setIsMobileChatActive] = useState(false);
+    const [showAndroidModal, setShowAndroidModal] = useState(false);
 
     const isAdmin = Boolean(
         role === "SUPER_ADMIN" ||
@@ -221,6 +224,18 @@ export default function DashboardLayout() {
 
                     <button
                         type="button"
+                        onClick={() => setShowAndroidModal(true)}
+                        className="flex min-h-[40px] w-full items-center justify-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/20 text-xs font-bold text-emerald-300 shadow-lg transition-all active:scale-[0.98] outline-none cursor-pointer mb-2 group"
+                        title="Download Native Android APK & QR"
+                    >
+                        <Smartphone className="h-4 w-4 text-emerald-400 group-hover:scale-110 transition-transform" />
+                        <span>Get Android App</span>
+                        <span className="rounded-full bg-emerald-500/25 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wider text-emerald-200">
+                            APK
+                        </span>
+                    </button>
+                    <button
+                        type="button"
                         onClick={() => setShowOnboarding(true)}
                         className="interactive-shimmer-btn flex min-h-[40px] w-full items-center justify-center gap-2 rounded-xl text-xs font-bold text-white shadow-lg transition-all active:scale-[0.98] outline-none cursor-pointer mb-2 group"
                         title="Interactive Guided Tour & Live Demo"
@@ -257,6 +272,15 @@ export default function DashboardLayout() {
                             </div>
                         </div>
                         <div className="flex items-center gap-2">
+                            <button
+                                type="button"
+                                onClick={() => setShowAndroidModal(true)}
+                                className="grid h-9 w-9 place-items-center rounded-xl border border-emerald-500/30 bg-emerald-500/15 text-emerald-300 active:scale-95 transition-all"
+                                aria-label="Get Android App APK"
+                                title="Get Android App (APK & QR)"
+                            >
+                                <Smartphone className="h-4 w-4 text-emerald-400" />
+                            </button>
                             <button
                                 type="button"
                                 onClick={() => setShowOnboarding(true)}

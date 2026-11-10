@@ -38,7 +38,7 @@ export default function DeadDropModal({ isOpen, onClose, onSendDeadDrop }) {
                     initial={{ opacity: 0, scale: 0.94, y: 12 }}
                     animate={{ opacity: 1, scale: 1, y: 0 }}
                     exit={{ opacity: 0, scale: 0.94, y: 12 }}
-                    className="relative w-full max-w-md rounded-2xl border border-amber-500/30 bg-[#0b0e17] p-5 sm:p-6 shadow-2xl text-white overflow-hidden"
+                    className="relative w-full max-w-md max-h-[88dvh] overflow-y-auto overflow-x-hidden custom-scrollbar rounded-2xl border border-amber-500/30 bg-[#0b0e17] p-5 sm:p-6 shadow-2xl text-white"
                 >
                     {/* Glowing sci-fi neon strip */}
                     <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-amber-400 to-transparent" />

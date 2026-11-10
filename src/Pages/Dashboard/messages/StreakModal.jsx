@@ -47,7 +47,7 @@ export default function StreakModal({ isOpen, onClose, targetUser }) {
                     initial={{ opacity: 0, scale: 0.9, y: 20 }}
                     animate={{ opacity: 1, scale: 1, y: 0 }}
                     exit={{ opacity: 0, scale: 0.9, y: 20 }}
-                    className="relative w-full max-w-md rounded-3xl bg-gradient-to-b from-[#131326] via-[#0d0d1a] to-[#07070f] border border-orange-500/30 p-6 shadow-2xl shadow-orange-500/20 overflow-hidden text-white"
+                    className="relative w-full max-w-md max-h-[88dvh] overflow-y-auto overflow-x-hidden custom-scrollbar rounded-3xl bg-gradient-to-b from-[#131326] via-[#0d0d1a] to-[#07070f] border border-orange-500/30 p-5 sm:p-6 shadow-2xl shadow-orange-500/20 text-white"
                 >
                     {/* Background glow orb */}
                     <div className="absolute -top-24 -left-24 w-56 h-56 rounded-full bg-gradient-to-br from-orange-500/20 to-red-500/0 blur-3xl pointer-events-none" />

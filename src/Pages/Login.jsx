@@ -53,7 +53,7 @@ export default function Login() {
   }, []);
 
   return (
-    <div className="relative min-h-screen w-full">
+    <div className="relative h-[100dvh] w-full overflow-y-auto overflow-x-hidden custom-scrollbar">
       {/* Floating 3-Day Shared Demo Quick Launcher (Positioned top-left to avoid telemetry pill on top-right) */}
       <div className="fixed top-3 left-3 sm:top-5 sm:left-6 z-40 flex items-center gap-2">
         <button
