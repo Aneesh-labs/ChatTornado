@@ -100,6 +100,9 @@ RECOMMENDED_GEMINI_MODELS = [
     "gemini-2.0-flash",
 ]
 
+_LAST_WORKING_GEMINI_MODEL: Optional[str] = None
+_UNAVAILABLE_GEMINI_MODELS: set = set()
+
 
 def extract_chunk_text(chunk: Any) -> str:
     """Safely extracts text string from a Gemini stream chunk without throwing ValueError on thought/tool parts."""
@@ -1543,9 +1546,18 @@ async def generate_ai_text_stream(
         types.SafetySetting(category=types.HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold=types.HarmBlockThreshold.BLOCK_NONE),
     ]
 
-    models_to_try = list(RECOMMENDED_GEMINI_MODELS)
-    if preferred_model:
-        models_to_try = [preferred_model] + [m for m in models_to_try if m != preferred_model]
+    global _LAST_WORKING_GEMINI_MODEL
+    ordered = []
+    if _LAST_WORKING_GEMINI_MODEL and _LAST_WORKING_GEMINI_MODEL not in _UNAVAILABLE_GEMINI_MODELS:
+        ordered.append(_LAST_WORKING_GEMINI_MODEL)
+    if preferred_model and preferred_model not in _UNAVAILABLE_GEMINI_MODELS and preferred_model not in ordered:
+        ordered.insert(0, preferred_model)
+    for m in RECOMMENDED_GEMINI_MODELS:
+        if m not in _UNAVAILABLE_GEMINI_MODELS and m not in ordered:
+            ordered.append(m)
+    if not ordered:
+        _UNAVAILABLE_GEMINI_MODELS.clear()
+        ordered = list(RECOMMENDED_GEMINI_MODELS)
 
     has_images = len(image_parts) > 0
     client = genai.Client(api_key=api_key)
@@ -1558,10 +1570,11 @@ async def generate_ai_text_stream(
     )
     search_quota_failed = False
 
-    for model_name in models_to_try:
+    for model_name in ordered:
         tool_options = [True, False] if (search_needed and not search_quota_failed) else [False]
 
         for use_search in tool_options:
+            emitted_any_chunk = False
             try:
                 gen_config = types.GenerateContentConfig(
                     system_instruction=system_prompt,
@@ -1581,6 +1594,7 @@ async def generate_ai_text_stream(
                 async for chunk in response_stream:
                     chunk_text = extract_chunk_text(chunk)
                     if chunk_text:
+                        emitted_any_chunk = True
                         full_accumulated_text += chunk_text
                         if on_chunk:
                             await on_chunk(chunk_text)
@@ -1590,8 +1604,8 @@ async def generate_ai_text_stream(
                         grounding_meta = getattr(candidate, "grounding_metadata", None)
                         if grounding_meta:
                             chunks = getattr(grounding_meta, "grounding_chunks", []) or []
-                            for c in chunks:
-                                web = getattr(c, "web", None)
+                            for ch in chunks:
+                                web = getattr(ch, "web", None)
                                 if web:
                                     uri = getattr(web, "uri", None)
                                     title = getattr(web, "title", None) or uri
@@ -1601,6 +1615,7 @@ async def generate_ai_text_stream(
                         pass
 
                 if full_accumulated_text:
+                    _LAST_WORKING_GEMINI_MODEL = model_name
                     if grounding_citations and "Sources" not in full_accumulated_text:
                         unique_sources = list(dict.fromkeys(grounding_citations))[:5]
                         source_block = "\n\n**🌐 Sources & Web References:**\n" + "\n".join(unique_sources)
@@ -1611,11 +1626,16 @@ async def generate_ai_text_stream(
                     return full_accumulated_text
 
             except Exception as stream_err:
+                if emitted_any_chunk and full_accumulated_text:
+                    return full_accumulated_text
                 err_s = str(stream_err)
                 try:
                     print(f"[AI_STREAM] Model {model_name} (search={use_search}) error: {err_s}", flush=True)
                 except Exception:
                     pass
+                if "404" in err_s or "NOT_FOUND" in err_s:
+                    _UNAVAILABLE_GEMINI_MODELS.add(model_name)
+                    break
                 if "429" in err_s or "RESOURCE_EXHAUSTED" in err_s or "quota" in err_s.lower():
                     if use_search:
                         search_quota_failed = True

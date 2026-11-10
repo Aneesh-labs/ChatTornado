@@ -1212,7 +1212,7 @@ async def websocket_endpoint(websocket: WebSocket):
                     bot = target_u
 
             if is_bot_target and bot:
-                async def handle_bot_reply(u_id: int, b_id: int, prompt_text: str, req_ai_mode: str = "DEFAULT", req_ai_model: Optional[str] = None, req_vault_context: Optional[str] = None):
+                async def handle_bot_reply(u_id: int, b_id: int, prompt_text: str, req_ai_mode: str = "DEFAULT", req_ai_model: Optional[str] = None, req_vault_context: Optional[str] = None, req_branch_id: Optional[int] = None):
                     await manager.send_personal_message(u_id, {
                         "type": "typing_start",
                         "sender_id": b_id
@@ -1416,6 +1416,7 @@ async def websocket_endpoint(websocket: WebSocket):
                             bot_message = Message(
                                 sender_id=b_id,
                                 receiver_id=u_id,
+                                branch_id=req_branch_id,
                                 message="",
                                 is_shielded=False,
                                 read_state="sent"
@@ -1438,6 +1439,7 @@ async def websocket_endpoint(websocket: WebSocket):
                                 "type": "ai_stream_start",
                                 "message_id": bot_message.id,
                                 "sender_id": b_id,
+                                "branch_id": req_branch_id,
                                 "created_at": str(bot_message.created_at)
                             })
 
@@ -1447,6 +1449,7 @@ async def websocket_endpoint(websocket: WebSocket):
                                 await manager.send_personal_message(u_id, {
                                     "type": "ai_stream_chunk",
                                     "message_id": bot_message.id,
+                                    "sender_id": b_id,
                                     "chunk": chunk_text
                                 })
 
@@ -1590,10 +1593,14 @@ async def websocket_endpoint(websocket: WebSocket):
                             asyncio.create_task(send_reminder_task(u_id, b_id, delay_sec, rem_msg))
                             reply_text = reply_text.replace(rem_match.group(0), f"*(Reminder set for {delay_sec} seconds)*")
 
+                        if not reply_text or not str(reply_text).strip():
+                            reply_text = "".join(accumulated_streamed_chunks) if (not direct_dispatched and accumulated_streamed_chunks) else "🤖 **VORTEX-9** received your message. Please try again in a moment!"
+
                         if direct_dispatched:
                             bot_message = Message(
                                 sender_id=b_id,
                                 receiver_id=u_id,
+                                branch_id=req_branch_id,
                                 message=reply_text,
                                 is_shielded=False,
                                 read_state="sent"
@@ -1621,6 +1628,7 @@ async def websocket_endpoint(websocket: WebSocket):
                             "message_id": bot_message.id,
                             "sender_id": b_id,
                             "receiver_id": u_id,
+                            "branch_id": req_branch_id,
                             "full_text": reply_text
                         })
 
@@ -1629,6 +1637,7 @@ async def websocket_endpoint(websocket: WebSocket):
                             "id": bot_message.id,
                             "sender_id": b_id,
                             "receiver_id": u_id,
+                            "branch_id": req_branch_id,
                             "message": reply_text,
                             "created_at": str(bot_message.created_at),
                             "is_shielded": False,
@@ -1703,7 +1712,7 @@ async def websocket_endpoint(websocket: WebSocket):
                         reply_db.close()
 
                 vault_ctx = data.get("vault_context")
-                asyncio.create_task(handle_bot_reply(user_id, bot.id, message_text, ai_mode, ai_model, vault_ctx))
+                asyncio.create_task(handle_bot_reply(user_id, bot.id, message_text, ai_mode, ai_model, vault_ctx, branch_id))
 
     except (WebSocketDisconnect, RuntimeError):
 

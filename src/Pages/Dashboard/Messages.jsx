@@ -1168,7 +1168,7 @@ const Messages = () => {
             ws.onopen = () => {
                 reconnectAttempts = 0;
                 setSocketReady(true);
-                flushOfflineQueue((text, opts) => sendMessage(text, opts));
+                flushOfflineQueue((text, opts) => sendMessageRef.current?.(text, { ...opts, _fromOfflineFlush: true }));
                 setSecurityStatus("SECURE");
                 setCallNotice((prev) => (prev.includes("Real-time connection") ? "" : prev));
 
@@ -1581,7 +1581,7 @@ const Messages = () => {
                             });
                         }
                         const currentChat = selectedUserRef.current;
-                        const isAiChat = Boolean(currentChat && (currentChat.is_bot || currentChat.username === "VORTEX-9" || areIdsEqual(currentChat.id, packet.sender_id)));
+                        const isAiChat = Boolean(currentChat && (currentChat.is_bot || currentChat.username === "VORTEX-9" || currentChat.username?.toUpperCase?.().includes("VORTEX") || areIdsEqual(currentChat.id, packet.sender_id)));
                         if (isAiChat) {
                             setMessages((prev) => {
                                 const exists = prev.some((m) => areIdsEqual(m.id, packet.message_id));
@@ -1594,6 +1594,7 @@ const Messages = () => {
                                         id: packet.message_id,
                                         sender_id: packet.sender_id,
                                         receiver_id: myUserId.current,
+                                        branch_id: packet.branch_id ?? null,
                                         message: "",
                                         created_at: packet.created_at || new Date().toISOString(),
                                         is_shielded: false,
@@ -1609,18 +1610,38 @@ const Messages = () => {
                     }
                     if (packet.type === "ai_stream_chunk") {
                         const currentChat = selectedUserRef.current;
-                        const isAiChat = Boolean(currentChat && (currentChat.is_bot || currentChat.username === "VORTEX-9" || areIdsEqual(currentChat.id, packet.sender_id)));
+                        const isAiChat = Boolean(currentChat && (currentChat.is_bot || currentChat.username === "VORTEX-9" || currentChat.username?.toUpperCase?.().includes("VORTEX") || (packet.sender_id != null && areIdsEqual(currentChat.id, packet.sender_id))));
                         if (isAiChat) {
-                            setMessages((prev) => prev.map((m) => {
-                                if (areIdsEqual(m.id, packet.message_id)) {
-                                    return {
-                                        ...m,
-                                        message: (m.message || "") + (packet.chunk || ""),
-                                        is_streaming: true
-                                    };
+                            setMessages((prev) => {
+                                const exists = prev.some((m) => areIdsEqual(m.id, packet.message_id));
+                                if (!exists) {
+                                    return [
+                                        ...prev,
+                                        {
+                                            id: packet.message_id,
+                                            sender_id: packet.sender_id || currentChat.id,
+                                            receiver_id: myUserId.current,
+                                            message: packet.chunk || "",
+                                            created_at: new Date().toISOString(),
+                                            is_shielded: false,
+                                            is_locked: false,
+                                            is_streaming: true,
+                                            read_state: "sent",
+                                            reactions: []
+                                        }
+                                    ];
                                 }
-                                return m;
-                            }));
+                                return prev.map((m) => {
+                                    if (areIdsEqual(m.id, packet.message_id)) {
+                                        return {
+                                            ...m,
+                                            message: (m.message || "") + (packet.chunk || ""),
+                                            is_streaming: true
+                                        };
+                                    }
+                                    return m;
+                                });
+                            });
                         }
                         return;
                     }
@@ -1635,18 +1656,39 @@ const Messages = () => {
                             });
                         }
                         const currentChat = selectedUserRef.current;
-                        const isAiChat = Boolean(currentChat && (currentChat.is_bot || currentChat.username === "VORTEX-9" || areIdsEqual(currentChat.id, packet.sender_id)));
+                        const isAiChat = Boolean(currentChat && (currentChat.is_bot || currentChat.username === "VORTEX-9" || currentChat.username?.toUpperCase?.().includes("VORTEX") || areIdsEqual(currentChat.id, packet.sender_id)));
                         if (isAiChat) {
-                            setMessages((prev) => prev.map((m) => {
-                                if (areIdsEqual(m.id, packet.message_id)) {
-                                    return {
-                                        ...m,
-                                        message: packet.full_text !== undefined ? packet.full_text : m.message,
-                                        is_streaming: false
-                                    };
+                            setMessages((prev) => {
+                                const exists = prev.some((m) => areIdsEqual(m.id, packet.message_id));
+                                if (!exists && packet.full_text) {
+                                    return [
+                                        ...prev,
+                                        {
+                                            id: packet.message_id,
+                                            sender_id: packet.sender_id || currentChat.id,
+                                            receiver_id: packet.receiver_id || myUserId.current,
+                                            branch_id: packet.branch_id ?? null,
+                                            message: packet.full_text,
+                                            created_at: new Date().toISOString(),
+                                            is_shielded: false,
+                                            is_locked: false,
+                                            is_streaming: false,
+                                            read_state: "sent",
+                                            reactions: []
+                                        }
+                                    ];
                                 }
-                                return m;
-                            }));
+                                return prev.map((m) => {
+                                    if (areIdsEqual(m.id, packet.message_id)) {
+                                        return {
+                                            ...m,
+                                            message: packet.full_text !== undefined ? packet.full_text : m.message,
+                                            is_streaming: false
+                                        };
+                                    }
+                                    return m;
+                                });
+                            });
                         }
                         return;
                     }
@@ -1813,34 +1855,14 @@ const Messages = () => {
 
     /* ── Message Sending (with rate limiting & sanitization) ────────────── */
     const sendMessage = useCallback((text, options = {}) => {
-        const currentTarget = activeUserRef.current || selectedUser;
-        if (!currentTarget) {
+        const activeChat = activeUserRef.current || selectedUser;
+        const targetReceiverId = options.receiver_id ?? activeChat?.id;
+        const currentTarget = activeChat && (!options.receiver_id || areIdsEqual(activeChat.id, options.receiver_id))
+            ? activeChat
+            : (usersRef.current.find((u) => areIdsEqual(u.id, targetReceiverId)) || activeChat);
+
+        if (!currentTarget && !targetReceiverId) {
             setCallNotice("Please select a conversation to send a message.");
-            return false;
-        }
-        if (!socketRef.current || socketRef.current.readyState !== WebSocket.OPEN) {
-            queueOfflineMessage({
-                temp_id,
-                receiver_id: currentTarget.id,
-                message: validation.text,
-                created_at: new Date().toISOString(),
-                ...options,
-            });
-            setCallNotice("Offline: Message queued locally. Will auto-sync when reconnected.");
-            setMessages((prev) => [...prev, {
-                temp_id,
-                sender_id: myUserId.current,
-                receiver_id: currentTarget.id,
-                message: validation.text,
-                created_at: new Date().toISOString(),
-                status: "pending_offline",
-                ...options,
-            }]);
-            return true;
-        }
-        const rateCheck = rateLimiterRef.current();
-        if (!rateCheck.allowed) {
-            setCallNotice(`Rate limit exceeded. Try again in ${rateCheck.retryAfter}s.`);
             return false;
         }
         const validation = validateMessage(text);
@@ -1848,7 +1870,37 @@ const Messages = () => {
             setCallNotice(validation.error);
             return false;
         }
-        const temp_id = generateSecureId();
+        const rateCheck = rateLimiterRef.current();
+        if (!rateCheck.allowed) {
+            setCallNotice(`Rate limit exceeded. Try again in ${rateCheck.retryAfter}s.`);
+            return false;
+        }
+        const temp_id = options.temp_id || generateSecureId();
+
+        if (!socketRef.current || socketRef.current.readyState !== WebSocket.OPEN) {
+            if (options._fromOfflineFlush) return false;
+            queueOfflineMessage({
+                temp_id,
+                receiver_id: targetReceiverId,
+                message: validation.text,
+                created_at: new Date().toISOString(),
+                ...options,
+            });
+            setCallNotice("Reconnecting... Message queued and will auto-send immediately.");
+            setMessages((prev) => {
+                if (prev.some((m) => areIdsEqual(m.temp_id, temp_id))) return prev;
+                return [...prev, {
+                    temp_id,
+                    sender_id: myUserId.current,
+                    receiver_id: targetReceiverId,
+                    message: validation.text,
+                    created_at: new Date().toISOString(),
+                    status: "pending_offline",
+                    ...options,
+                }];
+            });
+            return true;
+        }
         pendingTempIds.current.add(temp_id);
 
         // Handle Group Message Send
