@@ -529,9 +529,18 @@ const VortexBastionScene = ({
         mesh.position.set(e.wx, 0.38 + bob, e.wz);
         mesh.rotation.y = e.yaw;
 
-        const { hpBg, hpFill, coreMat, origHex } = mesh.userData;
-        coreMat.color.setHex(e.slowTimer > 0 ? 0x22d3ee : origHex);
-        coreMat.emissive.setHex(e.slowTimer > 0 ? 0x06b6d4 : origHex);
+        const { hpBg, hpFill, coreMat, armorMat, shieldSphere, origHex } = mesh.userData;
+        coreMat.color.setHex(e.slowTimer > 0 ? 0x22d3ee : e.burnTimer > 0 ? 0xf97316 : origHex);
+        coreMat.emissive.setHex(e.slowTimer > 0 ? 0x06b6d4 : e.burnTimer > 0 ? 0xea580c : origHex);
+        if (shieldSphere) {
+          shieldSphere.visible = (e.shield || 0) > 0;
+          shieldSphere.rotation.y = elapsed * 1.5;
+        }
+        if (e.stealthed) {
+          const revealed = (e.revealTimer || 0) > 0;
+          if (armorMat) armorMat.opacity = revealed ? 0.92 : 0.25;
+          coreMat.opacity = revealed ? 0.95 : 0.35;
+        }
         const hpRatio = Math.max(0.02, e.hp / Math.max(1, e.maxHp));
         hpFill.scale.x = hpRatio;
         hpFill.position.x = -(1 - hpRatio) * 0.24;
@@ -569,7 +578,7 @@ const VortexBastionScene = ({
       }
       for (const fx of sim.effects) {
         const tFrac = 1 - fx.life / Math.max(0.01, fx.maxLife);
-        if (fx.kind === "cryo_ring" || fx.kind === "explosion" || fx.kind === "upgrade") {
+        if (fx.kind === "cryo_ring" || fx.kind === "explosion" || fx.kind === "upgrade" || fx.kind === "shatter") {
           const rad = (fx.radius || 0.9) * Math.max(0.15, tFrac);
           const ring = new THREE.Mesh(
             new THREE.RingGeometry(Math.max(0.02, rad - 0.14), rad, 24),

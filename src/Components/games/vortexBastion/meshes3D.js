@@ -192,16 +192,32 @@ export function buildEnemyMesh(kind) {
   const group = new THREE.Group();
 
   const bodyCol =
-    kind === "juggernaut" ? 0xf97316 : kind === "swarmer" ? 0xeab308 : 0xf43f5e;
+    kind === "juggernaut"
+      ? 0xf97316
+      : kind === "swarmer"
+      ? 0xeab308
+      : kind === "shielded"
+      ? 0x38bdf8
+      : kind === "cloaker"
+      ? 0xc084fc
+      : kind === "healer"
+      ? 0x34d399
+      : 0xf43f5e;
+
+  const isCloak = kind === "cloaker";
   const armorMat = new THREE.MeshStandardMaterial({
     color: 0x0f172a,
     metalness: 0.75,
     roughness: 0.3,
+    transparent: isCloak,
+    opacity: isCloak ? 0.35 : 1,
   });
   const coreMat = new THREE.MeshStandardMaterial({
     color: bodyCol,
     emissive: bodyCol,
     emissiveIntensity: 1.4,
+    transparent: isCloak,
+    opacity: isCloak ? 0.45 : 1,
   });
 
   if (kind === "juggernaut") {
@@ -211,13 +227,21 @@ export function buildEnemyMesh(kind) {
     const crown = new THREE.Mesh(new THREE.OctahedronGeometry(0.2, 0), coreMat);
     crown.position.y = 0.24;
     group.add(crown);
-  } else if (kind === "swarmer") {
-    const dart = new THREE.Mesh(new THREE.ConeGeometry(0.22, 0.48, 6), coreMat);
+  } else if (kind === "swarmer" || kind === "cloaker") {
+    const dart = new THREE.Mesh(
+      new THREE.ConeGeometry(kind === "cloaker" ? 0.25 : 0.22, 0.5, 6),
+      coreMat
+    );
     dart.rotation.x = Math.PI / 2;
-    dart.castShadow = true;
+    dart.castShadow = !isCloak;
     group.add(dart);
+  } else if (kind === "healer") {
+    const pod = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, 0.24, 8), armorMat);
+    group.add(pod);
+    const medRing = new THREE.Mesh(new THREE.TorusGeometry(0.3, 0.04, 8, 20), coreMat);
+    medRing.rotation.x = Math.PI / 2;
+    group.add(medRing);
   } else {
-    // Standard hover drone
     const sphere = new THREE.Mesh(new THREE.OctahedronGeometry(0.24, 1), armorMat);
     sphere.castShadow = true;
     group.add(sphere);
@@ -226,12 +250,25 @@ export function buildEnemyMesh(kind) {
     group.add(eye);
   }
 
+  // Translucent Energy Shield Dome (shown whenever enemy.shield > 0)
+  const shieldSphere = new THREE.Mesh(
+    new THREE.SphereGeometry(0.42, 16, 12),
+    new THREE.MeshBasicMaterial({
+      color: 0x38bdf8,
+      transparent: true,
+      opacity: 0.26,
+      wireframe: true,
+    })
+  );
+  shieldSphere.visible = false;
+  group.add(shieldSphere);
+
   // Overhead 3D HP bar
   const hpBg = new THREE.Mesh(
     new THREE.PlaneGeometry(0.52, 0.075),
     new THREE.MeshBasicMaterial({ color: 0x020617, side: THREE.DoubleSide })
   );
-  hpBg.position.y = kind === "juggernaut" ? 0.56 : 0.44;
+  hpBg.position.y = kind === "juggernaut" ? 0.56 : 0.46;
 
   const hpFill = new THREE.Mesh(
     new THREE.PlaneGeometry(0.48, 0.05),
@@ -241,6 +278,6 @@ export function buildEnemyMesh(kind) {
   hpBg.add(hpFill);
   group.add(hpBg);
 
-  group.userData = { hpBg, hpFill, coreMat, origHex: bodyCol };
+  group.userData = { hpBg, hpFill, coreMat, armorMat, shieldSphere, origHex: bodyCol };
   return group;
 }

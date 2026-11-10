@@ -1,6 +1,9 @@
 /**
- * Core Combat Engine, 4 Articulated Turret Archetypes, Branching Tier 1-3 Upgrades,
- * Projectiles, Cryo Slow, Tesla Chain Lightning & Rail Pierce for Vortex Bastion.
+ * Core Combat Engine for Vortex Bastion:
+ * - 4 Articulated Turret Archetypes + Branching Tier 1-3 Upgrades
+ * - Specialized Enemies: Drone, Swarmer, Juggernaut (Armor), Aegis (Shield), Cloaker (Stealth), Healer
+ * - Elemental Synergy Matrix: Cryo + Siege Mortar => THERMAL SHATTER; Tesla + Rail => OVERCHARGE
+ * - Compound Interest (10% saved credits, max +60) & Early-Wave Send Bonus (+25)
  */
 
 import {
@@ -23,7 +26,7 @@ export const TURRET_CATALOG = {
     cost: 60,
     range: 2.55,
     damage: 18,
-    fireRate: 2.4, // shots/sec
+    fireRate: 2.4,
     projSpeed: 12.5,
     desc: "Rapid kinetic dual-cannon. High single-target DPS.",
     tier2Cost: 75,
@@ -43,7 +46,8 @@ export const TURRET_CATALOG = {
         damageMult: 2.2,
         fireRateMult: 0.85,
         splashRadius: 1.25,
-        desc: "Heavy explosive plasma shells with AoE blast.",
+        appliesBurn: true,
+        desc: "Explosive plasma shells; triggers Thermal Shatter on Chilled foes!",
       },
     },
   },
@@ -57,9 +61,9 @@ export const TURRET_CATALOG = {
     range: 2.35,
     damage: 10,
     fireRate: 1.0,
-    slowFactor: 0.42, // reduces speed by 42%
+    slowFactor: 0.42,
     slowDuration: 2.4,
-    desc: "Frost emitter chilling & slowing nearby squads.",
+    desc: "Frost emitter chilling foes & revealing Stealthed units.",
     tier2Cost: 90,
     branches: {
       A: {
@@ -94,7 +98,7 @@ export const TURRET_CATALOG = {
     fireRate: 1.35,
     chainCount: 3,
     chainRadius: 2.2,
-    desc: "High-voltage spire arcing chain lightning across foes.",
+    desc: "2.5× vs Energy Shields; chains arcs across squads.",
     tier2Cost: 115,
     branches: {
       A: {
@@ -114,7 +118,7 @@ export const TURRET_CATALOG = {
         fireRateMult: 0.95,
         chainCount: 3,
         stunDuration: 0.35,
-        desc: "Heavy voltage surge briefly stuns primary target.",
+        desc: "Heavy voltage surge stuns target & shreds armor on Rail marks.",
       },
     },
   },
@@ -129,7 +133,7 @@ export const TURRET_CATALOG = {
     damage: 68,
     fireRate: 0.58,
     pierceCount: 3,
-    desc: "Long-range electromagnetic beam piercing lined targets.",
+    desc: "Armor-piercing laser slicing lines & Overcharging Shocked foes.",
     tier2Cost: 135,
     branches: {
       A: {
@@ -149,7 +153,7 @@ export const TURRET_CATALOG = {
         fireRateMult: 1.35,
         pierceCount: 3,
         markVuln: 0.3,
-        desc: "Targets take +30% extra damage from all turrets.",
+        desc: "Reveals stealth & marks targets for +30% all-source damage.",
       },
     },
   },
@@ -168,6 +172,7 @@ export function computeTurretStats(type, tier = 1, branch = null) {
   let splashRadius = 0;
   let stunDuration = 0;
   let markVuln = 0;
+  let appliesBurn = false;
 
   if (tier >= 2) {
     range *= 1.1;
@@ -189,6 +194,7 @@ export function computeTurretStats(type, tier = 1, branch = null) {
     if (br.splashRadius) splashRadius = br.splashRadius;
     if (br.stunDuration) stunDuration = br.stunDuration;
     if (br.markVuln) markVuln = br.markVuln;
+    if (br.appliesBurn) appliesBurn = true;
   }
 
   return {
@@ -201,6 +207,7 @@ export function computeTurretStats(type, tier = 1, branch = null) {
     splashRadius,
     stunDuration,
     markVuln,
+    appliesBurn,
   };
 }
 
@@ -212,7 +219,7 @@ export function getUpgradeOptions(tower) {
       {
         tier: 2,
         branch: null,
-        label: `Upgrade Tier 2`,
+        label: "Upgrade Tier 2",
         cost: catalog.tier2Cost,
         desc: "+45% DMG, +15% Fire Rate & +10% Range",
       },
@@ -234,16 +241,20 @@ export function createCombatState(grid) {
     coreHp: 20,
     maxCoreHp: 20,
     wave: 0,
+    waveActive: false,
     score: 0,
     kills: 0,
+    reactionsTriggered: 0,
     speedMult: 1,
     towers: [],
     enemies: [],
     projectiles: [],
     effects: [],
+    popups: [],
     spawnQueue: [],
     spawnCooldown: 0,
     nextId: 1,
+    lastBanner: null,
     gameOver: false,
   };
 }
@@ -260,7 +271,6 @@ export function placeTurret(state, type, cell) {
   state.credits -= cat.cost;
 
   const pos = gridToWorld(cell.col, cell.row);
-  const stats = computeTurretStats(type, 1, null);
   const tower = {
     id: `t_${state.nextId++}`,
     type,
@@ -271,18 +281,15 @@ export function placeTurret(state, type, cell) {
     tier: 1,
     branch: null,
     totalInvested: cat.cost,
-    targeting: "first", // "first" | "strongest" | "close"
+    targeting: "first",
     yaw: 0,
     cooldown: 0,
     recoil: 0,
     kills: 0,
-    stats,
+    stats: computeTurretStats(type, 1, null),
   };
   state.towers.push(tower);
-
-  // Re-route active enemies smoothly around new tower
   rerouteActiveEnemies(state);
-
   return { ok: true, tower };
 }
 
@@ -350,24 +357,63 @@ export function rerouteActiveEnemies(state) {
   }
 }
 
+export function buildWaveRoster(waveNum) {
+  const count = 6 + waveNum * 2;
+  const roster = [];
+  for (let i = 0; i < count; i++) {
+    let kind = "drone";
+    if (waveNum >= 4 && i % 7 === 6) kind = "healer";
+    else if (waveNum >= 3 && i % 6 === 4) kind = "cloaker";
+    else if (waveNum >= 2 && i % 5 === 3) kind = "shielded";
+    else if (waveNum >= 2 && i % 4 === 3) kind = "juggernaut";
+    else if (waveNum >= 3 && i % 5 === 2) kind = "swarmer";
+
+    const hpScale = 46 + waveNum * 24;
+    const specs = {
+      drone: { hpMult: 1.0, speed: 1.55 + Math.min(0.6, waveNum * 0.05), reward: 14, dmg: 1, armor: 0, shield: 0 },
+      swarmer: { hpMult: 0.68, speed: 2.45, reward: 12, dmg: 1, armor: 0, shield: 0 },
+      juggernaut: { hpMult: 2.3, speed: 1.05, reward: 26, dmg: 2, armor: 8 + waveNum * 2, shield: 0 },
+      shielded: { hpMult: 1.15, speed: 1.45, reward: 22, dmg: 1, armor: 0, shield: Math.round(hpScale * 0.9) },
+      cloaker: { hpMult: 0.95, speed: 1.85, reward: 20, dmg: 1, armor: 0, shield: 0 },
+      healer: { hpMult: 1.1, speed: 1.35, reward: 24, dmg: 1, armor: 0, shield: Math.round(hpScale * 0.4) },
+    }[kind];
+
+    const maxHp = Math.round(hpScale * specs.hpMult);
+    roster.push({
+      kind,
+      hp: maxHp,
+      maxHp,
+      shield: specs.shield,
+      maxShield: specs.shield,
+      armor: specs.armor,
+      speed: specs.speed,
+      reward: specs.reward,
+      coreDmg: specs.dmg,
+      stealthed: kind === "cloaker",
+    });
+  }
+  return roster;
+}
+
 export function enqueueWave(state) {
   if (state.gameOver) return false;
-  state.wave += 1;
-  const w = state.wave;
-  const count = 6 + w * 2;
-  const mainPath = findPath(state.grid, SPAWN_CELL, CORE_CELL) || [SPAWN_CELL, CORE_CELL];
 
-  for (let i = 0; i < count; i++) {
-    const isHeavy = w >= 2 && i % 4 === 3;
-    const isFast = w >= 3 && i % 5 === 2;
-    const baseHp = Math.round((46 + w * 24) * (isHeavy ? 2.3 : isFast ? 0.68 : 1));
+  // Early-Send Bonus if calling new wave while active squad still fighting!
+  let earlyBonus = 0;
+  if (state.wave > 0 && (state.enemies.length > 0 || state.spawnQueue.length > 0)) {
+    earlyBonus = 25;
+    state.credits += earlyBonus;
+    state.lastBanner = { text: `EARLY CALL +${earlyBonus}⚡`, color: "#fbbf24", life: 2.2 };
+  }
+
+  state.wave += 1;
+  state.waveActive = true;
+  const mainPath = findPath(state.grid, SPAWN_CELL, CORE_CELL) || [SPAWN_CELL, CORE_CELL];
+  const roster = buildWaveRoster(state.wave);
+
+  for (const unit of roster) {
     state.spawnQueue.push({
-      kind: isHeavy ? "juggernaut" : isFast ? "swarmer" : "drone",
-      hp: baseHp,
-      maxHp: baseHp,
-      speed: isHeavy ? 1.05 : isFast ? 2.45 : 1.55 + Math.min(0.6, w * 0.05),
-      reward: isHeavy ? 24 : isFast ? 12 : 14,
-      coreDmg: isHeavy ? 2 : 1,
+      ...unit,
       pathSnapshot: mainPath,
     });
   }
@@ -375,15 +421,56 @@ export function enqueueWave(state) {
   return true;
 }
 
+export function createEnemyInstance(template, idNum, path) {
+  const startW = gridToWorld(path[0].col, path[0].row);
+  return {
+    id: `e_${idNum}`,
+    kind: template.kind,
+    hp: template.hp,
+    maxHp: template.maxHp,
+    shield: template.shield || 0,
+    maxShield: template.maxShield || 0,
+    shieldRegenDelay: 0,
+    armor: template.armor || 0,
+    baseSpeed: template.speed,
+    reward: template.reward,
+    coreDmg: template.coreDmg,
+    col: path[0].col,
+    row: path[0].row,
+    wx: startW.x,
+    wz: startW.z,
+    yaw: 0,
+    path,
+    waypointIdx: path.length > 1 ? 1 : 0,
+    progressRatio: 0,
+    slowFactor: 0,
+    slowTimer: 0,
+    shockTimer: 0,
+    burnTimer: 0,
+    stunTimer: 0,
+    armorShredTimer: 0,
+    healCooldown: template.kind === "healer" ? 1.6 : 0,
+    stealthed: Boolean(template.stealthed),
+    revealTimer: 0,
+    vulnBonus: 0,
+    dead: false,
+  };
+}
+
+function isTargetable(tower, enemy) {
+  const dist = Math.hypot(enemy.wx - tower.wx, enemy.wz - tower.wz);
+  if (dist > tower.stats.range || enemy.hp <= 0 || enemy.dead) return false;
+  if (!enemy.stealthed || enemy.revealTimer > 0) return true;
+  // Cloaked units are only targetable at close sensor range (<= 1.95 tiles)
+  return dist <= 1.95;
+}
+
 function chooseTarget(tower, enemies) {
-  const candidates = enemies.filter((e) => {
-    const dist = Math.hypot(e.wx - tower.wx, e.wz - tower.wz);
-    return dist <= tower.stats.range && e.hp > 0;
-  });
+  const candidates = enemies.filter((e) => isTargetable(tower, e));
   if (candidates.length === 0) return null;
 
   if (tower.targeting === "strongest") {
-    return candidates.reduce((a, b) => (b.hp > a.hp ? b : a));
+    return candidates.reduce((a, b) => (b.hp + b.shield > a.hp + a.shield ? b : a));
   }
   if (tower.targeting === "close") {
     return candidates.reduce((a, b) =>
@@ -392,16 +479,37 @@ function chooseTarget(tower, enemies) {
         : b
     );
   }
-  // Default: "first" (furthest along path / closest to Core)
-  return candidates.reduce((a, b) =>
-    b.progressRatio > a.progressRatio ? b : a
-  );
+  return candidates.reduce((a, b) => (b.progressRatio > a.progressRatio ? b : a));
 }
 
-function applyEnemyDamage(state, enemy, rawDmg, sourceTower) {
+export function applyEnemyDamage(state, enemy, rawDmg, sourceTower, damageType = "kinetic") {
+  if (enemy.dead) return 0;
+
+  // Rail ignores flat armor; Armor Shred halves remaining armor
+  const effectiveArmor =
+    damageType === "pierce" || damageType === "thermal"
+      ? 0
+      : (enemy.armor || 0) * (enemy.armorShredTimer > 0 ? 0.35 : 1);
+
   const mult = 1 + (enemy.vulnBonus || 0);
-  const dmg = Math.round(rawDmg * mult);
-  enemy.hp -= dmg;
+  let remaining = Math.max(1, Math.round((rawDmg - effectiveArmor) * mult));
+
+  // Energy Shield absorbs damage first; Tesla / Electric deals 2.5x shield damage!
+  if (enemy.shield > 0) {
+    enemy.shieldRegenDelay = 2.5;
+    const shieldMult = damageType === "electric" ? 2.5 : 1.0;
+    const effectiveShieldHit = remaining * shieldMult;
+    if (effectiveShieldHit <= enemy.shield) {
+      enemy.shield -= effectiveShieldHit;
+      return remaining;
+    } else {
+      const leftoverRatio = (effectiveShieldHit - enemy.shield) / effectiveShieldHit;
+      enemy.shield = 0;
+      remaining = Math.round(remaining * leftoverRatio);
+    }
+  }
+
+  enemy.hp -= remaining;
   if (enemy.hp <= 0 && !enemy.dead) {
     enemy.dead = true;
     state.credits += enemy.reward;
@@ -419,18 +527,69 @@ function applyEnemyDamage(state, enemy, rawDmg, sourceTower) {
       maxLife: 0.4,
     });
   }
-  return dmg;
+  return remaining;
+}
+
+function triggerThermalShatter(state, epicEnemy, sourceTower) {
+  state.reactionsTriggered += 1;
+  epicEnemy.slowTimer = 0;
+  epicEnemy.slowFactor = 0;
+  epicEnemy.armorShredTimer = 4.0;
+  const blastDmg = 45 + state.wave * 10;
+
+  for (const other of state.enemies) {
+    if (!other.dead && Math.hypot(other.wx - epicEnemy.wx, other.wz - epicEnemy.wz) <= 1.6) {
+      other.armorShredTimer = Math.max(other.armorShredTimer, 4.0);
+      applyEnemyDamage(state, other, blastDmg, sourceTower, "thermal");
+    }
+  }
+  state.effects.push({
+    id: `fx_${state.nextId++}`,
+    kind: "shatter",
+    x: epicEnemy.wx,
+    y: 0.35,
+    z: epicEnemy.wz,
+    radius: 1.65,
+    color: 0x38bdf8,
+    life: 0.45,
+    maxLife: 0.45,
+  });
+  state.lastBanner = { text: "THERMAL SHATTER! ARMOR SHREDDED", color: "#38bdf8", life: 1.8 };
+}
+
+function triggerOverchargeDischarge(state, enemy, sourceTower) {
+  state.reactionsTriggered += 1;
+  enemy.shockTimer = 0;
+  enemy.armorShredTimer = Math.max(enemy.armorShredTimer, 3.5);
+  const bonusDmg = 40 + state.wave * 8;
+  applyEnemyDamage(state, enemy, bonusDmg, sourceTower, "electric");
+  state.effects.push({
+    id: `fx_${state.nextId++}`,
+    kind: "cryo_ring",
+    x: enemy.wx,
+    y: 0.4,
+    z: enemy.wz,
+    radius: 1.35,
+    color: 0xfacc15,
+    life: 0.35,
+    maxLife: 0.35,
+  });
+  state.lastBanner = { text: "OVERCHARGE! +ARMOR SHRED", color: "#facc15", life: 1.8 };
 }
 
 /**
- * Steps full real-time tower defense simulation by `rawDt` seconds.
- * Returns events for audio: `{ fired: Set, killCount, leaked }`
+ * Steps real-time simulation by `rawDt` seconds.
  */
 export function stepCombat(state, rawDt) {
-  const audioEvents = { fired: new Set(), killCount: 0, leaked: false };
+  const audioEvents = { fired: new Set(), killCount: 0, leaked: false, reaction: false, waveCleared: false };
   if (state.gameOver) return audioEvents;
 
   const dt = Math.min(0.05, Math.max(0.001, rawDt)) * state.speedMult;
+
+  if (state.lastBanner) {
+    state.lastBanner.life -= dt;
+    if (state.lastBanner.life <= 0) state.lastBanner = null;
+  }
 
   // 1. Wave Spawning
   if (state.spawnQueue.length > 0) {
@@ -438,34 +597,12 @@ export function stepCombat(state, rawDt) {
     if (state.spawnCooldown <= 0) {
       const template = state.spawnQueue.shift();
       const freshPath = findPath(state.grid, SPAWN_CELL, CORE_CELL) || template.pathSnapshot;
-      const startW = gridToWorld(freshPath[0].col, freshPath[0].row);
-      state.enemies.push({
-        id: `e_${state.nextId++}`,
-        kind: template.kind,
-        hp: template.hp,
-        maxHp: template.maxHp,
-        baseSpeed: template.speed,
-        reward: template.reward,
-        coreDmg: template.coreDmg,
-        col: freshPath[0].col,
-        row: freshPath[0].row,
-        wx: startW.x,
-        wz: startW.z,
-        yaw: 0,
-        path: freshPath,
-        waypointIdx: freshPath.length > 1 ? 1 : 0,
-        progressRatio: 0,
-        slowFactor: 0,
-        slowTimer: 0,
-        stunTimer: 0,
-        vulnBonus: 0,
-        dead: false,
-      });
-      state.spawnCooldown = template.kind === "swarmer" ? 0.45 : 0.72;
+      state.enemies.push(createEnemyInstance(template, state.nextId++, freshPath));
+      state.spawnCooldown = template.kind === "swarmer" ? 0.42 : 0.72;
     }
   }
 
-  // 2. Enemy Movement & Status Timers
+  // 2. Enemy Movement, Shield Regen, Healer Pulse & Status Timers
   for (let i = state.enemies.length - 1; i >= 0; i--) {
     const e = state.enemies[i];
     if (e.dead || e.hp <= 0) {
@@ -478,6 +615,53 @@ export function stepCombat(state, rawDt) {
       e.slowTimer = Math.max(0, e.slowTimer - dt);
       if (e.slowTimer === 0) e.slowFactor = 0;
     }
+    if (e.shockTimer > 0) e.shockTimer = Math.max(0, e.shockTimer - dt);
+    if (e.armorShredTimer > 0) e.armorShredTimer = Math.max(0, e.armorShredTimer - dt);
+    if (e.revealTimer > 0) e.revealTimer = Math.max(0, e.revealTimer - dt);
+
+    // Burn DOT
+    if (e.burnTimer > 0) {
+      e.burnTimer = Math.max(0, e.burnTimer - dt);
+      e.hp -= 12 * dt;
+      if (e.hp <= 0) {
+        applyEnemyDamage(state, e, 1, null, "thermal");
+        continue;
+      }
+    }
+
+    // Shield Regeneration after delay
+    if (e.maxShield > 0) {
+      if (e.shieldRegenDelay > 0) {
+        e.shieldRegenDelay = Math.max(0, e.shieldRegenDelay - dt);
+      } else if (e.shield < e.maxShield) {
+        e.shield = Math.min(e.maxShield, e.shield + 14 * dt);
+      }
+    }
+
+    // Healer Nanite Pulse
+    if (e.kind === "healer" && e.stunTimer <= 0) {
+      e.healCooldown -= dt;
+      if (e.healCooldown <= 0) {
+        e.healCooldown = 2.2;
+        for (const ally of state.enemies) {
+          if (!ally.dead && ally.hp < ally.maxHp && Math.hypot(ally.wx - e.wx, ally.wz - e.wz) <= 2.1) {
+            ally.hp = Math.min(ally.maxHp, ally.hp + Math.round(ally.maxHp * 0.14));
+          }
+        }
+        state.effects.push({
+          id: `fx_${state.nextId++}`,
+          kind: "cryo_ring",
+          x: e.wx,
+          y: 0.2,
+          z: e.wz,
+          radius: 1.9,
+          color: 0x34d399,
+          life: 0.4,
+          maxLife: 0.4,
+        });
+      }
+    }
+
     if (e.stunTimer > 0) {
       e.stunTimer = Math.max(0, e.stunTimer - dt);
       continue;
@@ -514,7 +698,6 @@ export function stepCombat(state, rawDt) {
 
     e.progressRatio = e.waypointIdx / Math.max(1, e.path.length - 1);
 
-    // Reached Bastion Core!
     if (e.waypointIdx >= e.path.length) {
       state.coreHp = Math.max(0, state.coreHp - e.coreDmg);
       audioEvents.leaked = true;
@@ -534,7 +717,6 @@ export function stepCombat(state, rawDt) {
     const target = chooseTarget(t, state.enemies);
     if (!target) continue;
 
-    // Smooth yaw turn toward target
     const desiredYaw = Math.atan2(target.wx - t.wx, target.wz - t.wz);
     let diff = desiredYaw - t.yaw;
     while (diff > Math.PI) diff -= Math.PI * 2;
@@ -559,16 +741,22 @@ export function stepCombat(state, rawDt) {
         speed: TURRET_CATALOG.pulse.projSpeed,
         damage: t.stats.damage,
         splashRadius: t.stats.splashRadius || 0,
+        appliesBurn: Boolean(t.stats.appliesBurn),
         color: t.branch === "B" ? 0xf97316 : 0x38bdf8,
       });
     } else if (t.type === "cryo") {
-      // Expanding frost dome damaging & chilling ALL enemies in range
       for (const e of state.enemies) {
         if (Math.hypot(e.wx - t.wx, e.wz - t.wz) <= t.stats.range) {
           e.slowFactor = Math.max(e.slowFactor, t.stats.slowFactor);
           e.slowTimer = Math.max(e.slowTimer, TURRET_CATALOG.cryo.slowDuration);
+          e.revealTimer = Math.max(e.revealTimer, 3.0); // reveals cloaked units
           if (t.tier >= 2) e.vulnBonus = Math.max(e.vulnBonus, 0.15);
-          applyEnemyDamage(state, e, t.stats.damage, t);
+          if (e.burnTimer > 0) {
+            e.burnTimer = 0;
+            triggerThermalShatter(state, e, t);
+            audioEvents.reaction = true;
+          }
+          applyEnemyDamage(state, e, t.stats.damage, t, "cryo");
         }
       }
       state.effects.push({
@@ -588,7 +776,8 @@ export function stepCombat(state, rawDt) {
         { x: t.wx, y: 0.88, z: t.wz },
         { x: target.wx, y: 0.48, z: target.wz },
       ];
-      applyEnemyDamage(state, target, t.stats.damage, t);
+      target.shockTimer = Math.max(target.shockTimer, 3.0);
+      applyEnemyDamage(state, target, t.stats.damage, t, "electric");
       if (t.stats.stunDuration > 0) {
         target.stunTimer = Math.max(target.stunTimer, t.stats.stunDuration);
       }
@@ -605,8 +794,9 @@ export function stepCombat(state, rawDt) {
         );
         if (!nextHop) break;
         hitSet.add(nextHop.id);
+        nextHop.shockTimer = Math.max(nextHop.shockTimer, 3.0);
         chainPoints.push({ x: nextHop.wx, y: 0.48, z: nextHop.wz });
-        applyEnemyDamage(state, nextHop, Math.round(t.stats.damage * Math.pow(0.8, c)), t);
+        applyEnemyDamage(state, nextHop, Math.round(t.stats.damage * Math.pow(0.8, c)), t, "electric");
         curSource = nextHop;
       }
 
@@ -619,7 +809,6 @@ export function stepCombat(state, rawDt) {
         maxLife: 0.18,
       });
     } else if (t.type === "rail") {
-      // Piercing supersonic beam along line from turret through primary target
       const dx = target.wx - t.wx;
       const dz = target.wz - t.wz;
       const len = Math.max(0.01, Math.hypot(dx, dz));
@@ -638,8 +827,13 @@ export function stepCombat(state, rawDt) {
         if (perp <= 0.48) {
           if (t.stats.markVuln > 0) {
             e.vulnBonus = Math.max(e.vulnBonus, t.stats.markVuln);
+            e.revealTimer = Math.max(e.revealTimer, 4.0);
           }
-          applyEnemyDamage(state, e, t.stats.damage, t);
+          if (e.shockTimer > 0) {
+            triggerOverchargeDischarge(state, e, t);
+            audioEvents.reaction = true;
+          }
+          applyEnemyDamage(state, e, t.stats.damage, t, "pierce");
           pierced += 1;
         }
       }
@@ -660,7 +854,7 @@ export function stepCombat(state, rawDt) {
     }
   }
 
-  // 4. Projectile Flight & Impact
+  // 4. Projectiles Flight & Impact (including Siege Mortar Thermal Shatter!)
   for (let i = state.projectiles.length - 1; i >= 0; i--) {
     const pr = state.projectiles[i];
     const target = state.enemies.find((e) => e.id === pr.targetId && !e.dead);
@@ -679,7 +873,15 @@ export function stepCombat(state, rawDt) {
       if (pr.splashRadius > 0) {
         for (const e of state.enemies) {
           if (Math.hypot(e.wx - pr.lastX, e.wz - pr.lastZ) <= pr.splashRadius) {
-            applyEnemyDamage(state, e, pr.damage, srcTower);
+            if (pr.appliesBurn) {
+              if (e.slowTimer > 0) {
+                triggerThermalShatter(state, e, srcTower);
+                audioEvents.reaction = true;
+              } else {
+                e.burnTimer = Math.max(e.burnTimer, 3.0);
+              }
+            }
+            applyEnemyDamage(state, e, pr.damage, srcTower, "kinetic");
           }
         }
         state.effects.push({
@@ -694,7 +896,7 @@ export function stepCombat(state, rawDt) {
           maxLife: 0.3,
         });
       } else if (target) {
-        applyEnemyDamage(state, target, pr.damage, srcTower);
+        applyEnemyDamage(state, target, pr.damage, srcTower, "kinetic");
       }
       state.projectiles.splice(i, 1);
     } else {
@@ -703,7 +905,7 @@ export function stepCombat(state, rawDt) {
     }
   }
 
-  // 5. Cleanup Dead Enemies & Visual Effects
+  // 5. Cleanup Dead Enemies & FX
   for (let i = state.enemies.length - 1; i >= 0; i--) {
     if (state.enemies[i].dead || state.enemies[i].hp <= 0) {
       state.enemies.splice(i, 1);
@@ -713,6 +915,21 @@ export function stepCombat(state, rawDt) {
   for (let i = state.effects.length - 1; i >= 0; i--) {
     state.effects[i].life -= dt;
     if (state.effects[i].life <= 0) state.effects.splice(i, 1);
+  }
+
+  // 6. Wave Clear -> Award 10% Compound Interest (capped at +60⚡) + Wave Bonus
+  if (state.waveActive && state.spawnQueue.length === 0 && state.enemies.length === 0) {
+    state.waveActive = false;
+    const interest = Math.min(60, Math.floor(state.credits * 0.1));
+    const waveBonus = 30 + state.wave * 5;
+    state.credits += interest + waveBonus;
+    state.score += state.wave * 50;
+    state.lastBanner = {
+      text: `WAVE ${state.wave} CLEAR! +${waveBonus}⚡ • +${interest}⚡ INTEREST`,
+      color: "#34d399",
+      life: 2.6,
+    };
+    audioEvents.waveCleared = true;
   }
 
   return audioEvents;

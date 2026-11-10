@@ -59,6 +59,7 @@ const VortexBastionGame = ({ onBack, isMuted, onSaveScore }) => {
     kills: 0,
     speedMult: 1,
     enemiesLeft: 0,
+    banner: null,
     gameOver: false,
   });
 
@@ -87,6 +88,7 @@ const VortexBastionGame = ({ onBack, isMuted, onSaveScore }) => {
         kills: s.kills,
         speedMult: s.speedMult,
         enemiesLeft: s.enemies.length + s.spawnQueue.length,
+        banner: s.lastBanner ? { ...s.lastBanner } : null,
         gameOver: s.gameOver,
       });
       if (bumpGrid) {
@@ -206,6 +208,7 @@ const VortexBastionGame = ({ onBack, isMuted, onSaveScore }) => {
 
       if (ev.fired.has("tesla")) playAudio("laser");
       else if (ev.fired.has("rail")) playAudio("boing");
+      if (ev.reaction || ev.waveCleared) playAudio("tada");
       if (ev.killCount > 0) playAudio("coin");
       if (ev.leaked) playAudio("boom");
 
@@ -296,6 +299,16 @@ const VortexBastionGame = ({ onBack, isMuted, onSaveScore }) => {
           onTileTap={handleTileTap}
           onTick={handleTick}
         />
+
+        {/* Top-Left Live Reaction / Interest Banner */}
+        {hud.banner && !hud.gameOver && (
+          <div
+            className="absolute top-3 left-3 px-3 py-1.5 rounded-xl bg-slate-950/90 border text-[11px] font-black shadow-lg pointer-events-none"
+            style={{ color: hud.banner.color, borderColor: `${hud.banner.color}66` }}
+          >
+            {hud.banner.text}
+          </div>
+        )}
 
         {/* Top-Right Send Wave CTA Pill */}
         {!hud.gameOver && (
