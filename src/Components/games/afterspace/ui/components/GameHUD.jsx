@@ -235,8 +235,11 @@ const GameHUD = ({
           <div className="as-tech-label uppercase text-[#8F938C] group-hover:text-[#B99A70] transition-colors">
             Expedition record [Tab]
           </div>
-          <div className="as-secondary text-[#E8E9E2] mt-0.5 max-w-[240px]">
+          <div className="as-secondary text-[#E8E9E2] mt-0.5 max-w-[260px]">
             {activeObjective ? activeObjective.title : "Threshold stabilized."}
+          </div>
+          <div className="hidden md:block text-xs text-[#8F938C] mt-1">
+            WASD Move • Drag / Dbl-Click Look
           </div>
         </button>
       </div>

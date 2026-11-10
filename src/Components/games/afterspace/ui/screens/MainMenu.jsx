@@ -22,7 +22,7 @@ const MainMenu = ({
   const [showCredits, setShowCredits] = useState(false);
 
   return (
-    <div className="fixed inset-0 z-20 flex flex-col justify-between p-8 sm:p-12 md:p-16">
+    <div className="fixed inset-0 z-20 flex flex-col justify-between p-8 sm:p-12 md:p-16 bg-gradient-to-r from-[#151A19]/75 via-[#151A19]/25 to-transparent">
       {/* Top Bar: Quiet Return to ChatTornado Arcade */}
       <div className="flex items-center justify-between">
         <span className="as-tech-label uppercase text-[#8F938C]">Observatory Build</span>

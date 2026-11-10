@@ -9,6 +9,37 @@ import {
   stepAfterspaceState,
 } from "./afterspaceEngine";
 
+const SKY_VERT = `
+varying vec3 vWorldPos;
+void main() {
+  vec4 wp = modelMatrix * vec4(position, 1.0);
+  vWorldPos = wp.xyz;
+  gl_Position = projectionMatrix * viewMatrix * wp;
+}
+`;
+
+const SKY_FRAG = `
+uniform vec3 uZenith;
+uniform vec3 uMid;
+uniform vec3 uHorizon;
+varying vec3 vWorldPos;
+void main() {
+  vec3 dir = normalize(vWorldPos - vec3(0.0, 0.0, 10.0));
+  float h = clamp(dir.y * 1.15 + 0.14, 0.0, 1.0);
+  vec3 col = mix(uHorizon, uMid, smoothstep(0.0, 0.28, h));
+  col = mix(col, uZenith, smoothstep(0.28, 0.88, h));
+  gl_FragColor = vec4(col, 1.0);
+}
+`;
+
+function computeTargetElevation(x, z) {
+  if (z > 23.2) return 0.48;
+  if (z > 21.0) return 0.24;
+  if (z >= -4.2 && z <= 1.2 && Math.hypot(x, z + 1.5) < 6.4) return -0.22;
+  if (z <= -16.5 && z >= -22.2 && Math.hypot(x, z + 19.0) < 4.5) return 0.22;
+  return 0.0;
+}
+
 const AfterspaceWorld3D = ({
   simRef,
   inputRef,
@@ -42,11 +73,10 @@ const AfterspaceWorld3D = ({
     const height = container.clientHeight || window.innerHeight;
 
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x151a19);
-    scene.fog = new THREE.FogExp2(0x151a19, 0.02);
+    scene.fog = new THREE.FogExp2(0x1f2324, 0.0145);
 
-    const camera = new THREE.PerspectiveCamera(56, width / height, 0.1, 160);
-    camera.position.set(0, 3.2, 29);
+    const camera = new THREE.PerspectiveCamera(56, width / height, 0.1, 220);
+    camera.position.set(-5.8, 5.4, 27.5);
 
     const renderer = new THREE.WebGLRenderer({
       antialias: true,
@@ -55,303 +85,449 @@ const AfterspaceWorld3D = ({
     const dprCap = settingsRef.current?.graphicsPreset === "Medium" ? 1.25 : 1.75;
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, dprCap));
     renderer.setSize(width, height);
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.05;
+    renderer.toneMappingExposure = 1.08;
     container.appendChild(renderer.domElement);
 
-    // Architectural daylight-dusk observatory lighting (no neon)
-    const hemi = new THREE.HemisphereLight(0xedeae1, 0x151a19, 0.85);
+    // GLSL Atmospheric Twilight-Observatory Sky Dome
+    const skyUniforms = {
+      uZenith: { value: new THREE.Color(0x0f1416) },
+      uMid: { value: new THREE.Color(0x23292b) },
+      uHorizon: { value: new THREE.Color(0x5b4d42) },
+    };
+    const skyDome = new THREE.Mesh(
+      new THREE.SphereGeometry(165, 32, 24),
+      new THREE.ShaderMaterial({
+        vertexShader: SKY_VERT,
+        fragmentShader: SKY_FRAG,
+        uniforms: skyUniforms,
+        side: THREE.BackSide,
+        depthWrite: false,
+      })
+    );
+    scene.add(skyDome);
+
+    // Sculptural Sunset / Dusk Lighting + Soft Cast Shadows
+    const hemi = new THREE.HemisphereLight(0xedeae1, 0x161b1b, 0.65);
     scene.add(hemi);
 
-    const sunLight = new THREE.DirectionalLight(0xf5f3ed, 1.35);
-    sunLight.position.set(18, 28, 12);
+    const sunLight = new THREE.DirectionalLight(0xf3eadc, 2.0);
+    sunLight.position.set(22, 32, 16);
+    sunLight.castShadow = true;
+    sunLight.shadow.mapSize.set(2048, 2048);
+    sunLight.shadow.camera.near = 4;
+    sunLight.shadow.camera.far = 115;
+    sunLight.shadow.camera.left = -36;
+    sunLight.shadow.camera.right = 36;
+    sunLight.shadow.camera.top = 36;
+    sunLight.shadow.camera.bottom = -36;
+    sunLight.shadow.bias = -0.0005;
     scene.add(sunLight);
 
-    const rimLight = new THREE.DirectionalLight(0x8496a1, 0.55);
-    rimLight.position.set(-20, 12, -24);
-    scene.add(rimLight);
+    const bounceLight = new THREE.DirectionalLight(0x8496a1, 0.55);
+    bounceLight.position.set(-24, 14, -26);
+    scene.add(bounceLight);
 
-    // Distant celestial bodies
-    const moonMesh = new THREE.Mesh(
-      new THREE.SphereGeometry(7.2, 32, 32),
-      new THREE.MeshBasicMaterial({ color: 0xedeae1, transparent: true, opacity: 0.82 })
+    // Distant Astronomical Bodies (Eclipsed Ivory Giant + Companion Moon)
+    const celestialGroup = new THREE.Group();
+    celestialGroup.position.set(-24, 34, -108);
+    const planetMesh = new THREE.Mesh(
+      new THREE.SphereGeometry(13.5, 48, 48),
+      new THREE.MeshBasicMaterial({ color: 0xe6dfd3, transparent: true, opacity: 0.78 })
     );
-    moonMesh.position.set(-16, 22, -78);
-    scene.add(moonMesh);
-
-    const eclipseRing = new THREE.Mesh(
-      new THREE.RingGeometry(9.6, 10.1, 64),
+    const innerRing = new THREE.Mesh(
+      new THREE.RingGeometry(17.5, 19.6, 80),
       new THREE.MeshBasicMaterial({
         color: 0xb99a70,
         side: THREE.DoubleSide,
         transparent: true,
-        opacity: 0.45,
+        opacity: 0.36,
       })
     );
-    eclipseRing.position.copy(moonMesh.position);
-    eclipseRing.rotation.set(0.35, 0.4, 0.2);
-    scene.add(eclipseRing);
+    innerRing.rotation.set(1.18, 0.28, -0.18);
+    const outerRing = new THREE.Mesh(
+      new THREE.RingGeometry(21.2, 21.8, 80),
+      new THREE.MeshBasicMaterial({
+        color: 0xedeae1,
+        side: THREE.DoubleSide,
+        transparent: true,
+        opacity: 0.22,
+      })
+    );
+    outerRing.rotation.copy(innerRing.rotation);
+    const smallMoon = new THREE.Mesh(
+      new THREE.SphereGeometry(2.1, 24, 24),
+      new THREE.MeshBasicMaterial({ color: 0xd5d2c8, transparent: true, opacity: 0.65 })
+    );
+    smallMoon.position.set(32, -8, 12);
+    celestialGroup.add(planetMesh, innerRing, outerRing, smallMoon);
+    scene.add(celestialGroup);
 
-    // Materials library (Matte Architectural Stone, Basalt, Sandstone, Aged Brass)
+    // Architectural Materials (Travertine Limestone, Basalt, Obsidian Mirror, Aged Brass, Sage)
     const basaltMat = new THREE.MeshStandardMaterial({
       color: 0x202625,
-      roughness: 0.92,
-      metalness: 0.08,
+      roughness: 0.88,
+      metalness: 0.1,
     });
     const slateMat = new THREE.MeshStandardMaterial({
-      color: 0x303735,
-      roughness: 0.84,
+      color: 0x2d3432,
+      roughness: 0.82,
       metalness: 0.14,
     });
-    const limestoneMat = new THREE.MeshStandardMaterial({
+    const travertineMat = new THREE.MeshStandardMaterial({
       color: 0xd5d2c8,
-      roughness: 0.88,
+      roughness: 0.86,
       metalness: 0.04,
+    });
+    const ivoryAccentMat = new THREE.MeshStandardMaterial({
+      color: 0xedeae1,
+      roughness: 0.75,
+      metalness: 0.05,
+    });
+    const obsidianMirrorMat = new THREE.MeshStandardMaterial({
+      color: 0x151b1c,
+      roughness: 0.16,
+      metalness: 0.82,
     });
     const brassMat = new THREE.MeshStandardMaterial({
       color: 0xb99a70,
-      roughness: 0.42,
-      metalness: 0.68,
+      roughness: 0.36,
+      metalness: 0.78,
     });
     const sageMat = new THREE.MeshStandardMaterial({
       color: 0x89988a,
-      roughness: 0.6,
+      roughness: 0.55,
       metalness: 0.2,
     });
 
     const boxGeo = new THREE.BoxGeometry(1, 1, 1);
+    const cylGeo = new THREE.CylinderGeometry(1, 1, 1, 16);
 
-    // Region 01 — The Forgotten Gateway platform (z: 9 .. 30)
-    const gatewayFloor = new THREE.Mesh(boxGeo, basaltMat);
-    gatewayFloor.scale.set(24, 2, 21);
-    gatewayFloor.position.set(0, -1, 19.5);
-    scene.add(gatewayFloor);
+    const addShadowBox = (parent, sx, sy, sz, x, y, z, mat, rx = 0, ry = 0, rz = 0) => {
+      const m = new THREE.Mesh(boxGeo, mat);
+      m.scale.set(sx, sy, sz);
+      m.position.set(x, y, z);
+      if (rx || ry || rz) m.rotation.set(rx, ry, rz);
+      m.castShadow = true;
+      m.receiveShadow = true;
+      parent.add(m);
+      return m;
+    };
 
-    // Region 02 — The Fractured Observatory platform (z: -6.5 .. 3.5)
-    const observatoryFloor = new THREE.Mesh(boxGeo, slateMat);
-    observatoryFloor.scale.set(24, 2, 10);
-    observatoryFloor.position.set(0, -1, -1.5);
-    scene.add(observatoryFloor);
+    // Sea of Mist / Abyss Floor far below plazas
+    const abyssFogPlane = new THREE.Mesh(
+      new THREE.PlaneGeometry(240, 240),
+      new THREE.MeshBasicMaterial({ color: 0x252828, transparent: true, opacity: 0.55 })
+    );
+    abyssFogPlane.rotation.x = -Math.PI / 2;
+    abyssFogPlane.position.y = -5.5;
+    scene.add(abyssFogPlane);
 
-    // Permanent threshold bridge (z: -11.8 .. -6.2)
-    const northBridge = new THREE.Mesh(boxGeo, slateMat);
-    northBridge.scale.set(4.4, 0.5, 5.8);
-    northBridge.position.set(0, -0.25, -9.0);
-    scene.add(northBridge);
+    // ─── REGION 01: THE FORGOTTEN GATEWAY ────────────────────────
+    const gatewayGroup = new THREE.Group();
+    scene.add(gatewayGroup);
 
-    // Region 03 — The Silent Singularity platform (z: -30 .. -11.5)
-    const singularityFloor = new THREE.Mesh(boxGeo, basaltMat);
-    singularityFloor.scale.set(26, 2, 18.5);
-    singularityFloor.position.set(0, -1, -20.75);
-    scene.add(singularityFloor);
+    // Main monolithic foundation + stepped arrival terrace
+    addShadowBox(gatewayGroup, 24, 6, 21, 0, -3.0, 19.5, basaltMat);
+    addShadowBox(gatewayGroup, 16, 0.24, 6.2, 0, 0.12, 24.8, travertineMat);
+    addShadowBox(gatewayGroup, 14, 0.24, 4.4, 0, 0.36, 26.2, slateMat);
+    // Flanking shallow mirror pools
+    addShadowBox(gatewayGroup, 4.2, 0.06, 12.0, -7.8, 0.02, 16.5, obsidianMirrorMat);
+    addShadowBox(gatewayGroup, 4.2, 0.06, 12.0, 7.8, 0.02, 16.5, obsidianMirrorMat);
 
-    // Distant monolithic arches around the perimeter for monumental scale
-    const monolithPositions = [
-      [-16, 10, 8, 2.2, 24, 2.2],
-      [16, 12, -4, 2.4, 28, 2.4],
-      [-20, 14, -22, 3.0, 32, 3.0],
-      [20, 14, -22, 3.0, 32, 3.0],
-      [0, 18, -46, 22, 36, 3.2],
+    // 10 Colonnade Pillars flanking the promenade
+    for (let i = 0; i < 5; i += 1) {
+      const pz = 22.0 - i * 2.4;
+      for (const sx of [-5.0, 5.0]) {
+        const col = new THREE.Mesh(cylGeo, slateMat);
+        col.scale.set(0.32, 6.2, 0.32);
+        col.position.set(sx, 3.1, pz);
+        col.castShadow = true;
+        col.receiveShadow = true;
+        gatewayGroup.add(col);
+        addShadowBox(gatewayGroup, 0.95, 0.28, 0.95, sx, 0.14, pz, travertineMat);
+        addShadowBox(gatewayGroup, 1.05, 0.34, 1.05, sx, 6.2, pz, travertineMat);
+      }
+    }
+
+    // Architrave beams atop colonnade
+    addShadowBox(gatewayGroup, 0.85, 0.45, 11.4, -5.0, 6.58, 17.2, travertineMat);
+    addShadowBox(gatewayGroup, 0.85, 0.45, 11.4, 5.0, 6.58, 17.2, travertineMat);
+
+    // Ancient Structure Gate at z = 12.5 with carved Circular Oculus
+    const ancientArch = new THREE.Group();
+    ancientArch.position.set(0, 0, 12.5);
+    addShadowBox(ancientArch, 1.45, 6.8, 1.25, -2.55, 3.4, 0, travertineMat);
+    addShadowBox(ancientArch, 1.45, 6.8, 1.25, 2.55, 3.4, 0, travertineMat);
+    addShadowBox(ancientArch, 7.4, 1.15, 1.45, 0, 7.25, 0, slateMat);
+    const oculusRing = new THREE.Mesh(new THREE.TorusGeometry(1.15, 0.14, 16, 48), brassMat);
+    oculusRing.position.set(0, 5.3, 0);
+    oculusRing.castShadow = true;
+    ancientArch.add(oculusRing);
+    gatewayGroup.add(ancientArch);
+
+    // Temporal Residue Cantilevered Sanctuary (x = 4.2, z = 15.0)
+    addShadowBox(gatewayGroup, 3.0, 0.28, 3.0, 4.2, 0.14, 15.0, travertineMat);
+    const residueGroup = new THREE.Group();
+    residueGroup.position.set(4.2, 1.65, 15.0);
+    const residueCore = new THREE.Mesh(
+      new THREE.OctahedronGeometry(0.56, 0),
+      new THREE.MeshStandardMaterial({ color: 0x847a85, roughness: 0.32, metalness: 0.45 })
+    );
+    residueCore.castShadow = true;
+    const residueRing = new THREE.Mesh(new THREE.TorusGeometry(0.98, 0.03, 12, 48), brassMat);
+    const residueRingB = new THREE.Mesh(
+      new THREE.TorusGeometry(1.22, 0.02, 10, 48),
+      ivoryAccentMat
+    );
+    residueRing.rotation.x = Math.PI / 2;
+    residueGroup.add(residueCore, residueRing, residueRingB);
+    scene.add(residueGroup);
+
+    // ─── TEMPORAL CHASM BRIDGE (z = 3.2 .. 8.8) ───────────────────
+    // Abyssal support piers
+    for (const bz of [4.2, 7.8]) {
+      addShadowBox(scene, 3.2, 8.0, 0.9, 0, -4.4, bz, basaltMat);
+    }
+    const bridgeSlabs = [];
+    const pastBridgeMat = travertineMat.clone();
+    pastBridgeMat.transparent = true;
+    const futureBridgeMat = new THREE.MeshStandardMaterial({
+      color: 0x8496a1,
+      roughness: 0.25,
+      metalness: 0.4,
+      transparent: true,
+      opacity: 0.88,
+    });
+    for (let i = 0; i < 6; i += 1) {
+      const slab = new THREE.Mesh(boxGeo, pastBridgeMat);
+      slab.scale.set(4.1, 0.42, 0.88);
+      slab.position.set(0, -0.21, 3.8 + i * 0.92);
+      slab.castShadow = true;
+      slab.receiveShadow = true;
+      scene.add(slab);
+      bridgeSlabs.push({
+        mesh: slab,
+        restY: -0.21,
+        tilt: (i % 2 === 0 ? -1 : 1) * 0.38,
+      });
+    }
+
+    // ─── REGION 02: THE FRACTURED OBSERVATORY (z = -6.5 .. 3.5) ──
+    const obsGroup = new THREE.Group();
+    scene.add(obsGroup);
+    addShadowBox(obsGroup, 24, 6, 10, 0, -3.0, -1.5, slateMat);
+    // Obsidian sunken observatory bowl at z = -1.5
+    const bowlDisc = new THREE.Mesh(
+      new THREE.CylinderGeometry(5.8, 5.8, 0.08, 48),
+      obsidianMirrorMat
+    );
+    bowlDisc.position.set(0, 0.01, -1.5);
+    bowlDisc.receiveShadow = true;
+    obsGroup.add(bowlDisc);
+    // Inlaid brass meridian circles on plaza floor
+    [3.2, 5.6].forEach((r) => {
+      const meridian = new THREE.Mesh(new THREE.RingGeometry(r - 0.05, r + 0.05, 64), brassMat);
+      meridian.rotation.x = -Math.PI / 2;
+      meridian.position.set(0, 0.06, -1.5);
+      obsGroup.add(meridian);
+    });
+    // Tilted astronomical gnomon spire
+    addShadowBox(obsGroup, 0.35, 5.6, 0.55, 4.6, 2.2, -3.6, ivoryAccentMat, -0.22, -0.35, 0.14);
+
+    // Coordinate Slab Pedestal (x = -3.4, z = -2.0)
+    const coordSlab = addShadowBox(obsGroup, 1.35, 2.25, 0.36, -3.4, 1.12, -2.0, travertineMat, 0, 0.46, 0);
+    addShadowBox(coordSlab, 0.82, 0.06, 0.42, 0, 0.12, 0, brassMat);
+
+    // Colossal Overhead Rotating Armillary Sphere Rings
+    const astrolabeGroup = new THREE.Group();
+    astrolabeGroup.position.set(0, 8.8, -1.5);
+    const ringA = new THREE.Mesh(new THREE.TorusGeometry(7.8, 0.12, 16, 80), brassMat);
+    const ringB = new THREE.Mesh(new THREE.TorusGeometry(6.1, 0.09, 16, 72), travertineMat);
+    const ringC = new THREE.Mesh(new THREE.TorusGeometry(4.4, 0.07, 16, 64), brassMat);
+    [ringA, ringB, ringC].forEach((r) => {
+      r.castShadow = true;
+    });
+    astrolabeGroup.add(ringA, ringB, ringC);
+    scene.add(astrolabeGroup);
+
+    // Connecting Bridge (Observatory -> Singularity, z = -11.8 .. -6.2)
+    addShadowBox(scene, 4.4, 0.65, 5.8, 0, -0.32, -9.0, travertineMat);
+
+    // ─── REGION 03: THE SILENT SINGULARITY (z = -30 .. -11.5) ─────
+    const singGroup = new THREE.Group();
+    scene.add(singGroup);
+    addShadowBox(singGroup, 28, 6, 19, 0, -3.0, -21.0, basaltMat);
+
+    // Central raised Reflective Altar beneath the 4D Tesseract
+    const altarBase = new THREE.Mesh(new THREE.CylinderGeometry(4.2, 4.8, 0.36, 36), obsidianMirrorMat);
+    altarBase.position.set(0, 0.18, -19.0);
+    altarBase.receiveShadow = true;
+    singGroup.add(altarBase);
+    const altarTrim = new THREE.Mesh(new THREE.RingGeometry(4.15, 4.28, 48), brassMat);
+    altarTrim.rotation.x = -Math.PI / 2;
+    altarTrim.position.set(0, 0.37, -19.0);
+    singGroup.add(altarTrim);
+
+    // Semicircular Monumental Wall Buttresses framing the Horizon Gate
+    for (let i = 0; i < 8; i += 1) {
+      const a = Math.PI * 0.18 + (i / 7) * Math.PI * 0.64;
+      const bx = Math.cos(a) * 14.5;
+      const bz = -19.0 - Math.sin(a) * 11.5;
+      const wall = addShadowBox(singGroup, 1.35, 11.5, 2.2, bx, 5.5, bz, slateMat, 0, -a + Math.PI / 2, 0);
+      addShadowBox(wall, 1.05, 0.08, 0.9, 0, 0.45, 0, travertineMat);
+    }
+
+    // Dimensional Threshold Split-Monolith Gate at z = -25.8
+    const gateGroup = new THREE.Group();
+    gateGroup.position.set(0, 0, -25.8);
+    const gateWingL = addShadowBox(gateGroup, 2.4, 8.8, 1.5, -2.5, 4.4, 0, basaltMat);
+    const gateWingR = addShadowBox(gateGroup, 2.4, 8.8, 1.5, 2.5, 4.4, 0, basaltMat);
+    addShadowBox(gateGroup, 11.0, 1.25, 1.75, 0, 9.3, 0, travertineMat);
+    const gateVeilMat = new THREE.MeshBasicMaterial({
+      color: 0xb99a70,
+      transparent: true,
+      opacity: 0.1,
+      side: THREE.DoubleSide,
+    });
+    const gateVeil = new THREE.Mesh(new THREE.PlaneGeometry(5.8, 8.2), gateVeilMat);
+    gateVeil.position.set(0, 4.2, 0);
+    gateGroup.add(gateVeil);
+    scene.add(gateGroup);
+
+    // Distant Layered Silhouette Monoliths on the Outer Horizon (scale & depth!)
+    const silhouetteCoords = [
+      [-32, 12, -2, 6, 36, 6],
+      [34, 15, 6, 7, 42, 7],
+      [-42, 18, -36, 9, 52, 8],
+      [44, 16, -38, 8, 48, 8],
+      [-18, 22, -62, 11, 58, 5],
+      [24, 24, -66, 12, 62, 5],
     ];
-    monolithPositions.forEach(([x, y, z, sx, sy, sz]) => {
+    silhouetteCoords.forEach(([x, y, z, sx, sy, sz]) => {
       const m = new THREE.Mesh(boxGeo, basaltMat);
-      m.position.set(x, y - 6, z);
+      m.position.set(x, y - 10, z);
       m.scale.set(sx, sy, sz);
       scene.add(m);
     });
 
-    // Temporal Chasm Bridge between Gateway (z=9) and Observatory (z=3.5)
-    const temporalBridgeGroup = new THREE.Group();
-    const bridgeSlabs = [];
-    const pastBridgeMat = limestoneMat.clone();
-    pastBridgeMat.transparent = true;
-    const futureBridgeMat = new THREE.MeshStandardMaterial({
-      color: 0x8496a1,
-      roughness: 0.35,
-      metalness: 0.3,
-      transparent: true,
-      opacity: 0.86,
-    });
-    for (let i = 0; i < 6; i += 1) {
-      const slab = new THREE.Mesh(boxGeo, pastBridgeMat);
-      slab.scale.set(4.1, 0.36, 0.85);
-      slab.position.set(0, -0.18, 3.8 + i * 0.92);
-      temporalBridgeGroup.add(slab);
-      bridgeSlabs.push({ mesh: slab, restY: -0.18, offset: (i % 2 === 0 ? -1 : 1) * 0.45 });
-    }
-    scene.add(temporalBridgeGroup);
-
-    // Suspended Observatory Astrolabe Rings above Region 02
-    const astrolabeGroup = new THREE.Group();
-    astrolabeGroup.position.set(0, 7.5, -1.5);
-    const ringGeoA = new THREE.TorusGeometry(6.8, 0.08, 12, 72);
-    const ringGeoB = new THREE.TorusGeometry(4.9, 0.06, 12, 64);
-    const ringA = new THREE.Mesh(ringGeoA, brassMat);
-    const ringB = new THREE.Mesh(ringGeoB, limestoneMat);
-    astrolabeGroup.add(ringA, ringB);
-    scene.add(astrolabeGroup);
-
-    // Interactable Monuments in 3D space
-    // 1. Ancient Structure (archway at z = 12.5)
-    const ancientArch = new THREE.Group();
-    ancientArch.position.set(0, 0, 12.5);
-    const pillarL = new THREE.Mesh(boxGeo, limestoneMat);
-    pillarL.scale.set(0.75, 5.4, 0.75);
-    pillarL.position.set(-2.2, 2.7, 0);
-    const pillarR = new THREE.Mesh(boxGeo, limestoneMat);
-    pillarR.scale.set(0.75, 5.4, 0.75);
-    pillarR.position.set(2.2, 2.7, 0);
-    const lintel = new THREE.Mesh(boxGeo, limestoneMat);
-    lintel.scale.set(5.4, 0.72, 0.85);
-    lintel.position.set(0, 5.6, 0);
-    ancientArch.add(pillarL, pillarR, lintel);
-    scene.add(ancientArch);
-
-    // 2. Temporal Residue Pillar (x=4.2, z=15)
-    const residueGroup = new THREE.Group();
-    residueGroup.position.set(4.2, 1.3, 15.0);
-    const residueCore = new THREE.Mesh(
-      new THREE.OctahedronGeometry(0.55, 0),
-      new THREE.MeshStandardMaterial({ color: 0x847a85, roughness: 0.35, metalness: 0.45 })
-    );
-    const residueHalo = new THREE.Mesh(
-      new THREE.TorusGeometry(0.95, 0.025, 8, 40),
-      new THREE.MeshBasicMaterial({ color: 0xedeae1, transparent: true, opacity: 0.45 })
-    );
-    residueHalo.rotation.x = Math.PI / 2;
-    residueGroup.add(residueCore, residueHalo);
-    scene.add(residueGroup);
-
-    // 3. Coordinate Slab in Observatory (x=-3.4, z=-2.0)
-    const coordSlab = new THREE.Mesh(boxGeo, limestoneMat);
-    coordSlab.scale.set(1.2, 2.1, 0.32);
-    coordSlab.position.set(-3.4, 1.05, -2.0);
-    coordSlab.rotation.y = 0.42;
-    scene.add(coordSlab);
-
-    // 4. Dimensional Gate at north end of Singularity (z=-25.8)
-    const gateGroup = new THREE.Group();
-    gateGroup.position.set(0, 0, -25.8);
-    const gateL = new THREE.Mesh(boxGeo, basaltMat);
-    gateL.scale.set(1.2, 7.6, 1.4);
-    gateL.position.set(-3.4, 3.8, 0);
-    const gateR = new THREE.Mesh(boxGeo, basaltMat);
-    gateR.scale.set(1.2, 7.6, 1.4);
-    gateR.position.set(3.4, 3.8, 0);
-    const gateTop = new THREE.Mesh(boxGeo, basaltMat);
-    gateTop.scale.set(8.2, 1.1, 1.4);
-    gateTop.position.set(0, 7.8, 0);
-    const gateVeilMat = new THREE.MeshBasicMaterial({
-      color: 0xb99a70,
-      transparent: true,
-      opacity: 0.08,
-      side: THREE.DoubleSide,
-    });
-    const gateVeil = new THREE.Mesh(new THREE.PlaneGeometry(5.6, 6.8), gateVeilMat);
-    gateVeil.position.set(0, 3.6, 0);
-    gateGroup.add(gateL, gateR, gateTop, gateVeil);
-    scene.add(gateGroup);
-
-    // 5. Collectible Artifact pedestals
+    // Collectible Artifacts resting on Travertine Stele Plinths
     const artifactMeshes = new Map();
-    const artifactGeo = new THREE.OctahedronGeometry(0.32, 0);
+    const artifactGeo = new THREE.OctahedronGeometry(0.36, 0);
     ARTIFACT_CATALOG.forEach((art) => {
       if (art.initiallyOwned) return;
       const g = new THREE.Group();
-      g.position.set(art.coords.x, 1.05, art.coords.z);
-      const ped = new THREE.Mesh(boxGeo, slateMat);
-      ped.scale.set(0.65, 0.9, 0.65);
-      ped.position.y = -0.6;
+      g.position.set(art.coords.x, 1.15, art.coords.z);
+      addShadowBox(g, 0.68, 1.05, 0.68, 0, -0.62, 0, slateMat);
       const gem = new THREE.Mesh(
         artifactGeo,
         new THREE.MeshStandardMaterial({
           color: art.color,
-          roughness: 0.35,
-          metalness: 0.6,
+          roughness: 0.3,
+          metalness: 0.65,
         })
       );
-      g.add(ped, gem);
+      gem.castShadow = true;
+      g.add(gem);
       scene.add(g);
       artifactMeshes.set(art.id, { group: g, gem });
     });
 
-    // 6. Live 4D Tesseract in Region 03 (z = -19.0)
+    // ─── LIVE 3D-EXTRUDED 4D TESSERACT IN SINGULARITY CHAMBER ────
     const tesseractGroup = new THREE.Group();
-    tesseractGroup.position.set(0, 3.0, -19.0);
+    tesseractGroup.position.set(0, 3.25, -19.0);
     scene.add(tesseractGroup);
 
-    const edgePositions = new Float32Array(TESSERACT_TOPOLOGY.edges.length * 6);
-    const edgeGeo = new THREE.BufferGeometry();
-    edgeGeo.setAttribute("position", new THREE.BufferAttribute(edgePositions, 3));
-    const edgeMat = new THREE.LineBasicMaterial({
-      color: 0xedeae1,
-      transparent: true,
-      opacity: 0.78,
-    });
-    const tesseractLines = new THREE.LineSegments(edgeGeo, edgeMat);
-    tesseractGroup.add(tesseractLines);
-
+    const strutGeo = new THREE.CylinderGeometry(0.032, 0.032, 1, 8);
+    const strutMat = ivoryAccentMat.clone();
+    const edgeMeshes = [];
+    for (let i = 0; i < TESSERACT_TOPOLOGY.edges.length; i += 1) {
+      const strut = new THREE.Mesh(strutGeo, strutMat);
+      strut.castShadow = true;
+      tesseractGroup.add(strut);
+      edgeMeshes.push(strut);
+    }
     const vertexMeshes = [];
-    const vertexGeo = new THREE.SphereGeometry(0.085, 10, 10);
+    const vertexGeo = new THREE.OctahedronGeometry(0.11, 0);
     for (let i = 0; i < TESSERACT_TOPOLOGY.vertices.length; i += 1) {
       const vm = new THREE.Mesh(vertexGeo, brassMat);
+      vm.castShadow = true;
       tesseractGroup.add(vm);
       vertexMeshes.push(vm);
     }
 
-    // Restrained cooperative partner silhouette (when Coop mode active)
+    // Cooperative Explorer Silhouette
     const coopGroup = new THREE.Group();
-    const coopBody = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.32, 1.45, 12), limestoneMat);
+    const coopBody = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.34, 1.48, 12), travertineMat);
     coopBody.position.y = 0.75;
+    coopBody.castShadow = true;
     const coopHead = new THREE.Mesh(new THREE.SphereGeometry(0.18, 12, 12), sageMat);
     coopHead.position.y = 1.68;
     coopGroup.add(coopBody, coopHead);
     scene.add(coopGroup);
 
-    // Sparse atmospheric dust motes
-    const dustCount = 120;
+    // Subtle Atmospheric Dust Motes
+    const dustCount = 140;
     const dustPos = new Float32Array(dustCount * 3);
     for (let i = 0; i < dustCount; i += 1) {
-      dustPos[i * 3] = (Math.random() - 0.5) * 38;
-      dustPos[i * 3 + 1] = 0.6 + Math.random() * 14;
-      dustPos[i * 3 + 2] = 28 - Math.random() * 62;
+      dustPos[i * 3] = (Math.random() - 0.5) * 44;
+      dustPos[i * 3 + 1] = 0.8 + Math.random() * 16;
+      dustPos[i * 3 + 2] = 28 - Math.random() * 68;
     }
     const dustGeo = new THREE.BufferGeometry();
     dustGeo.setAttribute("position", new THREE.BufferAttribute(dustPos, 3));
     const dustMat = new THREE.PointsMaterial({
       color: 0xedeae1,
-      size: 0.085,
+      size: 0.08,
       transparent: true,
-      opacity: 0.38,
+      opacity: 0.36,
     });
     const dustPoints = new THREE.Points(dustGeo, dustMat);
     scene.add(dustPoints);
 
-    // Subtle Mouse Drag to Look Around
+    // Smooth Mouse-Look: PointerLock on double-click / click + fallback Mouse Drag anywhere
     let dragLook = null;
+    const dom = renderer.domElement;
+
+    const applyLookDelta = (dx, dy) => {
+      const sens = 0.0028 * (settingsRef.current?.mouseSensitivity ?? 1);
+      const invert = settingsRef.current?.invertY ? -1 : 1;
+      simRef.current.player.yaw -= dx * sens;
+      simRef.current.player.pitch = Math.max(
+        -0.78,
+        Math.min(0.74, simRef.current.player.pitch - dy * sens * invert)
+      );
+    };
+
     const onPointerDown = (e) => {
       if (simRef.current.screen !== "playing" || simRef.current.activeOverlay) return;
       dragLook = { x: e.clientX, y: e.clientY };
     };
+    const onDoubleClick = () => {
+      if (simRef.current.screen !== "playing" || simRef.current.activeOverlay) return;
+      if (document.pointerLockElement !== dom && dom.requestPointerLock) {
+        dom.requestPointerLock().catch?.(() => {});
+      }
+    };
     const onPointerMove = (e) => {
+      if (document.pointerLockElement === dom) {
+        applyLookDelta(e.movementX || 0, e.movementY || 0);
+        return;
+      }
       if (!dragLook) return;
-      const sens = 0.0032 * (settingsRef.current?.mouseSensitivity ?? 1);
-      const invert = settingsRef.current?.invertY ? -1 : 1;
       const dx = e.clientX - dragLook.x;
       const dy = e.clientY - dragLook.y;
       dragLook = { x: e.clientX, y: e.clientY };
-      simRef.current.player.yaw -= dx * sens;
-      simRef.current.player.pitch = Math.max(
-        -0.75,
-        Math.min(0.72, simRef.current.player.pitch - dy * sens * invert)
-      );
+      applyLookDelta(dx, dy);
     };
     const onPointerUp = () => {
       dragLook = null;
     };
 
-    const dom = renderer.domElement;
     dom.addEventListener("pointerdown", onPointerDown);
+    dom.addEventListener("dblclick", onDoubleClick);
     window.addEventListener("pointermove", onPointerMove);
     window.addEventListener("pointerup", onPointerUp);
 
@@ -365,11 +541,19 @@ const AfterspaceWorld3D = ({
     };
     window.addEventListener("resize", onResize);
 
+    // Pre-allocated scratch vectors for strut orientation
+    const vecA = new THREE.Vector3();
+    const vecB = new THREE.Vector3();
+    const vecMid = new THREE.Vector3();
+    const vecDir = new THREE.Vector3();
+    const upAxis = new THREE.Vector3(0, 1, 0);
+    const camTarget = new THREE.Vector3();
+    const projectedCache = new Array(16);
+
     let rafId = 0;
     let lastTime = performance.now();
     let elapsed = 0;
     let hudSyncAccum = 0;
-    const projectedCache = new Array(16);
 
     const tick = (now) => {
       rafId = requestAnimationFrame(tick);
@@ -381,31 +565,34 @@ const AfterspaceWorld3D = ({
       const reducedMotion = Boolean(settingsRef.current?.reducedMotion);
       const events = stepAfterspaceState(s, inputRef.current, dt);
 
+      // Smooth stair/terrace elevation
+      const targetElev = computeTargetElevation(s.player.x, s.player.z);
+      s.player.y += (targetElev - s.player.y) * Math.min(1, dt * 8);
+
       if (events.recoveredArtifact || events.scanCompleted || events.enteredRegion) {
         onEventRef.current?.(events);
         onSyncRef.current?.();
       }
 
-      // Environmental slow rotation
+      // Atmospheric motion (decoupled from UI)
       if (!reducedMotion) {
-        ringA.rotation.x = Math.sin(elapsed * 0.09) * 0.35 + 0.5;
-        ringA.rotation.y += dt * 0.04;
-        ringB.rotation.z -= dt * 0.06;
-        residueCore.rotation.y += dt * 0.35;
-        residueGroup.position.y = 1.3 + Math.sin(elapsed * 1.1) * 0.08;
-        dustPoints.rotation.y = Math.sin(elapsed * 0.025) * 0.06;
+        ringA.rotation.x = 0.55 + Math.sin(elapsed * 0.08) * 0.28;
+        ringA.rotation.y += dt * 0.045;
+        ringB.rotation.z -= dt * 0.065;
+        ringB.rotation.x = 1.0 + Math.cos(elapsed * 0.06) * 0.2;
+        ringC.rotation.y -= dt * 0.08;
+        residueCore.rotation.y += dt * 0.38;
+        residueGroup.position.y = 1.65 + Math.sin(elapsed * 1.1) * 0.09;
+        dustPoints.rotation.y = Math.sin(elapsed * 0.02) * 0.05;
       }
 
-      // Update Artifact pickups visibility
       artifactMeshes.forEach(({ group, gem }, id) => {
         const owned = Boolean(s.ownedArtifacts[id]);
         group.visible = !owned;
-        if (!owned && !reducedMotion) {
-          gem.rotation.y += dt * 0.55;
-        }
+        if (!owned && !reducedMotion) gem.rotation.y += dt * 0.55;
       });
 
-      // Update Temporal Chasm Bridge appearance based on active or previewed timeline state
+      // Temporal Bridge Transition
       const effectiveTempIdx =
         previewTempRef.current !== null && previewTempRef.current !== undefined
           ? previewTempRef.current
@@ -413,29 +600,50 @@ const AfterspaceWorld3D = ({
 
       bridgeSlabs.forEach((slab) => {
         if (effectiveTempIdx === 1) {
-          // PRESENT: fractured/recessed slabs
           slab.mesh.material = pastBridgeMat;
-          pastBridgeMat.opacity = 0.45;
-          slab.mesh.position.y += (-1.35 - slab.mesh.position.y) * Math.min(1, dt * 4);
-          slab.mesh.rotation.z += (slab.offset * 0.35 - slab.mesh.rotation.z) * Math.min(1, dt * 4);
+          pastBridgeMat.opacity = 0.55;
+          slab.mesh.position.y += (-1.55 - slab.mesh.position.y) * Math.min(1, dt * 4);
+          slab.mesh.rotation.z += (slab.tilt - slab.mesh.rotation.z) * Math.min(1, dt * 4);
         } else if (effectiveTempIdx === 0) {
-          // PAST: intact limestone causeway
           slab.mesh.material = pastBridgeMat;
           pastBridgeMat.opacity = 1.0;
           slab.mesh.position.y += (slab.restY - slab.mesh.position.y) * Math.min(1, dt * 4.5);
           slab.mesh.rotation.z += (0 - slab.mesh.rotation.z) * Math.min(1, dt * 4.5);
         } else {
-          // FUTURE: crystallized dusty blue span
           slab.mesh.material = futureBridgeMat;
           slab.mesh.position.y += (slab.restY - slab.mesh.position.y) * Math.min(1, dt * 4.5);
           slab.mesh.rotation.z += (0 - slab.mesh.rotation.z) * Math.min(1, dt * 4.5);
         }
       });
 
-      // Update live 4D Tesseract in Singularity chamber
+      // Sky & fog atmosphere response
+      if (s.scannerActive) {
+        skyUniforms.uZenith.value.setHex(0x13191b);
+        skyUniforms.uMid.value.setHex(0x283133);
+        skyUniforms.uHorizon.value.setHex(0x4c585a);
+        scene.fog.color.setHex(0x262e30);
+      } else if (effectiveTempIdx === 0) {
+        skyUniforms.uZenith.value.setHex(0x161412);
+        skyUniforms.uMid.value.setHex(0x2e2822);
+        skyUniforms.uHorizon.value.setHex(0x745c47);
+        scene.fog.color.setHex(0x3a322b);
+      } else if (effectiveTempIdx === 2) {
+        skyUniforms.uZenith.value.setHex(0x0d1316);
+        skyUniforms.uMid.value.setHex(0x1d282e);
+        skyUniforms.uHorizon.value.setHex(0x52646f);
+        scene.fog.color.setHex(0x243036);
+      } else {
+        skyUniforms.uZenith.value.setHex(0x0f1416);
+        skyUniforms.uMid.value.setHex(0x23292b);
+        skyUniforms.uHorizon.value.setHex(0x5b4d42);
+        scene.fog.color.setHex(0x282929);
+      }
+
+      // Update live 3D-extruded 4D Tesseract in Singularity chamber
       const tAngles = { ...s.hypercube.angles };
       if (!s.hypercube.alignment.aligned && s.activeOverlay !== "hypercube" && !reducedMotion) {
-        tAngles.XW += elapsed * 6;
+        tAngles.XW += elapsed * 6.5;
+        tAngles.YW += elapsed * 2.5;
       }
       for (let i = 0; i < 16; i += 1) {
         const p3 = project4Dto3D(
@@ -444,59 +652,49 @@ const AfterspaceWorld3D = ({
           s.hypercube.projectionDistance
         );
         projectedCache[i] = p3;
-        vertexMeshes[i].position.set(p3.x * 1.15, p3.y * 1.15, p3.z * 1.15);
+        vertexMeshes[i].position.set(p3.x * 1.25, p3.y * 1.25, p3.z * 1.25);
       }
-      const posArr = edgeGeo.attributes.position.array;
       for (let eIdx = 0; eIdx < TESSERACT_TOPOLOGY.edges.length; eIdx += 1) {
         const [a, b] = TESSERACT_TOPOLOGY.edges[eIdx];
         const pa = projectedCache[a];
         const pb = projectedCache[b];
-        const offset = eIdx * 6;
-        posArr[offset] = pa.x * 1.15;
-        posArr[offset + 1] = pa.y * 1.15;
-        posArr[offset + 2] = pa.z * 1.15;
-        posArr[offset + 3] = pb.x * 1.15;
-        posArr[offset + 4] = pb.y * 1.15;
-        posArr[offset + 5] = pb.z * 1.15;
+        vecA.set(pa.x * 1.25, pa.y * 1.25, pa.z * 1.25);
+        vecB.set(pb.x * 1.25, pb.y * 1.25, pb.z * 1.25);
+        vecMid.addVectors(vecA, vecB).multiplyScalar(0.5);
+        vecDir.subVectors(vecB, vecA);
+        const len = vecDir.length();
+        const mesh = edgeMeshes[eIdx];
+        mesh.position.copy(vecMid);
+        if (len > 0.0001) {
+          vecDir.divideScalar(len);
+          mesh.quaternion.setFromUnitVectors(upAxis, vecDir);
+        }
+        mesh.scale.set(1, len, 1);
       }
-      edgeGeo.attributes.position.needsUpdate = true;
 
-      // Dimensional Gate glow subtly shifts when hypercube aligned
-      gateVeilMat.opacity = s.hypercube.alignment.aligned ? 0.34 : 0.08;
-      residueHalo.visible = s.scannerActive || INTERACTABLES[1].radius > 0;
+      // Split Dimensional Threshold Gate physically opens when Hypercube aligned
+      const gateOpenOffset = s.hypercube.alignment.aligned ? 1.4 : 0;
+      gateWingL.position.x += (-2.5 - gateOpenOffset - gateWingL.position.x) * Math.min(1, dt * 3);
+      gateWingR.position.x += (2.5 + gateOpenOffset - gateWingR.position.x) * Math.min(1, dt * 3);
+      gateVeilMat.opacity = s.hypercube.alignment.aligned ? 0.32 : 0.08;
+      residueRing.visible = s.scannerActive || INTERACTABLES[1].radius > 0;
 
-      // Cooperative explorer partner visibility
       coopGroup.visible = s.coopMate.active && s.screen === "playing";
-      if (coopGroup.visible) {
-        coopGroup.position.set(s.coopMate.x, 0, s.coopMate.z);
-      }
+      if (coopGroup.visible) coopGroup.position.set(s.coopMate.x, 0, s.coopMate.z);
 
-      // Scanner mode subtle atmosphere tint & temporal warmth shift
-      if (s.scannerActive) {
-        scene.fog.color.setHex(0x1b2122);
-        scene.background.setHex(0x1b2122);
-      } else if (effectiveTempIdx === 0) {
-        scene.fog.color.setHex(0x1b1a17);
-        scene.background.setHex(0x1b1a17);
-      } else if (effectiveTempIdx === 2) {
-        scene.fog.color.setHex(0x171d20);
-        scene.background.setHex(0x171d20);
-      } else {
-        scene.fog.color.setHex(0x151a19);
-        scene.background.setHex(0x151a19);
-      }
-
-      // Camera framing per screen
+      // Camera Framing per screen
       if (s.screen === "menu" || s.screen === "setup") {
-        const driftX = Math.sin(elapsed * 0.07) * 3.2;
-        const targetZ = s.screen === "setup" ? 19.5 : 27.5 - Math.sin(elapsed * 0.04) * 1.5;
-        camera.position.lerp(new THREE.Vector3(driftX, 3.8, targetZ), Math.min(1, dt * 1.8));
-        camera.lookAt(0, 2.8, -14);
+        const driftX = Math.sin(elapsed * 0.08) * 3.8 - 2.4;
+        const targetZ = s.screen === "setup" ? 18.5 : 27.5 - Math.sin(elapsed * 0.04) * 1.2;
+        camTarget.set(driftX, 5.2, targetZ);
+        camera.position.lerp(camTarget, Math.min(1, dt * 1.8));
+        camera.lookAt(-1.2, 4.4, -18);
       } else if (s.screen === "complete") {
-        camera.position.lerp(new THREE.Vector3(2.8, 4.6, -15.5), Math.min(1, dt * 1.4));
-        camera.lookAt(0, 3.2, -25.8);
+        camTarget.set(3.4, 5.2, -13.5);
+        camera.position.lerp(camTarget, Math.min(1, dt * 1.3));
+        camera.lookAt(0, 3.6, -25.8);
       } else {
-        const eyeY = 1.72;
+        const eyeY = 1.72 + s.player.y;
         camera.position.set(s.player.x, eyeY, s.player.z);
         camera.rotation.order = "YXZ";
         camera.rotation.y = s.player.yaw;
@@ -516,7 +714,9 @@ const AfterspaceWorld3D = ({
 
     return () => {
       cancelAnimationFrame(rafId);
+      if (document.pointerLockElement === dom) document.exitPointerLock?.();
       dom.removeEventListener("pointerdown", onPointerDown);
+      dom.removeEventListener("dblclick", onDoubleClick);
       window.removeEventListener("pointermove", onPointerMove);
       window.removeEventListener("pointerup", onPointerUp);
       window.removeEventListener("resize", onResize);
