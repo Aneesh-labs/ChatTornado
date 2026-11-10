@@ -247,6 +247,41 @@ const Messages = () => {
     const [e2eeTextEnabled, setE2eeTextEnabled] = useState(false);
     const [peerPubKeyVersion, setPeerPubKeyVersion] = useState(0);
 
+    useEffect(() => {
+        if (!callNotice) return;
+        const timer = setTimeout(() => {
+            setCallNotice("");
+        }, 6000);
+        return () => clearTimeout(timer);
+    }, [callNotice]);
+
+    useEffect(() => {
+        const interval = setInterval(() => {
+            setQuantumPing(Math.floor(11 + Math.random() * 8));
+        }, 3500);
+        return () => clearInterval(interval);
+    }, []);
+
+    // ── Operational Refs ───────────────────────────────────────────────────────
+    const myUserId = useRef(getMyUserId());
+    const socketRef = useRef(null);
+    const usersRef = useRef([]);
+    const ghostUserRef = useRef(null);
+    const messagesEndRef = useRef(null);
+    const scrollContainerRef = useRef(null);
+    const pendingTempIds = useRef(new Set());
+    const typingTimeouts = useRef({});
+    const peerRef = useRef(null);
+    const callStartTimeRef = useRef(null);
+    const iceCandidateQueue = useRef([]);
+    const callSignalRef = useRef(null);
+    const sendMessageRef = useRef(null);
+    const rateLimiterRef = useRef(createRateLimiter(15, 60000));
+    const token = sessionStorage.getItem("token");
+
+    const activeUserRef = useRef(selectedUser);
+    const selectedUserRef = activeUserRef;
+
     // Initialize local device ECDH P-256 Identity Keypair & register public key
     useEffect(() => {
         const uid = myUserId.current;
@@ -313,40 +348,6 @@ const Messages = () => {
             .catch(() => {});
     }, [selectedUser?.id, selectedUser?.is_bot, selectedUser?.is_group, selectedUser?.e2ee_public_key, localIdentity, peerPubKeyVersion]);
 
-    useEffect(() => {
-        if (!callNotice) return;
-        const timer = setTimeout(() => {
-            setCallNotice("");
-        }, 6000);
-        return () => clearTimeout(timer);
-    }, [callNotice]);
-
-    useEffect(() => {
-        const interval = setInterval(() => {
-            setQuantumPing(Math.floor(11 + Math.random() * 8));
-        }, 3500);
-        return () => clearInterval(interval);
-    }, []);
-
-    // ── Operational Refs ───────────────────────────────────────────────────────
-    const myUserId = useRef(getMyUserId());
-    const socketRef = useRef(null);
-    const usersRef = useRef([]);
-    const ghostUserRef = useRef(null);
-    const messagesEndRef = useRef(null);
-    const scrollContainerRef = useRef(null);
-    const pendingTempIds = useRef(new Set());
-    const typingTimeouts = useRef({});
-    const peerRef = useRef(null);
-    const callStartTimeRef = useRef(null);
-    const iceCandidateQueue = useRef([]);
-    const callSignalRef = useRef(null);
-    const sendMessageRef = useRef(null);
-    const rateLimiterRef = useRef(createRateLimiter(15, 60000));
-    const token = sessionStorage.getItem("token");
-
-    const activeUserRef = useRef(selectedUser);
-    const selectedUserRef = activeUserRef;
 
     useEffect(() => {
         usersRef.current = users;
@@ -1491,7 +1492,7 @@ const Messages = () => {
                         );
                         if (isForCurrentChat) {
                             setMessages((prev) => {
-                                const existingIndex = prev.findIndex((m) => areIdsEqual(m.id, packet.id));
+                                const existingIndex = prev.findIndex((m) => areIdsEqual(m.id, packet.id) || (packet.stream_id && areIdsEqual(m.id, packet.stream_id)));
                                 const tempIndex = prev.findIndex((m) => {
                                     if (packet.temp_id && areIdsEqual(m.temp_id, packet.temp_id)) return true;
                                     if (
@@ -1744,7 +1745,8 @@ const Messages = () => {
                         const isAiChat = Boolean(currentChat && (currentChat.is_bot || currentChat.username === "VORTEX-9" || currentChat.username?.toUpperCase?.().includes("VORTEX") || areIdsEqual(currentChat.id, packet.sender_id)));
                         if (isAiChat) {
                             setMessages((prev) => {
-                                const exists = prev.some((m) => areIdsEqual(m.id, packet.message_id));
+                                const targetIds = [packet.message_id, packet.stream_id].filter(Boolean);
+                                const exists = prev.some((m) => targetIds.some((tid) => areIdsEqual(m.id, tid)));
                                 if (!exists && packet.full_text) {
                                     return [
                                         ...prev,
@@ -1764,10 +1766,14 @@ const Messages = () => {
                                     ];
                                 }
                                 return prev.map((m) => {
-                                    if (areIdsEqual(m.id, packet.message_id)) {
+                                    if (targetIds.some((tid) => areIdsEqual(m.id, tid))) {
+                                        const resolvedMsg = (packet.full_text && String(packet.full_text).trim())
+                                            ? packet.full_text
+                                            : m.message;
                                         return {
                                             ...m,
-                                            message: packet.full_text !== undefined ? packet.full_text : m.message,
+                                            id: packet.message_id ?? m.id,
+                                            message: resolvedMsg,
                                             is_streaming: false
                                         };
                                     }

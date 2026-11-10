@@ -981,6 +981,11 @@ const MessageBubble = React.memo(({
     const hasFiles = nonImageUrls.length > 0;
     const isVoiceNote = !isP2P && !isGame && !isSound && typeof actualMessage === "string" && actualMessage.includes('🎤 Voice Message');
 
+    // Never render a completely empty, non-streaming bubble without media/game/lock state
+    if (!actualMessage && !msg.is_streaming && !hasImages && !hasVideos && !hasAudio && !hasFiles && !isP2P && !isGame && !isSound && !msg.is_locked) {
+        return null;
+    }
+
     const renderMessageContent = () => {
         if (isGame && parsedGame) {
             const partnerId = isMe ? msg.receiver_id : msg.sender_id;

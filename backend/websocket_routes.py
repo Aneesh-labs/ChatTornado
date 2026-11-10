@@ -1225,6 +1225,9 @@ async def websocket_endpoint(websocket: WebSocket):
                         # DUAL-LAYER: 1. Direct prompt interception for Admin mode
                         direct_dispatched = False
                         reply_text = None  # will be set if we short-circuit
+                        bot_message = None
+                        stream_msg_id = None
+                        accumulated_streamed_chunks = []
 
                         if str(req_ai_mode).upper() == "ADMIN":
                             print(f"👑 [ADMIN_MODE] Received Admin request: '{prompt_text}'", flush=True)
@@ -1412,44 +1415,34 @@ async def websocket_endpoint(websocket: WebSocket):
                                         print(f"⚠️ [ADMIN_DIRECT] No user found for target='{target_raw}'", flush=True)
 
 
+                        stream_msg_id = None
+                        accumulated_streamed_chunks = []
                         if not direct_dispatched:
-                            # Pre-create bot message in DB so frontend has a stable message ID to stream into
-                            bot_message = Message(
-                                sender_id=b_id,
-                                receiver_id=u_id,
-                                branch_id=req_branch_id,
-                                message="",
-                                is_shielded=False,
-                                read_state="sent"
-                            )
-                            reply_db.add(bot_message)
-                            reply_db.commit()
-                            reply_db.refresh(bot_message)
-                            reply_db.add_all([
-                                MessageVisibility(message_id=bot_message.id, user_id=b_id, visible=True),
-                                MessageVisibility(message_id=bot_message.id, user_id=u_id, visible=True),
-                            ])
-                            reply_db.commit()
+                            import uuid as _uuid_mod
+                            stream_msg_id = f"ai_stream_{_uuid_mod.uuid4().hex[:12]}"
 
-                            # Signal streaming start to client and stop typing indicator
+                            # Signal streaming start to client using ephemeral stream_msg_id (NEVER write empty row to Postgres!)
                             await manager.send_personal_message(u_id, {
                                 "type": "typing_stop",
                                 "sender_id": b_id
                             })
                             await manager.send_personal_message(u_id, {
                                 "type": "ai_stream_start",
-                                "message_id": bot_message.id,
+                                "message_id": stream_msg_id,
+                                "stream_id": stream_msg_id,
                                 "sender_id": b_id,
                                 "branch_id": req_branch_id,
-                                "created_at": str(bot_message.created_at)
+                                "created_at": datetime.now(timezone.utc).isoformat()
                             })
 
-                            accumulated_streamed_chunks = []
                             async def on_stream_chunk(chunk_text: str):
+                                if not chunk_text:
+                                    return
                                 accumulated_streamed_chunks.append(chunk_text)
                                 await manager.send_personal_message(u_id, {
                                     "type": "ai_stream_chunk",
-                                    "message_id": bot_message.id,
+                                    "message_id": stream_msg_id,
+                                    "stream_id": stream_msg_id,
                                     "sender_id": b_id,
                                     "chunk": chunk_text
                                 })
@@ -1477,7 +1470,7 @@ async def websocket_endpoint(websocket: WebSocket):
                                     reply_text = "".join(accumulated_streamed_chunks)
                                 else:
                                     reply_text = f"⚠️ Neural synthesis encountered a connection interruption. Please try resending."
-                            print(f"[BOT_HANDLER] Stream reply generated successfully ({len(reply_text)} chars)", flush=True)
+                            print(f"[BOT_HANDLER] Stream reply generated successfully ({len(reply_text or '')} chars)", flush=True)
 
 
                             # DUAL-LAYER: 2. ADMIN BROADCAST INTERCEPT FROM LLM OUTPUT
@@ -1597,7 +1590,10 @@ async def websocket_endpoint(websocket: WebSocket):
                         if not reply_text or not str(reply_text).strip():
                             reply_text = "".join(accumulated_streamed_chunks) if (not direct_dispatched and accumulated_streamed_chunks) else "🤖 **VORTEX-9** received your message. Please try again in a moment!"
 
-                        if direct_dispatched:
+                        # Persist populated bot_message on a fresh DB session so long-held idle connections never drop the commit
+                        bot_message = None
+                        persist_db = SessionLocal()
+                        try:
                             bot_message = Message(
                                 sender_id=b_id,
                                 receiver_id=u_id,
@@ -1606,27 +1602,34 @@ async def websocket_endpoint(websocket: WebSocket):
                                 is_shielded=False,
                                 read_state="sent"
                             )
-                            reply_db.add(bot_message)
-                            reply_db.commit()
-                            reply_db.refresh(bot_message)
-                            reply_db.add_all([
+                            persist_db.add(bot_message)
+                            persist_db.commit()
+                            persist_db.refresh(bot_message)
+                            persist_db.add_all([
                                 MessageVisibility(message_id=bot_message.id, user_id=b_id, visible=True),
                                 MessageVisibility(message_id=bot_message.id, user_id=u_id, visible=True),
                             ])
-                            reply_db.commit()
-                        else:
-                            bot_message.message = reply_text
-                            reply_db.commit()
+                            persist_db.commit()
+                            bot_msg_id = bot_message.id
+                            bot_created_at = str(bot_message.created_at)
+                        except Exception as db_save_err:
+                            persist_db.rollback()
+                            logger.exception("Failed persisting bot_message (still delivering via WS): %s", db_save_err)
+                            bot_msg_id = stream_msg_id or f"ai_ephem_{int(datetime.now(timezone.utc).timestamp() * 1000)}"
+                            bot_created_at = datetime.now(timezone.utc).isoformat()
+                        finally:
+                            persist_db.close()
 
                         await manager.send_personal_message(u_id, {
                             "type": "typing_stop",
                             "sender_id": b_id
                         })
 
-                        # Finalize stream with complete text
+                        # Finalize stream with complete text & persisted ID swap
                         await manager.send_personal_message(u_id, {
                             "type": "ai_stream_done",
-                            "message_id": bot_message.id,
+                            "stream_id": stream_msg_id,
+                            "message_id": bot_msg_id,
                             "sender_id": b_id,
                             "receiver_id": u_id,
                             "branch_id": req_branch_id,
@@ -1635,12 +1638,13 @@ async def websocket_endpoint(websocket: WebSocket):
 
                         await manager.send_personal_message(u_id, {
                             "type": "message",
-                            "id": bot_message.id,
+                            "stream_id": stream_msg_id,
+                            "id": bot_msg_id,
                             "sender_id": b_id,
                             "receiver_id": u_id,
                             "branch_id": req_branch_id,
                             "message": reply_text,
-                            "created_at": str(bot_message.created_at),
+                            "created_at": bot_created_at,
                             "is_shielded": False,
                             "is_locked": False,
                             "read_state": "sent",
@@ -1651,57 +1655,53 @@ async def websocket_endpoint(websocket: WebSocket):
                         logger.exception("Error in bot reply task: %s", bot_err)
                         fallback_final = "".join(accumulated_streamed_chunks) if accumulated_streamed_chunks else "🤖 **VORTEX-9 Intelligence Core**\n\nI experienced a brief neural link latency during inference. I am standing by—feel free to re-send your prompt or let me know what you would like assistance with!"
                         try:
-                            if bot_message:
-                                bot_message.message = fallback_final
-                                reply_db.commit()
-                                await manager.send_personal_message(u_id, {
-                                    "type": "ai_stream_done",
-                                    "message_id": bot_message.id,
-                                    "sender_id": b_id,
-                                    "receiver_id": u_id,
-                                    "full_text": fallback_final
-                                })
-                                await manager.send_personal_message(u_id, {
-                                    "type": "message",
-                                    "id": bot_message.id,
-                                    "sender_id": b_id,
-                                    "receiver_id": u_id,
-                                    "message": fallback_final,
-                                    "created_at": str(bot_message.created_at),
-                                    "is_shielded": False,
-                                    "is_locked": False,
-                                    "read_state": "sent",
-                                    "reactions": []
-                                })
-                            else:
+                            err_db = SessionLocal()
+                            try:
                                 err_msg = Message(
                                     sender_id=b_id,
                                     receiver_id=u_id,
+                                    branch_id=req_branch_id,
                                     message=fallback_final,
                                     is_shielded=False,
                                     read_state="sent"
                                 )
-                                reply_db.add(err_msg)
-                                reply_db.commit()
-                                reply_db.refresh(err_msg)
-                                reply_db.add_all([
+                                err_db.add(err_msg)
+                                err_db.commit()
+                                err_db.refresh(err_msg)
+                                err_db.add_all([
                                     MessageVisibility(message_id=err_msg.id, user_id=b_id, visible=True),
                                     MessageVisibility(message_id=err_msg.id, user_id=u_id, visible=True),
                                 ])
-                                reply_db.commit()
+                                err_db.commit()
+                                err_id = err_msg.id
+                                err_created = str(err_msg.created_at)
+                            finally:
+                                err_db.close()
 
+                            if stream_msg_id:
                                 await manager.send_personal_message(u_id, {
-                                    "type": "message",
-                                    "id": err_msg.id,
+                                    "type": "ai_stream_done",
+                                    "stream_id": stream_msg_id,
+                                    "message_id": err_id,
                                     "sender_id": b_id,
                                     "receiver_id": u_id,
-                                    "message": fallback_final,
-                                    "created_at": str(err_msg.created_at),
-                                    "is_shielded": False,
-                                    "is_locked": False,
-                                    "read_state": "sent",
-                                    "reactions": []
+                                    "branch_id": req_branch_id,
+                                    "full_text": fallback_final
                                 })
+                            await manager.send_personal_message(u_id, {
+                                "type": "message",
+                                "stream_id": stream_msg_id,
+                                "id": err_id,
+                                "sender_id": b_id,
+                                "receiver_id": u_id,
+                                "branch_id": req_branch_id,
+                                "message": fallback_final,
+                                "created_at": err_created,
+                                "is_shielded": False,
+                                "is_locked": False,
+                                "read_state": "sent",
+                                "reactions": []
+                            })
                         except Exception as inner_err:
                             logger.exception("Failed to deliver error message to user: %s", inner_err)
 

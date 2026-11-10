@@ -95,6 +95,8 @@ async def get_messages(
     
     result = []
     for msg in messages:
+        if (msg.message is None or not str(msg.message).strip()) and not msg.is_shielded:
+            continue
         # If this message was sent to user_id, it is now read
         current_read_state = "read" if msg.receiver_id == user_id else getattr(msg, "read_state", "sent")
         
