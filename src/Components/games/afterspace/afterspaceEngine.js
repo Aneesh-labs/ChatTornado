@@ -461,6 +461,7 @@ export function createInitialAfterspaceState(options = {}) {
     },
     temporalIndex: 1, // 0 PAST, 1 PRESENT, 2 FUTURE
     temporalTransition: 0,
+    atFracturedSpan: false,
     scannerActive: false,
     scanTargetId: null,
     scanProgress: 0,
@@ -550,10 +551,16 @@ export function stepAfterspaceState(state, input, dt) {
     return events;
   }
 
+  // Smooth camera yaw turning (e.g. keyboard arrows) alongside mouse look
+  const turnDir = (input.turnLeft ? 1 : 0) - (input.turnRight ? 1 : 0);
+  if (turnDir !== 0) {
+    state.player.yaw += turnDir * 1.9 * safeDt;
+  }
+
   // Movement relative to camera yaw (yaw=0 looks along -Z)
   const moveForward = (input.forward ? 1 : 0) - (input.backward ? 1 : 0);
   const moveRight = (input.right ? 1 : 0) - (input.left ? 1 : 0);
-  const speed = 6.2;
+  const speed = input.sprint ? 8.6 : 6.2;
 
   if (moveForward !== 0 || moveRight !== 0) {
     const len = Math.hypot(moveForward, moveRight);
@@ -574,6 +581,12 @@ export function stepAfterspaceState(state, input, dt) {
       state.player.z = nextZ;
     }
   }
+
+  state.atFracturedSpan =
+    state.temporalIndex === 1 &&
+    state.player.z >= 8.2 &&
+    state.player.z <= 11.4 &&
+    Math.abs(state.player.x) <= 3.6;
 
   // Check passive collectible artifacts pickup
   for (const art of ARTIFACT_CATALOG) {

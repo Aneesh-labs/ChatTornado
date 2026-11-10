@@ -8,6 +8,7 @@ const GameHUD = ({
   stability,
   activeObjective,
   nearestInteractable,
+  atFracturedSpan = false,
   scannerActive,
   temporalLabel,
   regionBanner,
@@ -106,6 +107,14 @@ const GameHUD = ({
 
       {/* Discovery & Coop Notifications near bottom-center (Part 8.2 & 19.2) */}
       <div className="pointer-events-none fixed bottom-24 inset-x-0 flex flex-col items-center gap-2 px-4">
+        {atFracturedSpan && !discoveryToast && !timelineOpen && (
+          <div className="as-surface-atmospheric px-5 py-2.5 text-center transition-opacity duration-300">
+            <div className="as-tech-label uppercase text-[#A97C69]">Span Fractured in T + 000</div>
+            <div className="as-secondary text-[#D5D2C8] mt-0.5">
+              Open the Temporal Instrument [T] to cross into The Fractured Observatory.
+            </div>
+          </div>
+        )}
         {discoveryToast && (
           <div className="as-surface-atmospheric px-5 py-3 text-center max-w-sm transition-all duration-300">
             <div className="as-tech-label uppercase text-[#B99A70]">{discoveryToast.kicker}</div>
@@ -253,6 +262,7 @@ GameHUD.propTypes = {
   stability: PropTypes.number.isRequired,
   activeObjective: PropTypes.object,
   nearestInteractable: PropTypes.object,
+  atFracturedSpan: PropTypes.bool,
   scannerActive: PropTypes.bool.isRequired,
   temporalLabel: PropTypes.string.isRequired,
   regionBanner: PropTypes.object,

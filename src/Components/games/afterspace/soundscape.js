@@ -28,10 +28,66 @@ class AfterspaceSoundscape {
 
   setVolumes(v) {
     this.volumes = { ...this.volumes, ...v };
+    if (this.droneGain && this.ctx) {
+      this.droneGain.gain.setTargetAtTime(
+        this.muted ? 0.0001 : this.gainFor("ambient", 0.032),
+        this.ctx.currentTime,
+        0.2
+      );
+    }
   }
 
   setMuted(flag) {
     this.muted = Boolean(flag);
+    if (this.droneGain && this.ctx) {
+      this.droneGain.gain.setTargetAtTime(
+        this.muted ? 0.0001 : this.gainFor("ambient", 0.032),
+        this.ctx.currentTime,
+        0.2
+      );
+    }
+  }
+
+  startAmbientDrone() {
+    const ctx = this.ensureContext();
+    if (!ctx || this.droneNodes) return;
+    const now = ctx.currentTime;
+    const masterGain = ctx.createGain();
+    masterGain.gain.setValueAtTime(0.0001, now);
+    masterGain.gain.linearRampToValueAtTime(
+      this.muted ? 0.0001 : this.gainFor("ambient", 0.032),
+      now + 1.8
+    );
+
+    const filter = ctx.createBiquadFilter();
+    filter.type = "lowpass";
+    filter.frequency.setValueAtTime(280, now);
+
+    const oscA = ctx.createOscillator();
+    oscA.type = "sine";
+    oscA.frequency.setValueAtTime(73.42, now); // D2 warm observatory fifth
+    const oscB = ctx.createOscillator();
+    oscB.type = "sine";
+    oscB.frequency.setValueAtTime(110.0, now); // A2
+
+    oscA.connect(filter);
+    oscB.connect(filter);
+    filter.connect(masterGain).connect(ctx.destination);
+    oscA.start(now);
+    oscB.start(now);
+    this.droneGain = masterGain;
+    this.droneNodes = [oscA, oscB];
+  }
+
+  stopAmbientDrone() {
+    if (!this.droneNodes) return;
+    this.droneNodes.forEach((o) => {
+      try {
+        o.stop();
+      } catch (_) {}
+    });
+    this.droneNodes = null;
+    this.droneGain = null;
   }
 
   gainFor(channel = "effects", scale = 1) {

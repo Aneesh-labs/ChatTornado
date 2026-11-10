@@ -57,6 +57,7 @@ const buildUiSnapshot = (s) => ({
   difficulty: s.difficulty,
   player: { ...s.player },
   temporalIndex: s.temporalIndex,
+  atFracturedSpan: Boolean(s.atFracturedSpan),
   scannerActive: s.scannerActive,
   scanProgress: s.scanProgress,
   suitEnergy: s.suitEnergy,
@@ -78,8 +79,20 @@ const buildUiSnapshot = (s) => ({
 
 const AfterspaceGame = ({ onBack, isMuted = false, onSaveScore }) => {
   const simRef = useRef(createInitialAfterspaceState());
-  const inputRef = useRef({ forward: false, backward: false, left: false, right: false });
+  const inputRef = useRef({
+    forward: false,
+    backward: false,
+    left: false,
+    right: false,
+    turnLeft: false,
+    turnRight: false,
+    sprint: false,
+  });
   const settingsRef = useRef(loadSettings());
+
+  useEffect(() => {
+    return () => afterspaceSound.stopAmbientDrone();
+  }, []);
 
   const [settings, setSettings] = useState(loadSettings);
   const [snap, setSnap] = useState(() => buildUiSnapshot(createInitialAfterspaceState()));
@@ -214,6 +227,7 @@ const AfterspaceGame = ({ onBack, isMuted = false, onSaveScore }) => {
 
   const handleBeginExpedition = useCallback(() => {
     afterspaceSound.playDiscovery();
+    afterspaceSound.startAmbientDrone();
     const s = simRef.current;
     const fresh = createInitialAfterspaceState({
       startInWorld: true,
@@ -285,8 +299,11 @@ const AfterspaceGame = ({ onBack, isMuted = false, onSaveScore }) => {
       const k = key.toLowerCase();
       if (k === "w" || key === "arrowup") inputRef.current.forward = down;
       if (k === "s" || key === "arrowdown") inputRef.current.backward = down;
-      if (k === "a" || key === "arrowleft") inputRef.current.left = down;
-      if (k === "d" || key === "arrowright") inputRef.current.right = down;
+      if (k === "a") inputRef.current.left = down;
+      if (k === "d") inputRef.current.right = down;
+      if (key === "arrowleft") inputRef.current.turnLeft = down;
+      if (key === "arrowright") inputRef.current.turnRight = down;
+      if (key === "shift") inputRef.current.sprint = down;
     };
 
     const onKeyDown = (e) => {
@@ -431,6 +448,7 @@ const AfterspaceGame = ({ onBack, isMuted = false, onSaveScore }) => {
             stability={snap.stability}
             activeObjective={activeObjective}
             nearestInteractable={nearest}
+            atFracturedSpan={snap.atFracturedSpan}
             scannerActive={snap.scannerActive}
             temporalLabel={currentTemporal.code}
             regionBanner={snap.regionBanner}

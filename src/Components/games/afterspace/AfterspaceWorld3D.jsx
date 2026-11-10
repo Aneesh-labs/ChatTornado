@@ -165,36 +165,84 @@ const AfterspaceWorld3D = ({
     celestialGroup.add(planetMesh, innerRing, outerRing, smallMoon);
     scene.add(celestialGroup);
 
+    // Procedural Stone Masonry & Brushed Patina Textures
+    const createStoneMaps = (baseHex, seamHex, grainAlpha = 0.08) => {
+      const c = document.createElement("canvas");
+      c.width = 256;
+      c.height = 256;
+      const g = c.getContext("2d");
+      g.fillStyle = baseHex;
+      g.fillRect(0, 0, 256, 256);
+
+      for (let i = 0; i < 1600; i += 1) {
+        g.fillStyle = i % 2 === 0 ? `rgba(255,255,255,${grainAlpha})` : `rgba(0,0,0,${grainAlpha * 1.2})`;
+        g.fillRect((i * 73) % 256, (i * 137) % 256, 2, 2);
+      }
+
+      g.strokeStyle = seamHex;
+      g.lineWidth = 2;
+      for (let y = 0; y < 256; y += 64) {
+        g.beginPath();
+        g.moveTo(0, y);
+        g.lineTo(256, y);
+        g.stroke();
+        const offset = (y / 64) % 2 === 0 ? 0 : 64;
+        for (let x = offset; x < 256; x += 128) {
+          g.beginPath();
+          g.moveTo(x, y);
+          g.lineTo(x, y + 64);
+          g.stroke();
+        }
+      }
+
+      const tex = new THREE.CanvasTexture(c);
+      tex.wrapS = THREE.RepeatWrapping;
+      tex.wrapT = THREE.RepeatWrapping;
+      tex.repeat.set(3, 3);
+      tex.colorSpace = THREE.SRGBColorSpace;
+      return tex;
+    };
+
+    const basaltTex = createStoneMaps("#202625", "rgba(10,14,13,0.42)", 0.05);
+    const slateTex = createStoneMaps("#2e3533", "rgba(12,16,15,0.36)", 0.06);
+    const travTex = createStoneMaps("#d5d2c8", "rgba(110,104,92,0.28)", 0.07);
+
     // Architectural Materials (Travertine Limestone, Basalt, Obsidian Mirror, Aged Brass, Sage)
     const basaltMat = new THREE.MeshStandardMaterial({
-      color: 0x202625,
+      map: basaltTex,
+      bumpMap: basaltTex,
+      bumpScale: 0.04,
       roughness: 0.88,
-      metalness: 0.1,
+      metalness: 0.08,
     });
     const slateMat = new THREE.MeshStandardMaterial({
-      color: 0x2d3432,
+      map: slateTex,
+      bumpMap: slateTex,
+      bumpScale: 0.035,
       roughness: 0.82,
       metalness: 0.14,
     });
     const travertineMat = new THREE.MeshStandardMaterial({
-      color: 0xd5d2c8,
-      roughness: 0.86,
+      map: travTex,
+      bumpMap: travTex,
+      bumpScale: 0.03,
+      roughness: 0.84,
       metalness: 0.04,
     });
     const ivoryAccentMat = new THREE.MeshStandardMaterial({
       color: 0xedeae1,
-      roughness: 0.75,
+      roughness: 0.72,
       metalness: 0.05,
     });
     const obsidianMirrorMat = new THREE.MeshStandardMaterial({
       color: 0x151b1c,
-      roughness: 0.16,
-      metalness: 0.82,
+      roughness: 0.12,
+      metalness: 0.88,
     });
     const brassMat = new THREE.MeshStandardMaterial({
       color: 0xb99a70,
-      roughness: 0.36,
-      metalness: 0.78,
+      roughness: 0.32,
+      metalness: 0.82,
     });
     const sageMat = new THREE.MeshStandardMaterial({
       color: 0x89988a,
@@ -216,14 +264,56 @@ const AfterspaceWorld3D = ({
       return m;
     };
 
-    // Sea of Mist / Abyss Floor far below plazas
-    const abyssFogPlane = new THREE.Mesh(
-      new THREE.PlaneGeometry(240, 240),
-      new THREE.MeshBasicMaterial({ color: 0x252828, transparent: true, opacity: 0.55 })
+    // Sculpted Sandstone-Basalt Canyon Valley Terrain around the Sanctuary
+    const terrainGeo = new THREE.PlaneGeometry(240, 240, 56, 56);
+    terrainGeo.rotateX(-Math.PI / 2);
+    const tPos = terrainGeo.attributes.position;
+    for (let i = 0; i < tPos.count; i += 1) {
+      const tx = tPos.getX(i);
+      const tz = tPos.getZ(i);
+      const canyonDist = Math.max(0, Math.abs(tx) - 14.5);
+      const ridge =
+        Math.pow(canyonDist * 0.11, 1.35) * 4.2 +
+        Math.sin(tx * 0.09) * Math.cos(tz * 0.08) * 2.4;
+      const chasmDip = tz > 1.5 && tz < 10.5 && Math.abs(tx) < 15 ? -3.5 : 0;
+      tPos.setY(i, -6.2 + ridge + chasmDip);
+    }
+    terrainGeo.computeVertexNormals();
+    const canyonTerrain = new THREE.Mesh(
+      terrainGeo,
+      new THREE.MeshStandardMaterial({
+        color: 0x262422,
+        roughness: 0.94,
+        metalness: 0.04,
+      })
     );
-    abyssFogPlane.rotation.x = -Math.PI / 2;
-    abyssFogPlane.position.y = -5.5;
-    scene.add(abyssFogPlane);
+    canyonTerrain.receiveShadow = true;
+    scene.add(canyonTerrain);
+
+    // Subtle Volumetric Sunlight Shafts streaming through Ancient Gate Oculus & Observatory
+    const shaftGeo = new THREE.CylinderGeometry(0.95, 3.8, 22, 18, 1, true);
+    const shaftMat = new THREE.MeshBasicMaterial({
+      color: 0xedeae1,
+      transparent: true,
+      opacity: 0.045,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+    });
+    const rayPositions = [
+      [-1.5, 9.5, 11.5],
+      [-2.0, 9.8, -1.8],
+      [-2.2, 10.2, -19.2],
+    ];
+    rayPositions.forEach(([rx, ry, rz]) => {
+      const ray = new THREE.Mesh(shaftGeo, shaftMat);
+      ray.position.set(rx, ry, rz);
+      ray.rotation.set(0.18, 0, -0.38);
+      scene.add(ray);
+    });
+
+    // Subtle Smooth Step Rhythm & Eye-Elevation
+    let walkBob = 0;
 
     // ─── REGION 01: THE FORGOTTEN GATEWAY ────────────────────────
     const gatewayGroup = new THREE.Group();
@@ -694,7 +784,16 @@ const AfterspaceWorld3D = ({
         camera.position.lerp(camTarget, Math.min(1, dt * 1.3));
         camera.lookAt(0, 3.6, -25.8);
       } else {
-        const eyeY = 1.72 + s.player.y;
+        const isWalking =
+          inputRef.current.forward ||
+          inputRef.current.backward ||
+          inputRef.current.left ||
+          inputRef.current.right;
+        if (isWalking && !reducedMotion) {
+          walkBob += dt * (inputRef.current.sprint ? 11.5 : 8.5);
+        }
+        const bobOffset = isWalking && !reducedMotion ? Math.sin(walkBob) * 0.032 : 0;
+        const eyeY = 1.72 + s.player.y + bobOffset;
         camera.position.set(s.player.x, eyeY, s.player.z);
         camera.rotation.order = "YXZ";
         camera.rotation.y = s.player.yaw;
