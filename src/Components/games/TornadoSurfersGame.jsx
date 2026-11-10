@@ -244,6 +244,14 @@ const TornadoSurfersGame = ({ onBack, isMuted = false, onSaveScore }) => {
         e.preventDefault();
         if (s.phase === "ready" || s.phase === "gameover") startNewRun();
         else handleBoard();
+      } else if (e.key === "Enter") {
+        if (s.phase === "ready" || s.phase === "gameover") {
+          e.preventDefault();
+          startNewRun();
+        } else if (s.phase === "paused") {
+          e.preventDefault();
+          togglePause();
+        }
       } else if (e.key === "p" || e.key === "P" || e.key === "Escape") {
         e.preventDefault();
         togglePause();
@@ -252,6 +260,18 @@ const TornadoSurfersGame = ({ onBack, isMuted = false, onSaveScore }) => {
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [handleMove, handleJump, handleSlide, handleBoard, startNewRun, togglePause]);
+
+  // Auto-pause active runs if the user switches browser tabs
+  useEffect(() => {
+    const onVisibilityChange = () => {
+      if (document.hidden && stateRef.current.phase === "playing") {
+        stateRef.current.phase = "paused";
+        syncHudFromEngine();
+      }
+    };
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => document.removeEventListener("visibilitychange", onVisibilityChange);
+  }, [syncHudFromEngine]);
 
   const activeBars = POWERUP_BARS.filter((b) => hud[b.key] > 0.05);
 
@@ -379,7 +399,7 @@ const TornadoSurfersGame = ({ onBack, isMuted = false, onSaveScore }) => {
       {/* Compact Web Action Dock */}
       {hud.phase === "playing" && (
         <div className="pointer-events-none absolute bottom-4 inset-x-4 z-10 flex flex-col items-center gap-2">
-          <div className="w-full max-w-md grid grid-cols-5 gap-2">
+          <div className="w-full max-w-md grid grid-cols-5 gap-2 md:hidden">
             <button
               type="button"
               onClick={() => handleMove(-1)}
@@ -430,8 +450,24 @@ const TornadoSurfersGame = ({ onBack, isMuted = false, onSaveScore }) => {
               <ChevronRight className="w-6 h-6" />
             </button>
           </div>
-          <div className="hidden sm:block text-[11px] font-semibold tracking-wide text-emerald-200/75 bg-emerald-950/80 px-3 py-1 rounded-full border border-emerald-400/20">
-            WASD / Arrow Keys • Space: Shield • Double-click / Drag track
+
+          <div className="hidden md:flex items-center gap-2.5">
+            <button
+              type="button"
+              onClick={handleBoard}
+              aria-label="Activate Hoverboard Shield"
+              className={`pointer-events-auto h-9 px-3.5 rounded-full border flex items-center gap-1.5 text-xs font-black transition-transform active:scale-95 ${
+                hud.hoverboardTimer > 0
+                  ? "bg-emerald-500/40 border-emerald-300 text-white"
+                  : "bg-emerald-950/85 hover:bg-emerald-900/95 border-emerald-400/35 text-emerald-200"
+              }`}
+            >
+              <Shield className="w-3.5 h-3.5" />
+              <span className="tabular-nums">{hud.hoverboards}</span>
+            </button>
+            <div className="text-[11px] font-semibold tracking-wide text-emerald-200/80 bg-emerald-950/85 px-3.5 py-1.5 rounded-full border border-emerald-400/20">
+              WASD / Arrow Keys • Space: Shield • Double-click / Drag track • P: Pause
+            </div>
           </div>
         </div>
       )}
