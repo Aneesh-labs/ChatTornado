@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import PropTypes from "prop-types";
 import { motion, AnimatePresence } from "framer-motion";
-import { Lock, MoreVertical, AlertTriangle, Sparkles, Brain, Download, Cpu, Ban, UserCheck, ShieldAlert, Users, BadgeCheck, Dna, GitFork, Clock, Tv, Ghost, Flame, Shield, Phone, PhoneCall, Video, Search, RotateCw, ChevronLeft, ChevronDown, CheckSquare, ListChecks, Terminal, Zap } from "lucide-react";
+import { Activity, Smartphone, Lock, MoreVertical, AlertTriangle, Sparkles, Brain, Download, Cpu, Ban, UserCheck, ShieldAlert, Users, BadgeCheck, Dna, GitFork, Clock, Tv, Ghost, Flame, Shield, Phone, PhoneCall, Video, Search, RotateCw, ChevronLeft, ChevronDown, CheckSquare, ListChecks, Terminal, Zap } from "lucide-react";
 import { toggleShieldActive } from "../../../Services/privacyShieldService";
 import { triggerPanicEscape } from "../../../utils/panicKey";
 import { IconBtn, Avatar, useTheme } from "./constants";
@@ -410,6 +410,28 @@ const ChatHeader = React.memo(({
                                 >
                                     HOLO {quantumHud.holoScanlines ? "ON" : "OFF"}
                                 </button>
+                                {quantumHud.onOpenP2PTransfers && (
+                                    <button
+                                        type="button"
+                                        onClick={quantumHud.onOpenP2PTransfers}
+                                        title="Open Peer-to-Peer Transfers & Outbox Monitor"
+                                        className="text-[8px] font-mono px-1.5 py-0.5 rounded-full border border-cyan-500/30 bg-cyan-500/10 text-cyan-300 hover:bg-cyan-500/20 hover:border-cyan-400 transition-all cursor-pointer flex items-center gap-1"
+                                    >
+                                        <Activity className="w-2.5 h-2.5 text-cyan-400" />
+                                        P2P
+                                    </button>
+                                )}
+                                {quantumHud.onOpenAndroidDownload && (
+                                    <button
+                                        type="button"
+                                        onClick={quantumHud.onOpenAndroidDownload}
+                                        title="Get Native Android App (APK)"
+                                        className="text-[8px] font-mono px-1.5 py-0.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20 hover:border-emerald-400 transition-all cursor-pointer flex items-center gap-1"
+                                    >
+                                        <Smartphone className="w-2.5 h-2.5 text-emerald-400" />
+                                        APK
+                                    </button>
+                                )}
                             </div>
                         )}
                     </div>
@@ -778,6 +800,30 @@ const ChatHeader = React.memo(({
                                                 <p className="text-[10px] text-white/40">Download as Markdown / HTML</p>
                                             </div>
                                         </button>
+                                        {quantumHud?.onOpenP2PTransfers && (
+                                            <button
+                                                onClick={() => { quantumHud.onOpenP2PTransfers(); setShowQuantumMenu(false); }}
+                                                className="flex items-center gap-2.5 px-2.5 py-1.5 text-xs font-medium text-cyan-300 hover:text-white hover:bg-cyan-500/15 rounded-xl text-left cursor-pointer transition-colors"
+                                            >
+                                                <Activity className="w-4 h-4 text-cyan-400 shrink-0" />
+                                                <div>
+                                                    <p className="font-semibold">P2P Transfers & Outbox</p>
+                                                    <p className="text-[10px] text-white/40">Active streams & queued files</p>
+                                                </div>
+                                            </button>
+                                        )}
+                                        {quantumHud?.onOpenAndroidDownload && (
+                                            <button
+                                                onClick={() => { quantumHud.onOpenAndroidDownload(); setShowQuantumMenu(false); }}
+                                                className="flex items-center gap-2.5 px-2.5 py-1.5 text-xs font-medium text-emerald-300 hover:text-white hover:bg-emerald-500/15 rounded-xl text-left cursor-pointer transition-colors"
+                                            >
+                                                <Smartphone className="w-4 h-4 text-emerald-400 shrink-0" />
+                                                <div>
+                                                    <p className="font-semibold">Get Android App</p>
+                                                    <p className="text-[10px] text-white/40">Download APK & QR code</p>
+                                                </div>
+                                            </button>
+                                        )}
                                     </motion.div>
                                 </>
                             )}

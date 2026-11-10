@@ -1,3 +1,5 @@
+import AndroidAppDownloadModal from "./AndroidAppDownloadModal";
+import { Smartphone } from "lucide-react";
 import { NavLink } from "react-router-dom"
 import { useState } from "react"
 
@@ -6,6 +8,7 @@ export default function Sidebar() {
     const username = sessionStorage.getItem("username") || "Guest"
     const [open, setOpen] = useState(false)
     const [desktopOpen, setDesktopOpen] = useState(true)
+    const [showAndroidModal, setShowAndroidModal] = useState(false)
 
     const avatarLetter = username ? username.charAt(0).toUpperCase() : "?"
 
@@ -131,6 +134,21 @@ export default function Sidebar() {
                         })}
                     </nav>
 
+                    {/* GET ANDROID APP ACTION */}
+                    <div className="pt-2">
+                        <button
+                            type="button"
+                            onClick={() => setShowAndroidModal(true)}
+                            className="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-xs font-semibold text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/25 transition-all duration-300 shadow-[0_0_15px_rgba(16,185,129,0.1)] group cursor-pointer"
+                        >
+                            <Smartphone className="w-4 h-4 text-emerald-400 transition-transform group-hover:scale-110" />
+                            <div className="flex flex-col text-left">
+                                <span className="font-bold">Get Android App</span>
+                                <span className="text-[9px] text-emerald-300/60 font-mono">APK & QR Scan</span>
+                            </div>
+                        </button>
+                    </div>
+
                     {/* FOOTER / LOGOUT */}
                     <div className="mt-auto pt-4 border-t border-zinc-800/50">
                         <button
@@ -146,6 +164,10 @@ export default function Sidebar() {
                     </div>
                 </div>
             </div>
+            <AndroidAppDownloadModal 
+                isOpen={showAndroidModal} 
+                onClose={() => setShowAndroidModal(false)} 
+            />
         </>
     )
 }

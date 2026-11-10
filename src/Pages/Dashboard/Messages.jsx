@@ -1,3 +1,7 @@
+import P2PTransfersDrawer from "../../Components/P2PTransfersDrawer";
+import AndroidAppDownloadModal from "../../Components/AndroidAppDownloadModal";
+import p2pEngine, { TRANSFER_STATES } from "../../Services/webrtc/p2pTransferEngine";
+import { listOutboxTransfers } from "../../Services/db";
 import React, {
     useState,
     useRef,
@@ -173,6 +177,42 @@ const Messages = () => {
         typing: false,
     });
     const [callNotice, setCallNotice] = useState("");
+    useEffect(() => {
+        const unsub = p2pEngine.subscribe((event, data) => {
+            if (event === "incoming_transfer") {
+                soundEngine?.play?.("quantum_ping");
+                setIncomingTransferToast(data);
+            } else if (event === "transfer_state") {
+                if (data.state === TRANSFER_STATES.COMPLETED || data.state === TRANSFER_STATES.DECLINED || data.state === TRANSFER_STATES.CANCELLED) {
+                    setIncomingTransferToast((prev) => (prev?.transferId === data.transferId ? null : prev));
+                }
+            }
+        });
+        return () => unsub();
+    }, []);
+
+    const flushP2POutbox = useCallback((onlineIdSet) => {
+        listOutboxTransfers().then((pendingTransfers) => {
+            if (!pendingTransfers || pendingTransfers.length === 0) return;
+            for (const item of pendingTransfers) {
+                if (item.file && item.recipientId) {
+                    const isPeerOnline = onlineIdSet instanceof Set
+                        ? onlineIdSet.has(Number(item.recipientId)) || onlineIdSet.has(String(item.recipientId))
+                        : areIdsEqual(onlineIdSet, item.recipientId);
+                    if (isPeerOnline) {
+                        console.log(`[P2P Outbox] Auto-flushing queued file ${item.filename} to peer ${item.recipientId}`);
+                        p2pEngine.sendFile(item.file, item.recipientId, {
+                            transferId: item.transferId,
+                            filename: item.filename,
+                            mimeType: item.mimeType,
+                            sha256: item.sha256
+                        }).catch((e) => console.warn("Auto-flush P2P transfer error:", e));
+                    }
+                }
+            }
+        }).catch(() => {});
+    }, []);
+
     const [securityStatus, setSecurityStatus] = useState("SECURE");
 
     // ── Integrated Features State (DNA, Reality Forks, Future Messages) ────────
@@ -196,6 +236,9 @@ const Messages = () => {
     // ── Sci-Fi Holographic HUD Telemetry & Scanline Filter ─────────────────────
     const [holoScanlines, setHoloScanlines] = useState(() => localStorage.getItem("tornado_holo_scanlines") === "true");
     const [quantumPing, setQuantumPing] = useState(14);
+    const [p2pDrawerOpen, setP2pDrawerOpen] = useState(false);
+    const [androidModalOpen, setAndroidModalOpen] = useState(false);
+    const [incomingTransferToast, setIncomingTransferToast] = useState(null);
 
     useEffect(() => {
         if (!callNotice) return;
@@ -1337,9 +1380,11 @@ const Messages = () => {
                             idSet.add(String(id));
                         });
                         setOnlineUserIds(idSet);
+                        flushP2POutbox(idSet);
                         return;
                     }
                     if (packet.type === "user_status_update") {
+                        if (packet.status === "online") flushP2POutbox(packet.user_id);
                         setUsers((prev) => prev.map((u) => {
                             if (areIdsEqual(u.id, packet.user_id)) {
                                 return { ...u, status: packet.status, custom_status: packet.custom_status };
@@ -2405,7 +2450,9 @@ const Messages = () => {
                                     quantumPing,
                                     holoScanlines,
                                     toggleHoloScanlines,
-                                    color: statusColors[securityStatus] || "#22c55e"
+                                    color: statusColors[securityStatus] || "#22c55e",
+                                    onOpenP2PTransfers: () => setP2pDrawerOpen(true),
+                                    onOpenAndroidDownload: () => setAndroidModalOpen(true)
                                 }}
                             />
                         ) : (
@@ -2673,6 +2720,65 @@ const Messages = () => {
                                         </motion.button>
                                     </div>
                                 </motion.div>
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
+
+                    {/* Peer-to-Peer Transfers & Outbox Drawer */}
+                    <P2PTransfersDrawer 
+                        isOpen={p2pDrawerOpen} 
+                        onClose={() => setP2pDrawerOpen(false)} 
+                    />
+
+                    {/* Native Android APK Download & QR Scan Modal */}
+                    <AndroidAppDownloadModal 
+                        isOpen={androidModalOpen} 
+                        onClose={() => setAndroidModalOpen(false)} 
+                    />
+
+                    {/* Floating Incoming P2P Transfer Toast Notification */}
+                    <AnimatePresence>
+                        {incomingTransferToast && (
+                            <motion.div
+                                initial={{ opacity: 0, y: -20, scale: 0.95 }}
+                                animate={{ opacity: 1, y: 0, scale: 1 }}
+                                exit={{ opacity: 0, y: -20, scale: 0.95 }}
+                                className="fixed top-5 right-5 z-[200] max-w-sm rounded-2xl border border-cyan-500/40 bg-[#090d18]/95 p-4 shadow-[0_0_30px_rgba(6,182,212,0.35)] backdrop-blur-xl text-white select-none"
+                            >
+                                <div className="flex items-start gap-3">
+                                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 animate-pulse">
+                                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                                        </svg>
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                        <p className="text-[10px] font-mono uppercase tracking-wider text-cyan-400">Incoming Direct P2P Media</p>
+                                        <p className="text-xs font-bold truncate text-white mt-0.5">{incomingTransferToast.filename || "Direct File"}</p>
+                                        <p className="text-[10px] text-white/50">{incomingTransferToast.fileSize ? (incomingTransferToast.fileSize / (1024 * 1024)).toFixed(1) + " MB" : "Direct P2P Stream"}</p>
+                                        <div className="mt-3 flex items-center gap-2">
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    p2pEngine.acceptTransfer(incomingTransferToast.transferId);
+                                                    setIncomingTransferToast(null);
+                                                }}
+                                                className="flex-1 py-1.5 px-3 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 text-xs font-semibold cursor-pointer transition-colors shadow-[0_0_15px_rgba(16,185,129,0.2)]"
+                                            >
+                                                Accept
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    p2pEngine.rejectTransfer(incomingTransferToast.transferId);
+                                                    setIncomingTransferToast(null);
+                                                }}
+                                                className="py-1.5 px-3 rounded-lg bg-white/5 hover:bg-white/10 text-white/60 hover:text-white border border-white/10 text-xs font-medium cursor-pointer transition-colors"
+                                            >
+                                                Decline
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
                             </motion.div>
                         )}
                     </AnimatePresence>
