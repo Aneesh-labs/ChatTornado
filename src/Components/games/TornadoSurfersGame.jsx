@@ -215,7 +215,7 @@ const TornadoSurfersGame = ({ onBack, isMuted = false, onSaveScore }) => {
       }
 
       hudAccumRef.current += dt;
-      if (hudAccumRef.current >= 0.08) {
+      if (hudAccumRef.current >= 0.1) {
         hudAccumRef.current = 0;
         syncHudFromEngine();
       }
@@ -270,17 +270,17 @@ const TornadoSurfersGame = ({ onBack, isMuted = false, onSaveScore }) => {
       </div>
 
       {/* Big & Clean Translucent Emerald Top HUD */}
-      <div className="pointer-events-none absolute top-0 inset-x-0 z-10 p-3 sm:p-4 pt-[max(12px,env(safe-area-inset-top))] flex items-start justify-between gap-2">
+      <div className="pointer-events-none absolute top-0 inset-x-0 z-10 p-3 sm:p-4 flex items-start justify-between gap-2">
         {/* Left: Exit + Pause */}
         <div className="pointer-events-auto flex items-center gap-2">
           <button
             type="button"
             onClick={onBack}
             aria-label="Exit to Arcade"
-            className="h-11 px-3.5 rounded-2xl bg-emerald-950/65 hover:bg-emerald-900/80 border border-emerald-400/35 backdrop-blur-md text-emerald-100 flex items-center gap-1.5 text-sm font-bold shadow-lg transition active:scale-95"
+            className="h-10 px-3.5 rounded-2xl bg-emerald-950/85 hover:bg-emerald-900/95 border border-emerald-400/35 text-emerald-100 flex items-center gap-1.5 text-sm font-bold shadow-lg transition-transform active:scale-95"
           >
             <ArrowLeft className="w-5 h-5 text-emerald-300" />
-            <span className="hidden sm:inline">Exit</span>
+            <span>Exit</span>
           </button>
 
           {(hud.phase === "playing" || hud.phase === "paused") && (
@@ -288,7 +288,7 @@ const TornadoSurfersGame = ({ onBack, isMuted = false, onSaveScore }) => {
               type="button"
               onClick={togglePause}
               aria-label={hud.phase === "paused" ? "Resume run" : "Pause run"}
-              className="h-11 w-11 rounded-2xl bg-emerald-950/65 hover:bg-emerald-900/80 border border-emerald-400/35 backdrop-blur-md text-emerald-200 flex items-center justify-center shadow-lg transition active:scale-95"
+              className="h-10 w-10 rounded-2xl bg-emerald-950/85 hover:bg-emerald-900/95 border border-emerald-400/35 text-emerald-200 flex items-center justify-center shadow-lg transition-transform active:scale-95"
             >
               {hud.phase === "paused" ? <Play className="w-5 h-5" /> : <Pause className="w-5 h-5" />}
             </button>
@@ -297,7 +297,7 @@ const TornadoSurfersGame = ({ onBack, isMuted = false, onSaveScore }) => {
 
         {/* Center/Right: Big Legible Score + Coins + Stunts */}
         <div className="flex flex-col items-end gap-1.5">
-          <div className="px-4 py-1.5 rounded-2xl bg-emerald-950/65 border border-emerald-400/35 backdrop-blur-md shadow-lg flex items-baseline gap-2.5">
+          <div className="px-4 py-1.5 rounded-2xl bg-emerald-950/85 border border-emerald-400/35 shadow-lg flex items-baseline gap-2.5">
             <span className="text-xs font-bold uppercase tracking-wider text-emerald-300">
               {hud.speedMult.toFixed(1)}x
             </span>
@@ -307,17 +307,17 @@ const TornadoSurfersGame = ({ onBack, isMuted = false, onSaveScore }) => {
           </div>
 
           <div className="flex items-center gap-1.5">
-            <div className="flex items-center gap-1.5 px-3 py-1 rounded-xl bg-emerald-950/65 border border-emerald-400/25 backdrop-blur-md">
+            <div className="flex items-center gap-1.5 px-3 py-1 rounded-xl bg-emerald-950/85 border border-emerald-400/25">
               <Coins className="w-4 h-4 text-amber-300" />
               <span className="text-sm font-extrabold tabular-nums text-amber-200">{hud.coins}</span>
             </div>
 
-            <div className="flex items-center gap-1.5 px-3 py-1 rounded-xl bg-emerald-950/65 border border-emerald-400/25 backdrop-blur-md">
+            <div className="flex items-center gap-1.5 px-3 py-1 rounded-xl bg-emerald-950/85 border border-emerald-400/25">
               <Sparkles className="w-4 h-4 text-emerald-300" />
               <span className="text-sm font-extrabold tabular-nums text-emerald-200">{hud.stunts}</span>
             </div>
 
-            <div className="hidden sm:flex items-center gap-1.5 px-3 py-1 rounded-xl bg-emerald-950/65 border border-emerald-400/25 backdrop-blur-md">
+            <div className="hidden sm:flex items-center gap-1.5 px-3 py-1 rounded-xl bg-emerald-950/85 border border-emerald-400/25">
               <Trophy className="w-4 h-4 text-yellow-300" />
               <span className="text-sm font-bold tabular-nums text-emerald-100">
                 {highScore.toLocaleString()}
@@ -332,11 +332,11 @@ const TornadoSurfersGame = ({ onBack, isMuted = false, onSaveScore }) => {
         <div className="pointer-events-none absolute top-20 sm:top-24 inset-x-3 sm:inset-x-4 z-10 flex items-start justify-between">
           <div className="flex flex-col gap-1.5 max-w-[175px]">
             {activeBars.map(({ key, label, max, color, text, Icon }) => {
-              const pct = Math.max(5, Math.min(100, (hud[key] / max) * 100));
+              const ratio = Math.max(0.05, Math.min(1, hud[key] / max));
               return (
                 <div
                   key={key}
-                  className="px-3 py-2 rounded-xl bg-emerald-950/65 border border-emerald-400/30 backdrop-blur-md shadow-md"
+                  className="px-3 py-2 rounded-xl bg-emerald-950/85 border border-emerald-400/30 shadow-md"
                 >
                   <div className="flex items-center justify-between gap-2 mb-1">
                     <span className={`inline-flex items-center gap-1 text-xs font-extrabold ${text}`}>
@@ -349,8 +349,8 @@ const TornadoSurfersGame = ({ onBack, isMuted = false, onSaveScore }) => {
                   </div>
                   <div className="w-28 h-1.5 rounded-full bg-emerald-950 overflow-hidden">
                     <div
-                      className={`h-full rounded-full ${color} transition-all duration-75`}
-                      style={{ width: `${pct}%` }}
+                      className={`h-full w-full rounded-full origin-left ${color} transition-transform duration-100 will-change-transform`}
+                      style={{ transform: `scaleX(${ratio})` }}
                     />
                   </div>
                 </div>
@@ -360,7 +360,7 @@ const TornadoSurfersGame = ({ onBack, isMuted = false, onSaveScore }) => {
 
           <div className="flex flex-col items-end gap-1.5">
             {hud.chaserTimer > 0 && (
-              <div className="flex items-center gap-1.5 px-3.5 py-2 rounded-2xl bg-rose-950/80 border border-rose-400/60 text-rose-100 backdrop-blur-md shadow-lg animate-pulse">
+              <div className="flex items-center gap-1.5 px-3.5 py-2 rounded-2xl bg-rose-950/90 border border-rose-400/60 text-rose-100 shadow-lg">
                 <AlertTriangle className="w-4 h-4 text-rose-300" />
                 <span className="text-xs sm:text-sm font-black tracking-wide">
                   CHASER LOCK • {hud.chaserTimer.toFixed(1)}s
@@ -368,7 +368,7 @@ const TornadoSurfersGame = ({ onBack, isMuted = false, onSaveScore }) => {
               </div>
             )}
             {hud.combo > 1 && (
-              <div className="px-3 py-1.5 rounded-xl bg-emerald-950/70 border border-emerald-400/40 backdrop-blur-md text-xs sm:text-sm font-black text-lime-300">
+              <div className="px-3 py-1.5 rounded-xl bg-emerald-950/85 border border-emerald-400/40 text-xs sm:text-sm font-black text-lime-300">
                 {hud.combo}x STREAK
               </div>
             )}
@@ -376,39 +376,39 @@ const TornadoSurfersGame = ({ onBack, isMuted = false, onSaveScore }) => {
         </div>
       )}
 
-      {/* Floating Bottom Semi-Opaque Emerald Thumb Deck */}
+      {/* Compact Web Action Dock */}
       {hud.phase === "playing" && (
-        <div className="pointer-events-none absolute bottom-3 sm:bottom-5 inset-x-3 sm:inset-x-6 z-10 pb-[env(safe-area-inset-bottom,0px)]">
-          <div className="max-w-xl mx-auto grid grid-cols-5 gap-2">
+        <div className="pointer-events-none absolute bottom-4 inset-x-4 z-10 flex flex-col items-center gap-2">
+          <div className="w-full max-w-md grid grid-cols-5 gap-2">
             <button
               type="button"
               onClick={() => handleMove(-1)}
               aria-label="Move Left"
-              className="pointer-events-auto h-14 sm:h-12 rounded-2xl bg-emerald-950/55 hover:bg-emerald-900/75 border border-emerald-400/35 backdrop-blur-md text-emerald-100 flex items-center justify-center touch-manipulation transition active:scale-95"
+              className="pointer-events-auto h-11 rounded-2xl bg-emerald-950/85 hover:bg-emerald-900/95 border border-emerald-400/35 text-emerald-100 flex items-center justify-center transition-transform active:scale-95"
             >
-              <ChevronLeft className="w-7 h-7" />
+              <ChevronLeft className="w-6 h-6" />
             </button>
 
             <button
               type="button"
               onClick={handleJump}
               aria-label="Jump"
-              className="pointer-events-auto h-14 sm:h-12 rounded-2xl bg-emerald-950/55 hover:bg-emerald-900/75 border border-emerald-400/35 backdrop-blur-md text-lime-200 flex items-center justify-center touch-manipulation transition active:scale-95"
+              className="pointer-events-auto h-11 rounded-2xl bg-emerald-950/85 hover:bg-emerald-900/95 border border-emerald-400/35 text-lime-200 flex items-center justify-center transition-transform active:scale-95"
             >
-              <ChevronUp className="w-7 h-7" />
+              <ChevronUp className="w-6 h-6" />
             </button>
 
             <button
               type="button"
               onClick={handleBoard}
               aria-label="Activate Hoverboard Shield"
-              className={`pointer-events-auto h-14 sm:h-12 rounded-2xl border backdrop-blur-md flex items-center justify-center gap-1.5 text-sm font-black touch-manipulation transition active:scale-95 ${
+              className={`pointer-events-auto h-11 rounded-2xl border flex items-center justify-center gap-1.5 text-sm font-black transition-transform active:scale-95 ${
                 hud.hoverboardTimer > 0
-                  ? "bg-emerald-400/35 border-emerald-300 text-white"
-                  : "bg-emerald-950/55 hover:bg-emerald-900/75 border-emerald-400/40 text-emerald-200"
+                  ? "bg-emerald-500/40 border-emerald-300 text-white"
+                  : "bg-emerald-950/85 hover:bg-emerald-900/95 border-emerald-400/40 text-emerald-200"
               }`}
             >
-              <Shield className="w-5 h-5" />
+              <Shield className="w-4 h-4" />
               <span className="tabular-nums">{hud.hoverboards}</span>
             </button>
 
@@ -416,19 +416,22 @@ const TornadoSurfersGame = ({ onBack, isMuted = false, onSaveScore }) => {
               type="button"
               onClick={handleSlide}
               aria-label="Slide or Slam"
-              className="pointer-events-auto h-14 sm:h-12 rounded-2xl bg-emerald-950/55 hover:bg-emerald-900/75 border border-emerald-400/35 backdrop-blur-md text-amber-200 flex items-center justify-center touch-manipulation transition active:scale-95"
+              className="pointer-events-auto h-11 rounded-2xl bg-emerald-950/85 hover:bg-emerald-900/95 border border-emerald-400/35 text-amber-200 flex items-center justify-center transition-transform active:scale-95"
             >
-              <ChevronDown className="w-7 h-7" />
+              <ChevronDown className="w-6 h-6" />
             </button>
 
             <button
               type="button"
               onClick={() => handleMove(1)}
               aria-label="Move Right"
-              className="pointer-events-auto h-14 sm:h-12 rounded-2xl bg-emerald-950/55 hover:bg-emerald-900/75 border border-emerald-400/35 backdrop-blur-md text-emerald-100 flex items-center justify-center touch-manipulation transition active:scale-95"
+              className="pointer-events-auto h-11 rounded-2xl bg-emerald-950/85 hover:bg-emerald-900/95 border border-emerald-400/35 text-emerald-100 flex items-center justify-center transition-transform active:scale-95"
             >
-              <ChevronRight className="w-7 h-7" />
+              <ChevronRight className="w-6 h-6" />
             </button>
+          </div>
+          <div className="hidden sm:block text-[11px] font-semibold tracking-wide text-emerald-200/75 bg-emerald-950/80 px-3 py-1 rounded-full border border-emerald-400/20">
+            WASD / Arrow Keys • Space: Shield • Double-click / Drag track
           </div>
         </div>
       )}
@@ -436,37 +439,37 @@ const TornadoSurfersGame = ({ onBack, isMuted = false, onSaveScore }) => {
       {/* READY OVERLAY (Clean Translucent Emerald Glass) */}
       {hud.phase === "ready" && (
         <div className="absolute inset-0 z-20 flex items-center justify-center p-5 bg-emerald-950/45 backdrop-blur-sm">
-          <div className="w-full max-w-md rounded-3xl border border-emerald-400/35 bg-emerald-950/75 backdrop-blur-xl p-6 sm:p-7 shadow-2xl text-center">
+          <div className="w-full max-w-md rounded-3xl border border-emerald-400/35 bg-emerald-950/85 backdrop-blur-xl p-6 sm:p-7 shadow-2xl text-center">
             <div className="inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full bg-emerald-400/20 border border-emerald-300/35 text-xs font-extrabold text-emerald-200 mb-3">
               <Zap className="w-4 h-4" />
-              EMERALD 3D RUNNER
+              EMERALD 3D WEB RUNNER
             </div>
 
             <h2 className="text-3xl sm:text-4xl font-black tracking-tight text-white">
               Tornado Surfers
             </h2>
             <p className="mt-2 text-sm text-emerald-100/85 leading-relaxed">
-              Swipe anywhere to weave through glass Express Trains, leap roofs with Super Boots, and double-tap for your Hoverboard Shield.
+              Weave through Express Trains, leap roofs with Super Boots, and trigger your Hoverboard Shield on the track.
             </p>
 
             <div className="mt-5 grid grid-cols-2 gap-2.5 text-left text-xs">
-              <div className="p-3 rounded-2xl bg-emerald-900/45 border border-emerald-400/25">
-                <div className="font-extrabold text-emerald-200">Phone Touch</div>
-                <div className="text-emerald-100/75 mt-0.5">Swipe track or tap bottom dock</div>
+              <div className="p-3 rounded-2xl bg-emerald-900/55 border border-emerald-400/25">
+                <div className="font-extrabold text-emerald-200">Keyboard</div>
+                <div className="text-emerald-100/80 mt-0.5">WASD / Arrows • Space Shield</div>
               </div>
-              <div className="p-3 rounded-2xl bg-emerald-900/45 border border-emerald-400/25">
-                <div className="font-extrabold text-lime-200">Keyboard</div>
-                <div className="text-emerald-100/75 mt-0.5">WASD / Arrows • Space Shield</div>
+              <div className="p-3 rounded-2xl bg-emerald-900/55 border border-emerald-400/25">
+                <div className="font-extrabold text-lime-200">Mouse / Trackpad</div>
+                <div className="text-emerald-100/80 mt-0.5">Drag track or click dock</div>
               </div>
             </div>
 
             <button
               type="button"
               onClick={startNewRun}
-              className="mt-5 w-full py-4 rounded-2xl bg-gradient-to-r from-emerald-400 to-lime-300 hover:brightness-105 text-emerald-950 font-black text-base tracking-wide flex items-center justify-center gap-2 shadow-xl shadow-emerald-500/25 transition active:scale-95"
+              className="mt-5 w-full py-4 rounded-2xl bg-gradient-to-r from-emerald-400 to-lime-300 hover:brightness-105 text-emerald-950 font-black text-base tracking-wide flex items-center justify-center gap-2 shadow-xl shadow-emerald-500/25 transition-transform active:scale-95"
             >
               <Play className="w-5 h-5 fill-current" />
-              PLAY FULLSCREEN
+              START RUN
             </button>
           </div>
         </div>

@@ -634,7 +634,7 @@ export function stepRunnerState(state, rawDt, rng = Math.random) {
   state.popups = state.popups.filter((p) => p.life > 0);
 
   state.entities = state.entities.filter(
-    (e) => (e.zEnd ?? e.z) > -0.22 && !e.collected && !e.hit
+    (e) => (e.zEnd ?? e.z) > -0.26 && !e.collected && !e.hit
   );
 
   return events;

@@ -2,10 +2,7 @@ import React, { useEffect, useRef } from "react";
 import PropTypes from "prop-types";
 import * as THREE from "three";
 import { createGlowHaloTexture } from "./vortexBastion/textures3D";
-import {
-  PLAYER_HIT_Z,
-  TRAIN_ROOF_Y,
-} from "./tornadoSurfersEngine";
+import { PLAYER_HIT_Z, TRAIN_ROOF_Y } from "./tornadoSurfersEngine";
 
 const WORLD_DEPTH = 46;
 const LANE_WIDTH = 2.45;
@@ -15,22 +12,22 @@ function toWorldZ(simZ) {
   return -(simZ - PLAYER_HIT_Z) * WORLD_DEPTH;
 }
 
-function makeGlassMat(opts) {
-  const baseOpacity = opts.opacity ?? 0.88;
+function makeSolidMat(opts) {
+  const baseOpacity = opts.opacity ?? 1.0;
   const mat = new THREE.MeshStandardMaterial({
     ...opts,
-    transparent: true,
+    transparent: baseOpacity < 0.99,
     opacity: baseOpacity,
   });
   mat.userData.baseOpacity = baseOpacity;
   return mat;
 }
 
-function makeBasicGlassMat(opts) {
-  const baseOpacity = opts.opacity ?? 0.9;
+function makeBasicMat(opts) {
+  const baseOpacity = opts.opacity ?? 1.0;
   const mat = new THREE.MeshBasicMaterial({
     ...opts,
-    transparent: true,
+    transparent: baseOpacity < 0.99,
     opacity: baseOpacity,
   });
   mat.userData.baseOpacity = baseOpacity;
@@ -40,10 +37,28 @@ function makeBasicGlassMat(opts) {
 function applyMeshAlpha(group, alpha) {
   const a = Math.max(0, Math.min(1, alpha));
   group.traverse((obj) => {
+    if (!obj.material) return;
+    const base = obj.material.userData?.baseOpacity ?? 1;
+    const effective = base * a;
+    if (obj.isSprite) {
+      obj.material.opacity = effective;
+      return;
+    }
+    const needBlend = effective < 0.985;
+    if (obj.material.transparent !== needBlend) {
+      obj.material.transparent = needBlend;
+      obj.material.needsUpdate = true;
+    }
+    obj.material.depthWrite = !needBlend;
+    obj.material.opacity = effective;
+  });
+}
+
+function disposeGroupMaterials(group) {
+  group.traverse((obj) => {
     if (obj.material) {
-      const base = obj.material.userData?.baseOpacity ?? 1;
-      obj.material.transparent = true;
-      obj.material.opacity = base * a;
+      if (Array.isArray(obj.material)) obj.material.forEach((m) => m.dispose());
+      else obj.material.dispose();
     }
   });
 }
@@ -76,7 +91,22 @@ function createSkyscraperTexture(hueHex) {
   return tex;
 }
 
-function buildTrainMesh3D(variant = 0, moving = false, glowTex, lenZ = 0.28 * WORLD_DEPTH) {
+function createSharedGeos() {
+  return {
+    unitBox: new THREE.BoxGeometry(1, 1, 1),
+    unitPlane: new THREE.PlaneGeometry(1, 1),
+    lamp: new THREE.SphereGeometry(0.14, 8, 8),
+    coin: new THREE.CylinderGeometry(0.32, 0.32, 0.1, 16),
+    power: new THREE.OctahedronGeometry(0.42, 0),
+    spark: new THREE.BoxGeometry(0.14, 0.14, 0.14),
+    barrierBar: new THREE.BoxGeometry(1.74, 0.6, 0.22),
+    barrierLeg: new THREE.BoxGeometry(0.14, 0.75, 0.24),
+    gatePost: new THREE.BoxGeometry(0.16, 3.2, 0.24),
+    gateSign: new THREE.BoxGeometry(1.82, 1.35, 0.24),
+  };
+}
+
+function buildTrainMesh3D(variant = 0, moving = false, glowTex, lenZ = 0.28 * WORLD_DEPTH, geos) {
   const palettes = [
     { body: 0x064e3b, roof: 0x10b981, accent: 0x6ee7b7 },
     { body: 0x052e23, roof: 0x059669, accent: 0x4ade80 },
@@ -88,44 +118,48 @@ function buildTrainMesh3D(variant = 0, moving = false, glowTex, lenZ = 0.28 * WO
   const heightY = TRAIN_ROOF_Y * Y_SCALE;
   const widthX = 1.78;
 
-  // Translucent glossy green glass subway car
   const body = new THREE.Mesh(
-    new THREE.BoxGeometry(widthX, heightY, lenZ),
-    makeGlassMat({ color: pal.body, metalness: 0.55, roughness: 0.22, opacity: 0.86 })
+    geos.unitBox,
+    makeSolidMat({ color: pal.body, metalness: 0.55, roughness: 0.25, opacity: 1.0 })
   );
+  body.scale.set(widthX, heightY, lenZ);
   body.position.y = heightY * 0.5;
-  body.castShadow = true;
-  body.receiveShadow = true;
   group.add(body);
 
-  // Walkable Bevelled Roof Plate
   const roof = new THREE.Mesh(
-    new THREE.BoxGeometry(widthX * 0.94, 0.14, lenZ * 0.96),
-    makeGlassMat({ color: pal.roof, emissive: pal.roof, emissiveIntensity: 0.25, metalness: 0.45, roughness: 0.3, opacity: 0.92 })
+    geos.unitBox,
+    makeSolidMat({
+      color: pal.roof,
+      emissive: pal.roof,
+      emissiveIntensity: 0.25,
+      metalness: 0.45,
+      roughness: 0.3,
+      opacity: 1.0,
+    })
   );
+  roof.scale.set(widthX * 0.94, 0.14, lenZ * 0.96);
   roof.position.y = heightY + 0.05;
   group.add(roof);
 
-  // Glowing side accent stripes
-  const stripeMat = makeBasicGlassMat({ color: moving ? 0xfbbf24 : pal.accent, opacity: 0.95 });
-  const stripe = new THREE.Mesh(new THREE.BoxGeometry(widthX + 0.03, 0.12, lenZ * 0.98), stripeMat);
+  const stripe = new THREE.Mesh(
+    geos.unitBox,
+    makeBasicMat({ color: moving ? 0xfbbf24 : pal.accent, opacity: 1.0 })
+  );
+  stripe.scale.set(widthX + 0.03, 0.12, lenZ * 0.98);
   stripe.position.y = heightY * 0.35;
   group.add(stripe);
 
-  // Tinted Glass Windshield + Headlights (pointing +Z toward runner)
   const wind = new THREE.Mesh(
-    new THREE.PlaneGeometry(widthX * 0.72, heightY * 0.34),
-    makeBasicGlassMat({ color: 0x022c22, opacity: 0.78 })
+    geos.unitPlane,
+    makeBasicMat({ color: 0x022c22, opacity: 0.9 })
   );
+  wind.scale.set(widthX * 0.72, heightY * 0.34, 1);
   wind.position.set(0, heightY * 0.68, lenZ * 0.5 + 0.01);
   group.add(wind);
 
   const hlColor = moving ? 0xfef08a : pal.accent;
   for (const sx of [-0.46, 0.46]) {
-    const lamp = new THREE.Mesh(
-      new THREE.SphereGeometry(0.14, 8, 8),
-      makeBasicGlassMat({ color: hlColor, opacity: 0.95 })
-    );
+    const lamp = new THREE.Mesh(geos.lamp, makeBasicMat({ color: hlColor, opacity: 1.0 }));
     lamp.position.set(sx, heightY * 0.26, lenZ * 0.5 + 0.02);
     group.add(lamp);
 
@@ -150,10 +184,10 @@ function buildTrainMesh3D(variant = 0, moving = false, glowTex, lenZ = 0.28 * WO
   return group;
 }
 
-function buildEntityMesh3D(ent, glowTex) {
+function buildEntityMesh3D(ent, glowTex, geos) {
   if (ent.kind === "train") {
     const exactLenZ = Math.max(0.18, (ent.zEnd ?? ent.z + 0.28) - ent.z) * WORLD_DEPTH;
-    return buildTrainMesh3D(ent.colorVariant || 0, Boolean(ent.moving), glowTex, exactLenZ);
+    return buildTrainMesh3D(ent.colorVariant || 0, Boolean(ent.moving), glowTex, exactLenZ, geos);
   }
 
   if (ent.kind === "ramp") {
@@ -164,16 +198,17 @@ function buildEntityMesh3D(ent, glowTex) {
     const angle = Math.atan2(hY, lenZ);
 
     const plank = new THREE.Mesh(
-      new THREE.BoxGeometry(1.7, 0.16, hyp),
-      makeGlassMat({
+      geos.unitBox,
+      makeSolidMat({
         color: 0x34d399,
         emissive: 0x10b981,
         emissiveIntensity: 0.5,
         metalness: 0.4,
         roughness: 0.25,
-        opacity: 0.88,
+        opacity: 1.0,
       })
     );
+    plank.scale.set(1.7, 0.16, hyp);
     plank.rotation.x = angle;
     plank.position.set(0, hY * 0.5, 0);
     group.add(plank);
@@ -183,24 +218,20 @@ function buildEntityMesh3D(ent, glowTex) {
   if (ent.kind === "low_barrier") {
     const group = new THREE.Group();
     const bar = new THREE.Mesh(
-      new THREE.BoxGeometry(1.74, 0.6, 0.22),
-      makeGlassMat({
+      geos.barrierBar,
+      makeSolidMat({
         color: 0x4ade80,
         emissive: 0x16a34a,
         emissiveIntensity: 0.72,
         roughness: 0.2,
-        opacity: 0.82,
+        opacity: 1.0,
       })
     );
     bar.position.y = 0.75;
-    bar.castShadow = true;
     group.add(bar);
 
     for (const sx of [-0.65, 0.65]) {
-      const leg = new THREE.Mesh(
-        new THREE.BoxGeometry(0.14, 0.75, 0.24),
-        makeGlassMat({ color: 0x065f46, opacity: 0.9 })
-      );
+      const leg = new THREE.Mesh(geos.barrierLeg, makeSolidMat({ color: 0x065f46, opacity: 1.0 }));
       leg.position.set(sx, 0.38, 0);
       group.add(leg);
     }
@@ -210,20 +241,21 @@ function buildEntityMesh3D(ent, glowTex) {
   if (ent.kind === "high_gate") {
     const group = new THREE.Group();
     const beamY = 2.45;
-    const postMat = makeGlassMat({ color: 0x064e3b, metalness: 0.6, roughness: 0.3, opacity: 0.88 });
     for (const sx of [-0.82, 0.82]) {
-      const post = new THREE.Mesh(new THREE.BoxGeometry(0.16, 3.2, 0.24), postMat.clone());
-      post.material.userData.baseOpacity = 0.88;
+      const post = new THREE.Mesh(
+        geos.gatePost,
+        makeSolidMat({ color: 0x064e3b, metalness: 0.6, roughness: 0.3, opacity: 1.0 })
+      );
       post.position.set(sx, 1.6, 0);
       group.add(post);
     }
     const sign = new THREE.Mesh(
-      new THREE.BoxGeometry(1.82, 1.35, 0.24),
-      makeGlassMat({
+      geos.gateSign,
+      makeSolidMat({
         color: 0x10b981,
         emissive: 0x34d399,
-        emissiveIntensity: 0.9,
-        opacity: 0.76,
+        emissiveIntensity: 0.85,
+        opacity: 0.88,
       })
     );
     sign.position.y = beamY;
@@ -233,21 +265,20 @@ function buildEntityMesh3D(ent, glowTex) {
 
   if (ent.kind === "coin") {
     const coin = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.32, 0.32, 0.1, 16),
-      makeGlassMat({
+      geos.coin,
+      makeSolidMat({
         color: 0xfbbf24,
         emissive: 0xf59e0b,
         emissiveIntensity: 0.95,
         metalness: 0.8,
         roughness: 0.2,
-        opacity: 0.95,
+        opacity: 1.0,
       })
     );
     coin.rotation.x = Math.PI / 2;
     return coin;
   }
 
-  // Powerups (magnet, multiplier, jetpack, board_pickup, sneakers)
   const pCols = {
     magnet: 0xf43f5e,
     multiplier: 0xfbbf24,
@@ -258,8 +289,8 @@ function buildEntityMesh3D(ent, glowTex) {
   const col = pCols[ent.kind] || 0x34d399;
   const pGroup = new THREE.Group();
   const cube = new THREE.Mesh(
-    new THREE.OctahedronGeometry(0.42, 0),
-    makeGlassMat({ color: col, emissive: col, emissiveIntensity: 1.4, opacity: 0.9 })
+    geos.power,
+    makeSolidMat({ color: col, emissive: col, emissiveIntensity: 1.35, opacity: 1.0 })
   );
   pGroup.add(cube);
 
@@ -295,19 +326,15 @@ function buildArticulatedRunner3D(glowTex) {
   });
   const limbMat = new THREE.MeshStandardMaterial({ color: 0x064e3b, metalness: 0.45, roughness: 0.45 });
 
-  // Torso jacket
   const torso = new THREE.Mesh(new THREE.BoxGeometry(0.54, 0.72, 0.32), torsoMat);
   torso.position.y = 1.1;
-  torso.castShadow = true;
   bodyTilt.add(torso);
 
-  // Head + glowing mint cyber-visor
   const head = new THREE.Mesh(
     new THREE.SphereGeometry(0.24, 14, 12),
     new THREE.MeshStandardMaterial({ color: 0xf0fdf4, roughness: 0.3 })
   );
   head.position.y = 1.66;
-  head.castShadow = true;
   bodyTilt.add(head);
 
   const visor = new THREE.Mesh(
@@ -317,7 +344,6 @@ function buildArticulatedRunner3D(glowTex) {
   visor.position.set(0, 1.67, -0.18);
   bodyTilt.add(visor);
 
-  // Articulated Arms & Legs
   const legL = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.65, 0.2), limbMat);
   legL.position.set(-0.15, 0.42, 0);
   const legR = legL.clone();
@@ -330,7 +356,6 @@ function buildArticulatedRunner3D(glowTex) {
   armR.position.x = 0.37;
   bodyTilt.add(armL, armR);
 
-  // Super Sneakers boots aura
   const sneakerMat = new THREE.MeshBasicMaterial({ color: 0x86efac, visible: false });
   const shoeL = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.16, 0.34), sneakerMat);
   shoeL.position.set(0, -0.32, -0.04);
@@ -338,7 +363,6 @@ function buildArticulatedRunner3D(glowTex) {
   legL.add(shoeL);
   legR.add(shoeR);
 
-  // Neon Hoverboard + Shield Sphere
   const boardGroup = new THREE.Group();
   const deck = new THREE.Mesh(
     new THREE.BoxGeometry(0.55, 0.08, 1.45),
@@ -355,7 +379,6 @@ function buildArticulatedRunner3D(glowTex) {
   boardGroup.visible = false;
   bodyTilt.add(boardGroup);
 
-  // Dual-Thruster Jetpack on Back (+Z)
   const jetGroup = new THREE.Group();
   const tankMat = new THREE.MeshStandardMaterial({ color: 0x10b981, metalness: 0.7, roughness: 0.25 });
   const flameMat = new THREE.MeshBasicMaterial({ color: 0x6ee7b7 });
@@ -400,7 +423,7 @@ function buildArticulatedRunner3D(glowTex) {
 
 const TornadoSurfers3DScene = ({ simRef, onStep, onSwipeMove, onSwipeJump, onSwipeSlide, onDoubleTap }) => {
   const mountRef = useRef(null);
-  const touchStartRef = useRef(null);
+  const pointerDragRef = useRef(null);
   const lastTapRef = useRef(0);
 
   const callbacksRef = useRef({ onStep, onSwipeMove, onSwipeJump, onSwipeSlide, onDoubleTap });
@@ -416,7 +439,7 @@ const TornadoSurfers3DScene = ({ simRef, onStep, onSwipeMove, onSwipeJump, onSwi
     scene.background = new THREE.Color(0x031712);
     scene.fog = new THREE.FogExp2(0x04241b, 0.011);
 
-    const width = container.clientWidth || 380;
+    const width = container.clientWidth || 640;
     const height = container.clientHeight || 560;
     const aspect = width / Math.max(1, height);
     const camera = new THREE.PerspectiveCamera(aspect < 0.75 ? 66 : 58, aspect, 0.1, 95);
@@ -425,17 +448,14 @@ const TornadoSurfers3DScene = ({ simRef, onStep, onSwipeMove, onSwipeJump, onSwi
     const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     renderer.setSize(width, height);
-    renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.shadowMap.enabled = false;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.25;
     container.appendChild(renderer.domElement);
 
-    // Clear Mint/Emerald Lighting
-    scene.add(new THREE.HemisphereLight(0x6ee7b7, 0x052e23, 1.2));
+    scene.add(new THREE.HemisphereLight(0x6ee7b7, 0x052e23, 1.25));
     const dirLight = new THREE.DirectionalLight(0xecfdf5, 1.65);
     dirLight.position.set(6, 16, 10);
-    dirLight.castShadow = true;
     scene.add(dirLight);
 
     const runnerLight = new THREE.PointLight(0x34d399, 2.2, 9);
@@ -444,51 +464,45 @@ const TornadoSurfers3DScene = ({ simRef, onStep, onSwipeMove, onSwipeJump, onSwi
     const glowTex = createGlowHaloTexture();
     const bTexEmerald = createSkyscraperTexture("#10b981");
     const bTexMint = createSkyscraperTexture("#6ee7b7");
+    const geos = createSharedGeos();
 
-    // Track Bed & 3 Emerald Neon Rail Lanes
     const trackFloor = new THREE.Mesh(
       new THREE.PlaneGeometry(10.5, 76),
       new THREE.MeshStandardMaterial({ color: 0x041d17, metalness: 0.4, roughness: 0.65 })
     );
     trackFloor.rotation.x = -Math.PI / 2;
     trackFloor.position.set(0, 0, -28);
-    trackFloor.receiveShadow = true;
     scene.add(trackFloor);
 
-    const railMat = new THREE.MeshBasicMaterial({ color: 0x34d399, transparent: true, opacity: 0.55 });
+    const railMat = new THREE.MeshBasicMaterial({ color: 0x34d399 });
     for (const laneIdx of [-1, 0, 1]) {
       for (const offset of [-0.55, 0.55]) {
-        const rail = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.06, 76), railMat);
+        const rail = new THREE.Mesh(geos.unitBox, railMat);
+        rail.scale.set(0.08, 0.06, 76);
         rail.position.set(laneIdx * LANE_WIDTH + offset, 0.03, -28);
         scene.add(rail);
       }
     }
+    const stripMatCenter = new THREE.MeshBasicMaterial({ color: 0x10b981 });
+    const stripMatEdge = new THREE.MeshBasicMaterial({ color: 0x6ee7b7 });
     for (const edgeX of [-3.7, -1.22, 1.22, 3.7]) {
-      const strip = new THREE.Mesh(
-        new THREE.BoxGeometry(0.06, 0.04, 76),
-        new THREE.MeshBasicMaterial({
-          color: Math.abs(edgeX) > 3 ? 0x6ee7b7 : 0x10b981,
-          transparent: true,
-          opacity: 0.75,
-        })
-      );
+      const strip = new THREE.Mesh(geos.unitBox, Math.abs(edgeX) > 3 ? stripMatEdge : stripMatCenter);
+      strip.scale.set(0.06, 0.04, 76);
       strip.position.set(edgeX, 0.04, -28);
       scene.add(strip);
     }
 
-    // Horizon Emerald Sun / Vortex Orb
     const sunOrb = new THREE.Mesh(
       new THREE.CircleGeometry(7.8, 32),
-      new THREE.MeshBasicMaterial({ color: 0x10b981, transparent: true, opacity: 0.4 })
+      new THREE.MeshBasicMaterial({ color: 0x10b981, transparent: true, opacity: 0.42 })
     );
     sunOrb.position.set(0, 8.2, -55);
     scene.add(sunOrb);
 
-    // Scrolling Sleepers, Gantry Arches & Skyscrapers
     const sleeperGroup = new THREE.Group();
     const sleeperMeshes = [];
     const sleeperGeo = new THREE.BoxGeometry(8.2, 0.04, 0.28);
-    const sleeperMat = new THREE.MeshBasicMaterial({ color: 0x064e3b, transparent: true, opacity: 0.65 });
+    const sleeperMat = new THREE.MeshBasicMaterial({ color: 0x064e3b });
     for (let i = 0; i < 20; i++) {
       const m = new THREE.Mesh(sleeperGeo, sleeperMat);
       m.position.set(0, 0.015, -i * 2.8 + 4);
@@ -500,17 +514,21 @@ const TornadoSurfers3DScene = ({ simRef, onStep, onSwipeMove, onSwipeJump, onSwi
     const sceneryGroup = new THREE.Group();
     const gantryArches = [];
     const buildings = [];
+    const archPostMat = new THREE.MeshStandardMaterial({ color: 0x064e3b, metalness: 0.6 });
+    const bMatEmerald = new THREE.MeshBasicMaterial({ map: bTexEmerald });
+    const bMatMint = new THREE.MeshBasicMaterial({ map: bTexMint });
     for (let i = 0; i < 6; i++) {
       const gz = -i * 9.5;
       const arch = new THREE.Group();
-      const postMat = new THREE.MeshStandardMaterial({ color: 0x064e3b, metalness: 0.6, transparent: true, opacity: 0.72 });
-      const beamMat = new THREE.MeshBasicMaterial({ color: i % 2 === 0 ? 0x34d399 : 0x6ee7b7, transparent: true, opacity: 0.78 });
+      const beamMat = new THREE.MeshBasicMaterial({ color: i % 2 === 0 ? 0x34d399 : 0x6ee7b7 });
       for (const sx of [-4.1, 4.1]) {
-        const post = new THREE.Mesh(new THREE.BoxGeometry(0.24, 6.2, 0.3), postMat);
+        const post = new THREE.Mesh(geos.unitBox, archPostMat);
+        post.scale.set(0.24, 6.2, 0.3);
         post.position.set(sx, 3.1, 0);
         arch.add(post);
       }
-      const top = new THREE.Mesh(new THREE.BoxGeometry(8.4, 0.24, 0.35), beamMat);
+      const top = new THREE.Mesh(geos.unitBox, beamMat);
+      top.scale.set(8.4, 0.24, 0.35);
       top.position.set(0, 6.2, 0);
       arch.add(top);
       arch.position.z = gz;
@@ -520,13 +538,10 @@ const TornadoSurfers3DScene = ({ simRef, onStep, onSwipeMove, onSwipeJump, onSwi
       for (const side of [-1, 1]) {
         const h = 9 + ((i * 7 + (side > 0 ? 3 : 1)) % 8);
         const b = new THREE.Mesh(
-          new THREE.BoxGeometry(3.2, h, 4.0),
-          new THREE.MeshBasicMaterial({
-            map: (i + (side > 0 ? 1 : 0)) % 2 === 0 ? bTexEmerald : bTexMint,
-            transparent: true,
-            opacity: 0.72,
-          })
+          geos.unitBox,
+          (i + (side > 0 ? 1 : 0)) % 2 === 0 ? bMatEmerald : bMatMint
         );
+        b.scale.set(3.2, h, 4.0);
         b.position.set(side * 6.8, h * 0.5 - 0.5, gz - 2);
         sceneryGroup.add(b);
         buildings.push(b);
@@ -534,7 +549,6 @@ const TornadoSurfers3DScene = ({ simRef, onStep, onSwipeMove, onSwipeJump, onSwi
     }
     scene.add(sceneryGroup);
 
-    // Runner, Shadow & Chaser Drone
     const runnerMesh = buildArticulatedRunner3D(glowTex);
     scene.add(runnerMesh);
     scene.add(runnerMesh.userData.dropHalo);
@@ -560,14 +574,14 @@ const TornadoSurfers3DScene = ({ simRef, onStep, onSwipeMove, onSwipeJump, onSwi
     const sparksLayer = new THREE.Group();
     scene.add(sparksLayer);
     const activeSparks = [];
-    const sparkGeo = new THREE.BoxGeometry(0.14, 0.14, 0.14);
 
     const popupsLayer = new THREE.Group();
     scene.add(popupsLayer);
     const popupTexCache = new Map();
+    const popupSpriteMap = new Map();
 
     const resizeObserver = new ResizeObserver(() => {
-      const nw = container.clientWidth || 380;
+      const nw = container.clientWidth || 640;
       const nh = container.clientHeight || 560;
       const na = nw / Math.max(1, nh);
       camera.fov = na < 0.75 ? 66 : 58;
@@ -652,57 +666,75 @@ const TornadoSurfers3DScene = ({ simRef, onStep, onSwipeMove, onSwipeJump, onSwi
         chaserGroup.visible = false;
       }
 
+      // Frame-rate independent smooth camera follow
+      const camLerp = 1 - Math.exp(-12 * dt);
       const shakeMag = s.shakeTimer > 0 ? s.shakeIntensity * (s.shakeTimer / 0.45) : 0;
       const sx = shakeMag ? (Math.random() - 0.5) * shakeMag : 0;
       const sy = shakeMag ? (Math.random() - 0.5) * shakeMag : 0;
-      camera.position.x += (rx * 0.55 - camera.position.x) * 0.15 + sx;
-      camera.position.y += (4.35 + ry * 0.78 - camera.position.y) * 0.12 + sy;
-      camera.position.z = s.jetpackTimer > 0 ? 7.1 : 6.2;
+      const targetCamZ = s.jetpackTimer > 0 ? 7.1 : 6.2;
+
+      camera.position.x += (rx * 0.55 - camera.position.x) * camLerp + sx;
+      camera.position.y += (4.35 + ry * 0.78 - camera.position.y) * camLerp + sy;
+      camera.position.z += (targetCamZ - camera.position.z) * camLerp;
       camera.lookAt(rx * 0.35, ry * 0.55 + 1.35, -7.5);
 
-      // Flush any leftover exiting debris instantaneously upon fresh restart
       if (s.waveIndex === 0 && s.distance < 0.05 && exitingMeshes.length > 0) {
         while (exitingMeshes.length > 0) {
           const item = exitingMeshes.pop();
           entityLayer.remove(item.mesh);
+          disposeGroupMaterials(item.mesh);
         }
       }
 
-      // Sync Obstacles, Trains, Ramps, Coins & Powerups with Smooth Pass-Away Dissolve
+      // Track Entity Removal cleanly: only animate pickup/blasted exits; passed obstacles already faded out
       const activeIds = new Set(s.entities.map((e) => e.id));
       for (const [id, entry] of entityMeshMap.entries()) {
         if (!activeIds.has(id)) {
           entityMeshMap.delete(id);
-          exitingMeshes.push({
-            mesh: entry.mesh,
-            kind: entry.kind,
-            life: 0.32,
-            maxLife: 0.32,
-          });
+          const shouldFloatExit =
+            entry.kind === "coin" ||
+            entry.kind === "magnet" ||
+            entry.kind === "multiplier" ||
+            entry.kind === "jetpack" ||
+            entry.kind === "board_pickup" ||
+            entry.kind === "sneakers" ||
+            entry.lastEz < 3.5; // only if removed mid-track (Shield Blast), NOT passed behind camera!
+          if (shouldFloatExit) {
+            exitingMeshes.push({
+              mesh: entry.mesh,
+              kind: entry.kind,
+              life: 0.28,
+              maxLife: 0.28,
+            });
+          } else {
+            entityLayer.remove(entry.mesh);
+            disposeGroupMaterials(entry.mesh);
+          }
         }
       }
 
       for (const ent of s.entities) {
         let entry = entityMeshMap.get(ent.id);
         if (!entry) {
-          const mesh = buildEntityMesh3D(ent, glowTex);
+          const mesh = buildEntityMesh3D(ent, glowTex, geos);
           entityLayer.add(mesh);
-          entry = { mesh, kind: ent.kind };
+          entry = { mesh, kind: ent.kind, lastEz: -40 };
           entityMeshMap.set(ent.id, entry);
         }
         const mesh = entry.mesh;
         const ex = (ent.lane - 1) * LANE_WIDTH;
         const zCenter = ent.zEnd !== undefined ? (ent.z + ent.zEnd) * 0.5 : ent.z;
         const ez = toWorldZ(zCenter);
+        entry.lastEz = ez;
         const ey = (ent.y ?? 0) * Y_SCALE;
 
         mesh.position.set(ex, ey, ez);
 
-        // Smooth far horizon fade-in + smooth near pass-away fade-out
+        // Smooth far horizon fade-in + near pass-away dissolve once behind camera threshold
         const zTailWorld = toWorldZ(ent.zEnd ?? ent.z);
         const fadeIn = Math.max(0, Math.min(1, (ez + 48) / 14));
-        const fadeOutStart = ent.kind === "train" ? -0.5 : 1.0;
-        const fadeOutSpan = ent.kind === "train" ? 6.5 : 4.2;
+        const fadeOutStart = ent.kind === "train" ? 1.0 : 2.2;
+        const fadeOutSpan = ent.kind === "train" ? 5.5 : 3.6;
         const fadeOutRef = ent.kind === "train" ? zTailWorld : ez;
         const fadeOut =
           fadeOutRef > fadeOutStart
@@ -724,28 +756,27 @@ const TornadoSurfers3DScene = ({ simRef, onStep, onSwipeMove, onSwipeJump, onSwi
         }
       }
 
-      // Smoothly dissolve & float away collected/blasted entities
       for (let i = exitingMeshes.length - 1; i >= 0; i--) {
         const exItem = exitingMeshes[i];
         exItem.life -= dt;
         if (exItem.life <= 0) {
           entityLayer.remove(exItem.mesh);
+          disposeGroupMaterials(exItem.mesh);
           exitingMeshes.splice(i, 1);
           continue;
         }
         const frac = exItem.life / exItem.maxLife;
-        exItem.mesh.position.y += dt * (exItem.kind === "coin" ? 2.8 : 1.5);
-        exItem.mesh.position.z += dt * 4.5;
+        exItem.mesh.position.y += dt * 3.2;
+        exItem.mesh.scale.setScalar(0.5 + 0.5 * frac);
         applyMeshAlpha(exItem.mesh, frac);
       }
 
-      // 3D Sparks Bursts
       if (s.burstQueue?.length) {
         while (s.burstQueue.length > 0) {
           const b = s.burstQueue.pop();
           for (let k = 0; k < b.count; k++) {
             const sp = new THREE.Mesh(
-              sparkGeo,
+              geos.spark,
               new THREE.MeshBasicMaterial({ color: b.color, transparent: true, opacity: 1 })
             );
             sp.position.set(b.x * LANE_WIDTH, b.y * Y_SCALE, toWorldZ(b.z));
@@ -755,8 +786,8 @@ const TornadoSurfers3DScene = ({ simRef, onStep, onSwipeMove, onSwipeJump, onSwi
               vx: (Math.random() - 0.5) * 7,
               vy: 2 + Math.random() * 5,
               vz: (Math.random() - 0.5) * 6,
-              life: 0.5,
-              maxLife: 0.5,
+              life: 0.48,
+              maxLife: 0.48,
             });
           }
         }
@@ -782,47 +813,56 @@ const TornadoSurfers3DScene = ({ simRef, onStep, onSwipeMove, onSwipeJump, onSwi
         sp.mesh.material.opacity = Math.max(0, sp.life / sp.maxLife);
       }
 
-      // Floating 3D Sprite Popups
-      while (popupsLayer.children.length > 0) {
-        const ch = popupsLayer.children.pop();
-        ch.material?.dispose();
+      // Pooled Sprites for Popups (zero per-frame allocations!)
+      const activePopupIds = new Set(s.popups.map((p) => p.id));
+      for (const [pid, sprite] of popupSpriteMap.entries()) {
+        if (!activePopupIds.has(pid)) {
+          popupsLayer.remove(sprite);
+          sprite.material.dispose();
+          popupSpriteMap.delete(pid);
+        }
       }
       for (const p of s.popups) {
-        const key = `${p.text}_${p.color}`;
-        let tex = popupTexCache.get(key);
-        if (!tex) {
-          if (popupTexCache.size > 36) {
-            const firstKey = popupTexCache.keys().next().value;
-            popupTexCache.get(firstKey)?.dispose();
-            popupTexCache.delete(firstKey);
+        let sprite = popupSpriteMap.get(p.id);
+        if (!sprite) {
+          const key = `${p.text}_${p.color}`;
+          let tex = popupTexCache.get(key);
+          if (!tex) {
+            if (popupTexCache.size > 36) {
+              const firstKey = popupTexCache.keys().next().value;
+              popupTexCache.get(firstKey)?.dispose();
+              popupTexCache.delete(firstKey);
+            }
+            const c = document.createElement("canvas");
+            c.width = 256;
+            c.height = 64;
+            const pctx = c.getContext("2d");
+            pctx.font = "900 34px system-ui, sans-serif";
+            pctx.textAlign = "center";
+            pctx.textBaseline = "middle";
+            pctx.strokeStyle = "#022c22";
+            pctx.lineWidth = 8;
+            pctx.strokeText(p.text, 128, 32);
+            pctx.fillStyle = p.color || "#6ee7b7";
+            pctx.fillText(p.text, 128, 32);
+            tex = new THREE.CanvasTexture(c);
+            tex.colorSpace = THREE.SRGBColorSpace;
+            popupTexCache.set(key, tex);
           }
-          const c = document.createElement("canvas");
-          c.width = 256;
-          c.height = 64;
-          const pctx = c.getContext("2d");
-          pctx.font = "900 34px system-ui, sans-serif";
-          pctx.textAlign = "center";
-          pctx.textBaseline = "middle";
-          pctx.strokeStyle = "#022c22";
-          pctx.lineWidth = 8;
-          pctx.strokeText(p.text, 128, 32);
-          pctx.fillStyle = p.color || "#6ee7b7";
-          pctx.fillText(p.text, 128, 32);
-          tex = new THREE.CanvasTexture(c);
-          tex.colorSpace = THREE.SRGBColorSpace;
-          popupTexCache.set(key, tex);
+          sprite = new THREE.Sprite(
+            new THREE.SpriteMaterial({
+              map: tex,
+              transparent: true,
+              opacity: 1,
+              depthWrite: false,
+            })
+          );
+          sprite.scale.set(2.8, 0.7, 1);
+          popupsLayer.add(sprite);
+          popupSpriteMap.set(p.id, sprite);
         }
-        const sp = new THREE.Sprite(
-          new THREE.SpriteMaterial({
-            map: tex,
-            transparent: true,
-            opacity: Math.max(0, Math.min(1, p.life * 1.4)),
-            depthWrite: false,
-          })
-        );
-        sp.position.set(p.x * LANE_WIDTH, p.y * Y_SCALE, 0);
-        sp.scale.set(2.8, 0.7, 1);
-        popupsLayer.add(sp);
+        sprite.position.set(p.x * LANE_WIDTH, p.y * Y_SCALE, 0);
+        sprite.material.opacity = Math.max(0, Math.min(1, p.life * 1.4));
       }
 
       renderer.render(scene, camera);
@@ -838,7 +878,8 @@ const TornadoSurfers3DScene = ({ simRef, onStep, onSwipeMove, onSwipeJump, onSwi
       glowTex.dispose();
       bTexEmerald.dispose();
       bTexMint.dispose();
-      sparkGeo.dispose();
+      Object.values(geos).forEach((g) => g.dispose());
+      sleeperGeo.dispose();
       for (const tex of popupTexCache.values()) tex.dispose();
       popupTexCache.clear();
       if (renderer.domElement.parentNode === container) {
@@ -847,18 +888,16 @@ const TornadoSurfers3DScene = ({ simRef, onStep, onSwipeMove, onSwipeJump, onSwi
     };
   }, [simRef]);
 
-  const onTouchStart = (e) => {
-    const t = e.touches[0];
-    touchStartRef.current = { x: t.clientX, y: t.clientY, swiped: false };
+  const startGesture = (x, y) => {
+    pointerDragRef.current = { x, y, swiped: false };
   };
 
-  const onTouchMove = (e) => {
-    if (!touchStartRef.current || touchStartRef.current.swiped) return;
-    const t = e.touches[0];
-    const dx = t.clientX - touchStartRef.current.x;
-    const dy = t.clientY - touchStartRef.current.y;
+  const moveGesture = (x, y) => {
+    if (!pointerDragRef.current || pointerDragRef.current.swiped) return;
+    const dx = x - pointerDragRef.current.x;
+    const dy = y - pointerDragRef.current.y;
     if (Math.max(Math.abs(dx), Math.abs(dy)) < 18) return;
-    touchStartRef.current.swiped = true;
+    pointerDragRef.current.swiped = true;
     if (Math.abs(dx) > Math.abs(dy)) {
       callbacksRef.current.onSwipeMove?.(dx > 0 ? 1 : -1);
     } else if (dy < 0) {
@@ -868,24 +907,29 @@ const TornadoSurfers3DScene = ({ simRef, onStep, onSwipeMove, onSwipeJump, onSwi
     }
   };
 
-  const onTouchEnd = () => {
-    if (!touchStartRef.current) return;
-    if (!touchStartRef.current.swiped) {
+  const endGesture = () => {
+    if (!pointerDragRef.current) return;
+    if (!pointerDragRef.current.swiped) {
       const now = Date.now();
       if (now - lastTapRef.current < 260) {
         callbacksRef.current.onDoubleTap?.();
       }
       lastTapRef.current = now;
     }
-    touchStartRef.current = null;
+    pointerDragRef.current = null;
   };
 
   return (
     <div
       ref={mountRef}
-      onTouchStart={onTouchStart}
-      onTouchMove={onTouchMove}
-      onTouchEnd={onTouchEnd}
+      onTouchStart={(e) => startGesture(e.touches[0].clientX, e.touches[0].clientY)}
+      onTouchMove={(e) => moveGesture(e.touches[0].clientX, e.touches[0].clientY)}
+      onTouchEnd={endGesture}
+      onMouseDown={(e) => startGesture(e.clientX, e.clientY)}
+      onMouseMove={(e) => {
+        if (e.buttons === 1) moveGesture(e.clientX, e.clientY);
+      }}
+      onMouseUp={endGesture}
       className="w-full h-full touch-none select-none cursor-pointer"
     />
   );
