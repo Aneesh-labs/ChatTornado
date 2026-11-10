@@ -17,6 +17,7 @@ import {
 import { soundEngine } from "../../utils/soundEffects";
 import API from "../../Services/API";
 import TornadoSurfersGame from "../../Components/games/TornadoSurfersGame";
+import VortexBastionGame from "../../Components/games/vortexBastion/VortexBastionGame";
 import {
     SNAKE_GRID,
     queueSnakeDirection,
@@ -1988,6 +1989,14 @@ export default function Arcade() {
             tag: "3D Rail Runner",
             color: "from-cyan-500 to-fuchsia-600",
             desc: "True 3D trains, rooftop ramps, Hoverboards, Magnet, 2× & Jetpack!"
+        },
+        {
+            id: "vortexbastion",
+            title: "Vortex Bastion",
+            emoji: "🗼⚡",
+            tag: "3D Strategy TD",
+            color: "from-sky-500 to-indigo-700",
+            desc: "Real-time 3D WebGL A* maze tower defense with branching upgrades & synergies!"
         }
     ];
 
@@ -2021,7 +2030,9 @@ export default function Arcade() {
                     </div>
                 </header>
 
-                {selectedGame === "subwaysurfers" ? (
+                {selectedGame === "vortexbastion" ? (
+                    <VortexBastionGame onBack={handleBack} isMuted={isMuted} onSaveScore={saveBackendGameScore} />
+                ) : selectedGame === "subwaysurfers" ? (
                     <TornadoSurfersGame onBack={handleBack} isMuted={isMuted} onSaveScore={saveBackendGameScore} />
                 ) : selectedGame === "snake" ? (
                     <SnakeGame onBack={handleBack} isMuted={isMuted} />
