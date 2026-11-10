@@ -14,6 +14,8 @@ import {
   createArenaTileTexture,
   createMonolithTexture,
   createVortexPortalTexture,
+  createGlowHaloTexture,
+  createSubGridTexture,
 } from "./textures3D";
 import { buildTurretMesh, buildEnemyMesh } from "./meshes3D";
 import { TURRET_CATALOG } from "./turretsAndCombat";
@@ -127,10 +129,59 @@ const VortexBastionScene = ({
     const flashLight = new THREE.PointLight(0xfbbf24, 0, 5.5);
     scene.add(flashLight);
 
-    // ─── Arena Platform & Tiles ───────────────────────────────────
+    // ─── Arena Platform, Cyber Abyss Floor & Corner Pylons ────────
     const tileTex = createArenaTileTexture();
     const monolithTex = createMonolithTexture();
     const portalTex = createVortexPortalTexture();
+    const glowTex = createGlowHaloTexture();
+    const subGridTex = createSubGridTexture();
+
+    // Recessed cyber abyss sub-floor
+    const subFloor = new THREE.Mesh(
+      new THREE.PlaneGeometry(42, 42),
+      new THREE.MeshBasicMaterial({ map: subGridTex })
+    );
+    subFloor.rotation.x = -Math.PI / 2;
+    subFloor.position.y = -2.2;
+    scene.add(subFloor);
+
+    // 240 Deep-space ambient stars / energy motes
+    const starCount = 240;
+    const starPositions = new Float32Array(starCount * 3);
+    for (let i = 0; i < starCount; i++) {
+      starPositions[i * 3] = (Math.random() - 0.5) * 32;
+      starPositions[i * 3 + 1] = Math.random() * 11 - 2.0;
+      starPositions[i * 3 + 2] = (Math.random() - 0.5) * 36;
+    }
+    const starGeo = new THREE.BufferGeometry();
+    starGeo.setAttribute("position", new THREE.BufferAttribute(starPositions, 3));
+    const starPoints = new THREE.Points(
+      starGeo,
+      new THREE.PointsMaterial({ color: 0x38bdf8, size: 0.1, transparent: true, opacity: 0.65 })
+    );
+    scene.add(starPoints);
+
+    // 4 Corner Citadel Pylons anchoring the floating fortress
+    const pylonCorners = [
+      [-(GRID_COLS / 2 + 0.35), -(GRID_ROWS / 2 + 0.35)],
+      [GRID_COLS / 2 + 0.35, -(GRID_ROWS / 2 + 0.35)],
+      [-(GRID_COLS / 2 + 0.35), GRID_ROWS / 2 + 0.35],
+      [GRID_COLS / 2 + 0.35, GRID_ROWS / 2 + 0.35],
+    ];
+    for (const [px, pz] of pylonCorners) {
+      const pylon = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.14, 0.22, 1.35, 6),
+        new THREE.MeshStandardMaterial({ color: 0x1e293b, metalness: 0.8, roughness: 0.25 })
+      );
+      pylon.position.set(px, 0.3, pz);
+      scene.add(pylon);
+      const beacon = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.03, 0.03, 4.5, 6),
+        new THREE.MeshBasicMaterial({ color: 0x06b6d4, transparent: true, opacity: 0.22 })
+      );
+      beacon.position.set(px, 2.4, pz);
+      scene.add(beacon);
+    }
 
     const deckMesh = new THREE.Mesh(
       new THREE.BoxGeometry(GRID_COLS + 0.7, 0.55, GRID_ROWS + 0.7),
@@ -242,6 +293,35 @@ const VortexBastionScene = ({
     coreGroup.add(coreGyroB);
     scene.add(coreGroup);
 
+    // Additive HDR-style Bloom Glow Halos under Spawn & Core
+    const spawnHalo = new THREE.Sprite(
+      new THREE.SpriteMaterial({
+        map: glowTex,
+        color: 0xf43f5e,
+        transparent: true,
+        opacity: 0.72,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+      })
+    );
+    spawnHalo.position.set(spawnW.x, 0.25, spawnW.z);
+    spawnHalo.scale.set(2.4, 2.4, 1);
+    scene.add(spawnHalo);
+
+    const coreHalo = new THREE.Sprite(
+      new THREE.SpriteMaterial({
+        map: glowTex,
+        color: 0x22d3ee,
+        transparent: true,
+        opacity: 0.85,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+      })
+    );
+    coreHalo.position.set(coreW.x, 0.45, coreW.z);
+    coreHalo.scale.set(2.6, 2.6, 1);
+    scene.add(coreHalo);
+
     // ─── Dynamic Combat Layers & Entity Pools ─────────────────────
     const towersLayer = new THREE.Group();
     const enemiesLayer = new THREE.Group();
@@ -262,34 +342,59 @@ const VortexBastionScene = ({
     const enemyMeshMap = new Map();
     const projMeshMap = new Map();
 
-    // Range indicator ring (shared for selected turret OR placement preview)
+    // Range indicator ring + filled subtle disc (shared for selected turret OR placement preview)
     const rangeMesh = new THREE.Mesh(
       new THREE.RingGeometry(0.95, 1.0, 48),
       new THREE.MeshBasicMaterial({
         color: 0x38bdf8,
         side: THREE.DoubleSide,
         transparent: true,
-        opacity: 0.6,
+        opacity: 0.75,
       })
     );
     rangeMesh.rotation.x = -Math.PI / 2;
-    rangeMesh.position.y = 0.07;
+    rangeMesh.position.y = 0.075;
     rangeMesh.visible = false;
     scene.add(rangeMesh);
 
-    const ghostGroup = new THREE.Group();
-    const ghostBox = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.28, 0.36, 0.52, 8),
-      new THREE.MeshStandardMaterial({
-        color: 0x22d3ee,
-        emissive: 0x06b6d4,
-        emissiveIntensity: 1.0,
+    const rangeFillMesh = new THREE.Mesh(
+      new THREE.CircleGeometry(0.96, 48),
+      new THREE.MeshBasicMaterial({
+        color: 0x38bdf8,
+        side: THREE.DoubleSide,
         transparent: true,
-        opacity: 0.55,
+        opacity: 0.14,
+        depthWrite: false,
       })
     );
-    ghostBox.position.y = 0.32;
-    ghostGroup.add(ghostBox);
+    rangeFillMesh.rotation.x = -Math.PI / 2;
+    rangeFillMesh.position.y = 0.065;
+    rangeFillMesh.visible = false;
+    scene.add(rangeFillMesh);
+
+    // Real Hologram 3D Weapon Ghost Mesh (dynamically swaps per previewType)
+    const ghostGroup = new THREE.Group();
+    let currentGhostType = null;
+    const ghostMat = new THREE.MeshBasicMaterial({
+      color: 0x22d3ee,
+      transparent: true,
+      opacity: 0.55,
+      wireframe: true,
+    });
+    const setGhostWeapon = (typeKey) => {
+      if (currentGhostType === typeKey) return;
+      currentGhostType = typeKey;
+      while (ghostGroup.children.length > 0) ghostGroup.children.pop();
+      const holo = buildTurretMesh(typeKey, 1, null);
+      holo.traverse((obj) => {
+        if (obj.isMesh) {
+          obj.material = ghostMat;
+          obj.castShadow = false;
+        }
+      });
+      ghostGroup.add(holo);
+    };
+    setGhostWeapon("pulse");
     ghostGroup.visible = false;
     scene.add(ghostGroup);
 
@@ -469,6 +574,16 @@ const VortexBastionScene = ({
       coreCrystal.position.y = Math.sin(elapsed * 2.5) * 0.08;
       coreGyroA.rotation.x = elapsed * 1.1;
       coreGyroB.rotation.z = -elapsed * 1.4;
+      starPoints.rotation.y = elapsed * 0.025;
+
+      // Dynamic Core Integrity Glow (Cyan -> Amber -> Crimson Pulse)
+      const hpFrac = sim.coreHp / Math.max(1, sim.maxCoreHp || 20);
+      const cHex = hpFrac > 0.5 ? 0x22d3ee : hpFrac > 0.25 ? 0xfbbf24 : 0xf43f5e;
+      coreHalo.material.color.setHex(cHex);
+      coreLight.color.setHex(cHex);
+      coreCrystal.material.color.setHex(cHex);
+      coreCrystal.material.emissive.setHex(cHex);
+      coreHalo.scale.setScalar(2.4 + Math.sin(elapsed * 3.5) * 0.22);
 
       // Dynamic Muzzle / Impact PointLight Flash
       let brightestTower = null;
@@ -533,32 +648,44 @@ const VortexBastionScene = ({
         }
       }
 
-      // Range Dome Indicator (Preview OR Selected Turret)
+      // Range Dome Indicator & Real 3D Hologram Ghost (Preview OR Selected Turret)
       const selectedTower = selId ? sim.towers.find((t) => t.id === selId) : null;
       if (pCell) {
         const gw = gridToWorld(pCell.col, pCell.row);
         const cat = TURRET_CATALOG[pType];
         const rad = cat ? cat.range : 2.5;
+        setGhostWeapon(pType);
         ghostGroup.visible = true;
-        ghostGroup.position.set(gw.x, 0, gw.z);
-        ghostBox.position.y = 0.34 + Math.sin(elapsed * 4) * 0.04;
+        ghostGroup.position.set(gw.x, 0.06 + Math.sin(elapsed * 4) * 0.03, gw.z);
+        ghostGroup.rotation.y = elapsed * 0.8;
         const gCol = pValid ? (cat?.colorHex || 0x22d3ee) : 0xf43f5e;
-        ghostBox.material.color.setHex(gCol);
-        ghostBox.material.emissive.setHex(gCol);
+        ghostMat.color.setHex(gCol);
 
         rangeMesh.visible = true;
-        rangeMesh.position.set(gw.x, 0.07, gw.z);
+        rangeMesh.position.set(gw.x, 0.075, gw.z);
         rangeMesh.scale.set(rad, rad, 1);
         rangeMesh.material.color.setHex(gCol);
+
+        rangeFillMesh.visible = true;
+        rangeFillMesh.position.set(gw.x, 0.065, gw.z);
+        rangeFillMesh.scale.set(rad, rad, 1);
+        rangeFillMesh.material.color.setHex(gCol);
       } else if (selectedTower) {
+        const tCol = TURRET_CATALOG[selectedTower.type]?.colorHex || 0x38bdf8;
         ghostGroup.visible = false;
         rangeMesh.visible = true;
-        rangeMesh.position.set(selectedTower.wx, 0.07, selectedTower.wz);
+        rangeMesh.position.set(selectedTower.wx, 0.075, selectedTower.wz);
         rangeMesh.scale.set(selectedTower.stats.range, selectedTower.stats.range, 1);
-        rangeMesh.material.color.setHex(TURRET_CATALOG[selectedTower.type]?.colorHex || 0x38bdf8);
+        rangeMesh.material.color.setHex(tCol);
+
+        rangeFillMesh.visible = true;
+        rangeFillMesh.position.set(selectedTower.wx, 0.065, selectedTower.wz);
+        rangeFillMesh.scale.set(selectedTower.stats.range, selectedTower.stats.range, 1);
+        rangeFillMesh.material.color.setHex(tCol);
       } else {
         ghostGroup.visible = false;
         rangeMesh.visible = false;
+        rangeFillMesh.visible = false;
       }
 
       // Sync Enemies
@@ -769,6 +896,8 @@ const VortexBastionScene = ({
       tileTex.dispose();
       monolithTex.dispose();
       portalTex.dispose();
+      glowTex.dispose();
+      subGridTex.dispose();
       if (scene.userData.popupCache) {
         for (const t of scene.userData.popupCache.values()) t.dispose();
         scene.userData.popupCache.clear();
