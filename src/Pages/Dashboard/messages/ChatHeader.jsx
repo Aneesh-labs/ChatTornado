@@ -253,7 +253,7 @@ const ChatHeader = React.memo(({
         <div className={`relative z-30 flex items-center justify-between gap-2 overflow-hidden flex-nowrap px-3 sm:px-6 py-2.5 sm:py-3.5 border-b border-cyan-500/20 backdrop-blur-2xl bg-[#090c14]/90 shadow-[0_4px_24px_rgba(0,0,0,0.45)] flex-shrink-0 w-full select-none`}>
             {/* Sci-Fi Hologram Sweeper Beam */}
             <div className="pointer-events-none absolute top-0 left-0 right-0 h-[1.5px] bg-gradient-to-r from-transparent via-cyan-400 to-transparent opacity-60 animate-pulse shadow-[0_0_8px_rgba(34,211,238,0.8)]" />
-            <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
+            <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1 overflow-hidden">
                 {onBack && (
                     <button
                         type="button"
@@ -271,8 +271,8 @@ const ChatHeader = React.memo(({
                 ) : (
                     <Avatar user={user} size="md" className="flex-shrink-0 scale-90 sm:scale-100 origin-left" />
                 )}
-                <div className="min-w-0 flex-1 flex flex-col justify-center">
-                    <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
+                <div className="min-w-0 flex-1 flex flex-col justify-center overflow-hidden">
+                    <div className="flex items-center gap-1.5 sm:gap-2 min-w-0 overflow-hidden">
                         <h2 className="text-xs sm:text-sm font-semibold text-white leading-tight truncate tracking-wide flex items-center gap-1 min-w-0">
                             <span>{username}</span>
                             {!isGroup && (Boolean(user?.is_verified) || Boolean(user?.email_verified)) && (
@@ -385,63 +385,14 @@ const ChatHeader = React.memo(({
                             </>
                         )}
 
-                        {/* Inline Quantum Lattice HUD Telemetry Widget */}
-                        {quantumHud && (
-                            <div className="hidden lg:inline-flex items-center gap-1.5 rounded-full border border-cyan-500/30 bg-black/60 px-2 py-0.5 backdrop-blur-xl shrink-0">
-                                <span className="relative flex h-1.5 w-1.5">
-                                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full opacity-75" style={{ background: quantumHud.color || "#22c55e" }} />
-                                    <span className="relative inline-flex h-1.5 w-1.5 rounded-full shadow-[0_0_6px_rgba(34,197,94,0.9)]" style={{ background: quantumHud.color || "#22c55e" }} />
-                                </span>
-                                <span className="text-[9px] font-mono font-black uppercase tracking-wider text-cyan-300">
-                                    {quantumHud.securityStatus}
-                                </span>
-                                <span className="text-[8.5px] font-mono text-cyan-400/70 border-l border-white/15 pl-1">
-                                    {quantumHud.quantumPing}ms
-                                </span>
-                                <button
-                                    type="button"
-                                    onClick={quantumHud.toggleHoloScanlines}
-                                    title={quantumHud.holoScanlines ? "Disable Holographic HUD Scanlines" : "Enable Sci-Fi Holographic HUD Scanlines"}
-                                    className={`text-[8px] font-mono px-1.5 py-0.5 rounded-full border transition-all cursor-pointer ${
-                                        quantumHud.holoScanlines 
-                                            ? "bg-cyan-500/25 border-cyan-400 text-cyan-200 shadow-[0_0_10px_rgba(6,182,212,0.6)] font-bold animate-pulse" 
-                                            : "bg-white/5 border-white/10 text-white/50 hover:text-cyan-300 hover:border-cyan-500/40"
-                                    }`}
-                                >
-                                    HOLO {quantumHud.holoScanlines ? "ON" : "OFF"}
-                                </button>
-                                {quantumHud.onOpenP2PTransfers && (
-                                    <button
-                                        type="button"
-                                        onClick={quantumHud.onOpenP2PTransfers}
-                                        title="Open Peer-to-Peer Transfers & Outbox Monitor"
-                                        className="text-[8px] font-mono px-1.5 py-0.5 rounded-full border border-cyan-500/30 bg-cyan-500/10 text-cyan-300 hover:bg-cyan-500/20 hover:border-cyan-400 transition-all cursor-pointer flex items-center gap-1"
-                                    >
-                                        <Activity className="w-2.5 h-2.5 text-cyan-400" />
-                                        P2P
-                                    </button>
-                                )}
-                                {quantumHud.onOpenAndroidDownload && (
-                                    <button
-                                        type="button"
-                                        onClick={quantumHud.onOpenAndroidDownload}
-                                        title="Get Native Android App (APK)"
-                                        className="text-[8px] font-mono px-1.5 py-0.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20 hover:border-emerald-400 transition-all cursor-pointer flex items-center gap-1"
-                                    >
-                                        <Smartphone className="w-2.5 h-2.5 text-emerald-400" />
-                                        APK
-                                    </button>
-                                )}
-                            </div>
-                        )}
                     </div>
                     
-                    {isBotUser ? (
-                        <div className="flex items-center gap-1.5 mt-1">
+                    <div className="flex items-center gap-2 mt-1 min-w-0 overflow-hidden">
+                        {isBotUser ? (
                             <select
                                 value={aiMode}
                                 onChange={(e) => handleModeChange(e.target.value)}
-                                className={`text-[10px] sm:text-xs rounded-md px-1.5 py-0.5 outline-none cursor-pointer transition-all ${
+                                className={`text-[10px] sm:text-xs rounded-md px-1.5 py-0.5 outline-none cursor-pointer transition-all shrink-0 ${
                                     aiMode === "ADMIN" || adminUnlocked
                                         ? "bg-amber-950/70 border border-amber-500/60 text-amber-300 shadow-[0_0_10px_rgba(245,158,11,0.25)] focus:border-amber-400 font-semibold"
                                         : "bg-black/40 border border-cyan-500/30 text-cyan-300 focus:border-cyan-400"
@@ -459,18 +410,68 @@ const ChatHeader = React.memo(({
                                     </option>
                                 )}
                             </select>
-                        </div>
-                    ) : isGroup ? (
-                        <p className="text-[9px] sm:text-xs mt-0.5 font-medium text-violet-400 truncate">
-                            {user?.member_count ? `${user.member_count} members` : "Group Chat"}
-                        </p>
-                    ) : (
-                        <p className={`text-[9px] sm:text-xs mt-0.5 font-medium transition-colors truncate ${
-                            isOnline ? "text-emerald-400" : "text-white/25"
-                        }`}>
-                            {isOnline ? "Active now" : "Offline"}
-                        </p>
-                    )}
+                        ) : isGroup ? (
+                            <p className="text-[9px] sm:text-xs font-medium text-violet-400 truncate shrink-0">
+                                {user?.member_count ? `${user.member_count} members` : "Group Chat"}
+                            </p>
+                        ) : (
+                            <p className={`text-[9px] sm:text-xs font-medium transition-colors truncate shrink-0 ${
+                                isOnline ? "text-emerald-400" : "text-white/25"
+                            }`}>
+                                {isOnline ? "Active now" : "Offline"}
+                            </p>
+                        )}
+
+                        {/* Inline Quantum Lattice HUD Telemetry Widget (Row 2 — Zero Overlap) */}
+                        {quantumHud && (
+                            <div className="hidden lg:inline-flex items-center gap-1 rounded-full border border-cyan-500/30 bg-black/60 px-2 py-0.5 backdrop-blur-xl min-w-0 overflow-hidden shrink">
+                                <span className="relative flex h-1.5 w-1.5 shrink-0">
+                                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full opacity-75" style={{ background: quantumHud.color || "#22c55e" }} />
+                                    <span className="relative inline-flex h-1.5 w-1.5 rounded-full shadow-[0_0_6px_rgba(34,197,94,0.9)]" style={{ background: quantumHud.color || "#22c55e" }} />
+                                </span>
+                                <span className="text-[8.5px] font-mono font-black uppercase tracking-wider text-cyan-300 whitespace-nowrap">
+                                    {quantumHud.securityStatus}
+                                </span>
+                                <span className="text-[8.5px] font-mono text-cyan-400/70 border-l border-white/15 pl-1 whitespace-nowrap">
+                                    {quantumHud.quantumPing}ms
+                                </span>
+                                <button
+                                    type="button"
+                                    onClick={quantumHud.toggleHoloScanlines}
+                                    title={quantumHud.holoScanlines ? "Disable Holographic HUD Scanlines" : "Enable Sci-Fi Holographic HUD Scanlines"}
+                                    className={`text-[8px] font-mono px-1.5 py-0.5 rounded-full border transition-all cursor-pointer whitespace-nowrap shrink-0 ${
+                                        quantumHud.holoScanlines 
+                                            ? "bg-cyan-500/25 border-cyan-400 text-cyan-200 shadow-[0_0_10px_rgba(6,182,212,0.6)] font-bold animate-pulse" 
+                                            : "bg-white/5 border-white/10 text-white/50 hover:text-cyan-300 hover:border-cyan-500/40"
+                                    }`}
+                                >
+                                    HOLO <span className="hidden xl:inline">{quantumHud.holoScanlines ? "ON" : "OFF"}</span>
+                                </button>
+                                {quantumHud.onOpenP2PTransfers && (
+                                    <button
+                                        type="button"
+                                        onClick={quantumHud.onOpenP2PTransfers}
+                                        title="Open Peer-to-Peer Transfers & Outbox Monitor"
+                                        className="text-[8px] font-mono px-1.5 py-0.5 rounded-full border border-cyan-500/30 bg-cyan-500/10 text-cyan-300 hover:bg-cyan-500/20 hover:border-cyan-400 transition-all cursor-pointer flex items-center gap-1 whitespace-nowrap shrink-0"
+                                    >
+                                        <Activity className="w-2.5 h-2.5 text-cyan-400" />
+                                        P2P
+                                    </button>
+                                )}
+                                {quantumHud.onOpenAndroidDownload && (
+                                    <button
+                                        type="button"
+                                        onClick={quantumHud.onOpenAndroidDownload}
+                                        title="Get Native Android App (APK)"
+                                        className="text-[8px] font-mono px-1.5 py-0.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20 hover:border-emerald-400 transition-all cursor-pointer flex items-center gap-1 whitespace-nowrap shrink-0"
+                                    >
+                                        <Smartphone className="w-2.5 h-2.5 text-emerald-400" />
+                                        APK
+                                    </button>
+                                )}
+                            </div>
+                        )}
+                    </div>
                 </div>
             </div>
 

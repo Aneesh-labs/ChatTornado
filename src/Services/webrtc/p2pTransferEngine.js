@@ -399,6 +399,8 @@ class P2PTransferEngine {
     /**
      * Decline an incoming P2P transfer request.
      */
+    rejectTransfer(transferId) { return this.declineTransfer(transferId); }
+
     declineTransfer(transferId) {
         const session = this.activeTransfers.get(transferId);
         if (session) {

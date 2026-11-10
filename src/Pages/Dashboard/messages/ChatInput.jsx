@@ -478,27 +478,34 @@ const ChatInput = React.memo(({ onSend, replyTo, onCancelReply, selectedUser, so
         }
         // ──────────────────────────────────────────────────────────────────────
 
-        // If an image is staged for AI Vision / Upload:
+        // If an image is staged (P2P zero-server for humans, upload for AI Vision):
         if (stagedImage) {
             setUploading(true);
             try {
-                const body = new FormData();
-                body.append("file", stagedImage.file);
-                const response = await API.post(
-                    `/uploads?token=${encodeURIComponent(sessionStorage.getItem("token") || "")}`,
-                    body
-                );
-                const data = response.data;
-                const uploadRelPath = (data.original_url || data.url || "").replace(/^\//, "");
-                const fullUploadedUrl = `${baseUrl}/${uploadRelPath}`;
-
-                // isBot determined at component scope
-                const promptWithImage = trimmed
-                    ? `${fullUploadedUrl}\n\n${trimmed}`
-                    : (isBot ? `${fullUploadedUrl}\n\nPlease analyze and explain this image in detail.` : fullUploadedUrl);
-
                 const burnOptImg = isBurnMode ? { is_burn: true, burn_seconds: 10 } : {};
-                onSend(promptWithImage, { ...(shieldOptions || {}), ...burnOptImg, ai_mode: activeInputMode });
+                if (!isBot) {
+                    const p2pPayload = await prepareP2PFile(stagedImage.file, selectedUser.id, socket);
+                    onSend(p2pPayload, { ...(shieldOptions || {}), ...burnOptImg, ai_mode: activeInputMode });
+                    if (trimmed) {
+                        onSend(trimmed, { ai_mode: activeInputMode });
+                    }
+                } else {
+                    const body = new FormData();
+                    body.append("file", stagedImage.file);
+                    const response = await API.post(
+                        `/uploads?token=${encodeURIComponent(sessionStorage.getItem("token") || "")}`,
+                        body
+                    );
+                    const data = response.data;
+                    const uploadRelPath = (data.original_url || data.url || "").replace(/^\//, "");
+                    const fullUploadedUrl = `${baseUrl}/${uploadRelPath}`;
+
+                    const promptWithImage = trimmed
+                        ? `${fullUploadedUrl}\n\n${trimmed}`
+                        : `${fullUploadedUrl}\n\nPlease analyze and explain this image in detail.`;
+
+                    onSend(promptWithImage, { ...(shieldOptions || {}), ...burnOptImg, ai_mode: activeInputMode });
+                }
                 if (isBurnMode) setIsBurnMode(false);
 
                 setStagedImage(null);
@@ -508,8 +515,8 @@ const ChatInput = React.memo(({ onSend, replyTo, onCancelReply, selectedUser, so
                 setTimeout(() => { isSendingRef.current = false; }, 200);
                 return;
             } catch (err) {
-                console.error("Failed to upload staged image:", err);
-                setUploadError("Failed to upload image. Please try again.");
+                console.error("Failed to send staged image:", err);
+                setUploadError("Failed to send image. Please try again.");
                 isSendingRef.current = false;
                 return;
             } finally {
@@ -557,7 +564,7 @@ const ChatInput = React.memo(({ onSend, replyTo, onCancelReply, selectedUser, so
                 isSendingRef.current = false;
             }, 100);
         }
-    }, [text, disabled, onSend, shieldOptions, editModeId, sendStopTypingSignal, aiMode, stagedImage, stagedDoc]);
+    }, [text, disabled, onSend, shieldOptions, editModeId, sendStopTypingSignal, aiMode, stagedImage, stagedDoc, isBot, selectedUser?.id, socket, isBurnMode, baseUrl]);
 
 
 
@@ -665,6 +672,14 @@ const ChatInput = React.memo(({ onSend, replyTo, onCancelReply, selectedUser, so
 
             const ext = processedBlob.type && processedBlob.type.includes("wav") ? "wav" : "webm";
             const file = new File([processedBlob], `Voice_${selectedVoiceFilter}_${Date.now()}.${ext}`, { type: processedBlob.type || "audio/webm" });
+
+            if (!isBot && selectedUser?.id) {
+                const p2pPayload = await prepareP2PFile(file, selectedUser.id, socket);
+                onSend(p2pPayload, { ...(shieldOptions || {}), ai_mode: aiMode });
+                setShieldOptions(null);
+                return;
+            }
+
             const body = new FormData();
             body.append("file", file);
 
@@ -716,6 +731,15 @@ const ChatInput = React.memo(({ onSend, replyTo, onCancelReply, selectedUser, so
 
             setUploading(true);
             try {
+                if (!isBot) {
+                    for (const f of rawFiles) {
+                        const p2pPayload = await prepareP2PFile(f, selectedUser.id, socket);
+                        onSend(p2pPayload, { ...(shieldOptions || {}), ai_mode: aiMode });
+                    }
+                    setShieldOptions(null);
+                    return;
+                }
+
                 const body = new FormData();
                 rawFiles.forEach((f) => body.append("files", f));
 
@@ -800,7 +824,14 @@ const ChatInput = React.memo(({ onSend, replyTo, onCancelReply, selectedUser, so
                 return;
             }
 
-            // 3. Videos: Use FastAPI FFmpeg transcoding & WebP thumbnail generation pipeline
+            // 3. Videos: For humans, open client-side Quality Modal & send purely via P2P DataChannel
+            if (!isBot) {
+                setVideoForQuality(file);
+                setShowVideoQualityModal(true);
+                return;
+            }
+
+            // Bot fallback: FastAPI FFmpeg pipeline
             const body = new FormData();
             body.append("file", file);
 
@@ -1574,6 +1605,22 @@ const ChatInput = React.memo(({ onSend, replyTo, onCancelReply, selectedUser, so
                     if (textareaRef.current) {
                         textareaRef.current.focus();
                     }
+                }}
+            />
+
+            <VideoQualityModal
+                isOpen={showVideoQualityModal}
+                file={videoForQuality}
+                onClose={() => {
+                    setShowVideoQualityModal(false);
+                    setVideoForQuality(null);
+                }}
+                onConfirm={async (preset, onProgress) => {
+                    if (!videoForQuality || !selectedUser?.id) return;
+                    const processedVideo = await processVideoForTransfer(videoForQuality, preset, onProgress);
+                    const p2pPayload = await prepareP2PFile(processedVideo, selectedUser.id, socket);
+                    onSend(p2pPayload, { ...(shieldOptions || {}), ai_mode: aiMode });
+                    setShieldOptions(null);
                 }}
             />
         </div>

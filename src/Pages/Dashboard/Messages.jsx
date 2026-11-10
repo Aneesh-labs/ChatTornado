@@ -2769,7 +2769,7 @@ const Messages = () => {
                                             <button
                                                 type="button"
                                                 onClick={() => {
-                                                    p2pEngine.rejectTransfer(incomingTransferToast.transferId);
+                                                    p2pEngine.declineTransfer(incomingTransferToast.transferId);
                                                     setIncomingTransferToast(null);
                                                 }}
                                                 className="py-1.5 px-3 rounded-lg bg-white/5 hover:bg-white/10 text-white/60 hover:text-white border border-white/10 text-xs font-medium cursor-pointer transition-colors"
