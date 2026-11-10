@@ -246,6 +246,9 @@ export function createCombatState(grid) {
     kills: 0,
     reactionsTriggered: 0,
     speedMult: 1,
+    abilities: { ionCooldown: 0, empCooldown: 0 },
+    shakeTimer: 0,
+    shakeIntensity: 0,
     towers: [],
     enemies: [],
     projectiles: [],
@@ -392,6 +395,25 @@ export function buildWaveRoster(waveNum) {
       stealthed: kind === "cloaker",
     });
   }
+
+  // Every 5th wave culminates in a towering Dreadnought Boss!
+  if (waveNum % 5 === 0) {
+    const bossHp = Math.round((46 + waveNum * 24) * 9.5);
+    const bossShield = Math.round(bossHp * 0.45);
+    roster.push({
+      kind: "boss",
+      hp: bossHp,
+      maxHp: bossHp,
+      shield: bossShield,
+      maxShield: bossShield,
+      armor: 12 + waveNum * 2,
+      speed: 0.82,
+      reward: 120,
+      coreDmg: 5,
+      stealthed: false,
+    });
+  }
+
   return roster;
 }
 
@@ -399,9 +421,8 @@ export function enqueueWave(state) {
   if (state.gameOver) return false;
 
   // Early-Send Bonus if calling new wave while active squad still fighting!
-  let earlyBonus = 0;
   if (state.wave > 0 && (state.enemies.length > 0 || state.spawnQueue.length > 0)) {
-    earlyBonus = 25;
+    const earlyBonus = 25;
     state.credits += earlyBonus;
     state.lastBanner = { text: `EARLY CALL +${earlyBonus}⚡`, color: "#fbbf24", life: 2.2 };
   }
@@ -451,10 +472,90 @@ export function createEnemyInstance(template, idNum, path) {
     armorShredTimer: 0,
     healCooldown: template.kind === "healer" ? 1.6 : 0,
     stealthed: Boolean(template.stealthed),
+    splitTriggered: false,
     revealTimer: 0,
     vulnBonus: 0,
     dead: false,
   };
+}
+
+export const ABILITY_CONFIG = {
+  ion: { name: "Orbital Ion", cooldown: 22, radius: 1.85 },
+  emp: { name: "EMP Surge", cooldown: 18, radius: 2.85 },
+};
+
+export function triggerOrbitalAbility(state, kind, cell) {
+  if (state.gameOver || !cell) return { ok: false, reason: "Invalid state" };
+  const targetW = gridToWorld(cell.col, cell.row);
+
+  if (kind === "ion") {
+    if ((state.abilities?.ionCooldown || 0) > 0) {
+      return { ok: false, reason: "Ion recharging" };
+    }
+    state.abilities.ionCooldown = ABILITY_CONFIG.ion.cooldown;
+    const rad = ABILITY_CONFIG.ion.radius;
+    const dmg = 180 + state.wave * 35;
+    for (const e of state.enemies) {
+      if (!e.dead && Math.hypot(e.wx - targetW.x, e.wz - targetW.z) <= rad) {
+        e.burnTimer = Math.max(e.burnTimer, 4.0);
+        e.revealTimer = Math.max(e.revealTimer, 4.0);
+        applyEnemyDamage(state, e, dmg, null, "thermal");
+      }
+    }
+    state.effects.push({
+      id: `fx_${state.nextId++}`,
+      kind: "orbital_beam",
+      x: targetW.x,
+      z: targetW.z,
+      radius: rad,
+      color: 0xf43f5e,
+      life: 0.55,
+      maxLife: 0.55,
+    });
+    state.shakeTimer = 0.35;
+    state.shakeIntensity = 0.24;
+    state.lastBanner = { text: "ORBITAL ION IMPACT!", color: "#fb7185", life: 2.0 };
+    return { ok: true };
+  }
+
+  if (kind === "emp") {
+    if ((state.abilities?.empCooldown || 0) > 0) {
+      return { ok: false, reason: "EMP recharging" };
+    }
+    state.abilities.empCooldown = ABILITY_CONFIG.emp.cooldown;
+    const rad = ABILITY_CONFIG.emp.radius;
+    for (const e of state.enemies) {
+      if (!e.dead && Math.hypot(e.wx - targetW.x, e.wz - targetW.z) <= rad) {
+        e.shield = 0;
+        e.shieldRegenDelay = 5.0;
+        e.revealTimer = Math.max(e.revealTimer, 4.0);
+        e.shockTimer = Math.max(e.shockTimer, 3.5);
+        if (e.kind === "boss") {
+          e.slowFactor = Math.max(e.slowFactor, 0.5);
+          e.slowTimer = Math.max(e.slowTimer, 2.2);
+        } else {
+          e.stunTimer = Math.max(e.stunTimer, 2.6);
+        }
+      }
+    }
+    state.effects.push({
+      id: `fx_${state.nextId++}`,
+      kind: "cryo_ring",
+      x: targetW.x,
+      y: 0.35,
+      z: targetW.z,
+      radius: rad,
+      color: 0xfacc15,
+      life: 0.5,
+      maxLife: 0.5,
+    });
+    state.shakeTimer = 0.25;
+    state.shakeIntensity = 0.16;
+    state.lastBanner = { text: "EMP PULSE — SHIELDS STRIPPED!", color: "#facc15", life: 2.0 };
+    return { ok: true };
+  }
+
+  return { ok: false, reason: "Unknown ability" };
 }
 
 function isTargetable(tower, enemy) {
@@ -510,6 +611,29 @@ export function applyEnemyDamage(state, enemy, rawDmg, sourceTower, damageType =
   }
 
   enemy.hp -= remaining;
+
+  // Dreadnought Phase 2 Split at <= 50% HP: deploys 3 Hyper Swarmers ahead!
+  if (enemy.kind === "boss" && !enemy.splitTriggered && enemy.hp > 0 && enemy.hp <= enemy.maxHp * 0.5) {
+    enemy.splitTriggered = true;
+    state.shakeTimer = 0.3;
+    state.shakeIntensity = 0.22;
+    state.lastBanner = { text: "DREADNOUGHT PHASE 2 — SWARM DEPLOYED!", color: "#f97316", life: 2.4 };
+    const swHp = Math.round((46 + state.wave * 24) * 0.72);
+    for (let sIdx = 0; sIdx < 3; sIdx++) {
+      const sw = createEnemyInstance(
+        { kind: "swarmer", hp: swHp, maxHp: swHp, armor: 0, speed: 2.55, reward: 12, coreDmg: 1 },
+        state.nextId++,
+        enemy.path
+      );
+      sw.wx = enemy.wx + (sIdx - 1) * 0.28;
+      sw.wz = enemy.wz;
+      sw.col = enemy.col;
+      sw.row = enemy.row;
+      sw.waypointIdx = enemy.waypointIdx;
+      state.enemies.push(sw);
+    }
+  }
+
   if (enemy.hp <= 0 && !enemy.dead) {
     enemy.dead = true;
     state.credits += enemy.reward;
@@ -585,6 +709,18 @@ export function stepCombat(state, rawDt) {
   if (state.gameOver) return audioEvents;
 
   const dt = Math.min(0.05, Math.max(0.001, rawDt)) * state.speedMult;
+
+  if (state.abilities) {
+    if (state.abilities.ionCooldown > 0) {
+      state.abilities.ionCooldown = Math.max(0, state.abilities.ionCooldown - rawDt);
+    }
+    if (state.abilities.empCooldown > 0) {
+      state.abilities.empCooldown = Math.max(0, state.abilities.empCooldown - rawDt);
+    }
+  }
+  if (state.shakeTimer > 0) {
+    state.shakeTimer = Math.max(0, state.shakeTimer - rawDt);
+  }
 
   if (state.lastBanner) {
     state.lastBanner.life -= dt;

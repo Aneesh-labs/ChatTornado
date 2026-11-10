@@ -192,7 +192,9 @@ export function buildEnemyMesh(kind) {
   const group = new THREE.Group();
 
   const bodyCol =
-    kind === "juggernaut"
+    kind === "boss"
+      ? 0xe11d48
+      : kind === "juggernaut"
       ? 0xf97316
       : kind === "swarmer"
       ? 0xeab308
@@ -220,7 +222,25 @@ export function buildEnemyMesh(kind) {
     opacity: isCloak ? 0.45 : 1,
   });
 
-  if (kind === "juggernaut") {
+  if (kind === "boss") {
+    const mainHull = new THREE.Mesh(new THREE.BoxGeometry(0.86, 0.42, 0.92), armorMat);
+    mainHull.castShadow = true;
+    group.add(mainHull);
+    const wingL = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.24, 0.65), armorMat);
+    wingL.position.set(-0.5, 0, -0.05);
+    const wingR = wingL.clone();
+    wingR.position.x = 0.5;
+    group.add(wingL, wingR);
+
+    const dreadCore = new THREE.Mesh(new THREE.OctahedronGeometry(0.28, 0), coreMat);
+    dreadCore.position.y = 0.36;
+    group.add(dreadCore);
+
+    const halo = new THREE.Mesh(new THREE.TorusGeometry(0.55, 0.045, 10, 28), coreMat);
+    halo.rotation.x = Math.PI / 2;
+    halo.position.y = 0.3;
+    group.add(halo);
+  } else if (kind === "juggernaut") {
     const hull = new THREE.Mesh(new THREE.BoxGeometry(0.56, 0.34, 0.62), armorMat);
     hull.castShadow = true;
     group.add(hull);
@@ -252,11 +272,11 @@ export function buildEnemyMesh(kind) {
 
   // Translucent Energy Shield Dome (shown whenever enemy.shield > 0)
   const shieldSphere = new THREE.Mesh(
-    new THREE.SphereGeometry(0.42, 16, 12),
+    new THREE.SphereGeometry(kind === "boss" ? 0.72 : 0.42, 16, 12),
     new THREE.MeshBasicMaterial({
       color: 0x38bdf8,
       transparent: true,
-      opacity: 0.26,
+      opacity: 0.28,
       wireframe: true,
     })
   );
@@ -265,13 +285,13 @@ export function buildEnemyMesh(kind) {
 
   // Overhead 3D HP bar
   const hpBg = new THREE.Mesh(
-    new THREE.PlaneGeometry(0.52, 0.075),
+    new THREE.PlaneGeometry(kind === "boss" ? 0.92 : 0.52, kind === "boss" ? 0.1 : 0.075),
     new THREE.MeshBasicMaterial({ color: 0x020617, side: THREE.DoubleSide })
   );
-  hpBg.position.y = kind === "juggernaut" ? 0.56 : 0.46;
+  hpBg.position.y = kind === "boss" ? 0.85 : kind === "juggernaut" ? 0.56 : 0.46;
 
   const hpFill = new THREE.Mesh(
-    new THREE.PlaneGeometry(0.48, 0.05),
+    new THREE.PlaneGeometry(kind === "boss" ? 0.86 : 0.48, kind === "boss" ? 0.07 : 0.05),
     new THREE.MeshBasicMaterial({ color: 0x4ade80, side: THREE.DoubleSide })
   );
   hpFill.position.z = 0.005;

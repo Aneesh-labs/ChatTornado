@@ -420,10 +420,14 @@ const VortexBastionScene = ({
       const aspect = camera.aspect || 0.7;
       const baseDist = aspect < 0.85 ? 19.5 : 16.5;
       const dist = baseDist * (CAMERA_PRESETS[curPreset]?.distMult || 1);
-      camera.position.x = Math.sin(orbit.yaw) * Math.cos(orbit.pitch) * dist;
-      camera.position.y = Math.sin(orbit.pitch) * dist;
+      const shakeMag = (sim.shakeTimer || 0) > 0 ? (sim.shakeIntensity || 0.15) * (sim.shakeTimer / 0.35) : 0;
+      const sx = shakeMag ? (Math.random() - 0.5) * shakeMag : 0;
+      const sy = shakeMag ? (Math.random() - 0.5) * shakeMag : 0;
+
+      camera.position.x = Math.sin(orbit.yaw) * Math.cos(orbit.pitch) * dist + sx;
+      camera.position.y = Math.sin(orbit.pitch) * dist + sy;
       camera.position.z = Math.cos(orbit.yaw) * Math.cos(orbit.pitch) * dist + 0.35;
-      camera.lookAt(0, 0, 0.25);
+      camera.lookAt(sx * 0.4, 0, 0.25);
 
       // Animate Spawn & Core
       portalDisc.rotation.z = -elapsed * 1.4;
@@ -542,8 +546,9 @@ const VortexBastionScene = ({
           coreMat.opacity = revealed ? 0.95 : 0.35;
         }
         const hpRatio = Math.max(0.02, e.hp / Math.max(1, e.maxHp));
+        const halfBar = e.kind === "boss" ? 0.43 : 0.24;
         hpFill.scale.x = hpRatio;
-        hpFill.position.x = -(1 - hpRatio) * 0.24;
+        hpFill.position.x = -(1 - hpRatio) * halfBar;
         hpFill.material.color.setHex(hpRatio > 0.5 ? 0x4ade80 : hpRatio > 0.25 ? 0xfbbf24 : 0xf43f5e);
         hpBg.quaternion.copy(camera.quaternion);
       }
@@ -610,6 +615,32 @@ const VortexBastionScene = ({
             opacity: Math.max(0, 1 - tFrac),
           });
           fxLayer.add(new THREE.Line(lineGeo, lineMat));
+        } else if (fx.kind === "orbital_beam") {
+          const beamRad = Math.max(0.08, (1 - tFrac) * 0.45);
+          const pillar = new THREE.Mesh(
+            new THREE.CylinderGeometry(beamRad, beamRad * 1.4, 14, 14),
+            new THREE.MeshBasicMaterial({
+              color: fx.color,
+              transparent: true,
+              opacity: Math.max(0, (1 - tFrac) * 0.85),
+            })
+          );
+          pillar.position.set(fx.x, 7, fx.z);
+          fxLayer.add(pillar);
+
+          const impactRad = (fx.radius || 1.8) * Math.max(0.2, tFrac);
+          const ring = new THREE.Mesh(
+            new THREE.RingGeometry(Math.max(0.05, impactRad - 0.22), impactRad, 28),
+            new THREE.MeshBasicMaterial({
+              color: fx.color,
+              side: THREE.DoubleSide,
+              transparent: true,
+              opacity: Math.max(0, 1 - tFrac),
+            })
+          );
+          ring.rotation.x = -Math.PI / 2;
+          ring.position.set(fx.x, 0.16, fx.z);
+          fxLayer.add(ring);
         } else if (fx.kind === "beam") {
           const start = new THREE.Vector3(fx.x1, fx.y1, fx.z1);
           const end = new THREE.Vector3(fx.x2, fx.y2, fx.z2);

@@ -14,6 +14,8 @@ import {
   FastForward,
   Trophy,
   Crosshair,
+  Flame,
+  Radio,
 } from "lucide-react";
 import { soundEngine } from "../../../utils/soundEffects";
 import {
@@ -28,6 +30,7 @@ import {
   upgradeTurret,
   salvageTurret,
   enqueueWave,
+  triggerOrbitalAbility,
   stepCombat,
   getUpgradeOptions,
 } from "./turretsAndCombat";
@@ -41,6 +44,7 @@ const VortexBastionGame = ({ onBack, isMuted, onSaveScore }) => {
   const savedScoreRef = useRef(false);
 
   const [selectedBuildType, setSelectedBuildType] = useState("pulse");
+  const [activeAbilityMode, setActiveAbilityMode] = useState(null); // "ion" | "emp" | null
   const [previewCell, setPreviewCell] = useState(null);
   const [previewInfo, setPreviewInfo] = useState(null);
   const [selectedTowerId, setSelectedTowerId] = useState(null);
@@ -57,8 +61,15 @@ const VortexBastionGame = ({ onBack, isMuted, onSaveScore }) => {
     wave: 0,
     score: 0,
     kills: 0,
+    reactions: 0,
     speedMult: 1,
     enemiesLeft: 0,
+    ionCd: 0,
+    empCd: 0,
+    bossHp: 0,
+    bossMaxHp: 0,
+    bossShield: 0,
+    bossMaxShield: 0,
     banner: null,
     gameOver: false,
   });
@@ -80,14 +91,22 @@ const VortexBastionGame = ({ onBack, isMuted, onSaveScore }) => {
   const syncHud = useCallback(
     (bumpGrid = false, nextSelectedId = selectedTowerId, nextPreviewCell = previewCell) => {
       const s = simRef.current;
+      const boss = s.enemies.find((e) => e.kind === "boss" && !e.dead);
       setHud({
         credits: s.credits,
         coreHp: s.coreHp,
         wave: s.wave,
         score: s.score,
         kills: s.kills,
+        reactions: s.reactionsTriggered,
         speedMult: s.speedMult,
         enemiesLeft: s.enemies.length + s.spawnQueue.length,
+        ionCd: s.abilities?.ionCooldown || 0,
+        empCd: s.abilities?.empCooldown || 0,
+        bossHp: boss ? Math.max(0, Math.round(boss.hp)) : 0,
+        bossMaxHp: boss ? boss.maxHp : 0,
+        bossShield: boss ? Math.max(0, Math.round(boss.shield)) : 0,
+        bossMaxShield: boss ? boss.maxShield : 0,
         banner: s.lastBanner ? { ...s.lastBanner } : null,
         gameOver: s.gameOver,
       });
@@ -112,6 +131,15 @@ const VortexBastionGame = ({ onBack, isMuted, onSaveScore }) => {
   const handleTileTap = useCallback(
     (cell) => {
       const s = simRef.current;
+      if (activeAbilityMode) {
+        const res = triggerOrbitalAbility(s, activeAbilityMode, cell);
+        if (res.ok) {
+          playAudio(activeAbilityMode === "ion" ? "boom" : "tada");
+          setActiveAbilityMode(null);
+          syncHud();
+        }
+        return;
+      }
       const existing = s.towers.find((t) => t.col === cell.col && t.row === cell.row);
       if (existing) {
         playAudio("laser");
@@ -130,7 +158,7 @@ const VortexBastionGame = ({ onBack, isMuted, onSaveScore }) => {
       setPreviewCell(nextPreview);
       setPreviewInfo(nextPreview ? previewTowerPlacement(s.grid, nextPreview, s.enemies) : null);
     },
-    [playAudio, selectedTowerId, previewCell]
+    [activeAbilityMode, playAudio, selectedTowerId, previewCell, syncHud]
   );
 
   const handleConfirmBuild = useCallback(() => {
@@ -185,7 +213,7 @@ const VortexBastionGame = ({ onBack, isMuted, onSaveScore }) => {
 
   const handleToggleSpeed = useCallback(() => {
     const s = simRef.current;
-    s.speedMult = s.speedMult === 1 ? 2 : 1;
+    s.speedMult = s.speedMult === 1 ? 2 : s.speedMult === 2 ? 3 : 1;
     playAudio("laser");
     syncHud();
   }, [playAudio, syncHud]);
@@ -194,6 +222,7 @@ const VortexBastionGame = ({ onBack, isMuted, onSaveScore }) => {
     playAudio("whoosh");
     simRef.current = createCombatState(createInitialGrid());
     savedScoreRef.current = false;
+    setActiveAbilityMode(null);
     setPreviewCell(null);
     setSelectedTowerId(null);
     syncHud(true, null, null);
@@ -307,6 +336,51 @@ const VortexBastionGame = ({ onBack, isMuted, onSaveScore }) => {
             style={{ color: hud.banner.color, borderColor: `${hud.banner.color}66` }}
           >
             {hud.banner.text}
+          </div>
+        )}
+
+        {/* Active Dreadnought Boss Health Bar */}
+        {hud.bossMaxHp > 0 && !hud.gameOver && (
+          <div className="absolute top-12 left-3 right-3 p-2 rounded-xl bg-slate-950/90 border border-rose-500/45 shadow-lg pointer-events-none">
+            <div className="flex items-center justify-between text-[10px] font-black uppercase tracking-wider text-rose-300 mb-1">
+              <span>Dreadnought Boss</span>
+              <span>
+                {hud.bossShield > 0 ? `SHD ${hud.bossShield} • ` : ""}
+                HP {hud.bossHp}/{hud.bossMaxHp}
+              </span>
+            </div>
+            <div className="w-full h-2 rounded-full bg-slate-800 overflow-hidden flex flex-col gap-0.5">
+              <div
+                className="h-full bg-gradient-to-r from-rose-500 to-orange-400 transition-all"
+                style={{ width: `${Math.round((hud.bossHp / Math.max(1, hud.bossMaxHp)) * 100)}%` }}
+              />
+            </div>
+            {hud.bossMaxShield > 0 && hud.bossShield > 0 && (
+              <div className="w-full h-1 mt-0.5 rounded-full bg-slate-800 overflow-hidden">
+                <div
+                  className="h-full bg-cyan-400 transition-all"
+                  style={{ width: `${Math.round((hud.bossShield / Math.max(1, hud.bossMaxShield)) * 100)}%` }}
+                />
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Orbital Strike Crosshair Mode Banner */}
+        {activeAbilityMode && !hud.gameOver && (
+          <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between gap-2 p-2.5 rounded-2xl bg-rose-950/90 border border-rose-400 shadow-xl">
+            <p className="text-xs font-black text-rose-200">
+              {activeAbilityMode === "ion"
+                ? "TAP ANY TILE FOR ORBITAL ION STRIKE!"
+                : "TAP ANY TILE FOR EMP SHIELD PULSE!"}
+            </p>
+            <button
+              type="button"
+              onClick={() => setActiveAbilityMode(null)}
+              className="px-2.5 py-1 rounded-lg bg-white/15 text-xs font-bold text-white cursor-pointer"
+            >
+              Cancel
+            </button>
           </div>
         )}
 
@@ -451,7 +525,55 @@ const VortexBastionGame = ({ onBack, isMuted, onSaveScore }) => {
         )}
       </div>
 
-      {/* Bottom Phone-First Turret Selection Dock */}
+      {/* Orbital Strikes + Bottom Phone-First Turret Selection Dock */}
+      <div className="grid grid-cols-2 gap-2">
+        <button
+          type="button"
+          disabled={hud.ionCd > 0 || hud.gameOver}
+          onClick={() => {
+            playAudio("laser");
+            setPreviewCell(null);
+            setSelectedTowerId(null);
+            setActiveAbilityMode((m) => (m === "ion" ? null : "ion"));
+          }}
+          className={`px-3 py-2 rounded-2xl border flex items-center justify-between text-xs font-black transition-all cursor-pointer ${
+            activeAbilityMode === "ion"
+              ? "bg-rose-500/35 border-rose-400 text-rose-100"
+              : hud.ionCd > 0
+              ? "bg-white/5 border-white/10 text-white/40"
+              : "bg-rose-500/15 hover:bg-rose-500/25 border-rose-400/40 text-rose-200"
+          }`}
+        >
+          <span className="flex items-center gap-1.5">
+            <Flame className="w-4 h-4 text-rose-400" /> ORBITAL ION
+          </span>
+          <span>{hud.ionCd > 0 ? `${Math.ceil(hud.ionCd)}s` : "READY"}</span>
+        </button>
+
+        <button
+          type="button"
+          disabled={hud.empCd > 0 || hud.gameOver}
+          onClick={() => {
+            playAudio("laser");
+            setPreviewCell(null);
+            setSelectedTowerId(null);
+            setActiveAbilityMode((m) => (m === "emp" ? null : "emp"));
+          }}
+          className={`px-3 py-2 rounded-2xl border flex items-center justify-between text-xs font-black transition-all cursor-pointer ${
+            activeAbilityMode === "emp"
+              ? "bg-amber-500/35 border-amber-400 text-amber-100"
+              : hud.empCd > 0
+              ? "bg-white/5 border-white/10 text-white/40"
+              : "bg-amber-500/15 hover:bg-amber-500/25 border-amber-400/40 text-amber-200"
+          }`}
+        >
+          <span className="flex items-center gap-1.5">
+            <Radio className="w-4 h-4 text-amber-300" /> EMP PULSE
+          </span>
+          <span>{hud.empCd > 0 ? `${Math.ceil(hud.empCd)}s` : "READY"}</span>
+        </button>
+      </div>
+
       <div className="grid grid-cols-4 gap-2">
         {Object.values(TURRET_CATALOG).map((t) => {
           const active = selectedBuildType === t.id;
