@@ -1,7 +1,8 @@
 /**
  * Pure simulation engine & 3D perspective projection math for Tornado Surfers.
- * Kept framework-agnostic so both TornadoSurfersGame.jsx and unit tests run
- * deterministic, frame-rate independent physics and guaranteed-passable waves.
+ * Powers the Three.js 3D WebGL endless runner with delta-time physics,
+ * articulated runner stride/lean telemetry, side-scrape stumble + Chaser Drone,
+ * Express Moving Trains, Super Sneakers, Jetpack, Magnet, 2x & Hoverboard EMP.
  */
 
 export const MAX_Z = 1.0;
@@ -12,14 +13,16 @@ export const GRAVITY = 28;
 export const JUMP_VELOCITY = 11.4;
 export const SLAM_VELOCITY = -24;
 export const BASE_SPEED = 0.36; // world z-units per second
-export const MAX_SPEED = 0.86;
+export const MAX_SPEED = 0.88;
 
 export function createInitialRunnerState() {
   return {
     phase: "ready", // "ready" | "playing" | "paused" | "gameover"
     lane: 1, // 0, 1, 2
     prevLane: 1,
-    laneX: 0, // interpolated -1..1
+    laneX: 0, // smooth interpolated -1..1
+    leanAngle: 0,
+    stridePhase: 0,
     y: 0,
     vy: 0,
     groundY: 0,
@@ -27,43 +30,46 @@ export function createInitialRunnerState() {
     slamPending: false,
     jumpBufferTimer: 0,
     stumbleTimer: 0,
+    chaserTimer: 0,
     invulnTimer: 0,
     hoverboards: 3,
     hoverboardTimer: 0,
     magnetTimer: 0,
     multiplierTimer: 0,
     jetpackTimer: 0,
+    sneakersTimer: 0,
     speed: BASE_SPEED,
     distance: 0,
     coins: 0,
     score: 0,
     combo: 0,
+    stunts: 0,
     comboTimer: 0,
-    spawnTimer: 0.4,
+    spawnTimer: 0.35,
     trackScroll: 0,
     shakeTimer: 0,
     shakeIntensity: 0,
     waveIndex: 0,
     entities: [],
     popups: [],
-    particles: [],
+    burstQueue: [],
   };
 }
 
 export function triggerJump(state) {
   if (state.phase !== "playing") return false;
   if (state.jetpackTimer > 0) return false;
-  // Cancel active slide immediately so jumping feels snappy
   state.slideTimer = 0;
   state.slamPending = false;
   const onSurface = state.y <= state.groundY + 0.06;
   if (onSurface) {
-    state.vy = JUMP_VELOCITY;
+    const mult = state.sneakersTimer > 0 ? 1.38 : 1.0;
+    state.vy = JUMP_VELOCITY * mult;
     state.y = Math.max(state.y, state.groundY + 0.01);
     state.jumpBufferTimer = 0;
     return true;
   }
-  state.jumpBufferTimer = 0.14;
+  state.jumpBufferTimer = 0.15;
   return false;
 }
 
@@ -71,7 +77,6 @@ export function triggerSlideOrSlam(state) {
   if (state.phase !== "playing") return false;
   if (state.jetpackTimer > 0) return false;
   if (state.y > state.groundY + 0.08) {
-    // Mid-air fast-fall slam + roll on landing
     state.vy = Math.min(state.vy, SLAM_VELOCITY);
     state.slamPending = true;
     return true;
@@ -84,6 +89,55 @@ export function triggerLaneMove(state, delta) {
   if (state.phase !== "playing") return false;
   const next = Math.max(0, Math.min(2, state.lane + delta));
   if (next === state.lane) return false;
+
+  // Check if moving sideways into the side wall of an adjacent train at ground height!
+  const targetHitTrain = state.entities.find(
+    (e) =>
+      e.kind === "train" &&
+      !e.hit &&
+      Math.round(e.lane) === next &&
+      e.z <= PLAYER_HIT_Z + 0.015 &&
+      (e.zEnd ?? e.z + 0.24) >= PLAYER_HIT_Z - 0.015 &&
+      state.y < TRAIN_ROOF_Y - 0.25
+  );
+
+  if (targetHitTrain && state.invulnTimer <= 0 && state.jetpackTimer <= 0) {
+    // Side-scrape stumble like Subway Surfers: bounce back unless Chaser Drone is already right behind you!
+    state.shakeTimer = 0.28;
+    state.shakeIntensity = 0.22;
+    if (state.hoverboardTimer > 0) {
+      state.hoverboardTimer = 0;
+      state.invulnTimer = 1.4;
+      targetHitTrain.hit = true;
+      state.burstQueue.push({ x: targetHitTrain.lane - 1, y: 0.6, z: PLAYER_HIT_Z, color: 0x22d3ee, count: 16 });
+      state.popups.push({
+        id: `p_${Math.random()}`,
+        text: "BOARD SAVE!",
+        x: state.laneX,
+        y: state.y + 1.0,
+        color: "#22d3ee",
+        life: 0.9,
+      });
+      return true;
+    }
+    if (state.chaserTimer > 0) {
+      state.phase = "gameover";
+      return false;
+    }
+    state.chaserTimer = 4.2;
+    state.stumbleTimer = 0.4;
+    state.burstQueue.push({ x: state.laneX, y: 0.5, z: PLAYER_HIT_Z, color: 0xf97316, count: 10 });
+    state.popups.push({
+      id: `p_${Math.random()}`,
+      text: "STUMBLE!",
+      x: state.laneX,
+      y: state.y + 0.95,
+      color: "#fb923c",
+      life: 0.8,
+    });
+    return false;
+  }
+
   state.prevLane = state.lane;
   state.lane = next;
   return true;
@@ -94,17 +148,17 @@ export function triggerHoverboard(state) {
   if (state.hoverboardTimer > 0 || state.hoverboards <= 0) return false;
   state.hoverboards -= 1;
   state.hoverboardTimer = 18.0;
+  state.burstQueue.push({ x: state.laneX, y: 0.3, z: PLAYER_HIT_Z, color: 0x22d3ee, count: 14 });
   return true;
 }
 
 /**
  * Guaranteed passable procedural wave spawner.
- * Every wave ensures at least one lane is open OR traversable via ramp / low hurdle / arch.
+ * Includes rooftop ramps, slaloms, laser gates, and late-game moving Express Trains.
  */
 export function generateWave(waveIndex, rng = Math.random) {
   const entities = [];
   const laneOrder = [0, 1, 2];
-  // Shuffle lanes using rng
   for (let i = laneOrder.length - 1; i > 0; i--) {
     const j = Math.floor(rng() * (i + 1));
     [laneOrder[i], laneOrder[j]] = [laneOrder[j], laneOrder[i]];
@@ -112,9 +166,9 @@ export function generateWave(waveIndex, rng = Math.random) {
 
   const safeLane = laneOrder[0];
   const roll = rng();
+  const canExpress = waveIndex >= 6;
 
   if (waveIndex % 5 === 2 && roll < 0.85) {
-    // Elevated ramp + rooftop train run on one lane, trains on others
     entities.push({
       id: `ramp_${waveIndex}`,
       kind: "ramp",
@@ -128,22 +182,21 @@ export function generateWave(waveIndex, rng = Math.random) {
       kind: "train",
       lane: safeLane,
       z: 1.14,
-      zEnd: 1.42,
+      zEnd: 1.44,
       colorVariant: waveIndex % 3,
+      moving: false,
       hit: false,
     });
-    // Rooftop coin line
-    for (let k = 0; k < 4; k++) {
+    for (let k = 0; k < 5; k++) {
       entities.push({
         id: `rcoin_${waveIndex}_${k}`,
         kind: "coin",
         lane: safeLane,
-        y: TRAIN_ROOF_Y + 0.35,
-        z: 1.17 + k * 0.065,
+        y: TRAIN_ROOF_Y + 0.36,
+        z: 1.17 + k * 0.058,
         collected: false,
       });
     }
-    // Companion train in another lane
     entities.push({
       id: `train_side_${waveIndex}`,
       kind: "train",
@@ -151,36 +204,35 @@ export function generateWave(waveIndex, rng = Math.random) {
       z: 1.04,
       zEnd: 1.34,
       colorVariant: (waveIndex + 1) % 3,
+      moving: canExpress && rng() < 0.35,
       hit: false,
     });
-    // Bonus powerup at end of third lane or on safe rooftop
-    if (rng() < 0.45) {
-      const kinds = ["magnet", "multiplier", "jetpack", "board_pickup"];
+    if (rng() < 0.5) {
+      const kinds = ["magnet", "multiplier", "jetpack", "board_pickup", "sneakers"];
       entities.push({
         id: `pwr_${waveIndex}`,
         kind: kinds[Math.floor(rng() * kinds.length)],
         lane: laneOrder[2],
-        y: 0.36,
+        y: 0.4,
         z: 1.08,
         collected: false,
       });
     }
-    return { entities, nextCooldown: Math.max(0.88, 1.38 - waveIndex * 0.01) };
+    return { entities, nextCooldown: Math.max(0.85, 1.35 - waveIndex * 0.01) };
   }
 
-  // Standard mixed obstacle row: max 2 solid trains, 3rd lane is open or hurdle/arch
   const pattern = rng();
   if (pattern < 0.35) {
-    // 1 or 2 trains + open coin lane
-    const trainCount = rng() < 0.55 ? 2 : 1;
+    const trainCount = rng() < 0.58 ? 2 : 1;
     for (let i = 1; i <= trainCount; i++) {
       entities.push({
         id: `train_${waveIndex}_${i}`,
         kind: "train",
         lane: laneOrder[i],
         z: 1.02 + (i - 1) * 0.04,
-        zEnd: 1.28 + (i - 1) * 0.04,
+        zEnd: 1.3 + (i - 1) * 0.04,
         colorVariant: (waveIndex + i) % 3,
+        moving: canExpress && i === 1 && rng() < 0.3,
         hit: false,
       });
     }
@@ -189,13 +241,12 @@ export function generateWave(waveIndex, rng = Math.random) {
         id: `coin_${waveIndex}_${k}`,
         kind: "coin",
         lane: safeLane,
-        y: 0.32,
+        y: 0.34,
         z: 0.98 + k * 0.065,
         collected: false,
       });
     }
   } else if (pattern < 0.7) {
-    // Jumpable low barrier OR slideable high gate in safeLane, obstacles in others
     const isGate = rng() < 0.48;
     entities.push({
       id: `obs_${waveIndex}_safe`,
@@ -205,13 +256,12 @@ export function generateWave(waveIndex, rng = Math.random) {
       zEnd: 1.04,
       hit: false,
     });
-    // Arc of coins over barrier or under gate
     for (let k = 0; k < 3; k++) {
       entities.push({
         id: `acoin_${waveIndex}_${k}`,
         kind: "coin",
         lane: safeLane,
-        y: isGate ? 0.22 : k === 1 ? 0.92 : 0.62,
+        y: isGate ? 0.24 : k === 1 ? 0.95 : 0.65,
         z: 0.96 + k * 0.045,
         collected: false,
       });
@@ -221,8 +271,9 @@ export function generateWave(waveIndex, rng = Math.random) {
       kind: "train",
       lane: laneOrder[1],
       z: 1.0,
-      zEnd: 1.24,
+      zEnd: 1.26,
       colorVariant: waveIndex % 3,
+      moving: false,
       hit: false,
     });
     if (rng() < 0.65) {
@@ -236,7 +287,6 @@ export function generateWave(waveIndex, rng = Math.random) {
       });
     }
   } else {
-    // Slalom wave across all 3 lanes (low barriers & open coin trails)
     entities.push({
       id: `slalom_${waveIndex}_1`,
       kind: "low_barrier",
@@ -258,21 +308,20 @@ export function generateWave(waveIndex, rng = Math.random) {
         id: `scoin_${waveIndex}_${k}`,
         kind: "coin",
         lane: safeLane,
-        y: 0.32,
+        y: 0.34,
         z: 0.96 + k * 0.06,
         collected: false,
       });
     }
   }
 
-  // Occasional powerup spawn in open lane
-  if (rng() < 0.24) {
-    const kinds = ["magnet", "multiplier", "jetpack", "board_pickup"];
+  if (rng() < 0.26) {
+    const kinds = ["magnet", "multiplier", "jetpack", "board_pickup", "sneakers"];
     entities.push({
       id: `power_${waveIndex}`,
       kind: kinds[Math.floor(rng() * kinds.length)],
       lane: safeLane,
-      y: 0.4,
+      y: 0.42,
       z: 1.26,
       collected: false,
     });
@@ -280,13 +329,12 @@ export function generateWave(waveIndex, rng = Math.random) {
 
   return {
     entities,
-    nextCooldown: Math.max(0.66, 1.12 - waveIndex * 0.008),
+    nextCooldown: Math.max(0.64, 1.1 - waveIndex * 0.008),
   };
 }
 
 /**
  * Advances simulation by dt seconds (clamped for tab-switch safety).
- * Returns event flags for audio/effects: { coinPicked, crashed, shieldSaved, powerupPicked, jumped }
  */
 export function stepRunnerState(state, rawDt, rng = Math.random) {
   const events = {
@@ -294,24 +342,27 @@ export function stepRunnerState(state, rawDt, rng = Math.random) {
     crashed: false,
     shieldSaved: false,
     powerupPicked: null,
+    stunt: false,
   };
 
   if (state.phase !== "playing") return events;
   const dt = Math.min(0.05, Math.max(0, rawDt));
 
-  // Speed ramps smoothly with distance up to MAX_SPEED
   const targetSpeed = Math.min(MAX_SPEED, BASE_SPEED + state.distance * 0.00055);
-  const effectiveSpeed = state.jetpackTimer > 0 ? targetSpeed * 1.42 : targetSpeed;
+  const effectiveSpeed = state.jetpackTimer > 0 ? targetSpeed * 1.45 : targetSpeed;
   state.speed = effectiveSpeed;
+  state.stridePhase += dt * (effectiveSpeed / BASE_SPEED) * 14;
 
   // Timers
   if (state.slideTimer > 0) state.slideTimer = Math.max(0, state.slideTimer - dt);
   if (state.jumpBufferTimer > 0) state.jumpBufferTimer = Math.max(0, state.jumpBufferTimer - dt);
   if (state.stumbleTimer > 0) state.stumbleTimer = Math.max(0, state.stumbleTimer - dt);
+  if (state.chaserTimer > 0) state.chaserTimer = Math.max(0, state.chaserTimer - dt);
   if (state.invulnTimer > 0) state.invulnTimer = Math.max(0, state.invulnTimer - dt);
   if (state.hoverboardTimer > 0) state.hoverboardTimer = Math.max(0, state.hoverboardTimer - dt);
   if (state.magnetTimer > 0) state.magnetTimer = Math.max(0, state.magnetTimer - dt);
   if (state.multiplierTimer > 0) state.multiplierTimer = Math.max(0, state.multiplierTimer - dt);
+  if (state.sneakersTimer > 0) state.sneakersTimer = Math.max(0, state.sneakersTimer - dt);
   if (state.comboTimer > 0) {
     state.comboTimer = Math.max(0, state.comboTimer - dt);
     if (state.comboTimer === 0) state.combo = 0;
@@ -322,7 +373,7 @@ export function stepRunnerState(state, rawDt, rng = Math.random) {
   if (state.jetpackTimer > 0) {
     state.jetpackTimer = Math.max(0, state.jetpackTimer - dt);
     if (state.jetpackTimer === 0 && wasJetpack) {
-      state.invulnTimer = Math.max(state.invulnTimer, 1.4); // safe descent grace
+      state.invulnTimer = Math.max(state.invulnTimer, 1.45);
     }
   }
 
@@ -334,12 +385,14 @@ export function stepRunnerState(state, rawDt, rng = Math.random) {
   state.score += Math.floor(distGain * mult);
   state.trackScroll = (state.trackScroll + dz * 12) % 1;
 
-  // Smooth lateral lane interpolation
+  // Smooth lateral lane interpolation & dynamic body bank leanAngle
   const targetX = state.lane - 1;
   const dx = targetX - state.laneX;
   state.laneX += dx * Math.min(1, dt * 18);
+  const targetLean = Math.max(-0.42, Math.min(0.42, -dx * 0.75));
+  state.leanAngle += (targetLean - state.leanAngle) * Math.min(1, dt * 16);
 
-  // Determine ground surface underneath player (floor 0 or train roof/ramp)
+  // Surface elevation (ground / ramp / walkable train roof)
   let surfaceY = 0;
   for (const ent of state.entities) {
     if (Math.abs(ent.lane - (state.laneX + 1)) > 0.48) continue;
@@ -380,7 +433,7 @@ export function stepRunnerState(state, rawDt, rng = Math.random) {
     }
   }
 
-  // Spawn waves or jetpack sky-coins
+  // Spawn waves or sky coin trails
   state.spawnTimer -= dz;
   if (state.spawnTimer <= 0) {
     if (state.jetpackTimer > 0.6) {
@@ -405,35 +458,35 @@ export function stepRunnerState(state, rawDt, rng = Math.random) {
     }
   }
 
-  // Move entities toward runner & resolve interactions
   const playerIsSliding = state.slideTimer > 0;
   for (const ent of state.entities) {
-    ent.z -= dz;
-    if (ent.zEnd !== undefined) ent.zEnd -= dz;
+    const stepDz = ent.moving ? dz * 1.45 : dz;
+    ent.z -= stepDz;
+    if (ent.zEnd !== undefined) ent.zEnd -= stepDz;
 
     const isCoinOrPower =
       ent.kind === "coin" ||
       ent.kind === "magnet" ||
       ent.kind === "multiplier" ||
       ent.kind === "jetpack" ||
-      ent.kind === "board_pickup";
+      ent.kind === "board_pickup" ||
+      ent.kind === "sneakers";
 
     if (isCoinOrPower) {
       if (ent.collected) continue;
 
-      // Magnet pulls nearby coins across lanes & heights
-      if (ent.kind === "coin" && state.magnetTimer > 0 && ent.z < 0.48 && ent.z > -0.05) {
+      if (ent.kind === "coin" && state.magnetTimer > 0 && ent.z < 0.5 && ent.z > -0.05) {
         const laneTarget = state.laneX + 1;
         ent.lane += (laneTarget - ent.lane) * Math.min(1, dt * 14);
-        ent.y = (ent.y ?? 0.3) + (state.y + 0.3 - (ent.y ?? 0.3)) * Math.min(1, dt * 14);
+        ent.y = (ent.y ?? 0.34) + (state.y + 0.34 - (ent.y ?? 0.34)) * Math.min(1, dt * 14);
       }
 
-      const entY = ent.y ?? 0.32;
+      const entY = ent.y ?? 0.34;
       const laneDist = Math.abs(ent.lane - (state.laneX + 1));
       const zDist = Math.abs(ent.z - PLAYER_HIT_Z);
       const yDist = Math.abs(entY - (state.y + 0.35));
 
-      if (laneDist < 0.55 && zDist < 0.075 && yDist < 0.65) {
+      if (laneDist < 0.56 && zDist < 0.08 && yDist < 0.68) {
         ent.collected = true;
         if (ent.kind === "coin") {
           state.coins += mult;
@@ -442,6 +495,7 @@ export function stepRunnerState(state, rawDt, rng = Math.random) {
           const bonus = (10 + Math.min(40, state.combo * 2)) * mult;
           state.score += bonus;
           events.coinPicked = true;
+          state.burstQueue.push({ x: ent.lane - 1, y: entY, z: PLAYER_HIT_Z, color: 0xfbbf24, count: 6 });
           state.popups.push({
             id: `p_${Math.random()}`,
             text: `+${bonus}`,
@@ -452,16 +506,19 @@ export function stepRunnerState(state, rawDt, rng = Math.random) {
           });
         } else {
           events.powerupPicked = ent.kind;
-          if (ent.kind === "magnet") state.magnetTimer = 8.5;
+          if (ent.kind === "magnet") state.magnetTimer = 9.0;
           if (ent.kind === "multiplier") state.multiplierTimer = 10.0;
           if (ent.kind === "jetpack") state.jetpackTimer = 6.5;
           if (ent.kind === "board_pickup") state.hoverboards += 1;
+          if (ent.kind === "sneakers") state.sneakersTimer = 8.5;
           const labels = {
             magnet: "MAGNET!",
             multiplier: "2X SCORE!",
             jetpack: "JETPACK!",
             board_pickup: "+1 BOARD!",
+            sneakers: "SUPER BOOTS!",
           };
+          state.burstQueue.push({ x: ent.lane - 1, y: entY, z: PLAYER_HIT_Z, color: 0x38bdf8, count: 14 });
           state.popups.push({
             id: `p_${Math.random()}`,
             text: labels[ent.kind],
@@ -475,7 +532,6 @@ export function stepRunnerState(state, rawDt, rng = Math.random) {
       continue;
     }
 
-    // Obstacles
     if (ent.hit || ent.kind === "ramp") continue;
     const zStart = ent.z;
     const zEnd = ent.zEnd ?? ent.z + 0.04;
@@ -483,7 +539,24 @@ export function stepRunnerState(state, rawDt, rng = Math.random) {
     if (!overlapsZ) continue;
 
     const laneDist = Math.abs(ent.lane - (state.laneX + 1));
-    if (laneDist >= 0.44) continue;
+    if (laneDist >= 0.44) {
+      // Stunt graze bonus if jumping cleanly right past a train roof or low hurdle!
+      if (!ent.stunted && laneDist < 1.15 && state.y > 0.7 && ent.kind === "train") {
+        ent.stunted = true;
+        state.stunts += 1;
+        state.score += 50 * mult;
+        events.stunt = true;
+        state.popups.push({
+          id: `p_${Math.random()}`,
+          text: `+${50 * mult} STUNT!`,
+          x: state.laneX,
+          y: state.y + 1.05,
+          color: "#a855f7",
+          life: 0.8,
+        });
+      }
+      continue;
+    }
 
     let collides = false;
     if (ent.kind === "low_barrier") {
@@ -493,7 +566,6 @@ export function stepRunnerState(state, rawDt, rng = Math.random) {
         collides = true;
       }
     } else if (ent.kind === "train") {
-      // Safe if standing atop train roof or soaring above it
       if (state.y < TRAIN_ROOF_Y - 0.22) {
         collides = true;
       }
@@ -502,12 +574,12 @@ export function stepRunnerState(state, rawDt, rng = Math.random) {
     if (collides && state.invulnTimer <= 0 && state.jetpackTimer <= 0) {
       ent.hit = true;
       if (state.hoverboardTimer > 0) {
-        // Hoverboard EMP Shield saves run & shatters nearby obstacles!
         state.hoverboardTimer = 0;
         state.invulnTimer = 1.6;
         state.shakeTimer = 0.35;
-        state.shakeIntensity = 14;
+        state.shakeIntensity = 0.28;
         events.shieldSaved = true;
+        state.burstQueue.push({ x: state.laneX, y: state.y + 0.5, z: PLAYER_HIT_Z, color: 0x22d3ee, count: 24 });
         for (const other of state.entities) {
           if (other.z < 0.45 && other.z > -0.1 && (other.kind === "train" || other.kind === "low_barrier" || other.kind === "high_gate")) {
             other.hit = true;
@@ -524,21 +596,20 @@ export function stepRunnerState(state, rawDt, rng = Math.random) {
       } else {
         state.phase = "gameover";
         state.shakeTimer = 0.45;
-        state.shakeIntensity = 18;
+        state.shakeIntensity = 0.36;
         events.crashed = true;
+        state.burstQueue.push({ x: state.laneX, y: state.y + 0.5, z: PLAYER_HIT_Z, color: 0xf43f5e, count: 24 });
         return events;
       }
     }
   }
 
-  // Update popups
   for (const p of state.popups) {
     p.life -= dt;
-    p.y += dt * 1.1;
+    p.y += dt * 1.15;
   }
   state.popups = state.popups.filter((p) => p.life > 0);
 
-  // Prune behind camera
   state.entities = state.entities.filter(
     (e) => (e.zEnd ?? e.z) > -0.15 && !e.collected && !e.hit
   );
@@ -547,14 +618,12 @@ export function stepRunnerState(state, rawDt, rng = Math.random) {
 }
 
 /**
- * Projects world coordinates (laneX in -1.5..1.5, y in world units, z in 0..1)
- * onto canvas pixels with true horizon perspective.
+ * Retained for compatibility & deterministic perspective math unit tests.
  */
 export function projectWorld(laneX, y, z, width, height) {
   const clampedZ = Math.max(-0.08, Math.min(1.25, z));
   const horizonY = height * 0.31;
   const groundBottomY = height * 0.94;
-  // Non-linear perspective curve so foreground feels sweeping and horizon crisp
   const depthScale = Math.pow(1 - Math.min(0.95, clampedZ * 0.9), 1.45);
   const yFloor = horizonY + (groundBottomY - horizonY) * depthScale;
   const centerX = width * 0.5;

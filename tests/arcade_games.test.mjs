@@ -354,3 +354,59 @@ test("8. Tornado Surfers: 200 procedural waves are ALWAYS passable, ramp elevate
   assert.ok(pNear.yFloor > pFar.yFloor);
   assert.ok(pNear.scale > pFar.scale);
 });
+
+test("9. Tornado Surfers 3D upgrades: Super Sneakers, +50 Stunts, Moving Express Trains, and Side-Scrape Chaser", () => {
+  // A) Super Sneakers multiply jump velocity by 1.38x
+  const norm = createInitialRunnerState();
+  norm.phase = "playing";
+  triggerJump(norm);
+
+  const boot = createInitialRunnerState();
+  boot.phase = "playing";
+  boot.sneakersTimer = 8.0;
+  triggerJump(boot);
+  assert.ok(boot.vy > norm.vy * 1.35, `Expected Super Sneakers jump velocity boost (${boot.vy} vs ${norm.vy})`);
+
+  // B) Express Moving Train advances 1.45x faster than a stationary train
+  const exp = createInitialRunnerState();
+  exp.phase = "playing";
+  exp.entities = [
+    { id: "static_t", kind: "train", lane: 0, z: 0.8, zEnd: 1.05, moving: false, hit: false },
+    { id: "express_t", kind: "train", lane: 2, z: 0.8, zEnd: 1.05, moving: true, hit: false },
+  ];
+  stepRunnerState(exp, 0.04);
+  const dzStatic = 0.8 - exp.entities.find((e) => e.id === "static_t").z;
+  const dzExpress = 0.8 - exp.entities.find((e) => e.id === "express_t").z;
+  assert.ok(Math.abs(dzExpress / dzStatic - 1.45) < 1e-6, `Expected 1.45x express delta, got ${dzExpress / dzStatic}`);
+
+  // C) Mid-air +50 STUNT! bonus when jumping cleanly alongside a train
+  const stuntRun = createInitialRunnerState();
+  stuntRun.phase = "playing";
+  stuntRun.lane = 0;
+  stuntRun.laneX = -1;
+  stuntRun.y = 0.9;
+  stuntRun.vy = 2;
+  stuntRun.entities = [
+    { id: "adj_train", kind: "train", lane: 1, z: PLAYER_HIT_Z, zEnd: PLAYER_HIT_Z + 0.25, moving: false, hit: false },
+  ];
+  const stuntEv = stepRunnerState(stuntRun, 0.016);
+  assert.equal(stuntEv.stunt, true);
+  assert.equal(stuntRun.stunts, 1);
+  assert.ok(stuntRun.score >= 50);
+
+  // D) Side-scrape stumble alerts Chaser Drone first, then catches on repeat stumble
+  const stumbleRun = createInitialRunnerState();
+  stumbleRun.phase = "playing";
+  stumbleRun.lane = 1;
+  stumbleRun.entities = [
+    { id: "side_t", kind: "train", lane: 2, z: PLAYER_HIT_Z, zEnd: PLAYER_HIT_Z + 0.24, hit: false },
+  ];
+  assert.equal(triggerLaneMove(stumbleRun, 1), false);
+  assert.equal(stumbleRun.phase, "playing");
+  assert.equal(stumbleRun.lane, 1);
+  assert.ok(stumbleRun.chaserTimer > 3.5);
+
+  // Second consecutive side-scrape while Chaser Drone is locked causes gameover
+  assert.equal(triggerLaneMove(stumbleRun, 1), false);
+  assert.equal(stumbleRun.phase, "gameover");
+});
