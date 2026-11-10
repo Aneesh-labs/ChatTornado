@@ -410,3 +410,36 @@ test("9. Tornado Surfers 3D upgrades: Super Sneakers, +50 Stunts, Moving Express
   assert.equal(triggerLaneMove(stumbleRun, 1), false);
   assert.equal(stumbleRun.phase, "gameover");
 });
+
+test("10. Tornado Surfers tight physics: wave spacing >= tail + gap, Express anti-clip, and coyote roof-edge jump", () => {
+  // A) Consecutive waves guarantee zero z-overlap regardless of ramp/train tail length
+  for (let w = 0; w < 60; w++) {
+    const wave = generateWave(w, () => ((w * 19 + 7) % 100) / 100);
+    const maxTail = wave.entities.reduce((m, e) => Math.max(m, e.zEnd ?? e.z), 1.0);
+    assert.ok(
+      wave.nextCooldown >= (maxTail - 1.0) + 0.239,
+      `Wave ${w} cooldown (${wave.nextCooldown}) smaller than tail extent (${maxTail - 1.0})`
+    );
+  }
+
+  // B) Express train suppresses moving=true when another obstacle sits ahead in its lane
+  const clipCheck = createInitialRunnerState();
+  clipCheck.phase = "playing";
+  clipCheck.waveIndex = 8;
+  clipCheck.spawnTimer = 0;
+  for (const lane of [0, 1, 2]) {
+    clipCheck.entities.push({ id: `blk_${lane}`, kind: "low_barrier", lane, z: 0.65, zEnd: 0.69, hit: false });
+  }
+  stepRunnerState(clipCheck, 0.016, () => 0.1);
+  const newlySpawnedExpress = clipCheck.entities.filter((e) => !e.id.startsWith("blk_") && e.moving);
+  assert.equal(newlySpawnedExpress.length, 0);
+
+  // C) Coyote timer allows clean jump right after stepping off a roof
+  const coyoteRun = createInitialRunnerState();
+  coyoteRun.phase = "playing";
+  coyoteRun.y = TRAIN_ROOF_Y;
+  coyoteRun.groundY = 0;
+  coyoteRun.coyoteTimer = 0.08;
+  assert.equal(triggerJump(coyoteRun), true);
+  assert.ok(coyoteRun.vy > 12);
+});

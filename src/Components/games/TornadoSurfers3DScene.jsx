@@ -76,7 +76,7 @@ function createSkyscraperTexture(hueHex) {
   return tex;
 }
 
-function buildTrainMesh3D(variant = 0, moving = false, glowTex) {
+function buildTrainMesh3D(variant = 0, moving = false, glowTex, lenZ = 0.28 * WORLD_DEPTH) {
   const palettes = [
     { body: 0x064e3b, roof: 0x10b981, accent: 0x6ee7b7 },
     { body: 0x052e23, roof: 0x059669, accent: 0x4ade80 },
@@ -85,7 +85,6 @@ function buildTrainMesh3D(variant = 0, moving = false, glowTex) {
   const pal = palettes[variant % palettes.length];
   const group = new THREE.Group();
 
-  const lenZ = 0.28 * WORLD_DEPTH;
   const heightY = TRAIN_ROOF_Y * Y_SCALE;
   const widthX = 1.78;
 
@@ -153,7 +152,8 @@ function buildTrainMesh3D(variant = 0, moving = false, glowTex) {
 
 function buildEntityMesh3D(ent, glowTex) {
   if (ent.kind === "train") {
-    return buildTrainMesh3D(ent.colorVariant || 0, Boolean(ent.moving), glowTex);
+    const exactLenZ = Math.max(0.18, (ent.zEnd ?? ent.z + 0.28) - ent.z) * WORLD_DEPTH;
+    return buildTrainMesh3D(ent.colorVariant || 0, Boolean(ent.moving), glowTex, exactLenZ);
   }
 
   if (ent.kind === "ramp") {
@@ -660,6 +660,14 @@ const TornadoSurfers3DScene = ({ simRef, onStep, onSwipeMove, onSwipeJump, onSwi
       camera.position.z = s.jetpackTimer > 0 ? 7.1 : 6.2;
       camera.lookAt(rx * 0.35, ry * 0.55 + 1.35, -7.5);
 
+      // Flush any leftover exiting debris instantaneously upon fresh restart
+      if (s.waveIndex === 0 && s.distance < 0.05 && exitingMeshes.length > 0) {
+        while (exitingMeshes.length > 0) {
+          const item = exitingMeshes.pop();
+          entityLayer.remove(item.mesh);
+        }
+      }
+
       // Sync Obstacles, Trains, Ramps, Coins & Powerups with Smooth Pass-Away Dissolve
       const activeIds = new Set(s.entities.map((e) => e.id));
       for (const [id, entry] of entityMeshMap.entries()) {
@@ -841,21 +849,16 @@ const TornadoSurfers3DScene = ({ simRef, onStep, onSwipeMove, onSwipeJump, onSwi
 
   const onTouchStart = (e) => {
     const t = e.touches[0];
-    touchStartRef.current = { x: t.clientX, y: t.clientY };
-    const now = Date.now();
-    if (now - lastTapRef.current < 260) {
-      callbacksRef.current.onDoubleTap?.();
-    }
-    lastTapRef.current = now;
+    touchStartRef.current = { x: t.clientX, y: t.clientY, swiped: false };
   };
 
-  const onTouchEnd = (e) => {
-    if (!touchStartRef.current) return;
-    const t = e.changedTouches[0];
+  const onTouchMove = (e) => {
+    if (!touchStartRef.current || touchStartRef.current.swiped) return;
+    const t = e.touches[0];
     const dx = t.clientX - touchStartRef.current.x;
     const dy = t.clientY - touchStartRef.current.y;
-    touchStartRef.current = null;
     if (Math.max(Math.abs(dx), Math.abs(dy)) < 18) return;
+    touchStartRef.current.swiped = true;
     if (Math.abs(dx) > Math.abs(dy)) {
       callbacksRef.current.onSwipeMove?.(dx > 0 ? 1 : -1);
     } else if (dy < 0) {
@@ -865,10 +868,23 @@ const TornadoSurfers3DScene = ({ simRef, onStep, onSwipeMove, onSwipeJump, onSwi
     }
   };
 
+  const onTouchEnd = () => {
+    if (!touchStartRef.current) return;
+    if (!touchStartRef.current.swiped) {
+      const now = Date.now();
+      if (now - lastTapRef.current < 260) {
+        callbacksRef.current.onDoubleTap?.();
+      }
+      lastTapRef.current = now;
+    }
+    touchStartRef.current = null;
+  };
+
   return (
     <div
       ref={mountRef}
       onTouchStart={onTouchStart}
+      onTouchMove={onTouchMove}
       onTouchEnd={onTouchEnd}
       className="w-full h-full touch-none select-none cursor-pointer"
     />

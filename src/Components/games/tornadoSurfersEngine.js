@@ -9,11 +9,11 @@ export const MAX_Z = 1.0;
 export const PLAYER_HIT_Z = 0.085;
 export const TRAIN_ROOF_Y = 1.15;
 export const JETPACK_Y = 2.45;
-export const GRAVITY = 28;
-export const JUMP_VELOCITY = 11.4;
-export const SLAM_VELOCITY = -24;
+export const GRAVITY = 34;
+export const JUMP_VELOCITY = 12.6;
+export const SLAM_VELOCITY = -26;
 export const BASE_SPEED = 0.36; // world z-units per second
-export const MAX_SPEED = 0.88;
+export const MAX_SPEED = 0.86;
 
 export function createInitialRunnerState() {
   return {
@@ -26,6 +26,7 @@ export function createInitialRunnerState() {
     y: 0,
     vy: 0,
     groundY: 0,
+    coyoteTimer: 0,
     slideTimer: 0,
     slamPending: false,
     jumpBufferTimer: 0,
@@ -45,7 +46,7 @@ export function createInitialRunnerState() {
     combo: 0,
     stunts: 0,
     comboTimer: 0,
-    spawnTimer: 0.35,
+    spawnTimer: 0.25,
     trackScroll: 0,
     shakeTimer: 0,
     shakeIntensity: 0,
@@ -61,15 +62,16 @@ export function triggerJump(state) {
   if (state.jetpackTimer > 0) return false;
   state.slideTimer = 0;
   state.slamPending = false;
-  const onSurface = state.y <= state.groundY + 0.06;
+  const onSurface = state.y <= state.groundY + 0.06 || state.coyoteTimer > 0;
   if (onSurface) {
-    const mult = state.sneakersTimer > 0 ? 1.38 : 1.0;
+    const mult = state.sneakersTimer > 0 ? 1.36 : 1.0;
     state.vy = JUMP_VELOCITY * mult;
     state.y = Math.max(state.y, state.groundY + 0.01);
+    state.coyoteTimer = 0;
     state.jumpBufferTimer = 0;
     return true;
   }
-  state.jumpBufferTimer = 0.15;
+  state.jumpBufferTimer = 0.16;
   return false;
 }
 
@@ -327,9 +329,13 @@ export function generateWave(waveIndex, rng = Math.random) {
     });
   }
 
+  // Exact tail extent prevents consecutive waves from overlapping at any speed
+  const maxTailZ = entities.reduce((acc, e) => Math.max(acc, e.zEnd ?? e.z), 1.05);
+  const gapDist = Math.max(0.24, 0.36 - waveIndex * 0.002);
+
   return {
     entities,
-    nextCooldown: Math.max(0.64, 1.1 - waveIndex * 0.008),
+    nextCooldown: (maxTailZ - 1.0) + gapDist,
   };
 }
 
@@ -385,18 +391,19 @@ export function stepRunnerState(state, rawDt, rng = Math.random) {
   state.score += Math.floor(distGain * mult);
   state.trackScroll = (state.trackScroll + dz * 12) % 1;
 
-  // Smooth lateral lane interpolation & dynamic body bank leanAngle
+  // Smooth, crisp lateral lane interpolation & dynamic body bank leanAngle
   const targetX = state.lane - 1;
   const dx = targetX - state.laneX;
-  state.laneX += dx * Math.min(1, dt * 18);
-  const targetLean = Math.max(-0.42, Math.min(0.42, -dx * 0.75));
-  state.leanAngle += (targetLean - state.leanAngle) * Math.min(1, dt * 16);
+  state.laneX += dx * Math.min(1, dt * 26);
+  const targetLean = Math.max(-0.42, Math.min(0.42, -dx * 0.78));
+  state.leanAngle += (targetLean - state.leanAngle) * Math.min(1, dt * 22);
 
   // Surface elevation (ground / ramp / walkable train roof)
+  const prevGroundY = state.groundY;
   let surfaceY = 0;
   for (const ent of state.entities) {
-    if (Math.abs(ent.lane - (state.laneX + 1)) > 0.48) continue;
-    if (ent.kind === "ramp" && ent.z <= PLAYER_HIT_Z + 0.04 && (ent.zEnd ?? ent.z + 0.14) >= PLAYER_HIT_Z - 0.03) {
+    if (Math.abs(ent.lane - (state.laneX + 1)) > 0.5) continue;
+    if (ent.kind === "ramp" && ent.z <= PLAYER_HIT_Z + 0.05 && (ent.zEnd ?? ent.z + 0.14) >= PLAYER_HIT_Z - 0.04) {
       const len = (ent.zEnd ?? ent.z + 0.14) - ent.z;
       const rampFrac = Math.max(0, Math.min(1, (PLAYER_HIT_Z - ent.z) / Math.max(0.05, len)));
       surfaceY = Math.max(surfaceY, rampFrac * TRAIN_ROOF_Y);
@@ -404,13 +411,20 @@ export function stepRunnerState(state, rawDt, rng = Math.random) {
         state.y = surfaceY;
       }
     }
-    if (ent.kind === "train" && ent.z <= PLAYER_HIT_Z + 0.03 && (ent.zEnd ?? ent.z + 0.24) >= PLAYER_HIT_Z - 0.02) {
-      if (state.y >= TRAIN_ROOF_Y - 0.35) {
+    if (ent.kind === "train" && ent.z <= PLAYER_HIT_Z + 0.04 && (ent.zEnd ?? ent.z + 0.24) >= PLAYER_HIT_Z - 0.03) {
+      if (state.y >= TRAIN_ROOF_Y - 0.36) {
         surfaceY = Math.max(surfaceY, TRAIN_ROOF_Y);
       }
     }
   }
   state.groundY = surfaceY;
+  if (state.y <= prevGroundY + 0.06 && surfaceY < prevGroundY) {
+    state.coyoteTimer = 0.085;
+  } else if (state.y <= state.groundY + 0.04) {
+    state.coyoteTimer = 0.085;
+  } else if (state.coyoteTimer > 0) {
+    state.coyoteTimer = Math.max(0, state.coyoteTimer - dt);
+  }
 
   // Vertical motion
   if (state.jetpackTimer > 0) {
@@ -452,9 +466,18 @@ export function stepRunnerState(state, rawDt, rng = Math.random) {
       state.spawnTimer = 0.28;
     } else {
       const wave = generateWave(state.waveIndex, rng);
+      // Prevent fast Express moving trains from overtaking and clipping into existing obstacles ahead on that lane
+      for (const ent of wave.entities) {
+        if (ent.moving) {
+          const laneOccupiedAhead = state.entities.some(
+            (existing) => existing.kind !== "coin" && existing.lane === ent.lane && existing.z > 0.2
+          );
+          if (laneOccupiedAhead) ent.moving = false;
+        }
+      }
       state.entities.push(...wave.entities);
       state.waveIndex += 1;
-      state.spawnTimer = wave.nextCooldown * effectiveSpeed;
+      state.spawnTimer = wave.nextCooldown;
     }
   }
 
