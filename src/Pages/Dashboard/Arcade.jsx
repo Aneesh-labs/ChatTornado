@@ -18,6 +18,7 @@ import { soundEngine } from "../../utils/soundEffects";
 import API from "../../Services/API";
 import TornadoSurfersGame from "../../Components/games/TornadoSurfersGame";
 import VortexBastionGame from "../../Components/games/vortexBastion/VortexBastionGame";
+import NeonBladeGame from "../../Components/games/NeonBladeGame";
 import {
     SNAKE_GRID,
     queueSnakeDirection,
@@ -36,10 +37,6 @@ import {
     stepZombieState,
     createNeonDodgeState,
     stepNeonDodge,
-    computeBladeImpactAngle,
-    checkBladeCollision,
-    angularDistance,
-    normalizeAngle,
 } from "../../Components/games/arcadeEngines";
 
 const saveBackendGameScore = (game, score) => {
@@ -1562,341 +1559,6 @@ const NeonDodge = ({ onBack, isMuted }) => {
 };
 
 /* ═══════════════════════════════════════════════════════════════
-   7. NEON BLADE (Fixed Angle Math, Golden Orbs, Boss Wheels & Space)
-   ═══════════════════════════════════════════════════════════════ */
-const NeonBlade = ({ onBack, isMuted }) => {
-    const canvasRef = useRef(null);
-    const savedRunRef = useRef(false);
-
-    const [level, setLevel] = useState(1);
-    const [score, setScore] = useState(0);
-    const [phase, setPhase] = useState("ready"); // ready | playing | levelclear | gameover
-    const [highScore, setHighScore] = useState(() => Number(localStorage.getItem("neonblade_highscore") || 0));
-
-    const scoreRef = useRef(score);
-    const highScoreRef = useRef(highScore);
-    const isMutedRef = useRef(isMuted);
-    useEffect(() => { scoreRef.current = score; }, [score]);
-    useEffect(() => { highScoreRef.current = highScore; }, [highScore]);
-    useEffect(() => { isMutedRef.current = isMuted; }, [isMuted]);
-
-    const playAudio = useCallback((type) => {
-        if (!isMutedRef.current) soundEngine.play(type);
-    }, []);
-
-    const startFresh = useCallback(() => {
-        playAudio("whoosh");
-        savedRunRef.current = false;
-        setScore(0);
-        setLevel(1);
-        setPhase("playing");
-    }, [playAudio]);
-
-    useEffect(() => {
-        if (phase !== "playing") return;
-
-        const canvas = canvasRef.current;
-        const ctx = canvas.getContext("2d");
-        let animationId;
-        let lastTime = performance.now();
-
-        const cw = canvas.width;
-        const ch = canvas.height;
-        const centerX = cw / 2;
-        const centerY = ch * 0.34;
-        const targetRadius = 62;
-        const isBoss = level % 5 === 0;
-
-        let targetAngle = 0;
-        let baseSpeed = 1.65 + level * 0.16;
-        if (level % 2 === 0) baseSpeed *= -1;
-
-        const stuckKnives = [];
-        const initCount = Math.min(4, Math.floor(level / 2));
-        for (let i = 0; i < initCount; i++) {
-            stuckKnives.push((i * Math.PI * 2) / Math.max(1, initCount));
-        }
-
-        const orbs = [];
-        const orbCount = isBoss ? 3 : 2;
-        for (let i = 0; i < orbCount; i++) {
-            const ang = (i * 2.1 + 0.7) % (Math.PI * 2);
-            if (!checkBladeCollision(ang, stuckKnives, 0.25)) {
-                orbs.push({ angle: ang, sliced: false });
-            }
-        }
-
-        let knivesLeft = 5 + Math.floor(level / 2);
-        let flyingKnife = null;
-        let shakeTimer = 0;
-        const particles = [];
-
-        const throwBlade = () => {
-            if (flyingKnife || knivesLeft <= 0) return;
-            playAudio("laser");
-            flyingKnife = { y: ch - 60, speed: 1200 };
-        };
-
-        const onPointerDown = (e) => {
-            e.preventDefault();
-            throwBlade();
-        };
-        const onKeyDown = (e) => {
-            if (e.code === "Space" || e.key === "ArrowUp") {
-                e.preventDefault();
-                throwBlade();
-            }
-        };
-
-        canvas.addEventListener("pointerdown", onPointerDown);
-        window.addEventListener("keydown", onKeyDown);
-
-        const drawBladeShape = (isStuck) => {
-            ctx.fillStyle = "#38bdf8";
-            ctx.shadowColor = "#38bdf8";
-            ctx.shadowBlur = 10;
-            ctx.beginPath();
-            if (isStuck) {
-                ctx.moveTo(0, targetRadius - 4);
-                ctx.lineTo(-5, targetRadius + 28);
-                ctx.lineTo(5, targetRadius + 28);
-            } else {
-                ctx.moveTo(0, -24);
-                ctx.lineTo(-5, 8);
-                ctx.lineTo(5, 8);
-            }
-            ctx.closePath();
-            ctx.fill();
-            ctx.shadowBlur = 0;
-        };
-
-        const loop = (now) => {
-            const dt = Math.min(0.05, Math.max(0.001, (now - lastTime) / 1000));
-            lastTime = now;
-
-            if (shakeTimer > 0) shakeTimer = Math.max(0, shakeTimer - dt);
-
-            const spinMult = isBoss ? 1 + Math.sin(now * 0.003) * 0.65 : 1;
-            targetAngle = normalizeAngle(targetAngle + baseSpeed * spinMult * dt);
-
-            ctx.save();
-            if (shakeTimer > 0) {
-                ctx.translate((Math.random() - 0.5) * 8, (Math.random() - 0.5) * 8);
-            }
-
-            ctx.fillStyle = "#050a14";
-            ctx.fillRect(0, 0, cw, ch);
-
-            // Particles
-            for (let i = particles.length - 1; i >= 0; i--) {
-                const pt = particles[i];
-                pt.x += pt.vx * dt;
-                pt.y += pt.vy * dt;
-                pt.alpha -= dt * 2.4;
-                if (pt.alpha <= 0) {
-                    particles.splice(i, 1);
-                    continue;
-                }
-                ctx.save();
-                ctx.globalAlpha = pt.alpha;
-                ctx.fillStyle = pt.color;
-                ctx.beginPath();
-                ctx.arc(pt.x, pt.y, pt.r, 0, Math.PI * 2);
-                ctx.fill();
-                ctx.restore();
-            }
-
-            // Rotating Target Wheel
-            ctx.save();
-            ctx.translate(centerX, centerY);
-            ctx.rotate(targetAngle);
-
-            for (const ang of stuckKnives) {
-                ctx.save();
-                ctx.rotate(ang);
-                drawBladeShape(true);
-                ctx.restore();
-            }
-
-            for (const orb of orbs) {
-                if (orb.sliced) continue;
-                ctx.save();
-                ctx.rotate(orb.angle);
-                ctx.fillStyle = "#fbbf24";
-                ctx.shadowColor = "#fbbf24";
-                ctx.shadowBlur = 12;
-                ctx.beginPath();
-                ctx.arc(0, targetRadius + 10, 8, 0, Math.PI * 2);
-                ctx.fill();
-                ctx.restore();
-            }
-
-            ctx.fillStyle = isBoss ? "#eab308" : "#f43f5e";
-            ctx.shadowColor = isBoss ? "#eab308" : "#f43f5e";
-            ctx.shadowBlur = 22;
-            ctx.beginPath();
-            ctx.arc(0, 0, targetRadius, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.fillStyle = "#0f172a";
-            ctx.beginPath();
-            ctx.arc(0, 0, targetRadius - 12, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.shadowBlur = 0;
-
-            if (isBoss) {
-                ctx.fillStyle = "#fde047";
-                ctx.font = "900 12px sans-serif";
-                ctx.textAlign = "center";
-                ctx.textBaseline = "middle";
-                ctx.fillText("BOSS", 0, 0);
-            }
-            ctx.restore();
-
-            // Flying Knife
-            if (flyingKnife) {
-                flyingKnife.y -= flyingKnife.speed * dt;
-                ctx.save();
-                ctx.translate(centerX, flyingKnife.y);
-                drawBladeShape(false);
-                ctx.restore();
-
-                if (flyingKnife.y <= centerY + targetRadius) {
-                    const impactAngle = computeBladeImpactAngle(targetAngle);
-                    const collided = checkBladeCollision(impactAngle, stuckKnives, 0.24);
-                    flyingKnife = null;
-
-                    if (collided) {
-                        playAudio("boom");
-                        shakeTimer = 0.25;
-                        setPhase("gameover");
-                        if (scoreRef.current > highScoreRef.current) {
-                            highScoreRef.current = scoreRef.current;
-                            setHighScore(scoreRef.current);
-                            localStorage.setItem("neonblade_highscore", String(scoreRef.current));
-                        }
-                        if (!savedRunRef.current && scoreRef.current > 0) {
-                            savedRunRef.current = true;
-                            saveBackendGameScore("neonblade", scoreRef.current);
-                        }
-                        ctx.restore();
-                        return;
-                    }
-
-                    // Check golden orb slice
-                    let orbBonus = 0;
-                    for (const orb of orbs) {
-                        if (!orb.sliced && angularDistance(impactAngle, orb.angle) < 0.28) {
-                            orb.sliced = true;
-                            orbBonus += 25;
-                            for (let k = 0; k < 10; k++) {
-                                particles.push({
-                                    x: centerX,
-                                    y: centerY + targetRadius,
-                                    vx: (Math.random() - 0.5) * 200,
-                                    vy: (Math.random() - 0.5) * 200,
-                                    r: 3,
-                                    alpha: 1,
-                                    color: "#fbbf24",
-                                });
-                            }
-                        }
-                    }
-
-                    playAudio(orbBonus > 0 ? "tada" : "coin");
-                    stuckKnives.push(impactAngle);
-                    knivesLeft -= 1;
-                    shakeTimer = 0.08;
-                    const gained = 10 + orbBonus;
-                    const nextScore = scoreRef.current + gained;
-                    scoreRef.current = nextScore;
-                    setScore(nextScore);
-
-                    if (knivesLeft <= 0) {
-                        playAudio("win");
-                        setLevel((l) => l + 1);
-                        setPhase("levelclear");
-                        ctx.restore();
-                        return;
-                    }
-                }
-            }
-
-            // Waiting knives stock
-            for (let i = 0; i < knivesLeft; i++) {
-                ctx.save();
-                ctx.translate(28, ch - 28 - i * 18);
-                ctx.rotate(Math.PI / 2);
-                drawBladeShape(false);
-                ctx.restore();
-            }
-
-            // Standby blade at bottom
-            if (!flyingKnife && knivesLeft > 0) {
-                ctx.save();
-                ctx.translate(centerX, ch - 60);
-                drawBladeShape(false);
-                ctx.restore();
-            }
-
-            ctx.restore();
-            animationId = requestAnimationFrame(loop);
-        };
-
-        animationId = requestAnimationFrame(loop);
-        return () => {
-            cancelAnimationFrame(animationId);
-            canvas.removeEventListener("pointerdown", onPointerDown);
-            window.removeEventListener("keydown", onKeyDown);
-        };
-    }, [phase, level, playAudio]);
-
-    return (
-        <div className="flex flex-col items-center gap-3.5 max-w-md mx-auto w-full select-none">
-            <div className="flex items-center justify-between w-full px-1">
-                <button type="button" onClick={onBack} className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/10 text-xs font-bold text-white cursor-pointer">
-                    <ArrowLeft className="h-4 w-4" /> Back
-                </button>
-                <div className="flex items-center gap-3">
-                    <span className="text-xs font-bold text-white/75">Lvl <strong className="text-rose-400">{level}</strong></span>
-                    <span className="text-xs font-bold text-white/75">Score: <strong className="text-cyan-400">{score}</strong></span>
-                    <span className="text-xs font-bold text-amber-300 flex items-center gap-1">
-                        <Trophy className="h-3.5 w-3.5" /> {Math.max(highScore, score)}
-                    </span>
-                </div>
-            </div>
-
-            <div className="relative w-full max-w-[380px] aspect-[380/480] rounded-3xl overflow-hidden border-2 border-rose-500/35 shadow-[0_0_40px_rgba(244,63,94,0.18)]">
-                <canvas ref={canvasRef} width={380} height={480} className="w-full h-full bg-[#050a14] touch-none cursor-crosshair" />
-
-                {(phase === "ready" || phase === "levelclear") && (
-                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/75 backdrop-blur-sm gap-3 p-4 text-center">
-                        <span className="text-5xl">🎯</span>
-                        <h3 className="text-xl font-black text-white">
-                            {phase === "levelclear" ? `Stage ${level - 1} Cleared!` : "Neon Blade"}
-                        </h3>
-                        <p className="text-xs text-white/65">Tap or press Spacebar to throw blades. Slice gold orbs for +25!</p>
-                        <button type="button" onClick={() => setPhase("playing")} className="flex items-center gap-2 px-7 py-3 rounded-2xl bg-rose-500 hover:bg-rose-400 text-black font-black text-sm cursor-pointer active:scale-95">
-                            <Play className="h-4 w-4 fill-current" /> {phase === "levelclear" ? `Start Stage ${level}` : "Start Game"}
-                        </button>
-                    </div>
-                )}
-
-                {phase === "gameover" && (
-                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/85 backdrop-blur-sm gap-3">
-                        <span className="text-5xl">💥</span>
-                        <h3 className="text-xl font-black text-cyan-400">Blades Clashed!</h3>
-                        <p className="text-xs text-white/75">Final Score: <strong className="text-cyan-400 text-sm">{score}</strong></p>
-                        <button type="button" onClick={startFresh} className="flex items-center gap-2 px-6 py-3 rounded-2xl bg-cyan-400 hover:bg-cyan-300 text-black font-black text-sm cursor-pointer active:scale-95">
-                            <RotateCcw className="h-4 w-4" /> Try Again
-                        </button>
-                    </div>
-                )}
-            </div>
-        </div>
-    );
-};
-
-/* ═══════════════════════════════════════════════════════════════
    MAIN ARCADE LOBBY COMPONENT
    ═══════════════════════════════════════════════════════════════ */
 export default function Arcade() {
@@ -1978,9 +1640,9 @@ export default function Arcade() {
             id: "neonblade",
             title: "Neon Blade",
             emoji: "🎯🗡️",
-            tag: "Precision",
+            tag: "3D Cyber Forge",
             color: "from-rose-500 to-red-700",
-            desc: "Laser-accurate throws, golden orbs, and undulating boss cores!"
+            desc: "Three.js 3D blade forge, Razor Grazes, Chrono Slow-Mo, Overdrive & Boss cores!"
         },
         {
             id: "subwaysurfers",
@@ -2060,7 +1722,7 @@ export default function Arcade() {
                 ) : selectedGame === "neondodge" ? (
                     <NeonDodge onBack={handleBack} isMuted={isMuted} />
                 ) : selectedGame === "neonblade" ? (
-                    <NeonBlade onBack={handleBack} isMuted={isMuted} />
+                    <NeonBladeGame onBack={handleBack} isMuted={isMuted} onSaveScore={saveBackendGameScore} />
                 ) : (
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                         {GAMES.map((game) => (
