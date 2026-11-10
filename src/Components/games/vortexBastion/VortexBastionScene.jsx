@@ -124,6 +124,9 @@ const VortexBastionScene = ({
     coreLight.position.set(coreW.x, 1.5, coreW.z);
     scene.add(coreLight);
 
+    const flashLight = new THREE.PointLight(0xfbbf24, 0, 5.5);
+    scene.add(flashLight);
+
     // ─── Arena Platform & Tiles ───────────────────────────────────
     const tileTex = createArenaTileTexture();
     const monolithTex = createMonolithTexture();
@@ -331,19 +334,43 @@ const VortexBastionScene = ({
       }
     };
 
-    // ─── Camera & Touch Orbit ─────────────────────────────────────
-    const orbit = { yaw: 0, pitch: 0.92, targetYaw: 0, targetPitch: 0.92 };
+    // ─── Camera, Drag Orbit & Mobile Two-Finger Pinch Zoom ────────
+    const orbit = { yaw: 0, pitch: 0.92, targetYaw: 0, targetPitch: 0.92, zoom: 1.0, targetZoom: 1.0 };
     let pointerDownPos = null;
     let isDragging = false;
+    let lastPinchDist = null;
     const raycaster = new THREE.Raycaster();
     const pointerNDC = new THREE.Vector2();
+
+    const onWheel = (e) => {
+      e.preventDefault();
+      orbit.targetZoom = Math.max(0.68, Math.min(1.38, orbit.targetZoom + e.deltaY * 0.0008));
+    };
+    const onTouchMovePinch = (e) => {
+      if (e.touches.length === 2) {
+        e.preventDefault();
+        const d = Math.hypot(
+          e.touches[0].clientX - e.touches[1].clientX,
+          e.touches[0].clientY - e.touches[1].clientY
+        );
+        if (lastPinchDist != null) {
+          const delta = (lastPinchDist - d) * 0.004;
+          orbit.targetZoom = Math.max(0.68, Math.min(1.38, orbit.targetZoom + delta));
+        }
+        lastPinchDist = d;
+        isDragging = true;
+      }
+    };
+    const onTouchEndPinch = (e) => {
+      if (e.touches.length < 2) lastPinchDist = null;
+    };
 
     const onPointerDown = (e) => {
       pointerDownPos = { x: e.clientX, y: e.clientY, lastX: e.clientX, lastY: e.clientY };
       isDragging = false;
     };
     const onPointerMove = (e) => {
-      if (!pointerDownPos) return;
+      if (!pointerDownPos || lastPinchDist !== null) return;
       const dx = e.clientX - pointerDownPos.lastX;
       const dy = e.clientY - pointerDownPos.lastY;
       if (Math.hypot(e.clientX - pointerDownPos.x, e.clientY - pointerDownPos.y) > 8) {
@@ -371,6 +398,9 @@ const VortexBastionScene = ({
     };
 
     renderer.domElement.addEventListener("pointerdown", onPointerDown);
+    renderer.domElement.addEventListener("wheel", onWheel, { passive: false });
+    renderer.domElement.addEventListener("touchmove", onTouchMovePinch, { passive: false });
+    renderer.domElement.addEventListener("touchend", onTouchEndPinch);
     window.addEventListener("pointermove", onPointerMove);
     window.addEventListener("pointerup", onPointerUp);
 
@@ -416,10 +446,11 @@ const VortexBastionScene = ({
       }
       orbit.yaw += (orbit.targetYaw - orbit.yaw) * 0.12;
       orbit.pitch += (orbit.targetPitch - orbit.pitch) * 0.12;
+      orbit.zoom += (orbit.targetZoom - orbit.zoom) * 0.14;
 
       const aspect = camera.aspect || 0.7;
       const baseDist = aspect < 0.85 ? 19.5 : 16.5;
-      const dist = baseDist * (CAMERA_PRESETS[curPreset]?.distMult || 1);
+      const dist = baseDist * (CAMERA_PRESETS[curPreset]?.distMult || 1) * orbit.zoom;
       const shakeMag = (sim.shakeTimer || 0) > 0 ? (sim.shakeIntensity || 0.15) * (sim.shakeTimer / 0.35) : 0;
       const sx = shakeMag ? (Math.random() - 0.5) * shakeMag : 0;
       const sy = shakeMag ? (Math.random() - 0.5) * shakeMag : 0;
@@ -438,6 +469,22 @@ const VortexBastionScene = ({
       coreCrystal.position.y = Math.sin(elapsed * 2.5) * 0.08;
       coreGyroA.rotation.x = elapsed * 1.1;
       coreGyroB.rotation.z = -elapsed * 1.4;
+
+      // Dynamic Muzzle / Impact PointLight Flash
+      let brightestTower = null;
+      for (const t of sim.towers) {
+        if (t.recoil > 0.72) {
+          brightestTower = t;
+          break;
+        }
+      }
+      if (brightestTower) {
+        flashLight.position.set(brightestTower.wx, 0.9, brightestTower.wz);
+        flashLight.color.setHex(TURRET_CATALOG[brightestTower.type]?.colorHex || 0xfbbf24);
+        flashLight.intensity = 4.2;
+      } else {
+        flashLight.intensity *= 0.82;
+      }
 
       // Path Holograms
       const sig = curPath ? curPath.map((p) => `${p.col},${p.row}`).join(";") : "";
@@ -713,6 +760,9 @@ const VortexBastionScene = ({
       cancelAnimationFrame(rafId);
       resizeObserver.disconnect();
       renderer.domElement.removeEventListener("pointerdown", onPointerDown);
+      renderer.domElement.removeEventListener("wheel", onWheel);
+      renderer.domElement.removeEventListener("touchmove", onTouchMovePinch);
+      renderer.domElement.removeEventListener("touchend", onTouchEndPinch);
       window.removeEventListener("pointermove", onPointerMove);
       window.removeEventListener("pointerup", onPointerUp);
       renderer.dispose();
