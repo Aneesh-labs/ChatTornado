@@ -32,11 +32,11 @@ import {
 } from "./tornadoSurfersEngine";
 
 const POWERUP_BARS = [
-  { key: "hoverboardTimer", label: "BOARD", max: 18.0, color: "bg-cyan-400", text: "text-cyan-300", Icon: Shield },
-  { key: "jetpackTimer", label: "JETPACK", max: 6.5, color: "bg-sky-400", text: "text-sky-300", Icon: Flame },
-  { key: "sneakersTimer", label: "BOOTS", max: 8.5, color: "bg-emerald-400", text: "text-emerald-300", Icon: Wind },
-  { key: "magnetTimer", label: "MAGNET", max: 9.0, color: "bg-rose-400", text: "text-rose-300", Icon: Magnet },
-  { key: "multiplierTimer", label: "2X MULT", max: 10.0, color: "bg-amber-400", text: "text-amber-300", Icon: Zap },
+  { key: "hoverboardTimer", label: "BOARD", max: 18.0, color: "bg-emerald-400", text: "text-emerald-200", Icon: Shield },
+  { key: "jetpackTimer", label: "JETPACK", max: 6.5, color: "bg-teal-300", text: "text-teal-200", Icon: Flame },
+  { key: "sneakersTimer", label: "BOOTS", max: 8.5, color: "bg-lime-400", text: "text-lime-200", Icon: Wind },
+  { key: "magnetTimer", label: "MAGNET", max: 9.0, color: "bg-rose-400", text: "text-rose-200", Icon: Magnet },
+  { key: "multiplierTimer", label: "2X MULT", max: 10.0, color: "bg-amber-400", text: "text-amber-200", Icon: Zap },
 ];
 
 const TornadoSurfersGame = ({ onBack, isMuted = false, onSaveScore }) => {
@@ -256,69 +256,9 @@ const TornadoSurfersGame = ({ onBack, isMuted = false, onSaveScore }) => {
   const activeBars = POWERUP_BARS.filter((b) => hud[b.key] > 0.05);
 
   return (
-    <div className="w-full max-w-5xl mx-auto flex flex-col gap-2.5 select-none">
-      {/* Compact Sci-Fi Telemetry Top Bar */}
-      <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 rounded-2xl bg-slate-950/85 border border-cyan-500/20 backdrop-blur-md shadow-lg">
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={onBack}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-white/10 text-xs font-semibold text-slate-200 transition active:scale-95"
-          >
-            <ArrowLeft className="w-4 h-4 text-cyan-400" />
-            <span className="hidden sm:inline">Arcade</span>
-          </button>
-          <div>
-            <div className="text-xs font-black tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-sky-300 to-fuchsia-400 uppercase">
-              Tornado Surfers 3D
-            </div>
-            <div className="text-[11px] font-medium text-slate-400 hidden sm:block">
-              Neo-Rail Cyber Runner • {hud.speedMult.toFixed(1)}x Mach
-            </div>
-          </div>
-        </div>
-
-        {/* Live Telemetry Pills */}
-        <div className="flex items-center gap-1.5 sm:gap-2">
-          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-slate-900/90 border border-amber-400/25">
-            <Coins className="w-3.5 h-3.5 text-amber-400" />
-            <span className="text-xs font-bold tabular-nums text-amber-300">{hud.coins}</span>
-          </div>
-
-          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-slate-900/90 border border-fuchsia-400/25">
-            <Sparkles className="w-3.5 h-3.5 text-fuchsia-400" />
-            <span className="text-xs font-bold tabular-nums text-fuchsia-300">{hud.stunts}</span>
-          </div>
-
-          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-slate-900/90 border border-cyan-400/30">
-            <span className="text-[11px] font-semibold text-cyan-400/80">SCORE</span>
-            <span className="text-xs sm:text-sm font-black tabular-nums text-white">
-              {hud.score.toLocaleString()}
-            </span>
-          </div>
-
-          <div className="hidden md:flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-slate-900/90 border border-white/10">
-            <Trophy className="w-3.5 h-3.5 text-yellow-400" />
-            <span className="text-xs font-bold tabular-nums text-slate-300">
-              {highScore.toLocaleString()}
-            </span>
-          </div>
-
-          {(hud.phase === "playing" || hud.phase === "paused") && (
-            <button
-              type="button"
-              onClick={togglePause}
-              aria-label={hud.phase === "paused" ? "Resume game" : "Pause game"}
-              className="p-1.5 sm:px-2.5 sm:py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-cyan-500/30 text-cyan-300 transition active:scale-95"
-            >
-              {hud.phase === "paused" ? <Play className="w-4 h-4" /> : <Pause className="w-4 h-4" />}
-            </button>
-          )}
-        </div>
-      </div>
-
-      {/* Full-Bleed Phone-First 3D WebGL Viewport */}
-      <div className="relative w-full h-[61dvh] sm:h-[66dvh] min-h-[380px] max-h-[700px] rounded-2xl overflow-hidden border border-cyan-500/30 bg-[#050816] shadow-[0_0_50px_-12px_rgba(6,182,212,0.35)]">
+    <div className="fixed inset-0 z-50 w-screen h-[100dvh] bg-[#031712] overflow-hidden select-none">
+      {/* Full-Screen 3D WebGL Canvas Layer */}
+      <div className="absolute inset-0">
         <TornadoSurfers3DScene
           simRef={stateRef}
           onStep={handleStep}
@@ -327,37 +267,87 @@ const TornadoSurfersGame = ({ onBack, isMuted = false, onSaveScore }) => {
           onSwipeSlide={handleSlide}
           onDoubleTap={handleBoard}
         />
+      </div>
 
-        {/* Floating Top-Left Active Powerup Timers */}
-        {hud.phase === "playing" && (
-          <div className="pointer-events-none absolute top-3 left-3 flex flex-col gap-1.5 max-w-[165px]">
-            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-950/75 border border-cyan-400/30 backdrop-blur-sm">
-              <Shield className="w-3.5 h-3.5 text-cyan-400" />
-              <span className="text-xs font-bold text-cyan-200">
-                Boards: {hud.hoverboards}
-              </span>
-              <span className="text-[11px] font-semibold text-slate-400">
-                • {hud.speedMult.toFixed(1)}x
-              </span>
+      {/* Big & Clean Translucent Emerald Top HUD */}
+      <div className="pointer-events-none absolute top-0 inset-x-0 z-10 p-3 sm:p-4 pt-[max(12px,env(safe-area-inset-top))] flex items-start justify-between gap-2">
+        {/* Left: Exit + Pause */}
+        <div className="pointer-events-auto flex items-center gap-2">
+          <button
+            type="button"
+            onClick={onBack}
+            aria-label="Exit to Arcade"
+            className="h-11 px-3.5 rounded-2xl bg-emerald-950/65 hover:bg-emerald-900/80 border border-emerald-400/35 backdrop-blur-md text-emerald-100 flex items-center gap-1.5 text-sm font-bold shadow-lg transition active:scale-95"
+          >
+            <ArrowLeft className="w-5 h-5 text-emerald-300" />
+            <span className="hidden sm:inline">Exit</span>
+          </button>
+
+          {(hud.phase === "playing" || hud.phase === "paused") && (
+            <button
+              type="button"
+              onClick={togglePause}
+              aria-label={hud.phase === "paused" ? "Resume run" : "Pause run"}
+              className="h-11 w-11 rounded-2xl bg-emerald-950/65 hover:bg-emerald-900/80 border border-emerald-400/35 backdrop-blur-md text-emerald-200 flex items-center justify-center shadow-lg transition active:scale-95"
+            >
+              {hud.phase === "paused" ? <Play className="w-5 h-5" /> : <Pause className="w-5 h-5" />}
+            </button>
+          )}
+        </div>
+
+        {/* Center/Right: Big Legible Score + Coins + Stunts */}
+        <div className="flex flex-col items-end gap-1.5">
+          <div className="px-4 py-1.5 rounded-2xl bg-emerald-950/65 border border-emerald-400/35 backdrop-blur-md shadow-lg flex items-baseline gap-2.5">
+            <span className="text-xs font-bold uppercase tracking-wider text-emerald-300">
+              {hud.speedMult.toFixed(1)}x
+            </span>
+            <span className="text-2xl sm:text-3xl font-black tabular-nums text-white tracking-tight">
+              {hud.score.toLocaleString()}
+            </span>
+          </div>
+
+          <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-1.5 px-3 py-1 rounded-xl bg-emerald-950/65 border border-emerald-400/25 backdrop-blur-md">
+              <Coins className="w-4 h-4 text-amber-300" />
+              <span className="text-sm font-extrabold tabular-nums text-amber-200">{hud.coins}</span>
             </div>
 
+            <div className="flex items-center gap-1.5 px-3 py-1 rounded-xl bg-emerald-950/65 border border-emerald-400/25 backdrop-blur-md">
+              <Sparkles className="w-4 h-4 text-emerald-300" />
+              <span className="text-sm font-extrabold tabular-nums text-emerald-200">{hud.stunts}</span>
+            </div>
+
+            <div className="hidden sm:flex items-center gap-1.5 px-3 py-1 rounded-xl bg-emerald-950/65 border border-emerald-400/25 backdrop-blur-md">
+              <Trophy className="w-4 h-4 text-yellow-300" />
+              <span className="text-sm font-bold tabular-nums text-emerald-100">
+                {highScore.toLocaleString()}
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Floating Active Powerup Bars + Enforcer Alert */}
+      {hud.phase === "playing" && (
+        <div className="pointer-events-none absolute top-20 sm:top-24 inset-x-3 sm:inset-x-4 z-10 flex items-start justify-between">
+          <div className="flex flex-col gap-1.5 max-w-[175px]">
             {activeBars.map(({ key, label, max, color, text, Icon }) => {
-              const pct = Math.max(4, Math.min(100, (hud[key] / max) * 100));
+              const pct = Math.max(5, Math.min(100, (hud[key] / max) * 100));
               return (
                 <div
                   key={key}
-                  className="px-2.5 py-1.5 rounded-lg bg-slate-950/80 border border-white/10 backdrop-blur-sm"
+                  className="px-3 py-2 rounded-xl bg-emerald-950/65 border border-emerald-400/30 backdrop-blur-md shadow-md"
                 >
                   <div className="flex items-center justify-between gap-2 mb-1">
-                    <span className={`inline-flex items-center gap-1 text-[11px] font-extrabold ${text}`}>
-                      <Icon className="w-3 h-3" />
+                    <span className={`inline-flex items-center gap-1 text-xs font-extrabold ${text}`}>
+                      <Icon className="w-3.5 h-3.5" />
                       {label}
                     </span>
-                    <span className="text-[11px] font-bold tabular-nums text-slate-200">
+                    <span className="text-xs font-bold tabular-nums text-white">
                       {hud[key].toFixed(1)}s
                     </span>
                   </div>
-                  <div className="w-28 h-1.5 rounded-full bg-slate-800 overflow-hidden">
+                  <div className="w-28 h-1.5 rounded-full bg-emerald-950 overflow-hidden">
                     <div
                       className={`h-full rounded-full ${color} transition-all duration-75`}
                       style={{ width: `${pct}%` }}
@@ -367,209 +357,206 @@ const TornadoSurfersGame = ({ onBack, isMuted = false, onSaveScore }) => {
               );
             })}
           </div>
-        )}
 
-        {/* Floating Top-Right Chaser Warning & Combo Streak */}
-        {hud.phase === "playing" && (
-          <div className="pointer-events-none absolute top-3 right-3 flex flex-col items-end gap-1.5">
+          <div className="flex flex-col items-end gap-1.5">
             {hud.chaserTimer > 0 && (
-              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-950/90 border border-rose-400/60 text-rose-200 shadow-lg shadow-rose-950/60 animate-pulse">
-                <AlertTriangle className="w-4 h-4 text-rose-400" />
-                <span className="text-xs font-black tracking-wide">
-                  ENFORCER LOCK • {hud.chaserTimer.toFixed(1)}s
+              <div className="flex items-center gap-1.5 px-3.5 py-2 rounded-2xl bg-rose-950/80 border border-rose-400/60 text-rose-100 backdrop-blur-md shadow-lg animate-pulse">
+                <AlertTriangle className="w-4 h-4 text-rose-300" />
+                <span className="text-xs sm:text-sm font-black tracking-wide">
+                  CHASER LOCK • {hud.chaserTimer.toFixed(1)}s
                 </span>
               </div>
             )}
             {hud.combo > 1 && (
-              <div className="px-2.5 py-1 rounded-xl bg-amber-950/80 border border-amber-400/40 text-xs font-black text-amber-300 backdrop-blur-sm">
-                {hud.combo}x COIN COMBO
+              <div className="px-3 py-1.5 rounded-xl bg-emerald-950/70 border border-emerald-400/40 backdrop-blur-md text-xs sm:text-sm font-black text-lime-300">
+                {hud.combo}x STREAK
               </div>
             )}
           </div>
-        )}
+        </div>
+      )}
 
-        {/* READY OVERLAY */}
-        {hud.phase === "ready" && (
-          <div className="absolute inset-0 flex items-center justify-center p-4 bg-slate-950/65 backdrop-blur-sm">
-            <div className="w-full max-w-md rounded-2xl border border-cyan-400/35 bg-slate-900/95 p-5 shadow-2xl text-center">
-              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-cyan-500/15 border border-cyan-400/30 text-xs font-bold text-cyan-300 mb-3">
-                <Zap className="w-3.5 h-3.5" />
-                THREE.JS 3D EDITION
+      {/* Floating Bottom Semi-Opaque Emerald Thumb Deck */}
+      {hud.phase === "playing" && (
+        <div className="pointer-events-none absolute bottom-3 sm:bottom-5 inset-x-3 sm:inset-x-6 z-10 pb-[env(safe-area-inset-bottom,0px)]">
+          <div className="max-w-xl mx-auto grid grid-cols-5 gap-2">
+            <button
+              type="button"
+              onClick={() => handleMove(-1)}
+              aria-label="Move Left"
+              className="pointer-events-auto h-14 sm:h-12 rounded-2xl bg-emerald-950/55 hover:bg-emerald-900/75 border border-emerald-400/35 backdrop-blur-md text-emerald-100 flex items-center justify-center touch-manipulation transition active:scale-95"
+            >
+              <ChevronLeft className="w-7 h-7" />
+            </button>
+
+            <button
+              type="button"
+              onClick={handleJump}
+              aria-label="Jump"
+              className="pointer-events-auto h-14 sm:h-12 rounded-2xl bg-emerald-950/55 hover:bg-emerald-900/75 border border-emerald-400/35 backdrop-blur-md text-lime-200 flex items-center justify-center touch-manipulation transition active:scale-95"
+            >
+              <ChevronUp className="w-7 h-7" />
+            </button>
+
+            <button
+              type="button"
+              onClick={handleBoard}
+              aria-label="Activate Hoverboard Shield"
+              className={`pointer-events-auto h-14 sm:h-12 rounded-2xl border backdrop-blur-md flex items-center justify-center gap-1.5 text-sm font-black touch-manipulation transition active:scale-95 ${
+                hud.hoverboardTimer > 0
+                  ? "bg-emerald-400/35 border-emerald-300 text-white"
+                  : "bg-emerald-950/55 hover:bg-emerald-900/75 border-emerald-400/40 text-emerald-200"
+              }`}
+            >
+              <Shield className="w-5 h-5" />
+              <span className="tabular-nums">{hud.hoverboards}</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={handleSlide}
+              aria-label="Slide or Slam"
+              className="pointer-events-auto h-14 sm:h-12 rounded-2xl bg-emerald-950/55 hover:bg-emerald-900/75 border border-emerald-400/35 backdrop-blur-md text-amber-200 flex items-center justify-center touch-manipulation transition active:scale-95"
+            >
+              <ChevronDown className="w-7 h-7" />
+            </button>
+
+            <button
+              type="button"
+              onClick={() => handleMove(1)}
+              aria-label="Move Right"
+              className="pointer-events-auto h-14 sm:h-12 rounded-2xl bg-emerald-950/55 hover:bg-emerald-900/75 border border-emerald-400/35 backdrop-blur-md text-emerald-100 flex items-center justify-center touch-manipulation transition active:scale-95"
+            >
+              <ChevronRight className="w-7 h-7" />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* READY OVERLAY (Clean Translucent Emerald Glass) */}
+      {hud.phase === "ready" && (
+        <div className="absolute inset-0 z-20 flex items-center justify-center p-5 bg-emerald-950/45 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-3xl border border-emerald-400/35 bg-emerald-950/75 backdrop-blur-xl p-6 sm:p-7 shadow-2xl text-center">
+            <div className="inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full bg-emerald-400/20 border border-emerald-300/35 text-xs font-extrabold text-emerald-200 mb-3">
+              <Zap className="w-4 h-4" />
+              EMERALD 3D RUNNER
+            </div>
+
+            <h2 className="text-3xl sm:text-4xl font-black tracking-tight text-white">
+              Tornado Surfers
+            </h2>
+            <p className="mt-2 text-sm text-emerald-100/85 leading-relaxed">
+              Swipe anywhere to weave through glass Express Trains, leap roofs with Super Boots, and double-tap for your Hoverboard Shield.
+            </p>
+
+            <div className="mt-5 grid grid-cols-2 gap-2.5 text-left text-xs">
+              <div className="p-3 rounded-2xl bg-emerald-900/45 border border-emerald-400/25">
+                <div className="font-extrabold text-emerald-200">Phone Touch</div>
+                <div className="text-emerald-100/75 mt-0.5">Swipe track or tap bottom dock</div>
               </div>
-              <h2 className="text-2xl sm:text-3xl font-black tracking-tight text-white">
-                Tornado Surfers
-              </h2>
-              <p className="mt-1.5 text-xs sm:text-sm text-slate-300 leading-relaxed">
-                Dodge Express Moving Trains, vault rooftops with Super Boots, chain{" "}
-                <span className="text-fuchsia-300 font-semibold">+50 Stunts</span>, and fire your Hoverboard EMP shield.
-              </p>
-
-              <div className="mt-4 grid grid-cols-2 gap-2 text-left text-xs">
-                <div className="p-2.5 rounded-xl bg-slate-950/80 border border-white/10">
-                  <div className="font-bold text-cyan-300">Touch / Mobile</div>
-                  <div className="text-slate-400 mt-0.5">Swipe L/R/Up/Down • Double-tap Shield</div>
-                </div>
-                <div className="p-2.5 rounded-xl bg-slate-950/80 border border-white/10">
-                  <div className="font-bold text-fuchsia-300">Keyboard</div>
-                  <div className="text-slate-400 mt-0.5">WASD / Arrows • Space Shield • P Pause</div>
-                </div>
+              <div className="p-3 rounded-2xl bg-emerald-900/45 border border-emerald-400/25">
+                <div className="font-extrabold text-lime-200">Keyboard</div>
+                <div className="text-emerald-100/75 mt-0.5">WASD / Arrows • Space Shield</div>
               </div>
+            </div>
 
+            <button
+              type="button"
+              onClick={startNewRun}
+              className="mt-5 w-full py-4 rounded-2xl bg-gradient-to-r from-emerald-400 to-lime-300 hover:brightness-105 text-emerald-950 font-black text-base tracking-wide flex items-center justify-center gap-2 shadow-xl shadow-emerald-500/25 transition active:scale-95"
+            >
+              <Play className="w-5 h-5 fill-current" />
+              PLAY FULLSCREEN
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* PAUSED OVERLAY */}
+      {hud.phase === "paused" && (
+        <div className="absolute inset-0 z-20 flex items-center justify-center p-5 bg-emerald-950/60 backdrop-blur-md">
+          <div className="w-full max-w-xs rounded-3xl border border-emerald-400/35 bg-emerald-950/80 backdrop-blur-xl p-6 text-center shadow-2xl">
+            <h3 className="text-2xl font-black text-white">PAUSED</h3>
+            <p className="text-sm text-emerald-200/80 mt-1">
+              Score: {hud.score.toLocaleString()} • {hud.coins} Coins
+            </p>
+            <div className="mt-5 flex flex-col gap-2.5">
+              <button
+                type="button"
+                onClick={togglePause}
+                className="w-full py-3.5 rounded-2xl bg-emerald-400 hover:bg-emerald-300 text-emerald-950 font-black text-base flex items-center justify-center gap-2 transition active:scale-95"
+              >
+                <Play className="w-5 h-5 fill-current" />
+                RESUME
+              </button>
               <button
                 type="button"
                 onClick={startNewRun}
-                className="mt-4 w-full py-3 rounded-xl bg-gradient-to-r from-cyan-500 via-sky-500 to-fuchsia-500 hover:brightness-110 text-slate-950 font-black text-sm tracking-wide flex items-center justify-center gap-2 shadow-lg shadow-cyan-500/30 transition active:scale-95"
+                className="w-full py-3.5 rounded-2xl bg-emerald-900/70 hover:bg-emerald-800/80 border border-emerald-400/30 text-emerald-100 font-bold text-sm flex items-center justify-center gap-2 transition active:scale-95"
               >
-                <Play className="w-4 h-4 fill-current" />
-                LAUNCH 3D RUN
+                <RotateCcw className="w-4 h-4" />
+                RESTART
               </button>
             </div>
           </div>
-        )}
+        </div>
+      )}
 
-        {/* PAUSED OVERLAY */}
-        {hud.phase === "paused" && (
-          <div className="absolute inset-0 flex items-center justify-center p-4 bg-slate-950/75 backdrop-blur-md">
-            <div className="w-full max-w-xs rounded-2xl border border-cyan-400/35 bg-slate-900/95 p-5 text-center shadow-2xl">
-              <h3 className="text-xl font-black text-white">RUN PAUSED</h3>
-              <p className="text-xs text-slate-400 mt-1">
-                Score: {hud.score.toLocaleString()} • {hud.coins} Coins
-              </p>
-              <div className="mt-4 flex flex-col gap-2">
-                <button
-                  type="button"
-                  onClick={togglePause}
-                  className="w-full py-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-black text-sm flex items-center justify-center gap-2 transition active:scale-95"
-                >
-                  <Play className="w-4 h-4 fill-current" />
-                  RESUME
-                </button>
-                <button
-                  type="button"
-                  onClick={startNewRun}
-                  className="w-full py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-white/10 text-white font-bold text-sm flex items-center justify-center gap-2 transition active:scale-95"
-                >
-                  <RotateCcw className="w-4 h-4" />
-                  RESTART RUN
-                </button>
+      {/* GAMEOVER OVERLAY */}
+      {hud.phase === "gameover" && (
+        <div className="absolute inset-0 z-20 flex items-center justify-center p-5 bg-emerald-950/65 backdrop-blur-md">
+          <div className="w-full max-w-sm rounded-3xl border border-emerald-400/40 bg-emerald-950/85 backdrop-blur-xl p-6 text-center shadow-2xl">
+            {isNewBest && (
+              <div className="inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full bg-lime-400/20 border border-lime-300/40 text-xs font-black text-lime-200 mb-2">
+                <Trophy className="w-4 h-4" />
+                NEW HIGH SCORE!
+              </div>
+            )}
+            <h3 className="text-3xl font-black text-white">RUN ENDED</h3>
+
+            <div className="mt-5 grid grid-cols-2 gap-2.5">
+              <div className="p-3 rounded-2xl bg-emerald-900/50 border border-emerald-400/25">
+                <div className="text-xs font-semibold text-emerald-200/75">SCORE</div>
+                <div className="text-xl font-black tabular-nums text-white mt-0.5">
+                  {hud.score.toLocaleString()}
+                </div>
+              </div>
+              <div className="p-3 rounded-2xl bg-emerald-900/50 border border-emerald-400/25">
+                <div className="text-xs font-semibold text-emerald-200/75">BEST</div>
+                <div className="text-xl font-black tabular-nums text-lime-300 mt-0.5">
+                  {highScore.toLocaleString()}
+                </div>
+              </div>
+              <div className="p-3 rounded-2xl bg-emerald-900/50 border border-emerald-400/25">
+                <div className="text-xs font-semibold text-emerald-200/75">COINS</div>
+                <div className="text-lg font-bold tabular-nums text-amber-300 mt-0.5">{hud.coins}</div>
+              </div>
+              <div className="p-3 rounded-2xl bg-emerald-900/50 border border-emerald-400/25">
+                <div className="text-xs font-semibold text-emerald-200/75">STUNTS</div>
+                <div className="text-lg font-bold tabular-nums text-emerald-300 mt-0.5">{hud.stunts}</div>
               </div>
             </div>
-          </div>
-        )}
 
-        {/* GAMEOVER OVERLAY */}
-        {hud.phase === "gameover" && (
-          <div className="absolute inset-0 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md">
-            <div className="w-full max-w-sm rounded-2xl border border-rose-500/40 bg-slate-900/95 p-5 text-center shadow-2xl">
-              {isNewBest && (
-                <div className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-amber-500/20 border border-amber-400/40 text-xs font-black text-amber-300 mb-2">
-                  <Trophy className="w-3.5 h-3.5" />
-                  NEW PERSONAL RECORD!
-                </div>
-              )}
-              <h3 className="text-2xl font-black text-white">WIPED OUT!</h3>
-
-              <div className="mt-4 grid grid-cols-2 gap-2">
-                <div className="p-2.5 rounded-xl bg-slate-950/85 border border-cyan-400/20">
-                  <div className="text-[11px] font-semibold text-slate-400">FINAL SCORE</div>
-                  <div className="text-lg font-black tabular-nums text-cyan-300">
-                    {hud.score.toLocaleString()}
-                  </div>
-                </div>
-                <div className="p-2.5 rounded-xl bg-slate-950/85 border border-yellow-400/20">
-                  <div className="text-[11px] font-semibold text-slate-400">BEST RECORD</div>
-                  <div className="text-lg font-black tabular-nums text-yellow-300">
-                    {highScore.toLocaleString()}
-                  </div>
-                </div>
-                <div className="p-2.5 rounded-xl bg-slate-950/85 border border-amber-400/20">
-                  <div className="text-[11px] font-semibold text-slate-400">COINS</div>
-                  <div className="text-base font-bold tabular-nums text-amber-300">{hud.coins}</div>
-                </div>
-                <div className="p-2.5 rounded-xl bg-slate-950/85 border border-fuchsia-400/20">
-                  <div className="text-[11px] font-semibold text-slate-400">AIR STUNTS</div>
-                  <div className="text-base font-bold tabular-nums text-fuchsia-300">{hud.stunts}</div>
-                </div>
-              </div>
-
-              <div className="mt-4 flex gap-2">
-                <button
-                  type="button"
-                  onClick={startNewRun}
-                  className="flex-1 py-3 rounded-xl bg-gradient-to-r from-cyan-500 to-fuchsia-500 hover:brightness-110 text-slate-950 font-black text-sm flex items-center justify-center gap-2 transition active:scale-95"
-                >
-                  <RotateCcw className="w-4 h-4" />
-                  RUN AGAIN
-                </button>
-                <button
-                  type="button"
-                  onClick={onBack}
-                  className="px-4 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 border border-white/10 text-slate-200 font-bold text-sm transition active:scale-95"
-                >
-                  EXIT
-                </button>
-              </div>
+            <div className="mt-5 flex gap-2.5">
+              <button
+                type="button"
+                onClick={startNewRun}
+                className="flex-1 py-4 rounded-2xl bg-gradient-to-r from-emerald-400 to-lime-300 hover:brightness-105 text-emerald-950 font-black text-base flex items-center justify-center gap-2 shadow-lg transition active:scale-95"
+              >
+                <RotateCcw className="w-5 h-5" />
+                RUN AGAIN
+              </button>
+              <button
+                type="button"
+                onClick={onBack}
+                className="px-5 py-4 rounded-2xl bg-emerald-900/70 hover:bg-emerald-800/80 border border-emerald-400/30 text-emerald-100 font-bold text-sm transition active:scale-95"
+              >
+                EXIT
+              </button>
             </div>
           </div>
-        )}
-      </div>
-
-      {/* Thumb-Friendly Tactical Deck (Mobile Tap + Desktop Click) */}
-      <div className="grid grid-cols-5 gap-2">
-        <button
-          type="button"
-          onClick={() => handleMove(-1)}
-          aria-label="Move Left"
-          className="h-12 sm:h-11 rounded-xl bg-slate-900/90 hover:bg-slate-800 border border-cyan-500/25 text-cyan-300 flex items-center justify-center gap-1 text-xs font-bold touch-manipulation transition active:scale-95 active:bg-cyan-500/20"
-        >
-          <ChevronLeft className="w-5 h-5" />
-          <span className="hidden sm:inline">LEFT</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={handleJump}
-          aria-label="Jump"
-          className="h-12 sm:h-11 rounded-xl bg-slate-900/90 hover:bg-slate-800 border border-emerald-500/30 text-emerald-300 flex items-center justify-center gap-1 text-xs font-bold touch-manipulation transition active:scale-95 active:bg-emerald-500/20"
-        >
-          <ChevronUp className="w-5 h-5" />
-          <span className="hidden sm:inline">JUMP</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={handleBoard}
-          aria-label="Activate Hoverboard Shield"
-          className={`h-12 sm:h-11 rounded-xl border flex items-center justify-center gap-1.5 text-xs font-black touch-manipulation transition active:scale-95 ${
-            hud.hoverboardTimer > 0
-              ? "bg-cyan-500/25 border-cyan-400 text-cyan-200 shadow-inner shadow-cyan-500/30"
-              : "bg-slate-900/90 hover:bg-slate-800 border-fuchsia-500/35 text-fuchsia-300"
-          }`}
-        >
-          <Shield className="w-4 h-4" />
-          <span className="tabular-nums">{hud.hoverboards}</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={handleSlide}
-          aria-label="Slide or Air Slam"
-          className="h-12 sm:h-11 rounded-xl bg-slate-900/90 hover:bg-slate-800 border border-amber-500/30 text-amber-300 flex items-center justify-center gap-1 text-xs font-bold touch-manipulation transition active:scale-95 active:bg-amber-500/20"
-        >
-          <ChevronDown className="w-5 h-5" />
-          <span className="hidden sm:inline">SLIDE</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => handleMove(1)}
-          aria-label="Move Right"
-          className="h-12 sm:h-11 rounded-xl bg-slate-900/90 hover:bg-slate-800 border border-cyan-500/25 text-cyan-300 flex items-center justify-center gap-1 text-xs font-bold touch-manipulation transition active:scale-95 active:bg-cyan-500/20"
-        >
-          <span className="hidden sm:inline">RIGHT</span>
-          <ChevronRight className="w-5 h-5" />
-        </button>
-      </div>
+        </div>
+      )}
     </div>
   );
 };
