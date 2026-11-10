@@ -2296,34 +2296,6 @@ const Messages = () => {
                         <div className="pointer-events-none fixed inset-0 z-[55] cyber-scanlines opacity-30 mix-blend-screen" />
                     )}
 
-                    {/* Quantum Lattice Telemetry & Cyber HUD Widget (Only floating when no chat is open) */}
-                    {!isMobile && !enrichedSelected && (
-                        <div className="hidden lg:flex fixed top-3 right-3 z-[60] items-center gap-2 rounded-full border border-cyan-500/30 bg-black/80 px-3 py-1.5 backdrop-blur-2xl shadow-[0_0_24px_rgba(6,182,212,0.25)] group transition-all hover:border-cyan-400">
-                            <span className="relative flex h-2 w-2">
-                                <span className="absolute inline-flex h-full w-full animate-ping rounded-full opacity-75" style={{ background: statusColors[securityStatus] || "#22c55e" }} />
-                                <span className="relative inline-flex h-2 w-2 rounded-full shadow-[0_0_8px_rgba(34,197,94,0.9)]" style={{ background: statusColors[securityStatus] || "#22c55e" }} />
-                            </span>
-                            <span className="text-[10px] font-mono font-black uppercase tracking-wider text-cyan-300 drop-shadow-[0_0_8px_rgba(34,211,238,0.5)]">
-                                {securityStatus}
-                            </span>
-                            <span className="text-[9px] font-mono text-cyan-400/70 border-l border-white/15 pl-1.5">
-                                {quantumPing}ms
-                            </span>
-                            <button
-                                type="button"
-                                onClick={toggleHoloScanlines}
-                                title={holoScanlines ? "Disable Holographic HUD Scanlines" : "Enable Sci-Fi Holographic HUD Scanlines"}
-                                className={`text-[8.5px] font-mono px-2 py-0.5 rounded-full border transition-all cursor-pointer ${
-                                    holoScanlines 
-                                        ? "bg-cyan-500/25 border-cyan-400 text-cyan-200 shadow-[0_0_12px_rgba(6,182,212,0.6)] font-bold animate-pulse" 
-                                        : "bg-white/5 border-white/10 text-white/50 hover:text-cyan-300 hover:border-cyan-500/40"
-                                }`}
-                            >
-                                HOLO {holoScanlines ? "ON" : "OFF"}
-                            </button>
-                        </div>
-                    )}
-
                     {/* Conversation list */}
                     <AnimatePresence mode="wait">
                         {showSidebar && (

@@ -1,3 +1,4 @@
+import P2PMediaCard from "../../../Components/P2PMediaCard";
 import { Volume2, VolumeX, Languages, GitFork, Reply, Trash2, X, Download, Check, RotateCw, Flame, Eye, Pin, Zap } from "lucide-react";
 import React, { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import PropTypes from "prop-types";
@@ -436,136 +437,15 @@ const FileLink = ({ url }) => {
 /* ═══════════════════════════════════════════════════════════════
    P2P ZERO-SERVER MEDIA PREVIEW COMPONENT
    ═══════════════════════════════════════════════════════════════ */
-const P2PMediaPreview = ({ rawMessage, senderId, socket, onOpenLightbox }) => {
-    const [meta, setMeta] = useState(null);
-    const [localUrl, setLocalUrl] = useState(null);
-    const [downloading, setDownloading] = useState(false);
-    const [progress, setProgress] = useState(0);
-
-    useEffect(() => {
-        try {
-            const decoded = rawMessage || "";
-            if (!decoded) return;
-            const jsonPart = decoded.replace(/^⚡ P2P_MEDIA\s*/, "").trim();
-            const parsed = JSON.parse(jsonPart);
-            setMeta(parsed);
-
-            // Check if file is already saved in local IndexedDB or cache
-            getLocalMediaUrl(parsed.fileId).then((url) => {
-                if (url) {
-                    setLocalUrl(url);
-                } else if (socket && socket.readyState === WebSocket.OPEN) {
-                    // Auto-start download if recipient doesn't have it yet
-                    setDownloading(true);
-                    requestP2PDownload(
-                        parsed.fileId,
-                        senderId,
-                        socket,
-                        (p) => setProgress(p),
-                        (blob) => {
-                            setDownloading(false);
-                            const objectUrl = URL.createObjectURL(blob);
-                            setLocalUrl(objectUrl);
-                        }
-                    );
-                }
-            });
-        } catch (e) {
-            console.error("Failed to parse P2P media metadata:", e, rawMessage);
-            // Fallback object so bubble is never blank
-            setMeta({
-                name: "Photo Attachment",
-                type: "image/jpeg",
-                size: 0,
-                fileId: "unknown"
-            });
-        }
-    }, [rawMessage, senderId, socket]);
-
-    const isImage = !meta || meta.type?.startsWith("image/") || IMAGE_EXTENSIONS.test(meta?.name || "");
-
-    const handleDownload = () => {
-        if (!meta?.fileId) return;
-        setDownloading(true);
-        requestP2PDownload(
-            meta.fileId,
-            senderId,
-            socket,
-            (percent) => setProgress(percent),
-            (blob) => {
-                setDownloading(false);
-                const url = URL.createObjectURL(blob);
-                setLocalUrl(url);
-            }
-        );
-    };
-
-    if (localUrl && isImage) {
-        return (
-            <div className="mt-1 flex flex-col gap-1">
-                <ImagePreview imageUrl={localUrl} onOpenLightbox={onOpenLightbox} />
-                {meta?.name && (
-                    <div className="flex items-center justify-between text-[10px] text-white/40 px-1">
-                        <span className="truncate max-w-[160px]">{meta.name}</span>
-                        <span className="font-mono text-amber-400/80">⚡ P2P Vault</span>
-                    </div>
-                )}
-            </div>
-        );
-    }
-
-    const formatBytes = (bytes) => {
-        if (!bytes) return "0 B";
-        const k = 1024;
-        const sizes = ["B", "KB", "MB", "GB"];
-        const i = Math.floor(Math.log(bytes) / Math.log(k));
-        return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + " " + sizes[i];
-    };
-
+const P2PMediaPreview = ({ rawMessage, senderId, isMe, myUserId, onOpenLightbox }) => {
     return (
-        <div className="mt-1.5 rounded-2xl border border-white/[0.08] bg-black/40 p-3 flex flex-col gap-2 min-w-[220px]">
-            <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center flex-shrink-0">
-                    <span className="text-amber-400 text-sm">⚡</span>
-                </div>
-                <div className="min-w-0 flex-1">
-                    <p className="text-xs font-semibold text-white/90 truncate">{meta?.name || "Photo"}</p>
-                    <p className="text-[10px] text-amber-300/60 font-mono">{formatBytes(meta?.size)} • P2P Vault</p>
-                </div>
-            </div>
-
-            {localUrl ? (
-                <button
-                    type="button"
-                    onClick={(e) => {
-                        e.stopPropagation();
-                        downloadFile(localUrl, meta?.name || "photo");
-                    }}
-                    className="w-full py-1.5 px-3 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 text-xs font-medium border border-emerald-500/30 flex items-center justify-center gap-1.5 transition-colors"
-                >
-                    <Check className="w-3.5 h-3.5 text-emerald-400" />
-                    <span>Saved Locally</span>
-                </button>
-            ) : (
-                <button
-                    type="button"
-                    onClick={(e) => {
-                        e.stopPropagation();
-                        if (!downloading) handleDownload();
-                    }}
-                    disabled={downloading}
-                    className="w-full py-1.5 px-3 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 text-xs font-medium border border-amber-500/30 flex items-center justify-center gap-1.5 transition-colors disabled:opacity-50"
-                >
-                    {downloading ? (
-                        <span>Downloading photo... {progress}%</span>
-                    ) : (
-                        <>
-                            <span>⚡ Download from Peer</span>
-                        </>
-                    )}
-                </button>
-            )}
-        </div>
+        <P2PMediaCard
+            rawMessage={rawMessage}
+            senderId={senderId}
+            isMe={isMe}
+            myUserId={myUserId}
+            onOpenLightbox={onOpenLightbox}
+        />
     );
 };
 
@@ -1147,6 +1027,8 @@ const MessageBubble = React.memo(({
                 <P2PMediaPreview
                     rawMessage={actualMessage}
                     senderId={msg.sender_id}
+                    isMe={isMe}
+                    myUserId={myUserId}
                     socket={socket}
                     onOpenLightbox={setLightboxImage}
                 />

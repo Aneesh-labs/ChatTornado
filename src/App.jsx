@@ -16,11 +16,19 @@ import VerifyEmail from "./Pages/VerifyEmail";
 import AdminDashboard from "./Pages/Dashboard/AdminDashboard";
 import DarkWebHub from "./Pages/Dashboard/DarkWebHub";
 import { setupPanicKeyListener } from "./utils/panicKey";
+import { setupNativeMobileIntegration } from "./utils/nativeMobileIntegration";
 
 export default function App() {
   useEffect(() => {
-    const cleanup = setupPanicKeyListener();
-    return cleanup;
+    const cleanupPanic = setupPanicKeyListener();
+    let cleanupNative = null;
+    setupNativeMobileIntegration().then((cleanup) => {
+      cleanupNative = cleanup;
+    });
+    return () => {
+      cleanupPanic?.();
+      cleanupNative?.();
+    };
   }, []);
 
   return (

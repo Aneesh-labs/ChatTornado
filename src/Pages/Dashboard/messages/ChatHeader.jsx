@@ -250,7 +250,7 @@ const ChatHeader = React.memo(({
 
 
     return (
-        <div className={`relative z-30 flex items-center justify-between px-3 sm:px-6 py-2.5 sm:py-3.5 border-b border-cyan-500/20 backdrop-blur-2xl bg-[#090c14]/90 shadow-[0_4px_24px_rgba(0,0,0,0.45)] flex-shrink-0 w-full select-none`}>
+        <div className={`relative z-30 flex items-center justify-between gap-2 overflow-hidden flex-nowrap px-3 sm:px-6 py-2.5 sm:py-3.5 border-b border-cyan-500/20 backdrop-blur-2xl bg-[#090c14]/90 shadow-[0_4px_24px_rgba(0,0,0,0.45)] flex-shrink-0 w-full select-none`}>
             {/* Sci-Fi Hologram Sweeper Beam */}
             <div className="pointer-events-none absolute top-0 left-0 right-0 h-[1.5px] bg-gradient-to-r from-transparent via-cyan-400 to-transparent opacity-60 animate-pulse shadow-[0_0_8px_rgba(34,211,238,0.8)]" />
             <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
@@ -383,6 +383,34 @@ const ChatHeader = React.memo(({
                                     <span>Personalize</span>
                                 </button>
                             </>
+                        )}
+
+                        {/* Inline Quantum Lattice HUD Telemetry Widget */}
+                        {quantumHud && (
+                            <div className="hidden lg:inline-flex items-center gap-1.5 rounded-full border border-cyan-500/30 bg-black/60 px-2 py-0.5 backdrop-blur-xl shrink-0">
+                                <span className="relative flex h-1.5 w-1.5">
+                                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full opacity-75" style={{ background: quantumHud.color || "#22c55e" }} />
+                                    <span className="relative inline-flex h-1.5 w-1.5 rounded-full shadow-[0_0_6px_rgba(34,197,94,0.9)]" style={{ background: quantumHud.color || "#22c55e" }} />
+                                </span>
+                                <span className="text-[9px] font-mono font-black uppercase tracking-wider text-cyan-300">
+                                    {quantumHud.securityStatus}
+                                </span>
+                                <span className="text-[8.5px] font-mono text-cyan-400/70 border-l border-white/15 pl-1">
+                                    {quantumHud.quantumPing}ms
+                                </span>
+                                <button
+                                    type="button"
+                                    onClick={quantumHud.toggleHoloScanlines}
+                                    title={quantumHud.holoScanlines ? "Disable Holographic HUD Scanlines" : "Enable Sci-Fi Holographic HUD Scanlines"}
+                                    className={`text-[8px] font-mono px-1.5 py-0.5 rounded-full border transition-all cursor-pointer ${
+                                        quantumHud.holoScanlines 
+                                            ? "bg-cyan-500/25 border-cyan-400 text-cyan-200 shadow-[0_0_10px_rgba(6,182,212,0.6)] font-bold animate-pulse" 
+                                            : "bg-white/5 border-white/10 text-white/50 hover:text-cyan-300 hover:border-cyan-500/40"
+                                    }`}
+                                >
+                                    HOLO {quantumHud.holoScanlines ? "ON" : "OFF"}
+                                </button>
+                            </div>
                         )}
                     </div>
                     
@@ -755,34 +783,6 @@ const ChatHeader = React.memo(({
                             )}
                         </AnimatePresence>
                     </div>
-
-                    {/* Inline Quantum Lattice HUD Widget (Zero-Overlap Flow) */}
-                    {quantumHud && (
-                        <div className="hidden xl:flex items-center gap-1.5 rounded-full border border-cyan-500/30 bg-black/60 px-2.5 py-1 backdrop-blur-xl shrink-0">
-                            <span className="relative flex h-2 w-2">
-                                <span className="absolute inline-flex h-full w-full animate-ping rounded-full opacity-75" style={{ background: quantumHud.color || "#22c55e" }} />
-                                <span className="relative inline-flex h-2 w-2 rounded-full shadow-[0_0_8px_rgba(34,197,94,0.9)]" style={{ background: quantumHud.color || "#22c55e" }} />
-                            </span>
-                            <span className="text-[10px] font-mono font-black uppercase tracking-wider text-cyan-300">
-                                {quantumHud.securityStatus}
-                            </span>
-                            <span className="text-[9px] font-mono text-cyan-400/70 border-l border-white/15 pl-1.5">
-                                {quantumHud.quantumPing}ms
-                            </span>
-                            <button
-                                type="button"
-                                onClick={quantumHud.toggleHoloScanlines}
-                                title={quantumHud.holoScanlines ? "Disable Holographic HUD Scanlines" : "Enable Sci-Fi Holographic HUD Scanlines"}
-                                className={`text-[8.5px] font-mono px-1.5 py-0.5 rounded-full border transition-all cursor-pointer ${
-                                    quantumHud.holoScanlines 
-                                        ? "bg-cyan-500/25 border-cyan-400 text-cyan-200 shadow-[0_0_12px_rgba(6,182,212,0.6)] font-bold animate-pulse" 
-                                        : "bg-white/5 border-white/10 text-white/50 hover:text-cyan-300 hover:border-cyan-500/40"
-                                }`}
-                            >
-                                HOLO {quantumHud.holoScanlines ? "ON" : "OFF"}
-                            </button>
-                        </div>
-                    )}
 
                     {/* Shining Interactive Demo Button */}
                     <button

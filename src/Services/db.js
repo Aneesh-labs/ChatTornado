@@ -5,7 +5,8 @@
  */
 
 const DB_NAME = "ChatTornadoVault";
-const DB_VERSION = 3;
+const DB_VERSION = 4;
+const STORE_OUTBOX = "p2p_outbox";
 const STORE_STATUS = "ephemeral_status";
 const STORE_MEDIA = "p2p_media";
 const STORE_MESSAGES = "local_messages";
@@ -37,6 +38,12 @@ function openDB() {
 
             if (!db.objectStoreNames.contains(STORE_STATUS)) {
                 db.createObjectStore(STORE_STATUS, { keyPath: "id" });
+            }
+
+            if (!db.objectStoreNames.contains(STORE_OUTBOX)) {
+                const outboxStore = db.createObjectStore(STORE_OUTBOX, { keyPath: "transferId" });
+                outboxStore.createIndex("recipientId", "recipientId", { unique: false });
+                outboxStore.createIndex("status", "status", { unique: false });
             }
         };
 
@@ -395,3 +402,89 @@ export default {
     clearLocalStatusStory,
     clearVault,
 };
+
+
+/* ==========================================================================
+   P2P OFFLINE OUTBOX ENGINE (Zero Cloud Storage, Device Retained)
+   ========================================================================== */
+
+/**
+ * Save an outgoing P2P media file into local Outbox while waiting for peer to come online.
+ */
+export async function saveOutboxTransfer(transferId, file, metadata = {}) {
+    const db = await openDB();
+    return new Promise((resolve, reject) => {
+        const tx = db.transaction(STORE_OUTBOX, "readwrite");
+        const store = tx.objectStore(STORE_OUTBOX);
+        const record = {
+            transferId,
+            file,
+            filename: metadata.filename || file?.name || "file",
+            fileSize: metadata.fileSize || file?.size || 0,
+            mimeType: metadata.mimeType || file?.type || "application/octet-stream",
+            recipientId: metadata.recipientId,
+            recipientUsername: metadata.recipientUsername || "",
+            senderId: metadata.senderId,
+            status: metadata.status || "WAITING_FOR_PEER",
+            sha256: metadata.sha256 || "",
+            createdAt: metadata.createdAt || Date.now(),
+            attempts: 0,
+            lastAttempt: Date.now()
+        };
+        const req = store.put(record);
+        req.onsuccess = () => resolve(record);
+        req.onerror = (e) => reject(e.target.error);
+    });
+}
+
+export async function getOutboxTransfer(transferId) {
+    const db = await openDB();
+    return new Promise((resolve, reject) => {
+        const tx = db.transaction(STORE_OUTBOX, "readonly");
+        const store = tx.objectStore(STORE_OUTBOX);
+        const req = store.get(transferId);
+        req.onsuccess = () => resolve(req.result || null);
+        req.onerror = (e) => reject(e.target.error);
+    });
+}
+
+export async function listOutboxTransfers() {
+    const db = await openDB();
+    return new Promise((resolve, reject) => {
+        const tx = db.transaction(STORE_OUTBOX, "readonly");
+        const store = tx.objectStore(STORE_OUTBOX);
+        const req = store.getAll();
+        req.onsuccess = () => resolve(req.result || []);
+        req.onerror = (e) => reject(e.target.error);
+    });
+}
+
+export async function updateOutboxStatus(transferId, status) {
+    const db = await openDB();
+    return new Promise((resolve, reject) => {
+        const tx = db.transaction(STORE_OUTBOX, "readwrite");
+        const store = tx.objectStore(STORE_OUTBOX);
+        const req = store.get(transferId);
+        req.onsuccess = () => {
+            const record = req.result;
+            if (record) {
+                record.status = status;
+                record.lastAttempt = Date.now();
+                store.put(record);
+            }
+            resolve(record);
+        };
+        req.onerror = (e) => reject(e.target.error);
+    });
+}
+
+export async function deleteOutboxTransfer(transferId) {
+    const db = await openDB();
+    return new Promise((resolve, reject) => {
+        const tx = db.transaction(STORE_OUTBOX, "readwrite");
+        const store = tx.objectStore(STORE_OUTBOX);
+        const req = store.delete(transferId);
+        req.onsuccess = () => resolve(true);
+        req.onerror = (e) => reject(e.target.error);
+    });
+}

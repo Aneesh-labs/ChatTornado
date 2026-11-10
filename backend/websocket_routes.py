@@ -724,14 +724,76 @@ async def websocket_endpoint(websocket: WebSocket):
                 continue
 
             # ==========================
-            # P2P Direct File Transfer Signals
+            # P2P WebRTC Direct Media Signaling (Zero Server Media Storage)
             # ==========================
-            if data.get("type") in {"p2p_offer", "p2p_request", "p2p_chunk", "p2p_complete", "p2p_wipe"}:
-                receiver_id = data.get("receiver_id")
-                if receiver_id is not None:
-                    payload = dict(data)
-                    payload["sender_id"] = user_id
-                    await manager.send_personal_message(int(receiver_id), payload)
+            # Strict Prohibition: Never accept media chunks through WebSocket!
+            if data.get("type") == "p2p_chunk" or "chunk_data" in data or "binary" in data:
+                logger.warning("Rejected illegal binary chunk over WebSocket from user %s", user_id)
+                await manager.send_personal_message(user_id, {
+                    "type": "p2p_transfer_failed",
+                    "reason": "ILLEGAL_MEDIA_RELAY_ATTEMPT",
+                    "message": "WebSocket media relay is prohibited. ChatTornado strictly enforces peer-to-peer WebRTC DataChannels."
+                })
+                continue
+
+            p2p_signal_types = {
+                "p2p_offer",
+                "p2p_answer",
+                "p2p_ice_candidate",
+                "p2p_transfer_request",
+                "p2p_transfer_accept",
+                "p2p_transfer_reject",
+                "p2p_transfer_cancel",
+                "p2p_transfer_complete",
+                "p2p_transfer_failed",
+                "p2p_request",  # backward compatibility
+                "p2p_wipe",     # backward compatibility
+            }
+
+            if data.get("type") in p2p_signal_types:
+                target_raw = data.get("receiver_id") if data.get("receiver_id") is not None else data.get("recipient_id")
+                if target_raw is not None:
+                    try:
+                        receiver_id = int(target_raw)
+                    except (ValueError, TypeError):
+                        continue
+
+                    # Prevent self-transfer loopback
+                    if receiver_id == user_id:
+                        continue
+
+                    # Block check: blocked users cannot exchange P2P signals
+                    if is_blocked_bidirectional(db, user_id, receiver_id):
+                        logger.info("Blocked P2P signal %s between %s and %s", data.get("type"), user_id, receiver_id)
+                        continue
+
+                    # Check recipient online status
+                    is_online = (receiver_id in manager.active_connections) or (str(receiver_id) in manager.active_connections)
+                    sig_type = data.get("type")
+
+                    if not is_online and sig_type in ("p2p_offer", "p2p_transfer_request"):
+                        await manager.send_personal_message(user_id, {
+                            "type": "p2p_transfer_failed",
+                            "transfer_id": data.get("transfer_id"),
+                            "receiver_id": receiver_id,
+                            "reason": "RECIPIENT_OFFLINE",
+                            "message": "Recipient is currently offline. Queued in device outbox; transfer will initiate once peer connects."
+                        })
+                        continue
+
+                    # Construct validated payload (never trust client-supplied sender_id)
+                    forward_payload = dict(data)
+                    forward_payload["sender_id"] = user_id
+                    forward_payload["receiver_id"] = receiver_id
+
+                    # Strip any accidental large fields to guarantee zero-storage
+                    forward_payload.pop("chunk", None)
+                    forward_payload.pop("chunks", None)
+                    forward_payload.pop("data", None)
+                    forward_payload.pop("base64", None)
+
+                    await manager.send_personal_message(receiver_id, forward_payload)
+                    logger.info("Relayed P2P signal %s: %s -> %s (transfer_id: %s)", sig_type, user_id, receiver_id, data.get("transfer_id"))
                 continue
 
             # ==========================

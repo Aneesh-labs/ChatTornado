@@ -57,3 +57,14 @@ desktop.ini
 *.njsproj
 *.sln
 *.sw?
+
+# ==========================================
+# Android & Capacitor Native Builds
+# ==========================================
+android/app/build/
+android/.gradle/
+android/local.properties
+android/capacitor-cordova-android-plugins/build/
+android/build/
+*.apk
+*.zip

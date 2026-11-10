@@ -18,11 +18,16 @@
 ## 📑 Table of Contents
 
 - [Overview](#-overview)
+- [Native Android & Zero-Cloud P2P Architecture](#-native-android--zero-cloud-p2p-architecture)
 - [Languages & Tech Stack](#-languages--technology-stack)
 - [Core Features](#-core-features)
 - [Polyglot Architecture](#-polyglot-architecture)
 - [Microservices & Engines](#-microservices--engines)
 - [Quick Start Guide](#-quick-start-guide)
+- [Android Build Guide (ANDROID_BUILD.md)](ANDROID_BUILD.md)
+- [P2P Architecture Spec (P2P_ARCHITECTURE.md)](P2P_ARCHITECTURE.md)
+- [Security Model (SECURITY.md)](SECURITY.md)
+- [Testing Matrix (TESTING.md)](TESTING.md)
 - [Environment Variables](#-environment-variables)
 - [Testing & Quality Assurance](#-testing--quality-assurance)
 - [License](#-license)
@@ -37,6 +42,21 @@ ChatTornado is engineered from the ground up as an ultra-fast, resilient, and fe
 - **Rust** provides hardware-accelerated SIMD vector math for semantic embeddings and wire-speed cryptographic token auditing.
 - **Python (FastAPI)** powers business logic, REST APIs, SQLAlchemy database models, and AI agent orchestration.
 - **React 19 & Tailwind CSS** deliver a fluid, touch-optimized user experience on mobile and desktop alike.
+
+
+---
+
+## 📱 Native Android & Zero-Cloud P2P Architecture
+
+ChatTornado provides a native Android application package (`ChatTornado-Android-debug.apk`) built with Capacitor, sharing the exact same FastAPI backend, authentication, database, and real-time infrastructure as the web client.
+
+### Key Highlights:
+- **Strict Zero-Cloud Media Storage**: The server never stores or relays media binaries. All photos, videos, audio, and documents stream directly between devices over WebRTC DataChannels.
+- **64 KiB Binary Chunk Protocol**: Packaged with 65-byte structured binary headers (`TORN` protocol v1) with active backpressure (`bufferedAmountLowThreshold`).
+- **AES-256-GCM Double Encryption**: Application-level authenticated encryption with unique per-chunk 12-byte IVs and bit-for-bit SHA-256 integrity checks.
+- **WhatsApp-Style Media Cards**: Tap-to-accept/decline prompts, real-time transfer speed (KB/s), progress bars, cancellation, and retry.
+- **Dual Local Storage**: Received media is automatically cached in IndexedDB and exported to public Android directories (`Pictures/ChatTornado`, `Download/ChatTornado`).
+- **Offline Sender Outbox**: Files intended for offline peers are safely held in local IndexedDB outbox storage until both users are concurrently online.
 
 ---
 

@@ -1,3 +1,6 @@
+import p2pEngine from "../../../Services/webrtc/p2pTransferEngine";
+import VideoQualityModal from "../../../Components/VideoQualityModal";
+import { processVideoForTransfer } from "../../../Services/media/videoTranscoder";
 import React, { useState, useRef, useCallback, useEffect } from "react";
 import PropTypes from "prop-types";
 import { motion, AnimatePresence } from "framer-motion";
@@ -35,6 +38,8 @@ const ChatInput = React.memo(({ onSend, replyTo, onCancelReply, selectedUser, so
     const [shieldModalOpen, setShieldModalOpen] = useState(false);
     const [isBurnMode, setIsBurnMode] = useState(false);
     const [deadDropModalOpen, setDeadDropModalOpen] = useState(false);
+    const [videoForQuality, setVideoForQuality] = useState(null);
+    const [showVideoQualityModal, setShowVideoQualityModal] = useState(false);
 
     useEffect(() => {
         const handleOpenDeadDrop = () => setDeadDropModalOpen(true);
