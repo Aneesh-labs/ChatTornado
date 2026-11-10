@@ -746,6 +746,7 @@ async def websocket_endpoint(websocket: WebSocket):
                 "p2p_transfer_cancel",
                 "p2p_transfer_complete",
                 "p2p_transfer_failed",
+                "p2p_pubkey_exchange",
                 "p2p_request",  # backward compatibility
                 "p2p_wipe",     # backward compatibility
             }

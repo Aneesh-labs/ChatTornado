@@ -112,6 +112,7 @@ def run_migrations():
                 ("portfolio_data", "TEXT"),
                 ("is_verified", "BOOLEAN DEFAULT FALSE"),
                 ("game_stats", "TEXT"),
+                ("e2ee_public_key", "TEXT"),
             ]
             with engine.begin() as conn:
                 for col_name, col_def in user_cols_to_add:

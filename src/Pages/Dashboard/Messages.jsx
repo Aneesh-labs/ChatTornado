@@ -1,5 +1,7 @@
 import P2PTransfersDrawer from "../../Components/P2PTransfersDrawer";
 import AndroidAppDownloadModal from "../../Components/AndroidAppDownloadModal";
+import SafetyNumberModal from "../../Components/SafetyNumberModal";
+import { ensureIdentityKeypair, setRuntimeIdentity, setRuntimePeerPublicKey, getRuntimePeerPublicKey, getPeerTrustStatus, encryptMessageE2EE, isE2EETextEnabledForChat, setE2EETextEnabledForChat, E2EE_MSG_PREFIX } from "../../Services/e2eeIdentity";
 import p2pEngine, { TRANSFER_STATES } from "../../Services/webrtc/p2pTransferEngine";
 import { listOutboxTransfers } from "../../Services/db";
 import React, {
@@ -239,6 +241,77 @@ const Messages = () => {
     const [p2pDrawerOpen, setP2pDrawerOpen] = useState(false);
     const [androidModalOpen, setAndroidModalOpen] = useState(false);
     const [incomingTransferToast, setIncomingTransferToast] = useState(null);
+    const [localIdentity, setLocalIdentity] = useState(null);
+    const [safetyModalOpen, setSafetyModalOpen] = useState(false);
+    const [peerTrustState, setPeerTrustState] = useState(null);
+    const [e2eeTextEnabled, setE2eeTextEnabled] = useState(false);
+    const [peerPubKeyVersion, setPeerPubKeyVersion] = useState(0);
+
+    // Initialize local device ECDH P-256 Identity Keypair & register public key
+    useEffect(() => {
+        const uid = myUserId.current;
+        if (!uid || !token) return;
+        let cancelled = false;
+        ensureIdentityKeypair(uid).then((identity) => {
+            if (cancelled || !identity) return;
+            setLocalIdentity(identity);
+            setRuntimeIdentity(identity);
+            p2pEngine.setIdentity(identity);
+            API.post("/users/e2ee-key", { public_key: identity.publicJwkStr, token }).catch(() => {});
+        }).catch((err) => console.warn("[E2EE] Identity init skipped:", err));
+        return () => { cancelled = true; };
+    }, [token]);
+
+    // Sync peer public keys from p2pEngine live updates
+    useEffect(() => {
+        return p2pEngine.subscribe((evt) => {
+            if (evt === "peer_pubkey_updated") {
+                setPeerPubKeyVersion((v) => v + 1);
+            }
+        });
+    }, []);
+
+    // Fetch & evaluate selected peer trust status + per-chat E2EE text preference
+    const refreshSelectedPeerKey = useCallback(async (peerId) => {
+        if (!peerId || !token) return null;
+        try {
+            const res = await API.get(`/users/${peerId}/e2ee-key`, { params: { token } });
+            if (res.data?.e2ee_public_key) {
+                setRuntimePeerPublicKey(peerId, res.data.e2ee_public_key);
+                p2pEngine.setPeerPublicKey(peerId, res.data.e2ee_public_key);
+                setPeerPubKeyVersion((v) => v + 1);
+                return res.data.e2ee_public_key;
+            }
+        } catch { }
+        return null;
+    }, [token]);
+
+    useEffect(() => {
+        if (!selectedUser?.id || selectedUser.is_bot || selectedUser.is_group) {
+            setPeerTrustState(null);
+            setE2eeTextEnabled(false);
+            return;
+        }
+        setE2eeTextEnabled(isE2EETextEnabledForChat(selectedUser.id));
+        const cached = selectedUser.e2ee_public_key || getRuntimePeerPublicKey(selectedUser.id);
+        if (selectedUser.e2ee_public_key) {
+            setRuntimePeerPublicKey(selectedUser.id, selectedUser.e2ee_public_key);
+            p2pEngine.setPeerPublicKey(selectedUser.id, selectedUser.e2ee_public_key);
+        } else if (!cached) {
+            refreshSelectedPeerKey(selectedUser.id);
+        }
+    }, [selectedUser?.id, selectedUser?.is_bot, selectedUser?.is_group, selectedUser?.e2ee_public_key, refreshSelectedPeerKey]);
+
+    useEffect(() => {
+        if (!selectedUser?.id || selectedUser.is_bot || selectedUser.is_group || !localIdentity?.publicJwk) {
+            setPeerTrustState(null);
+            return;
+        }
+        const peerPub = getRuntimePeerPublicKey(selectedUser.id) || selectedUser.e2ee_public_key;
+        getPeerTrustStatus(myUserId.current, localIdentity.publicJwk, selectedUser.id, peerPub)
+            .then(setPeerTrustState)
+            .catch(() => {});
+    }, [selectedUser?.id, selectedUser?.is_bot, selectedUser?.is_group, selectedUser?.e2ee_public_key, localIdentity, peerPubKeyVersion]);
 
     useEffect(() => {
         if (!callNotice) return;
@@ -1049,6 +1122,12 @@ const Messages = () => {
             ]);
             const freshUsers = resGlobal.data || [];
             const active = resActive.data || [];
+            [...freshUsers, ...active].forEach((u) => {
+                if (u?.id && u?.e2ee_public_key) {
+                    setRuntimePeerPublicKey(u.id, u.e2ee_public_key);
+                    p2pEngine.setPeerPublicKey(u.id, u.e2ee_public_key);
+                }
+            });
             setUsers(freshUsers);
             setActiveUsers(active);
             setConnectionStatuses(resStatuses.data || {});
@@ -1077,6 +1156,12 @@ const Messages = () => {
                 // Fetch active chats
                 const resActive = await API.get("/connections/active", { params: { token } });
                 const active = resActive.data || [];
+                [...freshUsers, ...active].forEach((u) => {
+                    if (u?.id && u?.e2ee_public_key) {
+                        setRuntimePeerPublicKey(u.id, u.e2ee_public_key);
+                        p2pEngine.setPeerPublicKey(u.id, u.e2ee_public_key);
+                    }
+                });
                 setActiveUsers(active);
 
                 // Fetch connection statuses for global tab
@@ -1993,31 +2078,59 @@ const Messages = () => {
             ...options
         };
 
-        console.log(
-            `%c[WS SEND]%c To: ${currentTarget.username} (ID: ${currentTarget.id}) | Mode: %c${outgoingPayload.ai_mode}%c | Text: "${validation.text}"`,
-            "background: #059669; color: white; font-weight: bold; padding: 2px 6px; border-radius: 3px;",
-            "",
-            "color: #34d399; font-weight: bold;",
-            "",
-            outgoingPayload
+        const peerPubForChat = getRuntimePeerPublicKey(targetReceiverId) || currentTarget?.e2ee_public_key;
+        const shouldEncryptText = Boolean(
+            !currentTarget?.is_bot &&
+            currentTarget?.username !== "VORTEX-9" &&
+            !currentTarget?.is_group &&
+            !options._skipE2eeText &&
+            isE2EETextEnabledForChat(targetReceiverId) &&
+            localIdentity?.privateKey &&
+            peerPubForChat &&
+            !String(validation.text).startsWith("⚡ P2P_MEDIA") &&
+            !String(validation.text).startsWith("🎮 GAME:") &&
+            !String(validation.text).startsWith("🔊 SOUND:") &&
+            !String(validation.text).startsWith(E2EE_MSG_PREFIX)
         );
 
-        try {
-            socketRef.current.send(JSON.stringify(outgoingPayload));
-        } catch (err) {
-            console.error("[WS SEND ERROR]", err);
-            pendingTempIds.current.delete(temp_id);
-            setMessages((prev) => prev.map((m) =>
-                areIdsEqual(m.temp_id, temp_id)
-                    ? { ...m, status: "failed", errorMessage: "Network error sending message" }
-                    : m
-            ));
-            setCallNotice("Failed to send message: network error. Tap retry.");
-            return false;
-        }
+        const dispatchOverSocket = async () => {
+            try {
+                let wirePayload = outgoingPayload;
+                if (shouldEncryptText) {
+                    const cipherText = await encryptMessageE2EE(
+                        validation.text,
+                        localIdentity.privateKey,
+                        peerPubForChat,
+                        myUserId.current,
+                        targetReceiverId
+                    );
+                    wirePayload = { ...outgoingPayload, message: cipherText, e2ee_encrypted: true };
+                }
+                console.log(
+                    `%c[WS SEND]%c To: ${currentTarget?.username} (ID: ${targetReceiverId}) | Mode: %c${wirePayload.ai_mode}%c${shouldEncryptText ? " [E2EE]" : ""}`,
+                    "background: #059669; color: white; font-weight: bold; padding: 2px 6px; border-radius: 3px;",
+                    "",
+                    "color: #34d399; font-weight: bold;",
+                    "",
+                    wirePayload
+                );
+                socketRef.current.send(JSON.stringify(wirePayload));
+            } catch (err) {
+                console.error("[WS SEND ERROR]", err);
+                pendingTempIds.current.delete(temp_id);
+                setMessages((prev) => prev.map((m) =>
+                    areIdsEqual(m.temp_id, temp_id)
+                        ? { ...m, status: "failed", errorMessage: "Network error sending message" }
+                        : m
+                ));
+                setCallNotice("Failed to send message: network error. Tap retry.");
+            }
+        };
+
+        dispatchOverSocket();
         setReplyingTo(null);
         return true;
-    }, [selectedUser, aiMode, activeBranch]);
+    }, [selectedUser, aiMode, activeBranch, localIdentity]);
     sendMessageRef.current = sendMessage;
 
     /* ── Message Retry (via WebSocket or Guaranteed REST Fallback) ─────── */
@@ -2504,7 +2617,10 @@ const Messages = () => {
                                     toggleHoloScanlines,
                                     color: statusColors[securityStatus] || "#22c55e",
                                     onOpenP2PTransfers: () => setP2pDrawerOpen(true),
-                                    onOpenAndroidDownload: () => setAndroidModalOpen(true)
+                                    onOpenAndroidDownload: () => setAndroidModalOpen(true),
+                                    onOpenSafetyNumber: () => setSafetyModalOpen(true),
+                                    trustStatus: peerTrustState?.status || "unavailable",
+                                    e2eeTextEnabled
                                 }}
                             />
                         ) : (
@@ -2775,6 +2891,27 @@ const Messages = () => {
                             </motion.div>
                         )}
                     </AnimatePresence>
+
+                    {/* Zero-Knowledge ECDH Peer Safety Number Verification Modal */}
+                    <SafetyNumberModal
+                        isOpen={safetyModalOpen}
+                        onClose={() => setSafetyModalOpen(false)}
+                        myUserId={myUserId.current}
+                        myUsername={sessionStorage.getItem("username") || "You"}
+                        localIdentity={localIdentity}
+                        peerUser={selectedUser}
+                        peerPubKey={getRuntimePeerPublicKey(selectedUser?.id) || selectedUser?.e2ee_public_key}
+                        trustState={peerTrustState}
+                        onTrustUpdated={(nextTrust) => setPeerTrustState(nextTrust)}
+                        e2eeTextEnabled={e2eeTextEnabled}
+                        onToggleE2eeText={(enabled) => {
+                            if (selectedUser?.id) {
+                                setE2EETextEnabledForChat(selectedUser.id, enabled);
+                                setE2eeTextEnabled(enabled);
+                            }
+                        }}
+                        onRefreshPeerKey={refreshSelectedPeerKey}
+                    />
 
                     {/* Peer-to-Peer Transfers & Outbox Drawer */}
                     <P2PTransfersDrawer 

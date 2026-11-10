@@ -1,5 +1,6 @@
 import P2PMediaCard from "../../../Components/P2PMediaCard";
-import { Volume2, VolumeX, Languages, GitFork, Reply, Trash2, X, Download, Check, RotateCw, Flame, Eye, Pin, Zap } from "lucide-react";
+import { Lock, Volume2, VolumeX, Languages, GitFork, Reply, Trash2, X, Download, Check, RotateCw, Flame, Eye, Pin, Zap } from "lucide-react";
+import { E2EE_MSG_PREFIX, decryptMessageE2EE, getRuntimeIdentity, getRuntimePeerPublicKey, subscribeRuntimeE2EE } from "../../../Services/e2eeIdentity";
 import React, { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import PropTypes from "prop-types";
 import { motion, AnimatePresence } from "framer-motion";
@@ -867,9 +868,40 @@ const MessageBubble = React.memo(({
         setShowDeleteDialog(true);
     }, []);
 
-    // Detect content types
+    // Detect content types & Zero-Knowledge E2EE decryption
     const _rawPayload = unlockedPayload !== null ? unlockedPayload : (msg.message || "");
-    const actualMessage = typeof _rawPayload === "string" ? decodeHtmlEntities(_rawPayload) : _rawPayload;
+    const isWireE2ee = typeof _rawPayload === "string" && _rawPayload.startsWith(E2EE_MSG_PREFIX);
+    const isE2eeMessage = Boolean(msg.e2ee_encrypted || isWireE2ee);
+    const [decryptedE2ee, setDecryptedE2ee] = useState(null);
+
+    useEffect(() => {
+        if (!isWireE2ee) {
+            setDecryptedE2ee(null);
+            return;
+        }
+        let cancelled = false;
+        const peerId = isMe ? msg.receiver_id : msg.sender_id;
+        const runDecrypt = async () => {
+            const identity = getRuntimeIdentity();
+            const peerPub = getRuntimePeerPublicKey(peerId);
+            if (!identity?.privateKey || !peerPub || !myId || !peerId) return;
+            const res = await decryptMessageE2EE(_rawPayload, identity.privateKey, peerPub, myId, peerId);
+            if (!cancelled && res.decrypted) {
+                setDecryptedE2ee(res.text);
+            }
+        };
+        runDecrypt();
+        const unsub = subscribeRuntimeE2EE(runDecrypt);
+        return () => {
+            cancelled = true;
+            unsub();
+        };
+    }, [isWireE2ee, _rawPayload, isMe, msg.sender_id, msg.receiver_id, myId]);
+
+    const _resolvedPayload = isWireE2ee
+        ? (decryptedE2ee !== null ? decryptedE2ee : "🔐 Encrypted with Zero-Knowledge E2EE (verify peer key to decrypt)")
+        : _rawPayload;
+    const actualMessage = typeof _resolvedPayload === "string" ? decodeHtmlEntities(_resolvedPayload) : _resolvedPayload;
     const isP2P = typeof actualMessage === "string" && actualMessage.startsWith('⚡ P2P_MEDIA');
     const isGame = typeof actualMessage === "string" && actualMessage.startsWith('🎮 GAME:');
     const isDeadDrop = typeof actualMessage === "string" && actualMessage.startsWith('⚡ [DEAD DROP:');
@@ -1380,6 +1412,14 @@ const MessageBubble = React.memo(({
 
                         {/* Timestamp */}
                         <div className={`flex items-center gap-1 mt-0.5 sm:mt-1 ${isMe ? "justify-end" : "justify-start"} select-none`}>
+                            {isE2eeMessage && (
+                                <span
+                                    title="End-to-End Encrypted (ECDH P-256 + AES-256-GCM)"
+                                    className="inline-flex items-center gap-0.5 text-[8.5px] font-mono text-emerald-400/90 mr-0.5"
+                                >
+                                    <Lock className="w-2.5 h-2.5" />
+                                </span>
+                            )}
                             {isEdited && (
                                 <span className="text-[8px] sm:text-[9px] text-white/30 italic mr-1">(edited)</span>
                             )}

@@ -71,6 +71,7 @@ def get_users(
             "custom_status": user.custom_status,
             "is_verified": bool(getattr(user, "is_verified", False) or getattr(user, "email_verified", False)),
             "game_stats": getattr(user, "game_stats", {}) or {},
+            "e2ee_public_key": getattr(user, "e2ee_public_key", None),
             "streak": streaks_map.get(user.id, default_streak)
         }
         for user in users
@@ -500,4 +501,65 @@ async def delete_account(
     return {
         "success": True,
         "message": "Account and all associated data permanently deleted."
+    }
+
+
+@router.post("/users/e2ee-key")
+def register_e2ee_public_key(
+    data: dict,
+    token: str = "",
+    db: Session = Depends(get_db)
+):
+    """Register device ECDH P-256 public JWK for zero-knowledge E2EE. Rejects private key fields."""
+    import json
+    auth_token = token or data.get("token")
+    if not auth_token:
+        raise HTTPException(status_code=401, detail="Authorization token is required.")
+    payload = decode_token(auth_token)
+    if not payload:
+        raise HTTPException(status_code=401, detail="Invalid token.")
+    user = db.query(User).filter(User.id == payload["user_id"]).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found.")
+
+    raw_jwk = data.get("public_key")
+    if isinstance(raw_jwk, dict):
+        jwk_obj = raw_jwk
+        raw_str = json.dumps(raw_jwk, separators=(",", ":"), sort_keys=True)
+    elif isinstance(raw_jwk, str):
+        try:
+            jwk_obj = json.loads(raw_jwk)
+            raw_str = json.dumps(jwk_obj, separators=(",", ":"), sort_keys=True)
+        except Exception:
+            raise HTTPException(status_code=400, detail="Invalid JWK JSON format.")
+    else:
+        raise HTTPException(status_code=400, detail="public_key JWK is required.")
+
+    if not isinstance(jwk_obj, dict) or jwk_obj.get("kty") != "EC" or jwk_obj.get("crv") != "P-256" or not jwk_obj.get("x") or not jwk_obj.get("y"):
+        raise HTTPException(status_code=400, detail="public_key must be an ECDH P-256 JWK.")
+    if "d" in jwk_obj:
+        raise HTTPException(status_code=400, detail="Private key material ('d') must never leave your device.")
+
+    user.e2ee_public_key = raw_str
+    db.commit()
+    return {"success": True, "user_id": user.id, "e2ee_public_key": raw_str}
+
+
+@router.get("/users/{target_user_id}/e2ee-key")
+def get_peer_e2ee_public_key(
+    target_user_id: int,
+    token: str = Query(...),
+    db: Session = Depends(get_db)
+):
+    """Fetch a peer user's published ECDH P-256 public key."""
+    payload = decode_token(token)
+    if not payload:
+        raise HTTPException(status_code=401, detail="Invalid token.")
+    peer = db.query(User).filter(User.id == target_user_id).first()
+    if not peer:
+        raise HTTPException(status_code=404, detail="User not found.")
+    return {
+        "user_id": peer.id,
+        "username": peer.username,
+        "e2ee_public_key": getattr(peer, "e2ee_public_key", None)
     }

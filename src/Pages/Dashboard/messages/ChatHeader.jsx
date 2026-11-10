@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import PropTypes from "prop-types";
 import { motion, AnimatePresence } from "framer-motion";
-import { Activity, Smartphone, Lock, MoreVertical, AlertTriangle, Sparkles, Brain, Download, Cpu, Ban, UserCheck, ShieldAlert, Users, BadgeCheck, Dna, GitFork, Clock, Tv, Ghost, Flame, Shield, Phone, PhoneCall, Video, Search, RotateCw, ChevronLeft, ChevronDown, CheckSquare, ListChecks, Terminal, Zap } from "lucide-react";
+import { ShieldCheck, KeyRound, Activity, Smartphone, Lock, MoreVertical, AlertTriangle, Sparkles, Brain, Download, Cpu, Ban, UserCheck, ShieldAlert, Users, BadgeCheck, Dna, GitFork, Clock, Tv, Ghost, Flame, Shield, Phone, PhoneCall, Video, Search, RotateCw, ChevronLeft, ChevronDown, CheckSquare, ListChecks, Terminal, Zap } from "lucide-react";
 import { toggleShieldActive } from "../../../Services/privacyShieldService";
 import { triggerPanicEscape } from "../../../utils/panicKey";
 import { IconBtn, Avatar, useTheme } from "./constants";
@@ -447,6 +447,39 @@ const ChatHeader = React.memo(({
                                 >
                                     HOLO <span className="hidden xl:inline">{quantumHud.holoScanlines ? "ON" : "OFF"}</span>
                                 </button>
+                                {(!isBotUser && !isGroup && quantumHud.onOpenSafetyNumber) && (
+                                    <button
+                                        type="button"
+                                        onClick={quantumHud.onOpenSafetyNumber}
+                                        title={
+                                            quantumHud.trustStatus === "verified"
+                                                ? "Safety Number Verified (ECDH P-256) — Click for E2EE settings"
+                                                : quantumHud.trustStatus === "key_changed"
+                                                ? "Security Alert: Peer identity key changed! Click to verify"
+                                                : "Verify Peer Safety Number & Zero-Knowledge E2EE"
+                                        }
+                                        className={`text-[8px] font-mono px-1.5 py-0.5 rounded-full border transition-all cursor-pointer flex items-center gap-1 whitespace-nowrap shrink-0 ${
+                                            quantumHud.trustStatus === "verified"
+                                                ? "border-emerald-500/40 bg-emerald-500/15 text-emerald-300"
+                                                : quantumHud.trustStatus === "key_changed"
+                                                ? "border-amber-500/60 bg-amber-500/20 text-amber-300 animate-pulse font-bold"
+                                                : quantumHud.e2eeTextEnabled
+                                                ? "border-cyan-400/50 bg-cyan-500/20 text-cyan-200"
+                                                : "border-white/15 bg-white/5 text-white/60 hover:text-cyan-300 hover:border-cyan-500/40"
+                                        }`}
+                                    >
+                                        {quantumHud.trustStatus === "verified" ? (
+                                            <ShieldCheck className="w-2.5 h-2.5 text-emerald-400" />
+                                        ) : quantumHud.trustStatus === "key_changed" ? (
+                                            <ShieldAlert className="w-2.5 h-2.5 text-amber-400" />
+                                        ) : (
+                                            <KeyRound className="w-2.5 h-2.5 text-cyan-400" />
+                                        )}
+                                        <span>
+                                            {quantumHud.trustStatus === "verified" ? "E2EE ✓" : quantumHud.trustStatus === "key_changed" ? "KEY!" : "E2EE"}
+                                        </span>
+                                    </button>
+                                )}
                                 {quantumHud.onOpenP2PTransfers && (
                                     <button
                                         type="button"
@@ -616,6 +649,27 @@ const ChatHeader = React.memo(({
                                                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.069A1 1 0 0121 8.867v6.266a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
                                                     Video Call
                                                 </button>
+                                                {quantumHud?.onOpenSafetyNumber && (
+                                                    <button
+                                                        onClick={() => { quantumHud.onOpenSafetyNumber(); setShowMoreMenu(false); }}
+                                                        className={`flex items-center gap-2 px-3 py-2 text-xs rounded-lg text-left font-semibold cursor-pointer ${
+                                                            quantumHud.trustStatus === "verified"
+                                                                ? "text-emerald-300 bg-emerald-500/10"
+                                                                : quantumHud.trustStatus === "key_changed"
+                                                                ? "text-amber-300 bg-amber-500/15"
+                                                                : "text-cyan-300 hover:bg-cyan-500/10"
+                                                        }`}
+                                                    >
+                                                        <KeyRound className="w-4 h-4 shrink-0" />
+                                                        <span>
+                                                            {quantumHud.trustStatus === "verified"
+                                                                ? "Safety Number Verified ✓"
+                                                                : quantumHud.trustStatus === "key_changed"
+                                                                ? "Safety Key Changed! Verify"
+                                                                : "Verify Safety Number (E2EE)"}
+                                                        </span>
+                                                    </button>
+                                                )}
                                                 <button onClick={() => { onStartGhostChat?.(); setShowMoreMenu(false); }} className="flex items-center gap-2 px-3 py-2 text-xs text-white/80 hover:text-white hover:bg-white/10 rounded-lg text-left">
                                                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 10h.01M15 10h.01M9 14h6M7 20l-3-3V7a2 2 0 012-2h12a2 2 0 012 2v10a2 2 0 01-2 2H7z" /></svg>
                                                     Ghost Chat
@@ -801,6 +855,20 @@ const ChatHeader = React.memo(({
                                                 <p className="text-[10px] text-white/40">Download as Markdown / HTML</p>
                                             </div>
                                         </button>
+                                        {(!isBotUser && !isGroup && quantumHud?.onOpenSafetyNumber) && (
+                                            <button
+                                                onClick={() => { quantumHud.onOpenSafetyNumber(); setShowQuantumMenu(false); }}
+                                                className="flex items-center gap-2.5 px-2.5 py-1.5 text-xs font-medium text-emerald-300 hover:text-white hover:bg-emerald-500/15 rounded-xl text-left cursor-pointer transition-colors"
+                                            >
+                                                <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
+                                                <div>
+                                                    <p className="font-semibold">
+                                                        {quantumHud.trustStatus === "verified" ? "Verified Safety Number ✓" : "Safety Number & E2EE"}
+                                                    </p>
+                                                    <p className="text-[10px] text-white/40">ECDH P-256 verification & text E2EE</p>
+                                                </div>
+                                            </button>
+                                        )}
                                         {quantumHud?.onOpenP2PTransfers && (
                                             <button
                                                 onClick={() => { quantumHud.onOpenP2PTransfers(); setShowQuantumMenu(false); }}

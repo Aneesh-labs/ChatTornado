@@ -5,7 +5,9 @@
  */
 
 const DB_NAME = "ChatTornadoVault";
-const DB_VERSION = 4;
+const DB_VERSION = 5;
+const STORE_E2EE_KEYS = "e2ee_keys";
+const STORE_TRUSTED_PEERS = "e2ee_trusted_peers";
 const STORE_OUTBOX = "p2p_outbox";
 const STORE_STATUS = "ephemeral_status";
 const STORE_MEDIA = "p2p_media";
@@ -44,6 +46,14 @@ function openDB() {
                 const outboxStore = db.createObjectStore(STORE_OUTBOX, { keyPath: "transferId" });
                 outboxStore.createIndex("recipientId", "recipientId", { unique: false });
                 outboxStore.createIndex("status", "status", { unique: false });
+            }
+
+            if (!db.objectStoreNames.contains(STORE_E2EE_KEYS)) {
+                db.createObjectStore(STORE_E2EE_KEYS, { keyPath: "userId" });
+            }
+
+            if (!db.objectStoreNames.contains(STORE_TRUSTED_PEERS)) {
+                db.createObjectStore(STORE_TRUSTED_PEERS, { keyPath: "pairKey" });
             }
         };
 
@@ -487,4 +497,82 @@ export async function deleteOutboxTransfer(transferId) {
         req.onsuccess = () => resolve(true);
         req.onerror = (e) => reject(e.target.error);
     });
+}
+
+/* ==========================================================================
+   ZERO-KNOWLEDGE E2EE IDENTITY & TRUST STORE (DEVICE-ONLY)
+   ========================================================================== */
+
+export async function saveDeviceIdentityKey(userId, record) {
+    try {
+        const db = await openDB();
+        const tx = db.transaction(STORE_E2EE_KEYS, "readwrite");
+        tx.objectStore(STORE_E2EE_KEYS).put({ userId: String(userId), ...record, updatedAt: Date.now() });
+        return new Promise((resolve) => {
+            tx.oncomplete = () => resolve(true);
+            tx.onerror = () => resolve(false);
+        });
+    } catch (err) {
+        console.warn("[IndexedDB] Failed to save E2EE identity key:", err);
+        return false;
+    }
+}
+
+export async function getDeviceIdentityKey(userId) {
+    try {
+        const db = await openDB();
+        return new Promise((resolve) => {
+            const tx = db.transaction(STORE_E2EE_KEYS, "readonly");
+            const req = tx.objectStore(STORE_E2EE_KEYS).get(String(userId));
+            req.onsuccess = (e) => resolve(e.target.result || null);
+            req.onerror = () => resolve(null);
+        });
+    } catch (err) {
+        console.warn("[IndexedDB] Failed to read E2EE identity key:", err);
+        return null;
+    }
+}
+
+export async function saveTrustedPeer(pairKey, record) {
+    try {
+        const db = await openDB();
+        const tx = db.transaction(STORE_TRUSTED_PEERS, "readwrite");
+        tx.objectStore(STORE_TRUSTED_PEERS).put({ pairKey: String(pairKey), ...record, updatedAt: Date.now() });
+        return new Promise((resolve) => {
+            tx.oncomplete = () => resolve(true);
+            tx.onerror = () => resolve(false);
+        });
+    } catch (err) {
+        console.warn("[IndexedDB] Failed to save trusted peer:", err);
+        return false;
+    }
+}
+
+export async function getTrustedPeer(pairKey) {
+    try {
+        const db = await openDB();
+        return new Promise((resolve) => {
+            const tx = db.transaction(STORE_TRUSTED_PEERS, "readonly");
+            const req = tx.objectStore(STORE_TRUSTED_PEERS).get(String(pairKey));
+            req.onsuccess = (e) => resolve(e.target.result || null);
+            req.onerror = () => resolve(null);
+        });
+    } catch (err) {
+        console.warn("[IndexedDB] Failed to read trusted peer:", err);
+        return null;
+    }
+}
+
+export async function deleteTrustedPeer(pairKey) {
+    try {
+        const db = await openDB();
+        const tx = db.transaction(STORE_TRUSTED_PEERS, "readwrite");
+        tx.objectStore(STORE_TRUSTED_PEERS).delete(String(pairKey));
+        return new Promise((resolve) => {
+            tx.oncomplete = () => resolve(true);
+            tx.onerror = () => resolve(false);
+        });
+    } catch (err) {
+        return false;
+    }
 }

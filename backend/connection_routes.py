@@ -194,7 +194,8 @@ def get_active_connections(
                 "username": friend.username,
                 "avatar_url": friend.avatar_url,
                 "status": friend.status,
-                "last_seen": friend.last_seen
+                "last_seen": friend.last_seen,
+                "e2ee_public_key": getattr(friend, "e2ee_public_key", None)
             })
             
     return friends

@@ -42,6 +42,7 @@ class User(Base):
     portfolio_data: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
     is_verified: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     game_stats: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    e2ee_public_key: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     last_seen: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
     last_login: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)

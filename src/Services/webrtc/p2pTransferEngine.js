@@ -10,6 +10,7 @@
  */
 
 import { saveLocalMedia, getLocalMedia, saveOutboxTransfer, getOutboxTransfer, deleteOutboxTransfer, updateOutboxStatus } from "../db";
+import { deriveSharedAESKey, canonicalizePublicJwk } from "../e2eeIdentity";
 
 export const TRANSFER_STATES = {
     WAITING_FOR_PEER: "WAITING_FOR_PEER",
@@ -175,6 +176,22 @@ class P2PTransferEngine {
         this.activeTransfers = new Map(); // transferId -> TransferSession
         this.listeners = new Set();
         this.iceCandidatesQueue = new Map(); // peerUserId -> [candidates]
+        this.localIdentity = null;
+        this.peerPubKeys = new Map(); // String(userId) -> canonical public JWK
+    }
+
+    setIdentity(identity) {
+        this.localIdentity = identity || null;
+    }
+
+    setPeerPublicKey(userId, pubJwk) {
+        if (!userId || !pubJwk) return;
+        try {
+            const can = canonicalizePublicJwk(pubJwk);
+            if (can) {
+                this.peerPubKeys.set(String(userId), can);
+            }
+        } catch (e) { }
     }
 
     /**
@@ -302,9 +319,20 @@ class P2PTransferEngine {
         // Calculate SHA-256 digest
         const sha256 = await computeSHA256(file);
 
-        // Generate ephemeral AES-256-GCM key for defense-in-depth encryption
-        const aesKey = await generateAESKey();
-        const keyBase64 = await exportKeyBase64(aesKey);
+        // Zero-Knowledge ECDH P-256 derived key when peer public key is available; fallback to ephemeral AES key
+        const peerPubJwk = canonicalizePublicJwk(options.peerPubKey || this.peerPubKeys.get(String(recipientId)));
+        let aesKey = null;
+        let keyBase64 = null;
+        let keyMode = "ephemeral-aes";
+        let senderPubKey = this.localIdentity?.publicJwk || null;
+
+        if (this.localIdentity?.privateKey && peerPubJwk) {
+            aesKey = await deriveSharedAESKey(this.localIdentity.privateKey, peerPubJwk, transferId);
+            keyMode = "ecdh-p256";
+        } else {
+            aesKey = await generateAESKey();
+            keyBase64 = await exportKeyBase64(aesKey);
+        }
 
         const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
 
@@ -322,6 +350,7 @@ class P2PTransferEngine {
             sha256,
             aesKey,
             keyBase64,
+            keyMode,
             status: TRANSFER_STATES.WAITING_FOR_ACCEPTANCE,
             bytesSent: 0,
             startTime: Date.now(),
@@ -359,7 +388,9 @@ class P2PTransferEngine {
                 total_chunks: totalChunks,
                 chunk_size: CHUNK_SIZE,
                 sha256,
-                key_base64: keyBase64
+                key_mode: keyMode,
+                sender_pub_key: senderPubKey,
+                ...(keyMode === "ephemeral-aes" ? { key_base64: keyBase64 } : {})
             }));
         } else {
             session.status = TRANSFER_STATES.WAITING_FOR_PEER;
@@ -503,9 +534,26 @@ class P2PTransferEngine {
             return;
         }
 
+        // 3b. Live Peer ECDH Public Key Announcement
+        if (type === "p2p_pubkey_exchange") {
+            if (sender_id && packet.public_key) {
+                this.setPeerPublicKey(sender_id, packet.public_key);
+                this.emit("peer_pubkey_updated", { userId: sender_id, publicKey: packet.public_key });
+            }
+            return;
+        }
+
         // 4. Incoming Transfer Handshake Request
         if (type === "p2p_transfer_request") {
-            const aesKey = packet.key_base64 ? await importKeyBase64(packet.key_base64) : null;
+            if (sender_id && packet.sender_pub_key) {
+                this.setPeerPublicKey(sender_id, packet.sender_pub_key);
+            }
+            let aesKey = null;
+            if (packet.key_mode === "ecdh-p256" && packet.sender_pub_key && this.localIdentity?.privateKey) {
+                aesKey = await deriveSharedAESKey(this.localIdentity.privateKey, packet.sender_pub_key, transfer_id);
+            } else if (packet.key_base64) {
+                aesKey = await importKeyBase64(packet.key_base64);
+            }
 
             const session = {
                 transferId: transfer_id,
