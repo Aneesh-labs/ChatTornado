@@ -2,23 +2,45 @@ import React, { useEffect, useRef } from "react";
 import PropTypes from "prop-types";
 import * as THREE from "three";
 
-const ROOM_COLORS = {
-  start: 0x38bdf8,
-  extraction: 0x34d399,
-  cipher_vault: 0xc084fc,
-  recharge: 0xfbbf24,
-  junction: 0x60a5fa,
-  corridor: 0x1e293b,
-  unscanned: 0x0f172a,
-  adjacent: 0x1e293b,
+const ROOM_THEMES = {
+  start: { base: 0x0369a1, rim: 0x38bdf8, glass: 0x0ea5e9 },
+  extraction: { base: 0x047857, rim: 0x34d399, glass: 0x10b981 },
+  cipher_vault: { base: 0xb45309, rim: 0xfbbf24, glass: 0xf59e0b },
+  recharge: { base: 0x4d7c0f, rim: 0xa3e635, glass: 0x84cc16 },
+  junction: { base: 0x7e22ce, rim: 0xe879f9, glass: 0xa855f7 },
+  corridor: { base: 0x0f766e, rim: 0x2dd4bf, glass: 0x14b8a6 },
+  unscanned: { base: 0x1e1b4b, rim: 0x6366f1, glass: 0x4f46e5 },
+  adjacent: { base: 0x1e293b, rim: 0x38bdf8, glass: 0x0284c7 },
 };
 
 const HAZARD_COLORS = {
-  distortion: 0xc084fc,
+  distortion: 0xd946ef,
   instability: 0xf43f5e,
   false_passage: 0xf59e0b,
   lockdown: 0xf97316,
 };
+
+function makeLabelTexture(text, colorHex = "#e2e8f0") {
+  const c = document.createElement("canvas");
+  c.width = 160;
+  c.height = 56;
+  const ctx = c.getContext("2d");
+  ctx.fillStyle = "rgba(7, 11, 20, 0.72)";
+  ctx.beginPath();
+  ctx.roundRect(8, 8, 144, 40, 12);
+  ctx.fill();
+  ctx.strokeStyle = colorHex;
+  ctx.lineWidth = 2.5;
+  ctx.stroke();
+  ctx.fillStyle = colorHex;
+  ctx.font = "900 22px system-ui, sans-serif";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(text, 80, 29);
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
 
 const NullNorthMaze3D = ({ gameState, onSelectRoom }) => {
   const mountRef = useRef(null);
@@ -38,47 +60,53 @@ const NullNorthMaze3D = ({ gameState, onSelectRoom }) => {
     if (!container) return;
 
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x060913);
-    scene.fog = new THREE.FogExp2(0x060913, 0.032);
+    scene.background = new THREE.Color(0x050812);
+    scene.fog = new THREE.FogExp2(0x050812, 0.022);
 
-    const w = container.clientWidth || 500;
-    const h = container.clientHeight || 380;
-    const camera = new THREE.PerspectiveCamera(44, w / Math.max(1, h), 0.1, 100);
-    camera.position.set(0, 12.5, 11.5);
-    camera.lookAt(0, 0, 0);
+    const w = container.clientWidth || 560;
+    const h = container.clientHeight || 480;
+    const camera = new THREE.PerspectiveCamera(44, w / Math.max(1, h), 0.1, 120);
 
     const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     renderer.setSize(w, h);
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.2;
+    renderer.toneMappingExposure = 1.25;
     container.appendChild(renderer.domElement);
 
-    // Subtle cyberpunk ambient & cyan/violet key lighting
-    scene.add(new THREE.AmbientLight(0xcbd5e1, 0.75));
-    const keyLight = new THREE.DirectionalLight(0x38bdf8, 1.4);
-    keyLight.position.set(8, 16, 10);
+    // Three-point architectural lighting for crisp 3D depth
+    scene.add(new THREE.HemisphereLight(0xbae6fd, 0x1e1b4b, 0.95));
+    const keyLight = new THREE.DirectionalLight(0xffffff, 1.5);
+    keyLight.position.set(10, 18, 12);
     scene.add(keyLight);
 
-    const fillLight = new THREE.PointLight(0xa855f7, 2.0, 28);
-    fillLight.position.set(-6, 7, -4);
-    scene.add(fillLight);
+    const accentLight = new THREE.PointLight(0xa855f7, 2.4, 34);
+    accentLight.position.set(-8, 8, -6);
+    scene.add(accentLight);
 
-    // Subtle Isometric Base Grid
-    const grid = new THREE.GridHelper(28, 28, 0x1e293b, 0x0f172a);
-    grid.position.y = -0.35;
+    // Subtle spatial horizon floor grid below hovering monoliths
+    const grid = new THREE.GridHelper(34, 34, 0x1e293b, 0x0b1220);
+    grid.position.y = -1.35;
     scene.add(grid);
 
     const mazeLayer = new THREE.Group();
     scene.add(mazeLayer);
 
     const clickableMeshes = [];
+    const labelTexCache = new Map();
     const raycaster = new THREE.Raycaster();
     const pointer = new THREE.Vector2();
 
+    // Smooth interactive orbit state
+    let orbitYaw = 0.22;
+    let targetYaw = 0.22;
+    let isDragging = false;
+    let dragStartX = 0;
+    let dragMoved = false;
+
     const resizeObserver = new ResizeObserver(() => {
-      const nw = container.clientWidth || 500;
-      const nh = container.clientHeight || 380;
+      const nw = container.clientWidth || 560;
+      const nh = container.clientHeight || 480;
       camera.aspect = nw / Math.max(1, nh);
       camera.updateProjectionMatrix();
       renderer.setSize(nw, nh);
@@ -86,20 +114,51 @@ const NullNorthMaze3D = ({ gameState, onSelectRoom }) => {
     resizeObserver.observe(container);
 
     const handlePointerDown = (e) => {
-      const rect = renderer.domElement.getBoundingClientRect();
-      pointer.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
-      pointer.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
-      raycaster.setFromCamera(pointer, camera);
-      const hits = raycaster.intersectObjects(clickableMeshes, false);
-      if (hits.length > 0 && hits[0].object.userData?.roomId) {
-        onSelectRoomRef.current?.(hits[0].object.userData.roomId);
+      isDragging = true;
+      dragMoved = false;
+      dragStartX = e.clientX;
+    };
+
+    const handlePointerMove = (e) => {
+      if (!isDragging) return;
+      const dx = e.clientX - dragStartX;
+      if (Math.abs(dx) > 4) dragMoved = true;
+      targetYaw -= dx * 0.0065;
+      dragStartX = e.clientX;
+    };
+
+    const handlePointerUp = (e) => {
+      if (!isDragging) return;
+      isDragging = false;
+      if (!dragMoved) {
+        const rect = renderer.domElement.getBoundingClientRect();
+        pointer.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+        pointer.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+        raycaster.setFromCamera(pointer, camera);
+        const hits = raycaster.intersectObjects(clickableMeshes, false);
+        if (hits.length > 0 && hits[0].object.userData?.roomId) {
+          onSelectRoomRef.current?.(hits[0].object.userData.roomId);
+        }
       }
     };
+
     renderer.domElement.addEventListener("pointerdown", handlePointerDown);
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", handlePointerUp);
 
     let lastSig = "";
+    let camRadius = 15.0;
+    let camHeight = 11.2;
     const clock = new THREE.Clock();
     let rafId;
+
+    const getCachedLabel = (txt, hex) => {
+      const key = `${txt}_${hex}`;
+      if (!labelTexCache.has(key)) {
+        labelTexCache.set(key, makeLabelTexture(txt, hex));
+      }
+      return labelTexCache.get(key);
+    };
 
     const rebuildSceneGeometry = (st) => {
       while (mazeLayer.children.length > 0) {
@@ -117,7 +176,6 @@ const NullNorthMaze3D = ({ gameState, onSelectRoom }) => {
       const roomsList = carto ? carto.rooms : myRoom.adjacent_rooms || [myRoom];
       const edgesList = carto ? carto.edges : adjEdges;
 
-      // Center camera target smoothly around rooms average
       let avgX = 0;
       let avgY = 0;
       roomsList.forEach((r) => {
@@ -127,10 +185,12 @@ const NullNorthMaze3D = ({ gameState, onSelectRoom }) => {
       avgX /= Math.max(1, roomsList.length);
       avgY /= Math.max(1, roomsList.length);
 
-      const SCALE = 2.55;
+      const SCALE = 2.7;
       const roomPos = new Map();
       roomsList.forEach((r) => {
-        roomPos.set(r.id, new THREE.Vector3((r.gx - avgX) * SCALE, 0, (r.gy - avgY) * SCALE));
+        // Subtle 3D elevation variation by grid index for true multi-level depth
+        const elev = r.id === "R_EXT" ? 0.35 : r.type === "cipher_vault" ? 0.2 : 0;
+        roomPos.set(r.id, new THREE.Vector3((r.gx - avgX) * SCALE, elev, (r.gy - avgY) * SCALE));
       });
 
       const adjacentIds = new Set(adjEdges.map((e) => e.target_room_id));
@@ -138,79 +198,155 @@ const NullNorthMaze3D = ({ gameState, onSelectRoom }) => {
       const team = st.team || [];
       const selfId = st.self?.user_id;
 
-      // Build Rooms
+      // Build True Architectural 3D Chambers
       for (const r of roomsList) {
         const pos = roomPos.get(r.id);
         const isCurrent = r.id === myRoom.id;
         const isAdjacent = adjacentIds.has(r.id);
-        const col = ROOM_COLORS[r.type] || 0x1e293b;
+        const theme = ROOM_THEMES[r.type] || ROOM_THEMES.corridor;
 
-        const slab = new THREE.Mesh(
-          new THREE.BoxGeometry(1.5, isCurrent ? 0.42 : 0.28, 1.5),
+        // 1. Stepped Under-Plinth Column for true 3D hovering monolith silhouette
+        const column = new THREE.Mesh(
+          new THREE.BoxGeometry(1.12, 1.35, 1.12),
           new THREE.MeshStandardMaterial({
-            color: col,
-            emissive: isCurrent ? 0x0ea5e9 : col,
-            emissiveIntensity: isCurrent ? 0.55 : isAdjacent ? 0.35 : 0.16,
-            metalness: 0.65,
-            roughness: 0.25,
+            color: theme.base,
+            emissive: theme.base,
+            emissiveIntensity: 0.18,
+            metalness: 0.7,
+            roughness: 0.35,
+            transparent: true,
+            opacity: 0.82,
           })
         );
-        slab.position.copy(pos);
-        slab.userData = { roomId: r.id };
-        mazeLayer.add(slab);
-        clickableMeshes.push(slab);
+        column.position.set(pos.x, pos.y - 0.72, pos.z);
+        mazeLayer.add(column);
 
-        // Glowing rim border
-        const rimColor = isCurrent ? 0x38bdf8 : isAdjacent ? 0x22d3ee : r.id === "R_EXT" ? 0x34d399 : 0x334155;
-        const rim = new THREE.Mesh(
-          new THREE.BoxGeometry(1.58, 0.06, 1.58),
-          new THREE.MeshBasicMaterial({ color: rimColor })
+        // 2. Main Semi-Opaque Bevelled Chamber Deck
+        const deck = new THREE.Mesh(
+          new THREE.BoxGeometry(1.62, 0.32, 1.62),
+          new THREE.MeshStandardMaterial({
+            color: theme.base,
+            emissive: isCurrent ? 0x38bdf8 : theme.glass,
+            emissiveIntensity: isCurrent ? 0.6 : isAdjacent ? 0.42 : 0.25,
+            metalness: 0.55,
+            roughness: 0.2,
+            transparent: true,
+            opacity: 0.88,
+          })
         );
-        rim.position.set(pos.x, pos.y + (isCurrent ? 0.22 : 0.15), pos.z);
-        mazeLayer.add(rim);
+        deck.position.copy(pos);
+        deck.userData = { roomId: r.id };
+        mazeLayer.add(deck);
+        clickableMeshes.push(deck);
 
-        // Extraction Pillar Beacon
-        if (r.id === "R_EXT" || r.type === "extraction") {
-          const pylon = new THREE.Mesh(
-            new THREE.OctahedronGeometry(0.36, 0),
-            new THREE.MeshStandardMaterial({ color: 0x34d399, emissive: 0x10b981, emissiveIntensity: 1.3 })
-          );
-          pylon.position.set(pos.x, 0.85, pos.z);
-          pylon.userData.spin = true;
-          mazeLayer.add(pylon);
+        // 3. 4 Semi-Opaque Architectural Corner Pillars + Glowing Rim Frame
+        const pillarH = r.id === "R_EXT" ? 1.15 : isCurrent ? 0.85 : 0.6;
+        const pillarMat = new THREE.MeshStandardMaterial({
+          color: theme.rim,
+          emissive: theme.rim,
+          emissiveIntensity: isCurrent || isAdjacent ? 0.75 : 0.35,
+          transparent: true,
+          opacity: 0.78,
+          metalness: 0.4,
+          roughness: 0.15,
+        });
+        for (const [px, pz] of [[-0.68, -0.68], [0.68, -0.68], [-0.68, 0.68], [0.68, 0.68]]) {
+          const pil = new THREE.Mesh(new THREE.BoxGeometry(0.14, pillarH, 0.14), pillarMat);
+          pil.position.set(pos.x + px, pos.y + pillarH * 0.5 + 0.12, pos.z + pz);
+          mazeLayer.add(pil);
         }
 
-        // Cartographer Ping Ring
+        // Translucent Neon Glass Perimeter Walls on active/vault/extraction chambers
+        if (isCurrent || isAdjacent || r.id === "R_EXT" || r.type === "cipher_vault" || r.type === "recharge") {
+          const railMat = new THREE.MeshBasicMaterial({
+            color: theme.rim,
+            transparent: true,
+            opacity: isCurrent ? 0.55 : 0.3,
+          });
+          const frame = new THREE.Mesh(new THREE.BoxGeometry(1.52, 0.28, 1.52), railMat);
+          frame.position.set(pos.x, pos.y + 0.3, pos.z);
+          mazeLayer.add(frame);
+        }
+
+        // 4. Specialty Holo-Beacons per Chamber Type
+        if (r.id === "R_EXT" || r.type === "extraction") {
+          const spire = new THREE.Mesh(
+            new THREE.OctahedronGeometry(0.42, 0),
+            new THREE.MeshStandardMaterial({
+              color: 0x6ee7b7,
+              emissive: 0x10b981,
+              emissiveIntensity: 1.5,
+              transparent: true,
+              opacity: 0.9,
+            })
+          );
+          spire.position.set(pos.x, pos.y + 1.05, pos.z);
+          spire.userData.spin = true;
+          mazeLayer.add(spire);
+        } else if (r.type === "cipher_vault") {
+          const relic = new THREE.Mesh(
+            new THREE.OctahedronGeometry(0.28, 0),
+            new THREE.MeshStandardMaterial({ color: 0xfef08a, emissive: 0xf59e0b, emissiveIntensity: 1.3 })
+          );
+          relic.position.set(pos.x, pos.y + 0.85, pos.z);
+          relic.userData.spin = true;
+          mazeLayer.add(relic);
+        } else if (r.type === "recharge") {
+          const cell = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.2, 0.2, 0.58, 8),
+            new THREE.MeshStandardMaterial({ color: 0xd9f99d, emissive: 0x84cc16, emissiveIntensity: 1.25 })
+          );
+          cell.position.set(pos.x, pos.y + 0.65, pos.z);
+          cell.userData.spin = true;
+          mazeLayer.add(cell);
+        }
+
+        // 5. Crisp Floating Label for Current / Adjacent / Exit Rooms
+        if (isCurrent || isAdjacent || r.id === "R_EXT" || r.id === "R0") {
+          const lblCol = isCurrent ? "#38bdf8" : r.id === "R_EXT" ? "#34d399" : isAdjacent ? "#67e8f9" : "#94a3b8";
+          const sprite = new THREE.Sprite(
+            new THREE.SpriteMaterial({
+              map: getCachedLabel(r.id, lblCol),
+              transparent: true,
+              depthWrite: false,
+            })
+          );
+          sprite.position.set(pos.x, pos.y + (r.id === "R_EXT" ? 1.65 : 1.18), pos.z);
+          sprite.scale.set(1.15, 0.4, 1);
+          mazeLayer.add(sprite);
+        }
+
+        // 6. Cartographer Ping Halo
         if (pings[r.id]) {
           const pCol = pings[r.id].label === "AVOID" ? 0xf43f5e : pings[r.id].label === "EXIT" ? 0x34d399 : 0xfbbf24;
           const pingRing = new THREE.Mesh(
-            new THREE.TorusGeometry(0.95, 0.045, 8, 24),
-            new THREE.MeshBasicMaterial({ color: pCol })
+            new THREE.TorusGeometry(1.05, 0.06, 8, 28),
+            new THREE.MeshBasicMaterial({ color: pCol, transparent: true, opacity: 0.9 })
           );
           pingRing.rotation.x = Math.PI / 2;
-          pingRing.position.set(pos.x, 0.25, pos.z);
+          pingRing.position.set(pos.x, pos.y + 0.3, pos.z);
           mazeLayer.add(pingRing);
         }
 
-        // Player / Operative Tokens inside Chamber
+        // 7. 3D Operative Tokens inside Chamber
         const hereOps = team.filter((op) => op.room_id === r.id);
         hereOps.forEach((op, idx) => {
           const isMe = op.user_id === selfId;
           const token = new THREE.Mesh(
-            new THREE.CylinderGeometry(0.18, 0.22, 0.65, 10),
+            new THREE.ConeGeometry(0.24, 0.72, 6),
             new THREE.MeshStandardMaterial({
-              color: isMe ? 0x22d3ee : 0xc084fc,
-              emissive: isMe ? 0x06b6d4 : 0xa855f7,
-              emissiveIntensity: 0.9,
+              color: isMe ? 0x38bdf8 : 0xe879f9,
+              emissive: isMe ? 0x0ea5e9 : 0xc026d3,
+              emissiveIntensity: 1.1,
             })
           );
-          const off = (idx - (hereOps.length - 1) * 0.5) * 0.42;
-          token.position.set(pos.x + off, 0.55, pos.z);
+          const off = (idx - (hereOps.length - 1) * 0.5) * 0.45;
+          token.position.set(pos.x + off, pos.y + 0.62, pos.z);
           mazeLayer.add(token);
         });
       }
 
-      // Build Edges / Corridors
+      // Build 3D Walkways, Glass Side Guardrails, Laser Gates & Hazard Fields
       const hazByEdgeId = new Map();
       if (seer?.hazards) {
         seer.hazards.forEach((h) => hazByEdgeId.set(h.edge_id, h));
@@ -225,38 +361,65 @@ const NullNorthMaze3D = ({ gameState, onSelectRoom }) => {
         if (!pa || !pb) continue;
 
         const mid = new THREE.Vector3().addVectors(pa, pb).multiplyScalar(0.5);
-        const len = pa.distanceTo(pb) - 1.1;
+        const len = Math.max(0.45, pa.distanceTo(pb) - 1.45);
         const angle = Math.atan2(pb.x - pa.x, pb.z - pa.z);
 
         const hInfo = hazByEdgeId.get(e.id);
-        let edgeColor = 0x38bdf8;
-        let opacity = 0.85;
+        let edgeColor = 0x22d3ee;
+        let opacity = 0.78;
         if (!e.active) {
-          edgeColor = 0x475569;
-          opacity = 0.28;
+          edgeColor = 0xf59e0b;
+          opacity = 0.22;
         } else if (e.locked) {
-          edgeColor = 0xc084fc;
+          edgeColor = 0xd946ef;
+          opacity = 0.85;
         } else if (hInfo && hInfo.hazard !== "none" && !hInfo.stabilized) {
           edgeColor = HAZARD_COLORS[hInfo.hazard] || 0xf43f5e;
+          opacity = 0.88;
         }
 
-        const bridge = new THREE.Mesh(
-          new THREE.BoxGeometry(0.32, 0.1, Math.max(0.4, len)),
+        const spanGroup = new THREE.Group();
+        spanGroup.position.set(mid.x, mid.y, mid.z);
+        spanGroup.rotation.y = angle;
+        spanGroup.rotation.x = -Math.atan2(pb.y - pa.y, pa.distanceTo(pb));
+
+        const deck = new THREE.Mesh(
+          new THREE.BoxGeometry(0.46, 0.14, len),
           new THREE.MeshStandardMaterial({
             color: edgeColor,
             emissive: edgeColor,
-            emissiveIntensity: e.active ? 0.65 : 0.1,
+            emissiveIntensity: e.active ? 0.5 : 0.15,
             transparent: true,
             opacity,
           })
         );
-        bridge.position.set(mid.x, 0, mid.z);
-        bridge.rotation.y = angle;
-        mazeLayer.add(bridge);
+        spanGroup.add(deck);
+
+        // Translucent 3D side rails along active walkway
+        if (e.active) {
+          const railMat = new THREE.MeshBasicMaterial({ color: edgeColor, transparent: true, opacity: 0.45 });
+          for (const rx of [-0.25, 0.25]) {
+            const rMesh = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.24, len), railMat);
+            rMesh.position.set(rx, 0.12, 0);
+            spanGroup.add(rMesh);
+          }
+        }
+
+        // Visible 3D Laser Barrier Gate when Locked!
+        if (e.locked) {
+          const gateMat = new THREE.MeshBasicMaterial({ color: 0xf472b6, transparent: true, opacity: 0.9 });
+          for (const gy of [0.22, 0.42]) {
+            const bar = new THREE.Mesh(new THREE.BoxGeometry(0.65, 0.06, 0.06), gateMat);
+            bar.position.set(0, gy, 0);
+            spanGroup.add(bar);
+          }
+        }
+
+        mazeLayer.add(spanGroup);
       }
 
-      camera.position.set(0, carto ? 12.8 : 9.2, carto ? 11.2 : 8.5);
-      camera.lookAt(0, 0, 0);
+      camRadius = carto ? 15.6 : 11.4;
+      camHeight = carto ? 11.5 : 8.8;
     };
 
     const animate = () => {
@@ -272,9 +435,17 @@ const NullNorthMaze3D = ({ gameState, onSelectRoom }) => {
         rebuildSceneGeometry(st);
       }
 
+      orbitYaw += (targetYaw - orbitYaw) * Math.min(1, dt * 8);
+      camera.position.set(
+        Math.sin(orbitYaw) * camRadius,
+        camHeight,
+        Math.cos(orbitYaw) * camRadius
+      );
+      camera.lookAt(0, 0.15, 0);
+
       mazeLayer.children.forEach((ch) => {
         if (ch.userData?.spin) {
-          ch.rotation.y += dt * 1.8;
+          ch.rotation.y += dt * 1.9;
         }
       });
 
@@ -288,7 +459,11 @@ const NullNorthMaze3D = ({ gameState, onSelectRoom }) => {
       cancelAnimationFrame(rafId);
       resizeObserver.disconnect();
       renderer.domElement.removeEventListener("pointerdown", handlePointerDown);
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", handlePointerUp);
       renderer.dispose();
+      for (const tex of labelTexCache.values()) tex.dispose();
+      labelTexCache.clear();
       if (renderer.domElement.parentNode === container) {
         container.removeChild(renderer.domElement);
       }
@@ -298,7 +473,7 @@ const NullNorthMaze3D = ({ gameState, onSelectRoom }) => {
   return (
     <div
       ref={mountRef}
-      className="w-full h-full min-h-[280px] cursor-pointer touch-manipulation select-none"
+      className="w-full h-full min-h-[340px] cursor-grab active:cursor-grabbing touch-none select-none"
       aria-label="NULL//NORTH 3D Architectural Labyrinth View"
     />
   );

@@ -83,6 +83,7 @@ const NullNorthGame = ({ onBack, isMuted = false, initialMatchCode = "" }) => {
   // Clean non-cramped tab navigation
   const [mobileTab, setMobileTab] = useState("maze"); // maze | deck | comms | team
   const [desktopSideTab, setDesktopSideTab] = useState("deck"); // deck | comms | team
+  const [activeRoleTab, setActiveRoleTab] = useState(null);
 
   // Isolated Squad Comms
   const [commsMessages, setCommsMessages] = useState([]);
@@ -913,22 +914,23 @@ const NullNorthGame = ({ onBack, isMuted = false, initialMatchCode = "" }) => {
   }
 
   /* ═══════════════════════════════════════════════════════════════
-     SCREEN 4 & 5: ACTIVE LABYRINTH HUD (Spacious, Non-Cramped)
+     SCREEN 4 & 5: ACTIVE LABYRINTH HUD (Clean, Semi-Opaque & Spacious)
      ═══════════════════════════════════════════════════════════════ */
   const caps = self.capabilities || [self.assigned_role];
+  const selectedCap = activeRoleTab && caps.includes(activeRoleTab) ? activeRoleTab : caps[0];
   const currRoom = matchState.current_room;
   const adjEdges = currRoom?.adjacent_edges || [];
   const inExtraction = currRoom?.id === "R_EXT";
 
   return (
     <div className="w-full max-w-7xl mx-auto space-y-4 select-none">
-      {/* Top Sci-Fi Command Bar */}
-      <div className="rounded-3xl border border-white/10 bg-[#090d16]/95 p-3.5 sm:p-4 backdrop-blur-xl flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-2.5">
+      {/* Streamlined Semi-Opaque Command Header */}
+      <div className="rounded-3xl border border-white/15 bg-[#08101e]/70 p-3.5 sm:px-5 backdrop-blur-xl flex flex-wrap items-center justify-between gap-3 shadow-xl">
+        <div className="flex items-center gap-3">
           <button
             type="button"
             onClick={() => setMatchState(null)}
-            className="p-2.5 rounded-xl bg-white/[0.06] hover:bg-white/[0.12] border border-white/10 text-white cursor-pointer"
+            className="p-2.5 rounded-xl bg-white/[0.08] hover:bg-white/[0.15] border border-white/15 text-white cursor-pointer transition"
             title="Leave Match HUD"
           >
             <ArrowLeft className="w-4 h-4 text-cyan-400" />
@@ -937,34 +939,29 @@ const NullNorthGame = ({ onBack, isMuted = false, initialMatchCode = "" }) => {
           <div>
             <div className="text-sm font-black text-white flex items-center gap-2">
               NULL<span className="text-cyan-400">//</span>NORTH
-              <span className="px-2.5 py-0.5 rounded-lg bg-cyan-500/15 border border-cyan-400/35 text-xs font-bold text-cyan-200">
-                {caps.map((c) => ROLE_META[c]?.title || c).join(" + ")}
+              <span className="px-2.5 py-0.5 rounded-lg bg-cyan-500/20 border border-cyan-400/35 text-xs font-bold text-cyan-200">
+                {ROLE_META[selectedCap]?.title || selectedCap}
               </span>
             </div>
-            <div className="text-xs text-slate-400">
-              Location: <strong className="text-white">{currRoom?.name || self.current_room_id}</strong>
+            <div className="text-xs text-slate-300 mt-0.5">
+              Chamber: <strong className="text-white">{currRoom?.name || self.current_room_id}</strong>
             </div>
           </div>
         </div>
 
-        {/* Timers & Resources */}
-        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-          <div className="px-3 py-1.5 rounded-xl bg-white/[0.05] border border-white/10 flex items-center gap-1.5 text-xs font-black text-rose-300">
+        {/* Essential Vital Counters */}
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="px-3 py-1.5 rounded-xl bg-black/40 border border-rose-400/30 flex items-center gap-1.5 text-xs font-black text-rose-300">
             <Clock className="w-4 h-4" />
-            Collapse {fmtSeconds(mInfo.collapse_seconds_left)}
+            {fmtSeconds(mInfo.collapse_seconds_left)}
           </div>
 
-          <div className="px-3 py-1.5 rounded-xl bg-white/[0.05] border border-white/10 flex items-center gap-1.5 text-xs font-bold text-amber-300">
-            <Sparkles className="w-4 h-4" />
-            Shift {mInfo.instability_countdown}s
-          </div>
-
-          <div className="px-3 py-1.5 rounded-xl bg-white/[0.05] border border-emerald-400/25 flex items-center gap-1.5 text-xs font-black text-emerald-300">
+          <div className="px-3 py-1.5 rounded-xl bg-black/40 border border-emerald-400/30 flex items-center gap-1.5 text-xs font-black text-emerald-300">
             <Shield className="w-4 h-4" />
-            HP {self.hp}/3
+            {self.hp}/3
           </div>
 
-          <div className="px-3 py-1.5 rounded-xl bg-white/[0.05] border border-cyan-400/25 flex items-center gap-1.5 text-xs font-black text-cyan-300">
+          <div className="px-3 py-1.5 rounded-xl bg-black/40 border border-cyan-400/30 flex items-center gap-1.5 text-xs font-black text-cyan-300">
             <Zap className="w-4 h-4" />
             {self.energy}⚡
           </div>
@@ -972,7 +969,7 @@ const NullNorthGame = ({ onBack, isMuted = false, initialMatchCode = "" }) => {
           <button
             type="button"
             onClick={() => setShowBriefing(true)}
-            className="px-3 py-1.5 rounded-xl bg-white/[0.07] hover:bg-white/[0.14] text-xs font-bold text-slate-200 flex items-center gap-1 cursor-pointer"
+            className="px-3 py-1.5 rounded-xl bg-white/[0.08] hover:bg-white/[0.16] border border-white/15 text-xs font-bold text-slate-100 flex items-center gap-1 cursor-pointer transition"
           >
             <Info className="w-3.5 h-3.5 text-cyan-300" /> Briefing
           </button>
@@ -983,18 +980,18 @@ const NullNorthGame = ({ onBack, isMuted = false, initialMatchCode = "" }) => {
       <div className="grid grid-cols-4 gap-2 lg:hidden">
         {[
           { id: "maze", label: "3D & Move" },
-          { id: "deck", label: "Class Deck" },
-          { id: "comms", label: `Comms (${commsMessages.length})` },
-          { id: "team", label: "Squad & Log" },
+          { id: "deck", label: "Class" },
+          { id: "comms", label: `Chat (${commsMessages.length})` },
+          { id: "team", label: "Squad" },
         ].map((t) => (
           <button
             key={t.id}
             type="button"
             onClick={() => setMobileTab(t.id)}
-            className={`py-2.5 rounded-xl border text-xs font-black cursor-pointer ${
+            className={`py-2.5 rounded-xl border text-xs font-black cursor-pointer transition ${
               mobileTab === t.id
-                ? "bg-cyan-500/25 border-cyan-400 text-cyan-200"
-                : "bg-[#090d16] border-white/10 text-slate-400"
+                ? "bg-cyan-500/25 border-cyan-400 text-cyan-200 backdrop-blur-md"
+                : "bg-[#08101e]/70 border-white/10 text-slate-400"
             }`}
           >
             {t.label}
@@ -1004,9 +1001,9 @@ const NullNorthGame = ({ onBack, isMuted = false, initialMatchCode = "" }) => {
 
       {/* Main Split Workspace */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
-        {/* LEFT COLUMN: Three.js Isometric Labyrinth + Corridor Navigation */}
-        <div className={`lg:col-span-7 space-y-4 ${mobileTab === "maze" ? "block" : "hidden lg:block"}`}>
-          <div className="rounded-3xl border border-cyan-500/25 bg-[#060913] overflow-hidden shadow-2xl h-[340px] sm:h-[420px]">
+        {/* LEFT COLUMN: Hero Three.js Isometric Labyrinth with Translucent Navigation Dock */}
+        <div className={`lg:col-span-7 ${mobileTab === "maze" ? "block" : "hidden lg:block"}`}>
+          <div className="relative rounded-3xl border border-cyan-400/25 bg-[#050812] overflow-hidden shadow-2xl h-[470px] sm:h-[540px]">
             <NullNorthMaze3D
               gameState={matchState}
               onSelectRoom={(rid) => {
@@ -1015,76 +1012,84 @@ const NullNorthGame = ({ onBack, isMuted = false, initialMatchCode = "" }) => {
                 }
               }}
             />
-          </div>
 
-          {/* Spacious Movement & Recharge Action Strip */}
-          <div className="rounded-3xl border border-white/10 bg-[#0b101b]/90 p-5 space-y-3">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div className="text-xs font-black uppercase tracking-wider text-slate-300">
-                Connected Corridors From {currRoom?.id}
-              </div>
+            {/* Floating Top-Left Color Legend + Drag Hint */}
+            <div className="pointer-events-none absolute top-3 left-3 flex flex-wrap items-center gap-1.5 max-w-[80%]">
+              <span className="px-2.5 py-1 rounded-xl bg-black/55 backdrop-blur-md border border-white/10 text-xs font-semibold text-slate-200">
+                Drag to Orbit • Click Room
+              </span>
+              <span className="px-2 py-1 rounded-xl bg-sky-500/20 border border-sky-400/35 text-xs font-bold text-sky-200">Start</span>
+              <span className="px-2 py-1 rounded-xl bg-emerald-500/20 border border-emerald-400/35 text-xs font-bold text-emerald-200">Exit</span>
+              <span className="px-2 py-1 rounded-xl bg-amber-500/20 border border-amber-400/35 text-xs font-bold text-amber-200">Vault</span>
+              <span className="px-2 py-1 rounded-xl bg-lime-500/20 border border-lime-400/35 text-xs font-bold text-lime-200">Charge</span>
+              <span className="px-2 py-1 rounded-xl bg-fuchsia-500/20 border border-fuchsia-400/35 text-xs font-bold text-fuchsia-200">Locked</span>
+            </div>
 
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() => handleAction("RECHARGE", {})}
-                  className="px-3.5 py-2 rounded-xl bg-amber-500/20 hover:bg-amber-500/35 border border-amber-400/40 text-xs font-black text-amber-200 flex items-center gap-1.5 cursor-pointer"
-                >
-                  <BatteryCharging className="w-4 h-4" />
-                  {currRoom?.charge_ready ? "Node Recharge (+45⚡)" : "Rest (+22⚡)"}
-                </button>
+            {/* Floating Top-Right Shift Warning Badge */}
+            <div className="pointer-events-none absolute top-3 right-3 px-3 py-1 rounded-xl bg-black/60 backdrop-blur-md border border-amber-400/35 text-xs font-bold text-amber-200 flex items-center gap-1.5">
+              <Sparkles className="w-3.5 h-3.5" /> Shift {mInfo.instability_countdown}s
+            </div>
 
-                {inExtraction && (
+            {/* Semi-Opaque Frosted Navigation & Action Dock at Bottom of 3D View */}
+            <div className="absolute bottom-0 inset-x-0 p-3 sm:p-4 bg-[#060b16]/75 backdrop-blur-xl border-t border-white/15 space-y-2.5">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="text-xs font-black uppercase tracking-wider text-slate-300">
+                  Corridors from {currRoom?.id}
+                </span>
+
+                <div className="flex items-center gap-2">
                   <button
                     type="button"
                     disabled={busy}
-                    onClick={() => handleAction("TRIGGER_EXTRACTION", {})}
-                    className="px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-400 to-cyan-400 text-slate-950 font-black text-xs flex items-center gap-1.5 shadow-lg cursor-pointer animate-pulse"
+                    onClick={() => handleAction("RECHARGE", {})}
+                    className="px-3 py-1.5 rounded-xl bg-amber-500/25 hover:bg-amber-500/40 border border-amber-400/45 text-xs font-black text-amber-200 flex items-center gap-1.5 cursor-pointer"
                   >
-                    <Flag className="w-4 h-4" /> TRIGGER EXTRACTION
+                    <BatteryCharging className="w-3.5 h-3.5" />
+                    {currRoom?.charge_ready ? "Node +45⚡" : "Rest +22⚡"}
                   </button>
-                )}
-              </div>
-            </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-              {adjEdges.map((edge) => {
-                const blockedReason = !edge.active
-                  ? "Bridge Dormant"
-                  : edge.locked
-                  ? "Cipher Locked"
-                  : edge.cooldown_lock_ticks > 0
-                  ? `Locked (${edge.cooldown_lock_ticks}t)`
-                  : null;
-                return (
-                  <button
-                    key={edge.id}
-                    type="button"
-                    disabled={busy || Boolean(blockedReason)}
-                    onClick={() => handleAction("MOVE", { target_room_id: edge.target_room_id })}
-                    className="p-3.5 rounded-2xl border border-white/10 bg-white/[0.04] hover:border-cyan-400/50 hover:bg-cyan-500/10 disabled:opacity-50 text-left flex items-center justify-between gap-2 cursor-pointer transition"
-                  >
-                    <div>
-                      <div className="text-sm font-black text-white">
-                        Move → {edge.target_room_id}
-                      </div>
-                      <div className="text-xs text-slate-400 mt-0.5">
-                        Corridor {edge.id} {edge.hazard && edge.hazard !== "none" ? `• ${edge.hazard.toUpperCase()}` : ""}
-                      </div>
-                    </div>
-                    <span className="px-2.5 py-1 rounded-lg bg-black/40 text-xs font-bold text-cyan-300">
-                      {blockedReason || "-4⚡"}
-                    </span>
-                  </button>
-                );
-              })}
+                  {inExtraction && (
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => handleAction("TRIGGER_EXTRACTION", {})}
+                      className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-emerald-400 to-cyan-400 text-slate-950 font-black text-xs flex items-center gap-1.5 shadow-lg cursor-pointer animate-pulse"
+                    >
+                      <Flag className="w-3.5 h-3.5" /> EXTRACT
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                {adjEdges.map((edge) => {
+                  const blockedReason = !edge.active
+                    ? "Dormant"
+                    : edge.locked
+                    ? "Locked"
+                    : edge.cooldown_lock_ticks > 0
+                    ? `${edge.cooldown_lock_ticks}t Lock`
+                    : null;
+                  return (
+                    <button
+                      key={edge.id}
+                      type="button"
+                      disabled={busy || Boolean(blockedReason)}
+                      onClick={() => handleAction("MOVE", { target_room_id: edge.target_room_id })}
+                      className="px-3.5 py-2 rounded-xl border border-white/15 bg-white/[0.08] hover:border-cyan-400/60 hover:bg-cyan-500/20 disabled:opacity-45 text-xs font-bold text-white flex items-center gap-2 cursor-pointer transition"
+                    >
+                      <span>Move → {edge.target_room_id}</span>
+                      <span className="text-cyan-300 font-black">{blockedReason || "-4⚡"}</span>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           </div>
         </div>
 
-        {/* RIGHT COLUMN: Dedicated Class Deck / Isolated Squad Comms / Team Status */}
-        <div className={`lg:col-span-5 rounded-3xl border border-white/10 bg-[#0b101b]/95 p-5 space-y-4 ${mobileTab !== "maze" ? "block" : "hidden lg:block"}`}>
+        {/* RIGHT COLUMN: Semi-Opaque Uncluttered Class Deck / Comms / Squad */}
+        <div className={`lg:col-span-5 rounded-3xl border border-white/15 bg-[#08101e]/72 backdrop-blur-xl p-5 space-y-4 shadow-2xl ${mobileTab !== "maze" ? "block" : "hidden lg:block"}`}>
           {/* Desktop Side Switcher */}
           <div className="hidden lg:grid grid-cols-3 gap-2">
             {[
@@ -1096,10 +1101,10 @@ const NullNorthGame = ({ onBack, isMuted = false, initialMatchCode = "" }) => {
                 key={t.id}
                 type="button"
                 onClick={() => setDesktopSideTab(t.id)}
-                className={`py-2 rounded-xl border text-xs font-black cursor-pointer transition ${
+                className={`py-2.5 rounded-xl border text-xs font-black cursor-pointer transition ${
                   desktopSideTab === t.id
-                    ? "bg-cyan-500/20 border-cyan-400 text-cyan-200"
-                    : "bg-white/[0.03] border-white/10 text-slate-400 hover:text-white"
+                    ? "bg-cyan-500/25 border-cyan-400 text-cyan-200"
+                    : "bg-white/[0.04] border-white/10 text-slate-400 hover:text-white"
                 }`}
               >
                 {t.label}
@@ -1107,10 +1112,29 @@ const NullNorthGame = ({ onBack, isMuted = false, initialMatchCode = "" }) => {
             ))}
           </div>
 
-          {/* Class Interfaces */}
+          {/* Uncluttered Single-Role Deck View (Tabs if dual-role) */}
           {(mobileTab === "deck" || (mobileTab === "maze" && desktopSideTab === "deck")) && (
-            <div className="space-y-5">
-              {matchState.layers?.cartographer && (
+            <div className="space-y-4">
+              {caps.length > 1 && (
+                <div className="grid grid-cols-2 gap-2 p-1 rounded-2xl bg-black/35 border border-white/10">
+                  {caps.map((cap) => (
+                    <button
+                      key={cap}
+                      type="button"
+                      onClick={() => setActiveRoleTab(cap)}
+                      className={`py-2 rounded-xl text-xs font-black cursor-pointer transition ${
+                        selectedCap === cap
+                          ? "bg-cyan-500/25 text-cyan-200 border border-cyan-400/40"
+                          : "text-slate-400 hover:text-white"
+                      }`}
+                    >
+                      {ROLE_META[cap]?.title || cap}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {selectedCap === "CARTOGRAPHER" && matchState.layers?.cartographer && (
                 <CartographerDeck
                   layer={matchState.layers.cartographer}
                   currentRoomId={currRoom?.id}
@@ -1119,7 +1143,7 @@ const NullNorthGame = ({ onBack, isMuted = false, initialMatchCode = "" }) => {
                   busy={busy}
                 />
               )}
-              {matchState.layers?.seer && (
+              {selectedCap === "SEER" && matchState.layers?.seer && (
                 <SeerDeck
                   layer={matchState.layers.seer}
                   energy={self.energy}
@@ -1127,7 +1151,7 @@ const NullNorthGame = ({ onBack, isMuted = false, initialMatchCode = "" }) => {
                   busy={busy}
                 />
               )}
-              {matchState.layers?.decoder && (
+              {selectedCap === "DECODER" && matchState.layers?.decoder && (
                 <DecoderDeck
                   layer={matchState.layers.decoder}
                   energy={self.energy}
@@ -1135,7 +1159,7 @@ const NullNorthGame = ({ onBack, isMuted = false, initialMatchCode = "" }) => {
                   busy={busy}
                 />
               )}
-              {matchState.layers?.architect && (
+              {selectedCap === "ARCHITECT" && matchState.layers?.architect && (
                 <ArchitectDeck
                   layer={matchState.layers.architect}
                   energy={self.energy}
