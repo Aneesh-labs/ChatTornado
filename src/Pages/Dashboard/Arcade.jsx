@@ -1,8 +1,45 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import { Gamepad2, Trophy, RotateCcw, Volume2, VolumeX, Sparkles, Play, ArrowLeft } from "lucide-react";
+import { motion } from "framer-motion";
+import {
+    Gamepad2,
+    Trophy,
+    RotateCcw,
+    Volume2,
+    VolumeX,
+    Sparkles,
+    Play,
+    Pause,
+    ArrowLeft,
+    Undo2,
+    Shield,
+    Bomb,
+} from "lucide-react";
 import { soundEngine } from "../../utils/soundEffects";
 import API from "../../Services/API";
+import TornadoSurfersGame from "../../Components/games/TornadoSurfersGame";
+import {
+    SNAKE_GRID,
+    queueSnakeDirection,
+    spawnFreeCell,
+    stepSnakeState,
+    createFlappyState,
+    stepFlappy,
+    createMemoryDeck,
+    computeMemoryFinalScore,
+    move2048Board,
+    hasValid2048Moves,
+    hasReachedTile,
+    createZombieState,
+    fireZombieWeapon,
+    triggerZombieBomb,
+    stepZombieState,
+    createNeonDodgeState,
+    stepNeonDodge,
+    computeBladeImpactAngle,
+    checkBladeCollision,
+    angularDistance,
+    normalizeAngle,
+} from "../../Components/games/arcadeEngines";
 
 const saveBackendGameScore = (game, score) => {
     try {
@@ -14,218 +51,318 @@ const saveBackendGameScore = (game, score) => {
 };
 
 /* ═══════════════════════════════════════════════════════════════
-   1. SNAKE GAME COMPONENT (Ultra-Smooth with Dynamic Grid)
+   1. SUPER SNAKE (Buffered Queue, Canvas Vector, Golden Apples, Swipe)
    ═══════════════════════════════════════════════════════════════ */
 const SnakeGame = ({ onBack, isMuted }) => {
-    const GRID_SIZE = 18;
-    const [snake, setSnake] = useState([[9, 9], [9, 10], [9, 11]]);
-    const [food, setFood] = useState([4, 4]);
-    const [dir, setDir] = useState([0, -1]); // moving UP
-    const [gameOver, setGameOver] = useState(false);
+    const canvasRef = useRef(null);
+    const touchStartRef = useRef(null);
+    const savedRunRef = useRef(false);
+
+    const stateRef = useRef({
+        snake: [[9, 9], [9, 10], [9, 11]],
+        dir: [0, -1],
+        dirQueue: [],
+        food: [4, 4],
+        goldFood: null,
+        score: 0,
+        applesEaten: 0,
+        gameOver: false,
+    });
+
     const [score, setScore] = useState(0);
     const [highScore, setHighScore] = useState(() => Number(localStorage.getItem("snake_highscore") || 0));
     const [isPlaying, setIsPlaying] = useState(false);
-    const dirRef = useRef(dir);
-    dirRef.current = dir;
-    const foodRef = useRef(food);
-    foodRef.current = food;
-    const scoreRef = useRef(score);
-    scoreRef.current = score;
+    const [isPaused, setIsPaused] = useState(false);
+    const [gameOver, setGameOver] = useState(false);
+    const [portalWalls, setPortalWalls] = useState(false);
+
     const highScoreRef = useRef(highScore);
-    highScoreRef.current = highScore;
     const isMutedRef = useRef(isMuted);
-    isMutedRef.current = isMuted;
+    const portalWallsRef = useRef(portalWalls);
+    useEffect(() => { highScoreRef.current = highScore; }, [highScore]);
+    useEffect(() => { isMutedRef.current = isMuted; }, [isMuted]);
+    useEffect(() => { portalWallsRef.current = portalWalls; }, [portalWalls]);
 
     const playAudio = useCallback((type) => {
         if (!isMutedRef.current) soundEngine.play(type);
     }, []);
 
-    const generateFood = useCallback((currentSnake) => {
-        let newFood;
-        while (true) {
-            newFood = [
-                Math.floor(Math.random() * GRID_SIZE),
-                Math.floor(Math.random() * GRID_SIZE)
-            ];
-            if (!currentSnake.some(seg => seg[0] === newFood[0] && seg[1] === newFood[1])) {
-                break;
+    const drawSnakeCanvas = useCallback(() => {
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+        const ctx = canvas.getContext("2d");
+        const S = canvas.width;
+        const cell = S / SNAKE_GRID;
+        const st = stateRef.current;
+
+        ctx.fillStyle = "#080d18";
+        ctx.fillRect(0, 0, S, S);
+
+        // Subtle grid
+        ctx.strokeStyle = "rgba(255,255,255,0.03)";
+        ctx.lineWidth = 1;
+        for (let i = 1; i < SNAKE_GRID; i++) {
+            const p = i * cell;
+            ctx.beginPath();
+            ctx.moveTo(p, 0);
+            ctx.lineTo(p, S);
+            ctx.moveTo(0, p);
+            ctx.lineTo(S, p);
+            ctx.stroke();
+        }
+
+        // Regular Apple
+        const [fx, fy] = st.food;
+        ctx.save();
+        ctx.shadowColor = "#f43f5e";
+        ctx.shadowBlur = 14;
+        ctx.fillStyle = "#f43f5e";
+        ctx.beginPath();
+        ctx.arc((fx + 0.5) * cell, (fy + 0.5) * cell, cell * 0.36, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = "#4ade80";
+        ctx.fillRect((fx + 0.45) * cell, (fy + 0.1) * cell, cell * 0.14, cell * 0.18);
+        ctx.restore();
+
+        // Golden Bonus Apple
+        if (st.goldFood) {
+            const [gx, gy] = st.goldFood.pos;
+            ctx.save();
+            ctx.shadowColor = "#fbbf24";
+            ctx.shadowBlur = 18;
+            ctx.fillStyle = "#fbbf24";
+            ctx.beginPath();
+            ctx.arc((gx + 0.5) * cell, (gy + 0.5) * cell, cell * 0.42, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
+        }
+
+        // Snake segments (tail to head)
+        for (let i = st.snake.length - 1; i >= 0; i--) {
+            const [sx, sy] = st.snake[i];
+            const isHead = i === 0;
+            const pad = isHead ? 1.5 : 2.5;
+            ctx.fillStyle = isHead ? "#34d399" : i % 2 === 0 ? "#10b981" : "#059669";
+            ctx.beginPath();
+            ctx.roundRect(sx * cell + pad, sy * cell + pad, cell - pad * 2, cell - pad * 2, isHead ? 6 : 4);
+            ctx.fill();
+
+            if (isHead) {
+                const [dx, dy] = st.dir;
+                const cx = (sx + 0.5) * cell;
+                const cy = (sy + 0.5) * cell;
+                const eOff = cell * 0.18;
+                ctx.fillStyle = "#064e3b";
+                if (dx !== 0) {
+                    ctx.beginPath();
+                    ctx.arc(cx + dx * eOff, cy - eOff, 2.2, 0, Math.PI * 2);
+                    ctx.arc(cx + dx * eOff, cy + eOff, 2.2, 0, Math.PI * 2);
+                    ctx.fill();
+                } else {
+                    ctx.beginPath();
+                    ctx.arc(cx - eOff, cy + dy * eOff, 2.2, 0, Math.PI * 2);
+                    ctx.arc(cx + eOff, cy + dy * eOff, 2.2, 0, Math.PI * 2);
+                    ctx.fill();
+                }
             }
         }
-        return newFood;
-    }, [GRID_SIZE]);
+    }, []);
 
-    const resetGame = () => {
+    const resetGame = useCallback(() => {
         playAudio("whoosh");
-        const initialSnake = [[9, 9], [9, 10], [9, 11]];
-        const newFood = generateFood(initialSnake);
-        foodRef.current = newFood;
-        setSnake(initialSnake);
-        setFood(newFood);
-        setDir([0, -1]);
-        dirRef.current = [0, -1];
-        setGameOver(false);
+        const initSnake = [[9, 9], [9, 10], [9, 11]];
+        stateRef.current = {
+            snake: initSnake,
+            dir: [0, -1],
+            dirQueue: [],
+            food: spawnFreeCell(SNAKE_GRID, initSnake) || [4, 4],
+            goldFood: null,
+            score: 0,
+            applesEaten: 0,
+            gameOver: false,
+        };
+        savedRunRef.current = false;
         setScore(0);
-        scoreRef.current = 0;
+        setGameOver(false);
+        setIsPaused(false);
         setIsPlaying(true);
-    };
+        drawSnakeCanvas();
+    }, [drawSnakeCanvas, playAudio]);
 
-    // Keyboard controls
+    const pushDirection = useCallback((nextDir) => {
+        const st = stateRef.current;
+        st.dirQueue = queueSnakeDirection(st.dir, st.dirQueue, nextDir);
+    }, []);
+
+    useEffect(() => {
+        drawSnakeCanvas();
+    }, [drawSnakeCanvas]);
+
     useEffect(() => {
         const handleKeyDown = (e) => {
+            if (e.key === " " && (!isPlaying || gameOver)) {
+                e.preventDefault();
+                resetGame();
+                return;
+            }
             if (!isPlaying || gameOver) return;
-            const [dx, dy] = dirRef.current;
-
-            if ((e.key === "ArrowUp" || e.key === "w" || e.key === "W") && dy === 0) {
+            if (e.key === "p" || e.key === "P") {
                 e.preventDefault();
-                setDir([0, -1]);
-            } else if ((e.key === "ArrowDown" || e.key === "s" || e.key === "S") && dy === 0) {
+                setIsPaused((p) => !p);
+                return;
+            }
+            if (e.key === "ArrowUp" || e.key === "w" || e.key === "W") {
                 e.preventDefault();
-                setDir([0, 1]);
-            } else if ((e.key === "ArrowLeft" || e.key === "a" || e.key === "A") && dx === 0) {
+                pushDirection([0, -1]);
+            } else if (e.key === "ArrowDown" || e.key === "s" || e.key === "S") {
                 e.preventDefault();
-                setDir([-1, 0]);
-            } else if ((e.key === "ArrowRight" || e.key === "d" || e.key === "D") && dx === 0) {
+                pushDirection([0, 1]);
+            } else if (e.key === "ArrowLeft" || e.key === "a" || e.key === "A") {
                 e.preventDefault();
-                setDir([1, 0]);
+                pushDirection([-1, 0]);
+            } else if (e.key === "ArrowRight" || e.key === "d" || e.key === "D") {
+                e.preventDefault();
+                pushDirection([1, 0]);
             }
         };
         window.addEventListener("keydown", handleKeyDown);
         return () => window.removeEventListener("keydown", handleKeyDown);
-    }, [isPlaying, gameOver]);
+    }, [isPlaying, gameOver, pushDirection, resetGame]);
 
-    // Game loop
     useEffect(() => {
-        if (!isPlaying || gameOver) return;
+        if (!isPlaying || isPaused || gameOver) return;
+        let timeoutId;
+        const tick = () => {
+            const next = stepSnakeState(stateRef.current, portalWallsRef.current);
+            stateRef.current = next;
 
-        const interval = setInterval(() => {
-            setSnake((prev) => {
-                const head = prev[0];
-                const [dx, dy] = dirRef.current;
-                const newHead = [head[0] + dx, head[1] + dy];
-
-                // Collision with walls
-                if (newHead[0] < 0 || newHead[0] >= GRID_SIZE || newHead[1] < 0 || newHead[1] >= GRID_SIZE) {
-                    playAudio("boom");
-                    setGameOver(true);
-                    return prev;
+            if (next.event === "eat") {
+                playAudio("coin");
+                setScore(next.score);
+            } else if (next.event === "gold") {
+                playAudio("tada");
+                setScore(next.score);
+            } else if (next.event === "crash") {
+                playAudio("boom");
+                setGameOver(true);
+                if (next.score > highScoreRef.current) {
+                    highScoreRef.current = next.score;
+                    setHighScore(next.score);
+                    localStorage.setItem("snake_highscore", String(next.score));
                 }
-
-                // Collision with self
-                if (prev.some(seg => seg[0] === newHead[0] && seg[1] === newHead[1])) {
-                    playAudio("boom");
-                    setGameOver(true);
-                    return prev;
+                if (!savedRunRef.current && next.score > 0) {
+                    savedRunRef.current = true;
+                    saveBackendGameScore("snake", next.score);
                 }
+                drawSnakeCanvas();
+                return;
+            }
 
-                // Check food
-                const currentF = foodRef.current;
-                const ateFood = newHead[0] === currentF[0] && newHead[1] === currentF[1];
-                let nextSnake;
+            drawSnakeCanvas();
+            const tickMs = Math.max(66, 118 - Math.floor(next.applesEaten * 1.5));
+            timeoutId = setTimeout(tick, tickMs);
+        };
+        timeoutId = setTimeout(tick, 112);
+        return () => clearTimeout(timeoutId);
+    }, [isPlaying, isPaused, gameOver, drawSnakeCanvas, playAudio]);
 
-                if (ateFood) {
-                    playAudio("coin");
-                    const newScore = scoreRef.current + 10;
-                    scoreRef.current = newScore;
-                    setScore(newScore);
-                    if (newScore > highScoreRef.current) {
-                        highScoreRef.current = newScore;
-                        setHighScore(newScore);
-                        localStorage.setItem("snake_highscore", String(newScore));
-                        saveBackendGameScore("snake", newScore);
-                    }
-                    const nextF = generateFood([newHead, ...prev]);
-                    foodRef.current = nextF;
-                    setFood(nextF);
-                    nextSnake = [newHead, ...prev];
-                } else {
-                    nextSnake = [newHead, ...prev.slice(0, -1)];
-                }
-
-                return nextSnake;
-            });
-        }, 110);
-
-        return () => clearInterval(interval);
-    }, [isPlaying, gameOver, generateFood, playAudio]);
+    const onTouchStart = (e) => {
+        const t = e.touches[0];
+        touchStartRef.current = { x: t.clientX, y: t.clientY };
+    };
+    const onTouchEnd = (e) => {
+        if (!touchStartRef.current) return;
+        const t = e.changedTouches[0];
+        const dx = t.clientX - touchStartRef.current.x;
+        const dy = t.clientY - touchStartRef.current.y;
+        touchStartRef.current = null;
+        if (Math.max(Math.abs(dx), Math.abs(dy)) < 18) return;
+        if (Math.abs(dx) > Math.abs(dy)) pushDirection(dx > 0 ? [1, 0] : [-1, 0]);
+        else pushDirection(dy > 0 ? [0, 1] : [0, -1]);
+    };
 
     return (
-        <div className="flex flex-col items-center gap-4 max-w-md mx-auto w-full select-none">
-            {/* Top Bar */}
-            <div className="flex items-center justify-between w-full px-2">
+        <div className="flex flex-col items-center gap-3.5 max-w-md mx-auto w-full select-none">
+            <div className="flex items-center justify-between w-full px-1">
                 <button
                     type="button"
                     onClick={onBack}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-xs font-bold text-white transition-colors"
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-xs font-bold text-white cursor-pointer"
                 >
-                    <ArrowLeft className="h-4 w-4" /> Back to Arcade
+                    <ArrowLeft className="h-4 w-4" /> Back
                 </button>
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2">
+                    <button
+                        type="button"
+                        onClick={() => setPortalWalls((w) => !w)}
+                        className={`px-2.5 py-1 rounded-lg text-[10px] font-bold border cursor-pointer transition-colors ${
+                            portalWalls
+                                ? "bg-emerald-500/20 border-emerald-400/50 text-emerald-300"
+                                : "bg-white/5 border-white/10 text-white/60"
+                        }`}
+                    >
+                        {portalWalls ? "Portal Walls: ON" : "Classic Walls"}
+                    </button>
+                    {isPlaying && !gameOver && (
+                        <button
+                            type="button"
+                            onClick={() => setIsPaused((p) => !p)}
+                            className="p-1.5 rounded-lg bg-white/10 text-white cursor-pointer"
+                        >
+                            {isPaused ? <Play className="h-3.5 w-3.5" /> : <Pause className="h-3.5 w-3.5" />}
+                        </button>
+                    )}
                     <span className="text-xs font-bold text-white/70">Score: <strong className="text-emerald-400">{score}</strong></span>
                     <span className="text-xs font-bold text-amber-300 flex items-center gap-1">
-                        <Trophy className="h-3.5 w-3.5" /> {highScore}
+                        <Trophy className="h-3.5 w-3.5" /> {Math.max(highScore, score)}
                     </span>
                 </div>
             </div>
 
-            {/* Grid Container */}
-            <div className="relative w-[320px] h-[320px] sm:w-[360px] sm:h-[360px] rounded-3xl bg-[#090d16] border-2 border-emerald-500/30 p-2 shadow-[0_0_40px_rgba(16,185,129,0.15)] overflow-hidden">
-                <div
-                    className="w-full h-full gap-[2px]"
-                    style={{
-                        display: "grid",
-                        gridTemplateColumns: `repeat(${GRID_SIZE}, minmax(0, 1fr))`,
-                        gridTemplateRows: `repeat(${GRID_SIZE}, minmax(0, 1fr))`
-                    }}
-                >
-                    {Array.from({ length: GRID_SIZE * GRID_SIZE }).map((_, idx) => {
-                        const x = idx % GRID_SIZE;
-                        const y = Math.floor(idx / GRID_SIZE);
-                        const isHead = snake[0][0] === x && snake[0][1] === y;
-                        const isBody = snake.some(seg => seg[0] === x && seg[1] === y);
-                        const isFood = food[0] === x && food[1] === y;
+            <div
+                onTouchStart={onTouchStart}
+                onTouchEnd={onTouchEnd}
+                className="relative w-[324px] h-[324px] sm:w-[360px] sm:h-[360px] rounded-3xl bg-[#080d18] border-2 border-emerald-500/35 shadow-[0_0_40px_rgba(16,185,129,0.18)] overflow-hidden touch-none"
+            >
+                <canvas ref={canvasRef} width={360} height={360} className="w-full h-full block" />
 
-                        return (
-                            <div
-                                key={idx}
-                                className={`rounded-[3px] transition-all duration-75 ${
-                                    isHead
-                                        ? "bg-emerald-400 shadow-[0_0_12px_#34d399] z-10"
-                                        : isBody
-                                        ? "bg-emerald-600/90"
-                                        : isFood
-                                        ? "bg-rose-500 shadow-[0_0_12px_#f43f5e] animate-pulse scale-90 rounded-full"
-                                        : "bg-white/[0.02]"
-                                }`}
-                            />
-                        );
-                    })}
-                </div>
-
-                {/* Overlays */}
                 {!isPlaying && !gameOver && (
-                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/75 backdrop-blur-sm gap-3">
+                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/75 backdrop-blur-sm gap-3 p-4 text-center">
                         <span className="text-5xl animate-bounce">🐍</span>
-                        <h3 className="text-xl font-black text-white tracking-tight">Super Snake</h3>
-                        <p className="text-xs text-white/60">Use Arrow keys or W/A/S/D to steer</p>
+                        <h3 className="text-xl font-black text-white">Super Snake</h3>
+                        <p className="text-xs text-white/65">Swipe on board, tap D-pad, or use Arrows/WASD. Eat golden apples for +35!</p>
                         <button
                             type="button"
                             onClick={resetGame}
-                            className="flex items-center gap-2 px-7 py-3 rounded-2xl bg-emerald-500 hover:bg-emerald-400 text-black font-black text-sm shadow-[0_0_25px_rgba(16,185,129,0.4)] active:scale-95 transition-all"
+                            className="flex items-center gap-2 px-7 py-3 rounded-2xl bg-emerald-500 hover:bg-emerald-400 text-black font-black text-sm shadow-[0_0_25px_rgba(16,185,129,0.4)] cursor-pointer active:scale-95"
                         >
                             <Play className="h-4 w-4 fill-current" /> Start Game
                         </button>
                     </div>
                 )}
 
+                {isPaused && !gameOver && (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/70 backdrop-blur-sm gap-3">
+                        <h3 className="text-xl font-black text-white">Paused</h3>
+                        <button
+                            type="button"
+                            onClick={() => setIsPaused(false)}
+                            className="px-6 py-2.5 rounded-xl bg-emerald-500 text-black font-black text-sm cursor-pointer"
+                        >
+                            Resume
+                        </button>
+                    </div>
+                )}
+
                 {gameOver && (
                     <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/85 backdrop-blur-sm gap-3">
-                        <span className="text-5xl animate-pulse">💥</span>
-                        <h3 className="text-xl font-black text-rose-400">Game Over!</h3>
-                        <p className="text-xs text-white/70">Final Score: <strong className="text-emerald-400 text-sm">{score}</strong></p>
+                        <span className="text-5xl">💥</span>
+                        <h3 className="text-xl font-black text-rose-400">Game Over</h3>
+                        <p className="text-xs text-white/75">Final Score: <strong className="text-emerald-400 text-sm">{score}</strong></p>
                         <button
                             type="button"
                             onClick={resetGame}
-                            className="flex items-center gap-2 px-6 py-3 rounded-2xl bg-emerald-500 hover:bg-emerald-400 text-black font-black text-sm shadow-[0_0_25px_rgba(16,185,129,0.4)] active:scale-95 transition-all"
+                            className="flex items-center gap-2 px-6 py-3 rounded-2xl bg-emerald-500 hover:bg-emerald-400 text-black font-black text-sm cursor-pointer active:scale-95"
                         >
                             <RotateCcw className="h-4 w-4" /> Play Again
                         </button>
@@ -233,341 +370,394 @@ const SnakeGame = ({ onBack, isMuted }) => {
                 )}
             </div>
 
-            {/* Touch D-Pad */}
-            <div className="grid grid-cols-3 gap-2 w-48 mt-1">
+            {/* Mobile D-Pad */}
+            <div className="grid grid-cols-3 gap-1.5 w-44">
                 <div />
-                <button
-                    type="button"
-                    onClick={() => dirRef.current[1] === 0 && setDir([0, -1])}
-                    className="h-12 rounded-2xl bg-white/10 hover:bg-white/20 active:bg-emerald-500 active:text-black font-bold text-white flex items-center justify-center text-xl shadow"
-                >
-                    ▲
-                </button>
+                <button type="button" onClick={() => pushDirection([0, -1])} aria-label="Snake Up" className="h-10 rounded-xl bg-white/10 active:bg-emerald-500/40 font-bold text-white cursor-pointer">▲</button>
                 <div />
-                <button
-                    type="button"
-                    onClick={() => dirRef.current[0] === 0 && setDir([-1, 0])}
-                    className="h-12 rounded-2xl bg-white/10 hover:bg-white/20 active:bg-emerald-500 active:text-black font-bold text-white flex items-center justify-center text-xl shadow"
-                >
-                    ◀
-                </button>
-                <button
-                    type="button"
-                    onClick={() => dirRef.current[1] === 0 && setDir([0, 1])}
-                    className="h-12 rounded-2xl bg-white/10 hover:bg-white/20 active:bg-emerald-500 active:text-black font-bold text-white flex items-center justify-center text-xl shadow"
-                >
-                    ▼
-                </button>
-                <button
-                    type="button"
-                    onClick={() => dirRef.current[0] === 0 && setDir([1, 0])}
-                    className="h-12 rounded-2xl bg-white/10 hover:bg-white/20 active:bg-emerald-500 active:text-black font-bold text-white flex items-center justify-center text-xl shadow"
-                >
-                    ▶
-                </button>
+                <button type="button" onClick={() => pushDirection([-1, 0])} aria-label="Snake Left" className="h-10 rounded-xl bg-white/10 active:bg-emerald-500/40 font-bold text-white cursor-pointer">◀</button>
+                <button type="button" onClick={() => pushDirection([0, 1])} aria-label="Snake Down" className="h-10 rounded-xl bg-white/10 active:bg-emerald-500/40 font-bold text-white cursor-pointer">▼</button>
+                <button type="button" onClick={() => pushDirection([1, 0])} aria-label="Snake Right" className="h-10 rounded-xl bg-white/10 active:bg-emerald-500/40 font-bold text-white cursor-pointer">▶</button>
             </div>
         </div>
     );
 };
 
 /* ═══════════════════════════════════════════════════════════════
-   2. FLAPPY TORNADO COMPONENT (Ultra-Clean Physics & Cloud Pillars)
+   2. FLAPPY TORNADO (60fps Delta-Time Canvas, Wind Trail & Crystals)
    ═══════════════════════════════════════════════════════════════ */
 const FlappyTornadoGame = ({ onBack, isMuted }) => {
-    const [tornadoY, setTornadoY] = useState(150);
-    const [pipes, setPipes] = useState([]);
+    const canvasRef = useRef(null);
+    const stateRef = useRef(createFlappyState());
+    const trailRef = useRef([]);
+    const savedRunRef = useRef(false);
+
     const [score, setScore] = useState(0);
     const [highScore, setHighScore] = useState(() => Number(localStorage.getItem("flappy_highscore") || 0));
-    const [isPlaying, setIsPlaying] = useState(false);
-    const [gameOver, setGameOver] = useState(false);
-    
-    const velocityRef = useRef(0);
-    const tornadoYRef = useRef(150);
+    const [phase, setPhase] = useState("ready"); // ready | playing | gameover
+
     const highScoreRef = useRef(highScore);
-    highScoreRef.current = highScore;
     const isMutedRef = useRef(isMuted);
-    isMutedRef.current = isMuted;
+    useEffect(() => { highScoreRef.current = highScore; }, [highScore]);
+    useEffect(() => { isMutedRef.current = isMuted; }, [isMuted]);
 
     const playAudio = useCallback((type) => {
         if (!isMutedRef.current) soundEngine.play(type);
     }, []);
 
-    const jump = useCallback(() => {
-        if (!isPlaying || gameOver) return;
-        playAudio("boing");
-        velocityRef.current = -7.2;
-    }, [isPlaying, gameOver, playAudio]);
-
     const startGame = useCallback(() => {
         playAudio("whoosh");
-        tornadoYRef.current = 140;
-        setTornadoY(140);
-        velocityRef.current = 0;
-        setPipes([{ x: 320, top: 75, bottom: 125 }]);
+        stateRef.current = createFlappyState();
+        trailRef.current = [];
+        savedRunRef.current = false;
         setScore(0);
-        setGameOver(false);
-        setIsPlaying(true);
+        setPhase("playing");
     }, [playAudio]);
+
+    const flap = useCallback(() => {
+        if (phase === "ready" || phase === "gameover") {
+            startGame();
+            stateRef.current.vy = -310;
+            return;
+        }
+        if (stateRef.current.gameOver) return;
+        playAudio("boing");
+        stateRef.current.vy = -310;
+    }, [phase, startGame, playAudio]);
 
     useEffect(() => {
         const handleKeyDown = (e) => {
             if (e.code === "Space" || e.key === "ArrowUp" || e.key === "w" || e.key === "W") {
                 e.preventDefault();
-                if (!isPlaying) startGame();
-                else jump();
+                flap();
             }
         };
         window.addEventListener("keydown", handleKeyDown);
         return () => window.removeEventListener("keydown", handleKeyDown);
-    }, [isPlaying, jump, startGame]);
+    }, [flap]);
 
-    // Game loop
     useEffect(() => {
-        if (!isPlaying || gameOver) return;
+        let rafId;
+        let lastTime = performance.now();
 
-        const loop = setInterval(() => {
-            // Gravity
-            tornadoYRef.current += velocityRef.current;
-            velocityRef.current += 0.48;
-            setTornadoY(tornadoYRef.current);
+        const loop = (now) => {
+            const dt = Math.min(0.05, Math.max(0.001, (now - lastTime) / 1000));
+            lastTime = now;
 
-            if (tornadoYRef.current >= 275 || tornadoYRef.current <= 0) {
-                playAudio("boom");
-                setGameOver(true);
+            const st = stateRef.current;
+            if (phase === "playing" && !st.gameOver) {
+                const res = stepFlappy(st, dt, 380, 340);
+                if (res.event === "score") {
+                    playAudio("coin");
+                    setScore(st.score);
+                } else if (res.event === "crystal") {
+                    playAudio("tada");
+                    setScore(st.score);
+                } else if (res.event === "crash") {
+                    playAudio("boom");
+                    setScore(st.score);
+                    setPhase("gameover");
+                    if (st.score > highScoreRef.current) {
+                        highScoreRef.current = st.score;
+                        setHighScore(st.score);
+                        localStorage.setItem("flappy_highscore", String(st.score));
+                    }
+                    if (!savedRunRef.current && st.score > 0) {
+                        savedRunRef.current = true;
+                        saveBackendGameScore("flappy", st.score);
+                    }
+                }
+                trailRef.current.push({ x: 76, y: st.y, life: 0.45 });
+                trailRef.current = trailRef.current
+                    .map((t) => ({ ...t, x: t.x - 148 * dt, life: t.life - dt }))
+                    .filter((t) => t.life > 0);
             }
 
-            // Move pipes
-            setPipes((prev) => {
-                const next = prev.map((p) => ({ ...p, x: p.x - 3.2 }));
+            const canvas = canvasRef.current;
+            if (canvas) {
+                const ctx = canvas.getContext("2d");
+                const W = canvas.width;
+                const H = canvas.height;
+                const bg = ctx.createLinearGradient(0, 0, 0, H);
+                bg.addColorStop(0, "#051024");
+                bg.addColorStop(1, "#020612");
+                ctx.fillStyle = bg;
+                ctx.fillRect(0, 0, W, H);
 
-                // Spawn new pipe
-                const last = next[next.length - 1];
-                if (last && last.x < 170) {
-                    const topH = Math.floor(Math.random() * 95) + 35;
-                    const gap = 115;
-                    next.push({ x: 340, top: topH, bottom: 300 - topH - gap });
+                // Stars / Wind Streaks
+                ctx.fillStyle = "rgba(186, 230, 253, 0.2)";
+                for (let i = 0; i < 18; i++) {
+                    const sx = ((i * 73 + now * 0.04) % (W + 40)) - 20;
+                    const sy = (i * 37) % H;
+                    ctx.fillRect(W - sx, sy, 6, 1.5);
                 }
 
-                // Check scoring & collision
-                next.forEach((p) => {
-                    if (p.x < 50 && p.x >= 46.8) { // precise score trigger
-                        playAudio("coin");
-                        setScore((s) => {
-                            const newScore = s + 1;
-                            if (newScore > highScoreRef.current) {
-                                highScoreRef.current = newScore;
-                                setHighScore(newScore);
-                                localStorage.setItem("flappy_highscore", String(newScore));
-                                saveBackendGameScore("flappy", newScore);
-                            }
-                            return newScore;
-                        });
+                // Pipes with neon rim caps
+                for (const p of st.pipes) {
+                    const grad = ctx.createLinearGradient(p.x, 0, p.x + 44, 0);
+                    grad.addColorStop(0, "#0284c7");
+                    grad.addColorStop(0.5, "#22d3ee");
+                    grad.addColorStop(1, "#0369a1");
+                    ctx.fillStyle = grad;
+                    ctx.fillRect(p.x, 0, 44, p.top);
+                    ctx.fillRect(p.x - 3, p.top - 10, 50, 10);
+
+                    const botY = p.top + p.gap;
+                    ctx.fillRect(p.x, botY, 44, H - botY);
+                    ctx.fillRect(p.x - 3, botY, 50, 10);
+
+                    // Wind Crystal (+3)
+                    if (!p.crystalTaken && p.crystalY != null) {
+                        ctx.save();
+                        ctx.translate(p.x + 22, p.crystalY);
+                        ctx.rotate(now * 0.004);
+                        ctx.shadowColor = "#fbbf24";
+                        ctx.shadowBlur = 12;
+                        ctx.fillStyle = "#fde047";
+                        ctx.fillRect(-7, -7, 14, 14);
+                        ctx.restore();
                     }
+                }
 
-                    // Collision check
-                    if (p.x > 22 && p.x < 76) {
-                        if (tornadoYRef.current < p.top || tornadoYRef.current > 300 - p.bottom - 26) {
-                            playAudio("boom");
-                            setGameOver(true);
-                        }
-                    }
-                });
+                // Vortex trail
+                for (const tr of trailRef.current) {
+                    ctx.fillStyle = `rgba(56, 189, 248, ${tr.life * 0.8})`;
+                    ctx.beginPath();
+                    ctx.arc(tr.x, tr.y, 8 * tr.life * 2, 0, Math.PI * 2);
+                    ctx.fill();
+                }
 
-                return next.filter((p) => p.x > -45);
-            });
-        }, 1000 / 40);
+                // Swirling Tornado Sprite
+                ctx.save();
+                ctx.translate(76, st.y);
+                ctx.rotate(Math.max(-0.5, Math.min(0.6, st.vy * 0.0014)));
+                ctx.shadowColor = "#22d3ee";
+                ctx.shadowBlur = 18;
+                for (let r = 0; r < 3; r++) {
+                    const wR = 15 - r * 3.5;
+                    const yO = -7 + r * 6;
+                    ctx.strokeStyle = r === 0 ? "#e0f2fe" : "#38bdf8";
+                    ctx.lineWidth = 4 - r * 0.7;
+                    ctx.beginPath();
+                    ctx.ellipse(Math.sin(now * 0.015 + r) * 2.5, yO, wR, 5, 0, 0, Math.PI * 2);
+                    ctx.stroke();
+                }
+                ctx.restore();
+            }
 
-        return () => clearInterval(loop);
-    }, [isPlaying, gameOver, playAudio]);
+            rafId = requestAnimationFrame(loop);
+        };
+
+        rafId = requestAnimationFrame(loop);
+        return () => cancelAnimationFrame(rafId);
+    }, [phase, playAudio]);
 
     return (
-        <div className="flex flex-col items-center gap-4 max-w-md mx-auto w-full select-none">
-            <div className="flex items-center justify-between w-full px-2">
+        <div className="flex flex-col items-center gap-3.5 max-w-md mx-auto w-full select-none">
+            <div className="flex items-center justify-between w-full px-1">
                 <button
                     type="button"
                     onClick={onBack}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-xs font-bold text-white transition-colors"
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-xs font-bold text-white cursor-pointer"
                 >
-                    <ArrowLeft className="h-4 w-4" /> Back to Arcade
+                    <ArrowLeft className="h-4 w-4" /> Back
                 </button>
                 <div className="flex items-center gap-3">
                     <span className="text-xs font-bold text-white/70">Score: <strong className="text-cyan-400">{score}</strong></span>
                     <span className="text-xs font-bold text-amber-300 flex items-center gap-1">
-                        <Trophy className="h-3.5 w-3.5" /> {highScore}
+                        <Trophy className="h-3.5 w-3.5" /> {Math.max(highScore, score)}
                     </span>
                 </div>
             </div>
 
             <div
-                onClick={isPlaying ? jump : startGame}
-                className="relative w-[320px] h-[300px] sm:w-[360px] sm:h-[310px] rounded-3xl bg-gradient-to-b from-[#081226] via-[#0b1c36] to-[#040814] border-2 border-cyan-500/30 overflow-hidden shadow-[0_0_40px_rgba(6,182,212,0.15)] cursor-pointer"
+                onPointerDown={(e) => {
+                    if (e.target.closest("button")) return;
+                    flap();
+                }}
+                className="relative w-full max-w-[380px] aspect-[380/340] rounded-3xl overflow-hidden border-2 border-cyan-500/35 shadow-[0_0_40px_rgba(6,182,212,0.18)] cursor-pointer touch-none"
             >
-                {/* Background stars */}
-                <div className="absolute inset-0 bg-[radial-gradient(#ffffff20_1px,transparent_1px)] [background-size:18px_18px]" />
+                <canvas ref={canvasRef} width={380} height={340} className="w-full h-full block" />
 
-                {/* Pipes */}
-                {pipes.map((p, idx) => (
-                    <React.Fragment key={idx}>
-                        <div
-                            className="absolute bg-gradient-to-b from-cyan-500 to-blue-700 rounded-b-2xl border-b-2 border-cyan-300 shadow-lg"
-                            style={{ left: p.x, top: 0, width: 38, height: p.top }}
-                        />
-                        <div
-                            className="absolute bg-gradient-to-t from-cyan-500 to-blue-700 rounded-t-2xl border-t-2 border-cyan-300 shadow-lg"
-                            style={{ left: p.x, bottom: 0, width: 38, height: p.bottom }}
-                        />
-                    </React.Fragment>
-                ))}
-
-                {/* Tornado Character */}
-                <motion.div
-                    className="absolute text-3xl flex items-center justify-center drop-shadow-[0_0_14px_rgba(56,189,248,0.9)] select-none"
-                    style={{ left: 50, top: tornadoY, width: 32, height: 32 }}
-                    animate={{ rotate: [0, 360] }}
-                    transition={{ repeat: Infinity, duration: 0.35, ease: "linear" }}
-                >
-                    🌪️
-                </motion.div>
-
-                {/* Overlays */}
-                {!isPlaying && !gameOver && (
-                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/65 backdrop-blur-sm gap-2">
+                {phase === "ready" && (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/65 backdrop-blur-sm gap-2 p-4 text-center">
                         <span className="text-5xl animate-bounce">🌪️</span>
-                        <h3 className="text-xl font-black text-white tracking-tight">Flappy Tornado</h3>
-                        <p className="text-xs text-white/70">Tap screen or Spacebar to fly!</p>
+                        <h3 className="text-xl font-black text-white">Flappy Tornado</h3>
+                        <p className="text-xs text-white/70">Tap screen or Spacebar to flap! Grab golden crystals for +3.</p>
                         <button
                             type="button"
                             onClick={startGame}
-                            className="mt-2 flex items-center gap-2 px-7 py-3 rounded-2xl bg-cyan-400 hover:bg-cyan-300 text-black font-black text-sm shadow-[0_0_25px_rgba(6,182,212,0.4)] active:scale-95 transition-all"
+                            className="mt-2 flex items-center gap-2 px-7 py-3 rounded-2xl bg-cyan-400 hover:bg-cyan-300 text-black font-black text-sm cursor-pointer active:scale-95"
                         >
                             <Play className="h-4 w-4 fill-current" /> Tap to Fly
                         </button>
                     </div>
                 )}
 
-                {gameOver && (
+                {phase === "gameover" && (
                     <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/85 backdrop-blur-sm gap-2">
-                        <span className="text-5xl animate-pulse">💥</span>
-                        <h3 className="text-xl font-black text-rose-400">Oops, crashed!</h3>
-                        <p className="text-xs text-white/70">Final Score: <strong className="text-cyan-400 text-sm">{score}</strong></p>
+                        <span className="text-5xl">💥</span>
+                        <h3 className="text-xl font-black text-rose-400">Storm Dissipated!</h3>
+                        <p className="text-xs text-white/75">Final Score: <strong className="text-cyan-400 text-sm">{score}</strong></p>
                         <button
                             type="button"
                             onClick={startGame}
-                            className="mt-2 flex items-center gap-2 px-6 py-3 rounded-2xl bg-cyan-400 hover:bg-cyan-300 text-black font-black text-sm shadow-[0_0_25px_rgba(6,182,212,0.4)] active:scale-95 transition-all"
+                            className="mt-2 flex items-center gap-2 px-6 py-3 rounded-2xl bg-cyan-400 hover:bg-cyan-300 text-black font-black text-sm cursor-pointer active:scale-95"
                         >
-                            <RotateCcw className="h-4 w-4" /> Try Again
+                            <RotateCcw className="h-4 w-4" /> Fly Again
                         </button>
                     </div>
                 )}
             </div>
-
-            <p className="text-[11px] text-white/40">Tap anywhere on the box or press Spacebar to flap wings!</p>
         </div>
     );
 };
 
 /* ═══════════════════════════════════════════════════════════════
-   3. MEMORY MATCH COMPONENT
+   3. MEMORY MATCH (4x4 / 4x5 Modes, Timer, Streak Multiplier & Score)
    ═══════════════════════════════════════════════════════════════ */
-const EMOJI_CARDS = ["🐱", "🐶", "🦁", "🐼", "🐸", "🦄", "🚀", "🍕"];
-
 const MemoryMatchGame = ({ onBack, isMuted }) => {
-    const [cards, setCards] = useState([]);
+    const [pairCount, setPairCount] = useState(8);
+    const [cards, setCards] = useState(() => createMemoryDeck(8));
     const [flipped, setFlipped] = useState([]);
     const [matched, setMatched] = useState([]);
     const [moves, setMoves] = useState(0);
+    const [streak, setStreak] = useState(0);
+    const [maxStreak, setMaxStreak] = useState(0);
+    const [elapsed, setElapsed] = useState(0);
+    const [finalScore, setFinalScore] = useState(0);
+    const [highScore, setHighScore] = useState(() => Number(localStorage.getItem("memory_highscore") || 0));
     const [isWon, setIsWon] = useState(false);
 
-    const playAudio = (type) => {
+    const playAudio = useCallback((type) => {
         if (!isMuted) soundEngine.play(type);
-    };
+    }, [isMuted]);
 
-    const initCards = () => {
+    const initCards = useCallback((nextPairs = pairCount) => {
         playAudio("whoosh");
-        const deck = [...EMOJI_CARDS, ...EMOJI_CARDS]
-            .sort(() => Math.random() - 0.5)
-            .map((emoji, idx) => ({ id: idx, emoji }));
-        setCards(deck);
+        setPairCount(nextPairs);
+        setCards(createMemoryDeck(nextPairs));
         setFlipped([]);
         setMatched([]);
         setMoves(0);
+        setStreak(0);
+        setMaxStreak(0);
+        setElapsed(0);
+        setFinalScore(0);
         setIsWon(false);
-    };
+    }, [pairCount, playAudio]);
 
     useEffect(() => {
-        initCards();
-    }, []);
+        if (isWon || moves === 0) return;
+        const id = setInterval(() => setElapsed((e) => e + 1), 1000);
+        return () => clearInterval(id);
+    }, [isWon, moves]);
 
     const handleCardClick = (idx) => {
-        if (flipped.length === 2 || flipped.includes(idx) || matched.includes(idx)) return;
+        if (flipped.length === 2 || flipped.includes(idx) || matched.includes(idx) || isWon) return;
 
         playAudio("coin");
         const newFlipped = [...flipped, idx];
         setFlipped(newFlipped);
 
         if (newFlipped.length === 2) {
-            setMoves((m) => m + 1);
+            const nextMoves = moves + 1;
+            setMoves(nextMoves);
             const [first, second] = newFlipped;
             if (cards[first].emoji === cards[second].emoji) {
+                const nextStreak = streak + 1;
+                const nextMaxStreak = Math.max(maxStreak, nextStreak);
+                setStreak(nextStreak);
+                setMaxStreak(nextMaxStreak);
                 playAudio("tada");
-                setMatched((prev) => {
-                    const nextMatched = [...prev, first, second];
-                    if (nextMatched.length === cards.length) {
-                        playAudio("win");
-                        setIsWon(true);
-                    }
-                    return nextMatched;
-                });
+
+                const nextMatched = [...matched, first, second];
+                setMatched(nextMatched);
                 setFlipped([]);
+
+                if (nextMatched.length === cards.length) {
+                    playAudio("win");
+                    setIsWon(true);
+                    const sc = computeMemoryFinalScore(pairCount, nextMoves, elapsed, nextMaxStreak);
+                    setFinalScore(sc);
+                    if (sc > highScore) {
+                        setHighScore(sc);
+                        localStorage.setItem("memory_highscore", String(sc));
+                    }
+                    saveBackendGameScore("memory", sc);
+                }
             } else {
-                setTimeout(() => {
-                    setFlipped([]);
-                }, 750);
+                setStreak(0);
+                setTimeout(() => setFlipped([]), 620);
             }
         }
     };
 
     return (
-        <div className="flex flex-col items-center gap-4 max-w-md mx-auto w-full select-none">
-            <div className="flex items-center justify-between w-full px-2">
+        <div className="flex flex-col items-center gap-3.5 max-w-md mx-auto w-full select-none">
+            <div className="flex items-center justify-between w-full px-1 flex-wrap gap-2">
                 <button
                     type="button"
                     onClick={onBack}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-xs font-bold text-white transition-colors"
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-xs font-bold text-white cursor-pointer"
                 >
-                    <ArrowLeft className="h-4 w-4" /> Back to Arcade
+                    <ArrowLeft className="h-4 w-4" /> Back
                 </button>
-                <div className="flex items-center gap-3">
-                    <span className="text-xs font-bold text-white/70">Moves: <strong className="text-amber-300">{moves}</strong></span>
+                <div className="flex items-center gap-2">
+                    {[8, 10].map((cnt) => (
+                        <button
+                            key={cnt}
+                            type="button"
+                            onClick={() => initCards(cnt)}
+                            className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border cursor-pointer ${
+                                pairCount === cnt
+                                    ? "bg-fuchsia-500/30 border-fuchsia-400 text-fuchsia-200"
+                                    : "bg-white/5 border-white/10 text-white/60"
+                            }`}
+                        >
+                            {cnt === 8 ? "4×4" : "4×5"}
+                        </button>
+                    ))}
+                    <span className="text-xs font-bold text-white/70">{elapsed}s • {moves}m</span>
+                    <span className="text-xs font-bold text-amber-300 flex items-center gap-1">
+                        <Trophy className="h-3.5 w-3.5" /> {highScore}
+                    </span>
                     <button
                         type="button"
-                        onClick={initCards}
-                        className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-violet-600/40 text-violet-200 text-xs font-bold hover:bg-violet-600 hover:text-white transition-colors"
+                        onClick={() => initCards(pairCount)}
+                        className="p-1.5 rounded-lg bg-violet-600/40 text-violet-200 hover:bg-violet-600 hover:text-white cursor-pointer"
                     >
-                        <RotateCcw className="h-3.5 w-3.5" /> Restart
+                        <RotateCcw className="h-3.5 w-3.5" />
                     </button>
                 </div>
             </div>
 
-            {/* 4x4 Card Grid */}
-            <div className="grid grid-cols-4 gap-3 p-4 rounded-3xl bg-black/40 border border-white/10 backdrop-blur-md shadow-2xl">
+            {streak >= 2 && !isWon && (
+                <div className="px-3 py-1 rounded-full bg-amber-500/20 border border-amber-400/40 text-amber-300 text-xs font-black animate-pulse">
+                    🔥 {streak}× MATCH STREAK!
+                </div>
+            )}
+
+            <div className="grid grid-cols-4 gap-2.5 sm:gap-3 p-3.5 sm:p-4 rounded-3xl bg-black/40 border border-white/10 backdrop-blur-md shadow-2xl">
                 {cards.map((card, idx) => {
                     const isCardFlipped = flipped.includes(idx) || matched.includes(idx);
+                    const isMatchedCard = matched.includes(idx);
 
                     return (
                         <motion.button
                             key={card.id}
                             type="button"
-                            whileHover={!isCardFlipped ? { scale: 1.05 } : {}}
-                            whileTap={!isCardFlipped ? { scale: 0.95 } : {}}
+                            whileTap={!isCardFlipped ? { scale: 0.94 } : {}}
                             onClick={() => handleCardClick(idx)}
-                            className={`w-15 h-16 sm:w-18 sm:h-20 rounded-2xl flex items-center justify-center text-3xl font-bold border transition-all ${
-                                isCardFlipped
+                            className={`w-15 h-16 sm:w-18 sm:h-20 rounded-2xl flex items-center justify-center text-3xl font-bold border transition-all cursor-pointer ${
+                                isMatchedCard
+                                    ? "bg-gradient-to-br from-emerald-500/35 to-teal-700/40 border-emerald-400 text-white shadow-[0_0_16px_rgba(16,185,129,0.4)]"
+                                    : isCardFlipped
                                     ? "bg-gradient-to-br from-violet-600 to-indigo-700 border-violet-400 text-white shadow-[0_0_20px_rgba(139,92,246,0.5)]"
-                                    : "bg-white/[0.08] hover:bg-white/[0.14] border-white/15 text-transparent cursor-pointer shadow-sm"
+                                    : "bg-white/[0.08] hover:bg-white/[0.14] border-white/15 text-white/30"
                             }`}
                         >
-                            {isCardFlipped ? card.emoji : "❓"}
+                            {isCardFlipped ? card.emoji : "?"}
                         </motion.button>
                     );
                 })}
@@ -575,18 +765,23 @@ const MemoryMatchGame = ({ onBack, isMuted }) => {
 
             {isWon && (
                 <motion.div
-                    initial={{ scale: 0.8, opacity: 0 }}
+                    initial={{ scale: 0.85, opacity: 0 }}
                     animate={{ scale: 1, opacity: 1 }}
-                    className="flex flex-col items-center gap-2.5 p-5 rounded-3xl bg-emerald-500/20 border border-emerald-400 text-center shadow-[0_0_30px_rgba(16,185,129,0.3)]"
+                    className="flex flex-col items-center gap-2 p-4 rounded-3xl bg-emerald-500/20 border border-emerald-400 text-center w-full max-w-xs"
                 >
-                    <span className="text-4xl animate-bounce">🎉🏆</span>
-                    <h4 className="text-base font-black text-emerald-300">You matched all cards in {moves} moves!</h4>
+                    <span className="text-3xl">🏆</span>
+                    <h4 className="text-base font-black text-emerald-300">
+                        Cleared in {moves} moves ({elapsed}s)!
+                    </h4>
+                    <p className="text-xs text-white/80">
+                        Score: <strong className="text-amber-300">{finalScore}</strong> (Best Streak {maxStreak}×)
+                    </p>
                     <button
                         type="button"
-                        onClick={initCards}
-                        className="mt-1 px-5 py-2.5 rounded-2xl bg-emerald-500 text-black font-black text-xs hover:bg-emerald-400 transition-all shadow-lg active:scale-95"
+                        onClick={() => initCards(pairCount)}
+                        className="mt-1 px-5 py-2 rounded-xl bg-emerald-500 text-black font-black text-xs cursor-pointer"
                     >
-                        Play Another Round
+                        Play Again
                     </button>
                 </motion.div>
             )}
@@ -595,136 +790,104 @@ const MemoryMatchGame = ({ onBack, isMuted }) => {
 };
 
 /* ═══════════════════════════════════════════════════════════════
-   4. 2048 TORNADO COMPONENT (Ultra-Addictive Math & Merge Puzzle)
+   4. 2048 TORNADO (Swipe Gestures, 1-Step Undo, 2048 Victory & Endless)
    ═══════════════════════════════════════════════════════════════ */
+const addTileTo2048 = (b) => {
+    const empty = [];
+    for (let r = 0; r < 4; r++) {
+        for (let c = 0; c < 4; c++) {
+            if (b[r][c] === 0) empty.push([r, c]);
+        }
+    }
+    if (empty.length === 0) return b;
+    const [r, c] = empty[Math.floor(Math.random() * empty.length)];
+    const next = b.map((row) => [...row]);
+    next[r][c] = Math.random() < 0.9 ? 2 : 4;
+    return next;
+};
+
+const createInitial2048Board = () => {
+    const b = Array(4).fill(null).map(() => Array(4).fill(0));
+    return addTileTo2048(addTileTo2048(b));
+};
+
 const Game2048 = ({ onBack, isMuted }) => {
-    const [board, setBoard] = useState(Array(4).fill(null).map(() => Array(4).fill(0)));
+    const touchStartRef = useRef(null);
+    const savedRunRef = useRef(false);
+
+    const [board, setBoard] = useState(() => createInitial2048Board());
+    const [undoSnapshot, setUndoSnapshot] = useState(null);
     const [score, setScore] = useState(0);
     const [highScore, setHighScore] = useState(() => Number(localStorage.getItem("2048_highscore") || 0));
+    const [hasWon2048, setHasWon2048] = useState(false);
+    const [showWinBanner, setShowWinBanner] = useState(false);
     const [gameOver, setGameOver] = useState(false);
 
-    const playAudio = (type) => {
+    const playAudio = useCallback((type) => {
         if (!isMuted) soundEngine.play(type);
-    };
+    }, [isMuted]);
 
-    const addRandomTile = useCallback((b) => {
-        const emptyCells = [];
-        for (let r = 0; r < 4; r++) {
-            for (let c = 0; c < 4; c++) {
-                if (b[r][c] === 0) emptyCells.push([r, c]);
-            }
-        }
-        if (emptyCells.length === 0) return b;
-        const [r, c] = emptyCells[Math.floor(Math.random() * emptyCells.length)];
-        const newB = b.map(row => [...row]);
-        newB[r][c] = Math.random() < 0.9 ? 2 : 4;
-        return newB;
-    }, []);
+    const addRandomTile = useCallback((b) => addTileTo2048(b), []);
 
-    const init2048 = () => {
+    const init2048 = useCallback(() => {
         playAudio("whoosh");
-        let b = Array(4).fill(null).map(() => Array(4).fill(0));
-        b = addRandomTile(b);
-        b = addRandomTile(b);
-        setBoard(b);
+        savedRunRef.current = false;
+        setBoard(createInitial2048Board());
+        setUndoSnapshot(null);
         setScore(0);
+        setHasWon2048(false);
+        setShowWinBanner(false);
         setGameOver(false);
-    };
+    }, [playAudio]);
 
-    useEffect(() => {
-        init2048();
-    }, []);
+    const move = useCallback((direction) => {
+        if (gameOver || showWinBanner) return;
+        const result = move2048Board(board, direction);
+        if (!result.changed) return;
 
-    const slideRowLeft = (row) => {
-        let filtered = row.filter(val => val !== 0);
-        let gained = 0;
-        for (let i = 0; i < filtered.length - 1; i++) {
-            if (filtered[i] === filtered[i + 1]) {
-                filtered[i] *= 2;
-                gained += filtered[i];
-                filtered[i + 1] = 0;
-            }
-        }
-        filtered = filtered.filter(val => val !== 0);
-        while (filtered.length < 4) filtered.push(0);
-        return { row: filtered, gained };
-    };
+        setUndoSnapshot({ board: board.map((r) => [...r]), score });
+        playAudio(result.gained > 0 ? "coin" : "laser");
 
-    const move = (direction) => {
-        if (gameOver) return;
-        let newBoard = board.map(row => [...row]);
-        let totalGained = 0;
-        let changed = false;
+        const finalBoard = addRandomTile(result.board);
+        const nextScore = score + result.gained;
+        setBoard(finalBoard);
+        setScore(nextScore);
 
-        if (direction === "left") {
-            for (let r = 0; r < 4; r++) {
-                const { row, gained } = slideRowLeft(newBoard[r]);
-                if (row.join(",") !== newBoard[r].join(",")) changed = true;
-                newBoard[r] = row;
-                totalGained += gained;
-            }
-        } else if (direction === "right") {
-            for (let r = 0; r < 4; r++) {
-                const reversed = [...newBoard[r]].reverse();
-                const { row, gained } = slideRowLeft(reversed);
-                const restored = row.reverse();
-                if (restored.join(",") !== newBoard[r].join(",")) changed = true;
-                newBoard[r] = restored;
-                totalGained += gained;
-            }
-        } else if (direction === "up") {
-            for (let c = 0; c < 4; c++) {
-                const col = [newBoard[0][c], newBoard[1][c], newBoard[2][c], newBoard[3][c]];
-                const { row, gained } = slideRowLeft(col);
-                for (let r = 0; r < 4; r++) {
-                    if (newBoard[r][c] !== row[r]) changed = true;
-                    newBoard[r][c] = row[r];
-                }
-                totalGained += gained;
-            }
-        } else if (direction === "down") {
-            for (let c = 0; c < 4; c++) {
-                const col = [newBoard[3][c], newBoard[2][c], newBoard[1][c], newBoard[0][c]];
-                const { row, gained } = slideRowLeft(col);
-                const restored = row.reverse();
-                for (let r = 0; r < 4; r++) {
-                    if (newBoard[r][c] !== restored[r]) changed = true;
-                    newBoard[r][c] = restored[r];
-                }
-                totalGained += gained;
-            }
+        if (nextScore > highScore) {
+            setHighScore(nextScore);
+            localStorage.setItem("2048_highscore", String(nextScore));
         }
 
-        if (changed) {
-            playAudio(totalGained > 0 ? "coin" : "laser");
-            const finalBoard = addRandomTile(newBoard);
-            setBoard(finalBoard);
-            const nextScore = score + totalGained;
-            setScore(nextScore);
-            if (nextScore > highScore) {
-                setHighScore(nextScore);
-                localStorage.setItem("2048_highscore", String(nextScore));
+        if (!hasWon2048 && hasReachedTile(finalBoard, 2048)) {
+            playAudio("win");
+            setHasWon2048(true);
+            setShowWinBanner(true);
+            if (!savedRunRef.current) {
+                savedRunRef.current = true;
                 saveBackendGameScore("2048", nextScore);
             }
+        }
 
-            // Check game over
-            let hasMoves = false;
-            for (let r = 0; r < 4; r++) {
-                for (let c = 0; c < 4; c++) {
-                    if (finalBoard[r][c] === 0) hasMoves = true;
-                    if (r < 3 && finalBoard[r][c] === finalBoard[r + 1][c]) hasMoves = true;
-                    if (c < 3 && finalBoard[r][c] === finalBoard[r][c + 1]) hasMoves = true;
-                }
-            }
-            if (!hasMoves) {
-                playAudio("boom");
-                setGameOver(true);
+        if (!hasValid2048Moves(finalBoard)) {
+            playAudio("boom");
+            setGameOver(true);
+            if (!savedRunRef.current && nextScore > 0) {
+                savedRunRef.current = true;
+                saveBackendGameScore("2048", nextScore);
             }
         }
+    }, [board, score, highScore, gameOver, showWinBanner, hasWon2048, addRandomTile, playAudio]);
+
+    const handleUndo = () => {
+        if (!undoSnapshot) return;
+        setBoard(undoSnapshot.board);
+        setScore(undoSnapshot.score);
+        setGameOver(false);
+        setUndoSnapshot(null);
     };
 
     const moveRef = useRef(move);
-    moveRef.current = move;
+    useEffect(() => { moveRef.current = move; }, [move]);
 
     useEffect(() => {
         const handleKeyDown = (e) => {
@@ -736,6 +899,21 @@ const Game2048 = ({ onBack, isMuted }) => {
         window.addEventListener("keydown", handleKeyDown);
         return () => window.removeEventListener("keydown", handleKeyDown);
     }, []);
+
+    const onTouchStart = (e) => {
+        const t = e.touches[0];
+        touchStartRef.current = { x: t.clientX, y: t.clientY };
+    };
+    const onTouchEnd = (e) => {
+        if (!touchStartRef.current) return;
+        const t = e.changedTouches[0];
+        const dx = t.clientX - touchStartRef.current.x;
+        const dy = t.clientY - touchStartRef.current.y;
+        touchStartRef.current = null;
+        if (Math.max(Math.abs(dx), Math.abs(dy)) < 22) return;
+        if (Math.abs(dx) > Math.abs(dy)) move(dx > 0 ? "right" : "left");
+        else move(dy > 0 ? "down" : "up");
+    };
 
     const getTileColor = (val) => {
         switch (val) {
@@ -749,62 +927,88 @@ const Game2048 = ({ onBack, isMuted }) => {
             case 256: return "bg-rose-600 text-white font-black shadow-[0_0_15px_#e11d48]";
             case 512: return "bg-amber-500 text-black font-black shadow-[0_0_15px_#f59e0b]";
             case 1024: return "bg-amber-400 text-black font-black shadow-[0_0_20px_#fbbf24]";
-            case 2048: return "bg-emerald-400 text-black font-black shadow-[0_0_25px_#34d399] animate-pulse";
-            default: return "bg-white/[0.04] text-transparent";
+            case 2048: return "bg-emerald-400 text-black font-black shadow-[0_0_25px_#34d399]";
+            default: return val > 2048 ? "bg-teal-300 text-black font-black" : "bg-white/[0.04] text-transparent";
         }
     };
 
     return (
-        <div className="flex flex-col items-center gap-4 max-w-md mx-auto w-full select-none">
-            <div className="flex items-center justify-between w-full px-2">
+        <div className="flex flex-col items-center gap-3.5 max-w-md mx-auto w-full select-none">
+            <div className="flex items-center justify-between w-full px-1">
                 <button
                     type="button"
                     onClick={onBack}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-xs font-bold text-white transition-colors"
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-xs font-bold text-white cursor-pointer"
                 >
-                    <ArrowLeft className="h-4 w-4" /> Back to Arcade
+                    <ArrowLeft className="h-4 w-4" /> Back
                 </button>
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2">
                     <span className="text-xs font-bold text-white/70">Score: <strong className="text-amber-300">{score}</strong></span>
                     <span className="text-xs font-bold text-amber-300 flex items-center gap-1">
-                        <Trophy className="h-3.5 w-3.5" /> {highScore}
+                        <Trophy className="h-3.5 w-3.5" /> {Math.max(highScore, score)}
                     </span>
                     <button
                         type="button"
-                        onClick={init2048}
-                        className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white/10 text-white text-xs font-bold hover:bg-white/20 transition-colors"
+                        onClick={handleUndo}
+                        disabled={!undoSnapshot}
+                        title="Undo Move"
+                        className="p-1.5 rounded-lg bg-white/10 text-white disabled:opacity-35 cursor-pointer"
                     >
-                        <RotateCcw className="h-3 w-3" />
+                        <Undo2 className="h-3.5 w-3.5" />
+                    </button>
+                    <button
+                        type="button"
+                        onClick={init2048}
+                        className="p-1.5 rounded-lg bg-white/10 text-white hover:bg-white/20 cursor-pointer"
+                    >
+                        <RotateCcw className="h-3.5 w-3.5" />
                     </button>
                 </div>
             </div>
 
-            {/* 4x4 Grid */}
-            <div className="relative w-[300px] h-[300px] sm:w-[340px] sm:h-[340px] p-3 rounded-3xl bg-[#0a0f1d] border-2 border-indigo-500/30 shadow-2xl">
+            <div
+                onTouchStart={onTouchStart}
+                onTouchEnd={onTouchEnd}
+                className="relative w-[300px] h-[300px] sm:w-[340px] sm:h-[340px] p-3 rounded-3xl bg-[#0a0f1d] border-2 border-indigo-500/35 shadow-2xl touch-none"
+            >
                 <div className="grid grid-cols-4 grid-rows-4 gap-2.5 w-full h-full">
                     {board.flatMap((row, r) =>
                         row.map((val, c) => (
-                            <motion.div
+                            <div
                                 key={`${r}-${c}`}
-                                initial={{ scale: 0.8 }}
-                                animate={{ scale: 1 }}
-                                className={`rounded-2xl flex items-center justify-center text-xl sm:text-2xl transition-all ${getTileColor(val)}`}
+                                className={`rounded-2xl flex items-center justify-center ${
+                                    val >= 1024 ? "text-lg sm:text-xl" : "text-xl sm:text-2xl"
+                                } transition-colors duration-100 ${getTileColor(val)}`}
                             >
                                 {val > 0 ? val : ""}
-                            </motion.div>
+                            </div>
                         ))
                     )}
                 </div>
+
+                {showWinBanner && (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/80 backdrop-blur-sm rounded-3xl gap-3 p-4 text-center">
+                        <span className="text-4xl">👑</span>
+                        <h4 className="text-xl font-black text-emerald-300">2048 Reached!</h4>
+                        <button
+                            type="button"
+                            onClick={() => setShowWinBanner(false)}
+                            className="px-5 py-2.5 rounded-xl bg-emerald-500 text-black font-black text-xs cursor-pointer"
+                        >
+                            Keep Playing
+                        </button>
+                    </div>
+                )}
 
                 {gameOver && (
                     <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/85 backdrop-blur-sm rounded-3xl gap-3">
                         <span className="text-4xl">🏁</span>
                         <h4 className="text-lg font-black text-rose-400">No More Moves!</h4>
-                        <p className="text-xs text-white/70">Final Score: <strong className="text-amber-300">{score}</strong></p>
+                        <p className="text-xs text-white/75">Final Score: <strong className="text-amber-300">{score}</strong></p>
                         <button
                             type="button"
                             onClick={init2048}
-                            className="px-5 py-2.5 rounded-xl bg-amber-400 text-black font-black text-xs hover:bg-amber-300 transition-all shadow-lg active:scale-95"
+                            className="px-5 py-2.5 rounded-xl bg-amber-400 text-black font-black text-xs cursor-pointer"
                         >
                             Try Again
                         </button>
@@ -812,1296 +1016,887 @@ const Game2048 = ({ onBack, isMuted }) => {
                 )}
             </div>
 
-            {/* Direction Controls */}
-            <div className="grid grid-cols-3 gap-2 w-48 mt-1">
+            <div className="grid grid-cols-3 gap-2 w-48">
                 <div />
-                <button
-                    type="button"
-                    onClick={() => move("up")}
-                    className="h-11 rounded-xl bg-white/10 hover:bg-white/20 active:bg-indigo-500 font-bold text-white flex items-center justify-center text-lg shadow"
-                >
-                    ▲
-                </button>
+                <button type="button" onClick={() => move("up")} className="h-10 rounded-xl bg-white/10 active:bg-indigo-500 font-bold text-white cursor-pointer">▲</button>
                 <div />
-                <button
-                    type="button"
-                    onClick={() => move("left")}
-                    className="h-11 rounded-xl bg-white/10 hover:bg-white/20 active:bg-indigo-500 font-bold text-white flex items-center justify-center text-lg shadow"
-                >
-                    ◀
-                </button>
-                <button
-                    type="button"
-                    onClick={() => move("down")}
-                    className="h-11 rounded-xl bg-white/10 hover:bg-white/20 active:bg-indigo-500 font-bold text-white flex items-center justify-center text-lg shadow"
-                >
-                    ▼
-                </button>
-                <button
-                    type="button"
-                    onClick={() => move("right")}
-                    className="h-11 rounded-xl bg-white/10 hover:bg-white/20 active:bg-indigo-500 font-bold text-white flex items-center justify-center text-lg shadow"
-                >
-                    ▶
-                </button>
+                <button type="button" onClick={() => move("left")} className="h-10 rounded-xl bg-white/10 active:bg-indigo-500 font-bold text-white cursor-pointer">◀</button>
+                <button type="button" onClick={() => move("down")} className="h-10 rounded-xl bg-white/10 active:bg-indigo-500 font-bold text-white cursor-pointer">▼</button>
+                <button type="button" onClick={() => move("right")} className="h-10 rounded-xl bg-white/10 active:bg-indigo-500 font-bold text-white cursor-pointer">▶</button>
             </div>
         </div>
     );
 };
 
 /* ═══════════════════════════════════════════════════════════════
-   5. ZOMBIE SHOOTER (Canvas-based Action Game 14+)
+   5. ZOMBIE SURVIVAL (WASD Move, 3HP, Auto-Fire Hold, Boss & Bombs)
    ═══════════════════════════════════════════════════════════════ */
 const ZombieShooter = ({ onBack, isMuted }) => {
     const canvasRef = useRef(null);
-    const [score, setScore] = useState(0);
-    const [gameOver, setGameOver] = useState(false);
-    const [isPlaying, setIsPlaying] = useState(false);
+    const stateRef = useRef(createZombieState(400, 400));
+    const savedRunRef = useRef(false);
+
+    const [hud, setHud] = useState({ kills: 0, score: 0, hp: 3, bombs: 1, spread: false });
+    const [autoFire, setAutoFire] = useState(true);
+    const [phase, setPhase] = useState("ready");
     const [highScore, setHighScore] = useState(() => Number(localStorage.getItem("zombie_highscore") || 0));
+
+    const autoFireRef = useRef(autoFire);
     const highScoreRef = useRef(highScore);
-    highScoreRef.current = highScore;
     const isMutedRef = useRef(isMuted);
-    isMutedRef.current = isMuted;
+    useEffect(() => { autoFireRef.current = autoFire; }, [autoFire]);
+    useEffect(() => { highScoreRef.current = highScore; }, [highScore]);
+    useEffect(() => { isMutedRef.current = isMuted; }, [isMuted]);
 
     const playAudio = useCallback((type) => {
         if (!isMutedRef.current) soundEngine.play(type);
     }, []);
 
-    const startGame = () => {
+    const startGame = useCallback(() => {
         playAudio("whoosh");
-        setScore(0);
-        setGameOver(false);
-        setIsPlaying(true);
-    };
+        stateRef.current = createZombieState(400, 400);
+        savedRunRef.current = false;
+        setHud({ kills: 0, score: 0, hp: 3, bombs: 1, spread: false });
+        setPhase("playing");
+    }, [playAudio]);
+
+    const detonateBomb = useCallback(() => {
+        if (triggerZombieBomb(stateRef.current)) {
+            playAudio("boom");
+            const s = stateRef.current;
+            setHud({ kills: s.kills, score: s.score, hp: s.player.hp, bombs: s.bombs, spread: s.player.spreadTimer > 0 });
+        }
+    }, [playAudio]);
 
     useEffect(() => {
-        if (!isPlaying || gameOver) return;
+        if (phase !== "playing") return;
 
         const canvas = canvasRef.current;
         const ctx = canvas.getContext("2d");
         let animationId;
-        let lastTime = 0;
-        let spawnTimer = 0;
+        let lastTime = performance.now();
+        let hudSync = 0;
 
-        const cw = canvas.width;
-        const ch = canvas.height;
-        const player = { x: cw / 2, y: ch / 2, radius: 15, angle: 0 };
-        const bullets = [];
-        const zombies = [];
-        let particles = [];
-        let currentScore = 0;
+        const aim = { x: 200, y: 80, down: false };
+        const keys = {};
 
-        // Mouse tracking
-        const mouse = { x: cw / 2, y: ch / 2 };
-        const updateMouse = (e) => {
-            const rect = canvas.getBoundingClientRect();
-            mouse.x = (e.clientX - rect.left) * (canvas.width / rect.width);
-            mouse.y = (e.clientY - rect.top) * (canvas.height / rect.height);
-        };
-        const handleTouch = (e) => {
-            e.preventDefault(); // Prevent scrolling
-            const rect = canvas.getBoundingClientRect();
-            mouse.x = (e.touches[0].clientX - rect.left) * (canvas.width / rect.width);
-            mouse.y = (e.touches[0].clientY - rect.top) * (canvas.height / rect.height);
-        };
-        
-        const shoot = () => {
-            playAudio("laser");
-            const angle = Math.atan2(mouse.y - player.y, mouse.x - player.x);
-            bullets.push({
-                x: player.x + Math.cos(angle) * player.radius,
-                y: player.y + Math.sin(angle) * player.radius,
-                vx: Math.cos(angle) * 12,
-                vy: Math.sin(angle) * 12,
-                radius: 4
-            });
-        };
-
-        const handlePointerDown = (e) => {
-            if (e.touches) handleTouch(e);
-            else updateMouse(e);
-            shoot();
-        };
-
-        canvas.addEventListener("mousemove", updateMouse);
-        canvas.addEventListener("mousedown", handlePointerDown);
-        canvas.addEventListener("touchstart", handlePointerDown, { passive: false });
-        canvas.addEventListener("touchmove", handleTouch, { passive: false });
-
-        const spawnZombie = () => {
-            const radius = Math.random() * 8 + 10;
-            let x, y;
-            if (Math.random() < 0.5) {
-                x = Math.random() < 0.5 ? 0 - radius : cw + radius;
-                y = Math.random() * ch;
-            } else {
-                x = Math.random() * cw;
-                y = Math.random() < 0.5 ? 0 - radius : ch + radius;
+        const onKeyDown = (e) => {
+            keys[e.code] = true;
+            if (e.code === "Space") {
+                e.preventDefault();
+                detonateBomb();
             }
-            zombies.push({ x, y, radius, speed: Math.random() * 1.5 + 0.5 });
+        };
+        const onKeyUp = (e) => { keys[e.code] = false; };
+        window.addEventListener("keydown", onKeyDown);
+        window.addEventListener("keyup", onKeyUp);
+
+        const updateAim = (clientX, clientY) => {
+            const rect = canvas.getBoundingClientRect();
+            aim.x = (clientX - rect.left) * (canvas.width / rect.width);
+            aim.y = (clientY - rect.top) * (canvas.height / rect.height);
+        };
+        const onMouseMove = (e) => updateAim(e.clientX, e.clientY);
+        const onMouseDown = (e) => {
+            aim.down = true;
+            updateAim(e.clientX, e.clientY);
+            if (fireZombieWeapon(stateRef.current, aim.x, aim.y)) playAudio("laser");
+        };
+        const onMouseUp = () => { aim.down = false; };
+        const onTouchStart = (e) => {
+            e.preventDefault();
+            aim.down = true;
+            updateAim(e.touches[0].clientX, e.touches[0].clientY);
+            if (fireZombieWeapon(stateRef.current, aim.x, aim.y)) playAudio("laser");
+        };
+        const onTouchMove = (e) => {
+            e.preventDefault();
+            updateAim(e.touches[0].clientX, e.touches[0].clientY);
         };
 
-        const draw = (deltaTime) => {
-            ctx.fillStyle = "rgba(10, 15, 29, 0.4)"; // Trail effect
-            ctx.fillRect(0, 0, cw, ch);
+        canvas.addEventListener("mousemove", onMouseMove);
+        canvas.addEventListener("mousedown", onMouseDown);
+        window.addEventListener("mouseup", onMouseUp);
+        canvas.addEventListener("touchstart", onTouchStart, { passive: false });
+        canvas.addEventListener("touchmove", onTouchMove, { passive: false });
 
-            // Update & Draw Player
-            player.angle = Math.atan2(mouse.y - player.y, mouse.x - player.x);
-            ctx.save();
-            ctx.translate(player.x, player.y);
-            ctx.rotate(player.angle);
-            ctx.fillStyle = "#38bdf8"; // cyan-400
-            ctx.beginPath();
-            ctx.arc(0, 0, player.radius, 0, Math.PI * 2);
-            ctx.fill();
-            // Gun barrel
-            ctx.fillStyle = "#cbd5e1";
-            ctx.fillRect(player.radius - 5, -4, 15, 8);
-            ctx.restore();
+        const loop = (now) => {
+            const dt = Math.min(0.05, Math.max(0.001, (now - lastTime) / 1000));
+            lastTime = now;
+            const st = stateRef.current;
 
-            // Bullets
-            for (let i = bullets.length - 1; i >= 0; i--) {
-                const b = bullets[i];
-                b.x += b.vx;
-                b.y += b.vy;
-                ctx.fillStyle = "#fbbf24"; // amber-400
-                ctx.beginPath();
-                ctx.arc(b.x, b.y, b.radius, 0, Math.PI * 2);
-                ctx.fill();
+            const move = {
+                x: (keys.KeyD || keys.ArrowRight ? 1 : 0) - (keys.KeyA || keys.ArrowLeft ? 1 : 0),
+                y: (keys.KeyS || keys.ArrowDown ? 1 : 0) - (keys.KeyW || keys.ArrowUp ? 1 : 0),
+            };
+            st.player.angle = Math.atan2(aim.y - st.player.y, aim.x - st.player.x);
 
-                if (b.x < 0 || b.x > cw || b.y < 0 || b.y > ch) {
-                    bullets.splice(i, 1);
+            // Auto-target nearest zombie if autoFire on and holding or mobile
+            if (aim.down || autoFireRef.current) {
+                let targetX = aim.x;
+                let targetY = aim.y;
+                if (autoFireRef.current && !aim.down && st.zombies.length > 0) {
+                    let best = st.zombies[0];
+                    let bestD = Infinity;
+                    for (const z of st.zombies) {
+                        const d = Math.hypot(z.x - st.player.x, z.y - st.player.y);
+                        if (d < bestD) { bestD = d; best = z; }
+                    }
+                    targetX = best.x;
+                    targetY = best.y;
+                    st.player.angle = Math.atan2(targetY - st.player.y, targetX - st.player.x);
                 }
+                if (fireZombieWeapon(st, targetX, targetY)) playAudio("laser");
+            }
+
+            const res = stepZombieState(st, dt, move);
+            if (res.event === "kill") playAudio("coin");
+            if (res.event === "powerup") playAudio("tada");
+            if (res.event === "hurt") playAudio("boing");
+            if (res.event === "crash") {
+                playAudio("boom");
+                setPhase("gameover");
+                setHud({ kills: st.kills, score: st.score, hp: 0, bombs: st.bombs, spread: false });
+                if (st.score > highScoreRef.current) {
+                    highScoreRef.current = st.score;
+                    setHighScore(st.score);
+                    localStorage.setItem("zombie_highscore", String(st.score));
+                }
+                if (!savedRunRef.current && st.score > 0) {
+                    savedRunRef.current = true;
+                    saveBackendGameScore("zombie", st.score);
+                }
+                return;
+            }
+
+            hudSync += dt;
+            if (hudSync >= 0.1) {
+                hudSync = 0;
+                setHud({
+                    kills: st.kills,
+                    score: st.score,
+                    hp: st.player.hp,
+                    bombs: st.bombs,
+                    spread: st.player.spreadTimer > 0,
+                });
+            }
+
+            // Render
+            ctx.fillStyle = "#080d19";
+            ctx.fillRect(0, 0, st.cw, st.ch);
+
+            // Arena grid
+            ctx.strokeStyle = "rgba(132, 204, 22, 0.06)";
+            ctx.lineWidth = 1;
+            for (let g = 40; g < st.cw; g += 40) {
+                ctx.beginPath();
+                ctx.moveTo(g, 0); ctx.lineTo(g, st.ch);
+                ctx.moveTo(0, g); ctx.lineTo(st.cw, g);
+                ctx.stroke();
+            }
+
+            // Pickups
+            for (const pk of st.pickups) {
+                ctx.fillStyle = pk.kind === "spread" ? "#fbbf24" : pk.kind === "heal" ? "#f43f5e" : "#38bdf8";
+                ctx.beginPath();
+                ctx.arc(pk.x, pk.y, 10, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.fillStyle = "#000";
+                ctx.font = "900 10px sans-serif";
+                ctx.textAlign = "center";
+                ctx.textBaseline = "middle";
+                ctx.fillText(pk.kind === "spread" ? "3×" : pk.kind === "heal" ? "+" : "B", pk.x, pk.y + 0.5);
             }
 
             // Particles
-            for (let i = particles.length - 1; i >= 0; i--) {
-                const p = particles[i];
-                p.x += p.vx;
-                p.y += p.vy;
-                p.alpha -= 0.02;
-                if (p.alpha <= 0) {
-                    particles.splice(i, 1);
-                    continue;
-                }
+            for (const pt of st.particles) {
                 ctx.save();
-                ctx.globalAlpha = p.alpha;
-                ctx.fillStyle = p.color;
+                ctx.globalAlpha = Math.max(0, pt.alpha);
+                ctx.fillStyle = pt.color;
                 ctx.beginPath();
-                ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+                ctx.arc(pt.x, pt.y, pt.radius, 0, Math.PI * 2);
                 ctx.fill();
                 ctx.restore();
             }
 
-            // Zombies
-            spawnTimer += deltaTime;
-            if (spawnTimer > Math.max(300, 1500 - currentScore * 10)) {
-                spawnZombie();
-                spawnTimer = 0;
+            // Bullets
+            ctx.fillStyle = "#fbbf24";
+            for (const b of st.bullets) {
+                ctx.beginPath();
+                ctx.arc(b.x, b.y, b.radius, 0, Math.PI * 2);
+                ctx.fill();
             }
 
-            for (let i = zombies.length - 1; i >= 0; i--) {
-                const z = zombies[i];
-                const angle = Math.atan2(player.y - z.y, player.x - z.x);
-                z.x += Math.cos(angle) * z.speed;
-                z.y += Math.sin(angle) * z.speed;
-
-                ctx.fillStyle = "#84cc16"; // lime-500 (toxic green)
+            // Zombies
+            for (const z of st.zombies) {
+                ctx.fillStyle = z.boss ? "#f43f5e" : "#84cc16";
                 ctx.beginPath();
                 ctx.arc(z.x, z.y, z.radius, 0, Math.PI * 2);
                 ctx.fill();
-
-                // Player collision (Game Over)
-                const distPlayer = Math.hypot(player.x - z.x, player.y - z.y);
-                if (distPlayer - z.radius - player.radius < 0) {
-                    playAudio("boom");
-                    setGameOver(true);
-                    return;
-                }
-
-                // Bullet collision
-                for (let j = bullets.length - 1; j >= 0; j--) {
-                    const b = bullets[j];
-                    const distBullet = Math.hypot(b.x - z.x, b.y - z.y);
-                    if (distBullet - z.radius - b.radius < 0) {
-                        // Explosion particles
-                        for (let k = 0; k < 8; k++) {
-                            particles.push({
-                                x: z.x, y: z.y,
-                                vx: (Math.random() - 0.5) * 6,
-                                vy: (Math.random() - 0.5) * 6,
-                                radius: Math.random() * 3,
-                                alpha: 1,
-                                color: "#84cc16"
-                            });
-                        }
-                        playAudio("coin"); // Use coin or similar for hit confirm
-                        currentScore += 10;
-                        setScore(currentScore);
-                        if (currentScore > highScoreRef.current) {
-                            highScoreRef.current = currentScore;
-                            setHighScore(currentScore);
-                            localStorage.setItem("zombie_highscore", String(currentScore));
-                            saveBackendGameScore("zombie", currentScore);
-                        }
-                        zombies.splice(i, 1);
-                        bullets.splice(j, 1);
-                        break;
-                    }
-                }
+                ctx.fillStyle = "#0f172a";
+                ctx.beginPath();
+                ctx.arc(z.x - 4, z.y - 3, 2.5, 0, Math.PI * 2);
+                ctx.arc(z.x + 4, z.y - 3, 2.5, 0, Math.PI * 2);
+                ctx.fill();
             }
+
+            // Player
+            if (st.player.invulnTimer <= 0 || Math.floor(now * 0.02) % 2 === 0) {
+                ctx.save();
+                ctx.translate(st.player.x, st.player.y);
+                ctx.rotate(st.player.angle);
+                ctx.fillStyle = st.player.spreadTimer > 0 ? "#fbbf24" : "#38bdf8";
+                ctx.beginPath();
+                ctx.arc(0, 0, st.player.radius, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.fillStyle = "#e2e8f0";
+                ctx.fillRect(st.player.radius - 4, -4, 15, 8);
+                ctx.restore();
+            }
+
+            animationId = requestAnimationFrame(loop);
         };
 
-        const loop = (timestamp) => {
-            const deltaTime = timestamp - lastTime;
-            lastTime = timestamp;
-            draw(deltaTime);
-            if (!gameOver) animationId = requestAnimationFrame(loop);
-        };
         animationId = requestAnimationFrame(loop);
-
         return () => {
             cancelAnimationFrame(animationId);
-            canvas.removeEventListener("mousemove", updateMouse);
-            canvas.removeEventListener("mousedown", handlePointerDown);
-            canvas.removeEventListener("touchstart", handlePointerDown);
-            canvas.removeEventListener("touchmove", handleTouch);
+            window.removeEventListener("keydown", onKeyDown);
+            window.removeEventListener("keyup", onKeyUp);
+            canvas.removeEventListener("mousemove", onMouseMove);
+            canvas.removeEventListener("mousedown", onMouseDown);
+            window.removeEventListener("mouseup", onMouseUp);
+            canvas.removeEventListener("touchstart", onTouchStart);
+            canvas.removeEventListener("touchmove", onTouchMove);
         };
-    }, [isPlaying, gameOver, playAudio]);
+    }, [phase, playAudio, detonateBomb]);
 
     return (
-        <div className="flex flex-col items-center gap-4 max-w-md mx-auto w-full select-none">
-            <div className="flex items-center justify-between w-full px-2">
-                <button type="button" onClick={onBack} className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-xs font-bold text-white transition-colors">
+        <div className="flex flex-col items-center gap-3.5 max-w-md mx-auto w-full select-none">
+            <div className="flex items-center justify-between w-full px-1 flex-wrap gap-2">
+                <button type="button" onClick={onBack} className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/10 text-xs font-bold text-white cursor-pointer">
                     <ArrowLeft className="h-4 w-4" /> Back
                 </button>
-                <div className="flex items-center gap-3">
-                    <span className="text-xs font-bold text-white/70">Kills: <strong className="text-lime-400">{score / 10}</strong></span>
+                <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-rose-400">{"❤️".repeat(Math.max(0, hud.hp))}</span>
+                    <button
+                        type="button"
+                        onClick={detonateBomb}
+                        disabled={phase !== "playing" || hud.bombs <= 0}
+                        className="px-2 py-1 rounded-lg bg-sky-500/20 border border-sky-400/40 text-sky-200 text-[11px] font-bold flex items-center gap-1 disabled:opacity-40 cursor-pointer"
+                    >
+                        <Bomb className="h-3 w-3" /> ×{hud.bombs}
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => setAutoFire((a) => !a)}
+                        className={`px-2 py-1 rounded-lg text-[10px] font-bold border cursor-pointer ${
+                            autoFire ? "bg-lime-500/20 border-lime-400/50 text-lime-300" : "bg-white/5 border-white/10 text-white/60"
+                        }`}
+                    >
+                        {autoFire ? "Auto-Aim ON" : "Manual"}
+                    </button>
+                    <span className="text-xs font-bold text-white/75">Kills: <strong className="text-lime-400">{hud.kills}</strong></span>
                     <span className="text-xs font-bold text-amber-300 flex items-center gap-1">
-                        <Trophy className="h-3.5 w-3.5" /> {highScore / 10}
+                        <Trophy className="h-3.5 w-3.5" /> {Math.floor(Math.max(highScore, hud.score) / 10)}
                     </span>
                 </div>
             </div>
 
-            <div className="relative w-[340px] h-[340px] sm:w-[400px] sm:h-[400px] rounded-3xl overflow-hidden border-2 border-lime-500/30 shadow-[0_0_40px_rgba(132,204,22,0.15)]">
-                <canvas ref={canvasRef} width={400} height={400} className="w-full h-full bg-[#0a0f1d] touch-none" />
+            <div className="relative w-full max-w-[400px] aspect-square rounded-3xl overflow-hidden border-2 border-lime-500/35 shadow-[0_0_40px_rgba(132,204,22,0.18)]">
+                <canvas ref={canvasRef} width={400} height={400} className="w-full h-full bg-[#080d19] touch-none" />
 
-                {!isPlaying && !gameOver && (
-                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/75 backdrop-blur-sm gap-3">
+                {phase === "ready" && (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/75 backdrop-blur-sm gap-3 p-4 text-center">
                         <span className="text-5xl">🧟</span>
-                        <h3 className="text-xl font-black text-white tracking-tight">Zombie Survival</h3>
-                        <p className="text-xs text-white/60">Tap/Click anywhere to shoot!</p>
-                        <button onClick={startGame} className="flex items-center gap-2 px-7 py-3 rounded-2xl bg-lime-500 hover:bg-lime-400 text-black font-black text-sm shadow-[0_0_25px_rgba(132,204,22,0.4)] active:scale-95 transition-all">
+                        <h3 className="text-xl font-black text-white">Zombie Survival</h3>
+                        <p className="text-xs text-white/65">WASD to dodge, aim/tap to shoot, Space for EMP Bomb! 3 HP shield + Bosses.</p>
+                        <button type="button" onClick={startGame} className="flex items-center gap-2 px-7 py-3 rounded-2xl bg-lime-500 hover:bg-lime-400 text-black font-black text-sm cursor-pointer active:scale-95">
                             <Play className="h-4 w-4 fill-current" /> Survive
                         </button>
                     </div>
                 )}
 
-                {gameOver && (
+                {phase === "gameover" && (
                     <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/85 backdrop-blur-sm gap-3">
-                        <span className="text-5xl animate-pulse">💀</span>
-                        <h3 className="text-xl font-black text-rose-400">You Died</h3>
-                        <p className="text-xs text-white/70">Zombies Defeated: <strong className="text-lime-400 text-sm">{score / 10}</strong></p>
-                        <button onClick={startGame} className="flex items-center gap-2 px-6 py-3 rounded-2xl bg-lime-500 hover:bg-lime-400 text-black font-black text-sm shadow-[0_0_25px_rgba(132,204,22,0.4)] active:scale-95 transition-all">
-                            <RotateCcw className="h-4 w-4" /> Try Again
+                        <span className="text-5xl">💀</span>
+                        <h3 className="text-xl font-black text-rose-400">Overrun!</h3>
+                        <p className="text-xs text-white/75">Kills: <strong className="text-lime-400">{hud.kills}</strong> • Score: <strong className="text-amber-300">{hud.score}</strong></p>
+                        <button type="button" onClick={startGame} className="flex items-center gap-2 px-6 py-3 rounded-2xl bg-lime-500 hover:bg-lime-400 text-black font-black text-sm cursor-pointer active:scale-95">
+                            <RotateCcw className="h-4 w-4" /> Fight Again
                         </button>
                     </div>
                 )}
             </div>
-            <p className="text-[11px] text-white/40">Keep moving your mouse/finger and tap repeatedly to fire!</p>
         </div>
     );
 };
 
-
 /* ═══════════════════════════════════════════════════════════════
-   6. NEON DODGE (Fast-Paced Infinite Runner)
+   6. NEON DODGE (Jet Sprite, Shield Pickups, Near-Miss Combos)
    ═══════════════════════════════════════════════════════════════ */
 const NeonDodge = ({ onBack, isMuted }) => {
     const canvasRef = useRef(null);
+    const stateRef = useRef(createNeonDodgeState(380, 450));
+    const savedRunRef = useRef(false);
+
     const [score, setScore] = useState(0);
-    const [gameOver, setGameOver] = useState(false);
-    const [isPlaying, setIsPlaying] = useState(false);
+    const [hasShield, setHasShield] = useState(false);
+    const [phase, setPhase] = useState("ready");
     const [highScore, setHighScore] = useState(() => Number(localStorage.getItem("neondodge_highscore") || 0));
+
     const highScoreRef = useRef(highScore);
-    highScoreRef.current = highScore;
     const isMutedRef = useRef(isMuted);
-    isMutedRef.current = isMuted;
+    useEffect(() => { highScoreRef.current = highScore; }, [highScore]);
+    useEffect(() => { isMutedRef.current = isMuted; }, [isMuted]);
 
     const playAudio = useCallback((type) => {
         if (!isMutedRef.current) soundEngine.play(type);
     }, []);
 
-    const startGame = () => {
+    const startGame = useCallback(() => {
         playAudio("whoosh");
+        stateRef.current = createNeonDodgeState(380, 450);
+        savedRunRef.current = false;
         setScore(0);
-        setGameOver(false);
-        setIsPlaying(true);
-    };
+        setHasShield(false);
+        setPhase("playing");
+    }, [playAudio]);
 
     useEffect(() => {
-        if (!isPlaying || gameOver) return;
+        if (phase !== "playing") return;
 
         const canvas = canvasRef.current;
         const ctx = canvas.getContext("2d");
         let animationId;
-        
-        const cw = canvas.width;
-        const ch = canvas.height;
-        const player = { x: cw / 2, y: ch - 40, width: 30, height: 20, speed: 8 };
-        let obstacles = [];
-        let particles = [];
-        let currentScore = 0;
-        let speedMultiplier = 1;
-        let frameCount = 0;
-
-        // Controls
+        let lastTime = performance.now();
+        let hudSync = 0;
         const keys = {};
-        const handleKeyDown = (e) => { keys[e.code] = true; };
-        const handleKeyUp = (e) => { keys[e.code] = false; };
-        window.addEventListener("keydown", handleKeyDown);
-        window.addEventListener("keyup", handleKeyUp);
 
-        const handleTouchMove = (e) => {
-            e.preventDefault();
+        const onKeyDown = (e) => { keys[e.code] = true; };
+        const onKeyUp = (e) => { keys[e.code] = false; };
+        window.addEventListener("keydown", onKeyDown);
+        window.addEventListener("keyup", onKeyUp);
+
+        const movePointer = (clientX) => {
             const rect = canvas.getBoundingClientRect();
-            const touchX = (e.touches[0].clientX - rect.left) * (canvas.width / rect.width);
-            player.x = Math.max(player.width / 2, Math.min(cw - player.width / 2, touchX));
+            const px = (clientX - rect.left) * (canvas.width / rect.width);
+            const p = stateRef.current.player;
+            p.x = Math.max(p.width / 2, Math.min(canvas.width - p.width / 2, px));
         };
-        canvas.addEventListener("touchmove", handleTouchMove, { passive: false });
+        const onTouchMove = (e) => { e.preventDefault(); movePointer(e.touches[0].clientX); };
+        const onPointerMove = (e) => { if (e.buttons > 0) movePointer(e.clientX); };
 
-        const draw = () => {
-            ctx.fillStyle = "rgba(10, 5, 25, 0.5)"; // Motion blur background
-            ctx.fillRect(0, 0, cw, ch);
+        canvas.addEventListener("touchmove", onTouchMove, { passive: false });
+        canvas.addEventListener("pointermove", onPointerMove);
 
-            // Player movement via keyboard
-            if ((keys["ArrowLeft"] || keys["KeyA"]) && player.x > player.width / 2) {
-                player.x -= player.speed;
-            }
-            if ((keys["ArrowRight"] || keys["KeyD"]) && player.x < cw - player.width / 2) {
-                player.x += player.speed;
-            }
+        const loop = (now) => {
+            const dt = Math.min(0.05, Math.max(0.001, (now - lastTime) / 1000));
+            lastTime = now;
+            const st = stateRef.current;
 
-            // Draw Player
-            ctx.fillStyle = "#a855f7"; // purple-500
-            ctx.shadowBlur = 15;
-            ctx.shadowColor = "#a855f7";
-            ctx.fillRect(player.x - player.width / 2, player.y - player.height / 2, player.width, player.height);
-            ctx.shadowBlur = 0; // reset
+            const dir = (keys.ArrowRight || keys.KeyD ? 1 : 0) - (keys.ArrowLeft || keys.KeyA ? 1 : 0);
+            const res = stepNeonDodge(st, dt, dir);
 
-            // Spawn obstacles
-            frameCount++;
-            if (frameCount % Math.max(15, Math.floor(40 - speedMultiplier * 5)) === 0) {
-                const w = Math.random() * 50 + 20;
-                obstacles.push({
-                    x: Math.random() * (cw - w),
-                    y: -50,
-                    width: w,
-                    height: 20,
-                    color: Math.random() < 0.2 ? "#f43f5e" : "#e11d48", // rose colors
-                    speed: (Math.random() * 3 + 4) * speedMultiplier
-                });
-            }
-
-            // Update & Draw Obstacles
-            for (let i = obstacles.length - 1; i >= 0; i--) {
-                const obs = obstacles[i];
-                obs.y += obs.speed;
-                
-                ctx.fillStyle = obs.color;
-                ctx.shadowBlur = 10;
-                ctx.shadowColor = obs.color;
-                ctx.fillRect(obs.x, obs.y, obs.width, obs.height);
-                ctx.shadowBlur = 0;
-
-                // Collision detection
-                if (
-                    player.x - player.width / 2 < obs.x + obs.width &&
-                    player.x + player.width / 2 > obs.x &&
-                    player.y - player.height / 2 < obs.y + obs.height &&
-                    player.y + player.height / 2 > obs.y
-                ) {
-                    playAudio("boom");
-                    setGameOver(true);
-                    return;
+            if (res.event === "pickup" || res.event === "graze") playAudio("coin");
+            if (res.event === "shield_save") playAudio("tada");
+            if (res.event === "crash") {
+                playAudio("boom");
+                setScore(st.score);
+                setHasShield(false);
+                setPhase("gameover");
+                if (st.score > highScoreRef.current) {
+                    highScoreRef.current = st.score;
+                    setHighScore(st.score);
+                    localStorage.setItem("neondodge_highscore", String(st.score));
                 }
-
-                if (obs.y > ch) {
-                    obstacles.splice(i, 1);
-                    currentScore += 10;
-                    setScore(currentScore);
-                    if (currentScore > highScoreRef.current) {
-                        highScoreRef.current = currentScore;
-                        setHighScore(currentScore);
-                        localStorage.setItem("neondodge_highscore", String(currentScore));
-                        saveBackendGameScore("neondodge", currentScore);
-                    }
-                    if (currentScore % 200 === 0) {
-                        speedMultiplier += 0.2;
-                        playAudio("coin");
-                    }
+                if (!savedRunRef.current && st.score > 0) {
+                    savedRunRef.current = true;
+                    saveBackendGameScore("neondodge", st.score);
                 }
+                return;
             }
-        };
 
-        const loop = () => {
-            draw();
-            if (!gameOver) animationId = requestAnimationFrame(loop);
-        };
-        animationId = requestAnimationFrame(loop);
+            hudSync += dt;
+            if (hudSync >= 0.1) {
+                hudSync = 0;
+                setScore(st.score);
+                setHasShield(st.player.shield);
+            }
 
-        return () => {
-            cancelAnimationFrame(animationId);
-            window.removeEventListener("keydown", handleKeyDown);
-            window.removeEventListener("keyup", handleKeyUp);
-            canvas.removeEventListener("touchmove", handleTouchMove);
-        };
-    }, [isPlaying, gameOver, playAudio]);
+            // Render
+            ctx.fillStyle = "rgba(10, 5, 25, 0.55)";
+            ctx.fillRect(0, 0, st.cw, st.ch);
 
-    return (
-        <div className="flex flex-col items-center gap-4 max-w-md mx-auto w-full select-none">
-            <div className="flex items-center justify-between w-full px-2">
-                <button type="button" onClick={onBack} className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-xs font-bold text-white transition-colors">
-                    <ArrowLeft className="h-4 w-4" /> Back
-                </button>
-                <div className="flex items-center gap-3">
-                    <span className="text-xs font-bold text-white/70">Score: <strong className="text-purple-400">{score}</strong></span>
-                    <span className="text-xs font-bold text-amber-300 flex items-center gap-1">
-                        <Trophy className="h-3.5 w-3.5" /> {highScore}
-                    </span>
-                </div>
-            </div>
-
-            <div className="relative w-[340px] h-[400px] sm:w-[380px] sm:h-[450px] rounded-3xl overflow-hidden border-2 border-purple-500/30 shadow-[0_0_40px_rgba(168,85,247,0.15)]">
-                <canvas ref={canvasRef} width={380} height={450} className="w-full h-full bg-[#0a0519] touch-none" />
-
-                {!isPlaying && !gameOver && (
-                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/75 backdrop-blur-sm gap-3">
-                        <span className="text-5xl animate-pulse">⚡</span>
-                        <h3 className="text-xl font-black text-white tracking-tight">Neon Dodge</h3>
-                        <p className="text-xs text-white/60">Drag left/right or use Arrow Keys to dodge!</p>
-                        <button onClick={startGame} className="flex items-center gap-2 px-7 py-3 rounded-2xl bg-purple-500 hover:bg-purple-400 text-black font-black text-sm shadow-[0_0_25px_rgba(168,85,247,0.4)] active:scale-95 transition-all">
-                            <Play className="h-4 w-4 fill-current" /> Start Engine
-                        </button>
-                    </div>
-                )}
-
-                {gameOver && (
-                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/85 backdrop-blur-sm gap-3">
-                        <span className="text-5xl animate-bounce">💥</span>
-                        <h3 className="text-xl font-black text-rose-400">CRASHED!</h3>
-                        <p className="text-xs text-white/70">Final Score: <strong className="text-purple-400 text-sm">{score}</strong></p>
-                        <button onClick={startGame} className="flex items-center gap-2 px-6 py-3 rounded-2xl bg-purple-500 hover:bg-purple-400 text-black font-black text-sm shadow-[0_0_25px_rgba(168,85,247,0.4)] active:scale-95 transition-all">
-                            <RotateCcw className="h-4 w-4" /> Go Again
-                        </button>
-                    </div>
-                )}
-            </div>
-            <p className="text-[11px] text-white/40">Drag the purple block to dodge the falling neon hazards!</p>
-        </div>
-    );
-};
-
-
-/* ═══════════════════════════════════════════════════════════════
-   7. NEON BLADE (Knife Hit clone - Action puzzle)
-   ═══════════════════════════════════════════════════════════════ */
-const NeonBlade = ({ onBack, isMuted }) => {
-    const canvasRef = useRef(null);
-    const [level, setLevel] = useState(1);
-    const [score, setScore] = useState(0);
-    const [gameOver, setGameOver] = useState(false);
-    const [isPlaying, setIsPlaying] = useState(false);
-    const [highScore, setHighScore] = useState(() => Number(localStorage.getItem("neonblade_highscore") || 0));
-    const highScoreRef = useRef(highScore);
-    highScoreRef.current = highScore;
-    const isMutedRef = useRef(isMuted);
-    isMutedRef.current = isMuted;
-
-    const playAudio = useCallback((type) => {
-        if (!isMutedRef.current) soundEngine.play(type);
-    }, []);
-
-    const startGame = () => {
-        playAudio("whoosh");
-        setScore(0);
-        setLevel(1);
-        setGameOver(false);
-        setIsPlaying(true);
-    };
-
-    useEffect(() => {
-        if (!isPlaying || gameOver) return;
-
-        const canvas = canvasRef.current;
-        const ctx = canvas.getContext("2d");
-        let animationId;
-        
-        const cw = canvas.width;
-        const ch = canvas.height;
-        const targetRadius = 60;
-        
-        let targetAngle = 0;
-        let rotationSpeed = 0.03 + (level * 0.005);
-        if (level > 3 && Math.random() > 0.5) rotationSpeed *= -1; // random reverse
-        
-        let knives = [];
-        // Add random initial knives based on level
-        const numInitKnives = Math.min(3, Math.floor(level / 2));
-        for (let i=0; i<numInitKnives; i++) {
-            knives.push(Math.random() * Math.PI * 2);
-        }
-
-        let knivesToThrow = 5 + Math.floor(level / 2);
-        let flyingKnife = null;
-        let particles = [];
-        
-        const throwKnife = () => {
-            if (flyingKnife || knivesToThrow <= 0) return;
-            playAudio("laser");
-            flyingKnife = { y: ch - 50, speed: 25 };
-        };
-
-        const handlePointerDown = (e) => {
-            e.preventDefault();
-            throwKnife();
-        };
-
-        canvas.addEventListener("mousedown", handlePointerDown);
-        canvas.addEventListener("touchstart", handlePointerDown, { passive: false });
-
-        const drawKnife = (ctx, isStuck) => {
-            ctx.fillStyle = "#38bdf8"; // cyan-400
-            ctx.shadowBlur = 10;
-            ctx.shadowColor = "#38bdf8";
-            ctx.beginPath();
-            ctx.moveTo(0, isStuck ? targetRadius : -20);
-            ctx.lineTo(-4, isStuck ? targetRadius + 30 : 10);
-            ctx.lineTo(4, isStuck ? targetRadius + 30 : 10);
-            ctx.fill();
-            ctx.shadowBlur = 0;
-        };
-
-        const draw = () => {
-            ctx.fillStyle = "rgba(5, 10, 20, 1)";
-            ctx.fillRect(0, 0, cw, ch);
-
-            // Update & Draw Particles
-            for (let i = particles.length - 1; i >= 0; i--) {
-                const p = particles[i];
-                p.x += p.vx;
-                p.y += p.vy;
-                p.alpha -= 0.03;
-                if (p.alpha <= 0) {
-                    particles.splice(i, 1);
-                    continue;
-                }
+            // Pickups
+            for (const pk of st.pickups) {
                 ctx.save();
-                ctx.globalAlpha = p.alpha;
-                ctx.fillStyle = p.color;
+                ctx.fillStyle = pk.kind === "shield" ? "#22d3ee" : "#fbbf24";
+                ctx.shadowColor = ctx.fillStyle;
+                ctx.shadowBlur = 12;
                 ctx.beginPath();
-                ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+                ctx.arc(pk.x, pk.y, 10, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.fillStyle = "#000";
+                ctx.font = "900 10px sans-serif";
+                ctx.textAlign = "center";
+                ctx.textBaseline = "middle";
+                ctx.fillText(pk.kind === "shield" ? "S" : "★", pk.x, pk.y + 0.5);
+                ctx.restore();
+            }
+
+            // Obstacles
+            for (const o of st.obstacles) {
+                ctx.save();
+                ctx.fillStyle = o.color;
+                ctx.shadowColor = o.color;
+                ctx.shadowBlur = 10;
+                ctx.beginPath();
+                ctx.roundRect(o.x, o.y, o.width, o.height, 4);
                 ctx.fill();
                 ctx.restore();
             }
 
-            // Draw Target Center
-            targetAngle += rotationSpeed;
-            // periodically change speed if high level
-            if (level > 4 && Math.random() < 0.01) rotationSpeed = -rotationSpeed;
+            // Near miss popup
+            if (st.nearMissPop) {
+                ctx.save();
+                ctx.fillStyle = "#fde047";
+                ctx.font = "900 13px sans-serif";
+                ctx.textAlign = "center";
+                ctx.fillText(st.nearMissPop.text, st.nearMissPop.x, st.nearMissPop.y);
+                ctx.restore();
+            }
+
+            // Fighter Jet Player
+            const p = st.player;
+            if (p.invuln <= 0 || Math.floor(now * 0.02) % 2 === 0) {
+                ctx.save();
+                ctx.translate(p.x, p.y);
+                if (p.shield) {
+                    ctx.strokeStyle = "#22d3ee";
+                    ctx.lineWidth = 2;
+                    ctx.beginPath();
+                    ctx.arc(0, 0, 22, 0, Math.PI * 2);
+                    ctx.stroke();
+                }
+                // Thruster flame
+                ctx.fillStyle = "#38bdf8";
+                ctx.beginPath();
+                ctx.moveTo(-5, 11);
+                ctx.lineTo(0, 20 + Math.random() * 6);
+                ctx.lineTo(5, 11);
+                ctx.fill();
+
+                ctx.shadowColor = "#a855f7";
+                ctx.shadowBlur = 16;
+                ctx.fillStyle = "#c084fc";
+                ctx.beginPath();
+                ctx.moveTo(0, -15);
+                ctx.lineTo(15, 12);
+                ctx.lineTo(0, 6);
+                ctx.lineTo(-15, 12);
+                ctx.closePath();
+                ctx.fill();
+                ctx.restore();
+            }
+
+            animationId = requestAnimationFrame(loop);
+        };
+
+        animationId = requestAnimationFrame(loop);
+        return () => {
+            cancelAnimationFrame(animationId);
+            window.removeEventListener("keydown", onKeyDown);
+            window.removeEventListener("keyup", onKeyUp);
+            canvas.removeEventListener("touchmove", onTouchMove);
+            canvas.removeEventListener("pointermove", onPointerMove);
+        };
+    }, [phase, playAudio]);
+
+    return (
+        <div className="flex flex-col items-center gap-3.5 max-w-md mx-auto w-full select-none">
+            <div className="flex items-center justify-between w-full px-1">
+                <button type="button" onClick={onBack} className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/10 text-xs font-bold text-white cursor-pointer">
+                    <ArrowLeft className="h-4 w-4" /> Back
+                </button>
+                <div className="flex items-center gap-2.5">
+                    {hasShield && (
+                        <span className="px-2 py-0.5 rounded-lg bg-cyan-500/20 border border-cyan-400 text-cyan-300 text-[10px] font-bold flex items-center gap-1">
+                            <Shield className="h-3 w-3" /> SHIELD
+                        </span>
+                    )}
+                    <span className="text-xs font-bold text-white/75">Score: <strong className="text-purple-400">{score}</strong></span>
+                    <span className="text-xs font-bold text-amber-300 flex items-center gap-1">
+                        <Trophy className="h-3.5 w-3.5" /> {Math.max(highScore, score)}
+                    </span>
+                </div>
+            </div>
+
+            <div className="relative w-full max-w-[380px] aspect-[380/450] rounded-3xl overflow-hidden border-2 border-purple-500/35 shadow-[0_0_40px_rgba(168,85,247,0.18)]">
+                <canvas ref={canvasRef} width={380} height={450} className="w-full h-full bg-[#0a0519] touch-none" />
+
+                {phase === "ready" && (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/75 backdrop-blur-sm gap-3 p-4 text-center">
+                        <span className="text-5xl animate-pulse">🛸</span>
+                        <h3 className="text-xl font-black text-white">Neon Dodge</h3>
+                        <p className="text-xs text-white/65">Drag or use A/D / Arrows. Graze close for +15 & grab S Shields!</p>
+                        <button type="button" onClick={startGame} className="flex items-center gap-2 px-7 py-3 rounded-2xl bg-purple-500 hover:bg-purple-400 text-black font-black text-sm cursor-pointer active:scale-95">
+                            <Play className="h-4 w-4 fill-current" /> Launch Jet
+                        </button>
+                    </div>
+                )}
+
+                {phase === "gameover" && (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/85 backdrop-blur-sm gap-3">
+                        <span className="text-5xl">💥</span>
+                        <h3 className="text-xl font-black text-rose-400">Reactor Breached!</h3>
+                        <p className="text-xs text-white/75">Final Score: <strong className="text-purple-400 text-sm">{score}</strong></p>
+                        <button type="button" onClick={startGame} className="flex items-center gap-2 px-6 py-3 rounded-2xl bg-purple-500 hover:bg-purple-400 text-black font-black text-sm cursor-pointer active:scale-95">
+                            <RotateCcw className="h-4 w-4" /> Fly Again
+                        </button>
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+};
+
+/* ═══════════════════════════════════════════════════════════════
+   7. NEON BLADE (Fixed Angle Math, Golden Orbs, Boss Wheels & Space)
+   ═══════════════════════════════════════════════════════════════ */
+const NeonBlade = ({ onBack, isMuted }) => {
+    const canvasRef = useRef(null);
+    const savedRunRef = useRef(false);
+
+    const [level, setLevel] = useState(1);
+    const [score, setScore] = useState(0);
+    const [phase, setPhase] = useState("ready"); // ready | playing | levelclear | gameover
+    const [highScore, setHighScore] = useState(() => Number(localStorage.getItem("neonblade_highscore") || 0));
+
+    const scoreRef = useRef(score);
+    const highScoreRef = useRef(highScore);
+    const isMutedRef = useRef(isMuted);
+    useEffect(() => { scoreRef.current = score; }, [score]);
+    useEffect(() => { highScoreRef.current = highScore; }, [highScore]);
+    useEffect(() => { isMutedRef.current = isMuted; }, [isMuted]);
+
+    const playAudio = useCallback((type) => {
+        if (!isMutedRef.current) soundEngine.play(type);
+    }, []);
+
+    const startFresh = useCallback(() => {
+        playAudio("whoosh");
+        savedRunRef.current = false;
+        setScore(0);
+        setLevel(1);
+        setPhase("playing");
+    }, [playAudio]);
+
+    useEffect(() => {
+        if (phase !== "playing") return;
+
+        const canvas = canvasRef.current;
+        const ctx = canvas.getContext("2d");
+        let animationId;
+        let lastTime = performance.now();
+
+        const cw = canvas.width;
+        const ch = canvas.height;
+        const centerX = cw / 2;
+        const centerY = ch * 0.34;
+        const targetRadius = 62;
+        const isBoss = level % 5 === 0;
+
+        let targetAngle = 0;
+        let baseSpeed = 1.65 + level * 0.16;
+        if (level % 2 === 0) baseSpeed *= -1;
+
+        const stuckKnives = [];
+        const initCount = Math.min(4, Math.floor(level / 2));
+        for (let i = 0; i < initCount; i++) {
+            stuckKnives.push((i * Math.PI * 2) / Math.max(1, initCount));
+        }
+
+        const orbs = [];
+        const orbCount = isBoss ? 3 : 2;
+        for (let i = 0; i < orbCount; i++) {
+            const ang = (i * 2.1 + 0.7) % (Math.PI * 2);
+            if (!checkBladeCollision(ang, stuckKnives, 0.25)) {
+                orbs.push({ angle: ang, sliced: false });
+            }
+        }
+
+        let knivesLeft = 5 + Math.floor(level / 2);
+        let flyingKnife = null;
+        let shakeTimer = 0;
+        const particles = [];
+
+        const throwBlade = () => {
+            if (flyingKnife || knivesLeft <= 0) return;
+            playAudio("laser");
+            flyingKnife = { y: ch - 60, speed: 1200 };
+        };
+
+        const onPointerDown = (e) => {
+            e.preventDefault();
+            throwBlade();
+        };
+        const onKeyDown = (e) => {
+            if (e.code === "Space" || e.key === "ArrowUp") {
+                e.preventDefault();
+                throwBlade();
+            }
+        };
+
+        canvas.addEventListener("pointerdown", onPointerDown);
+        window.addEventListener("keydown", onKeyDown);
+
+        const drawBladeShape = (isStuck) => {
+            ctx.fillStyle = "#38bdf8";
+            ctx.shadowColor = "#38bdf8";
+            ctx.shadowBlur = 10;
+            ctx.beginPath();
+            if (isStuck) {
+                ctx.moveTo(0, targetRadius - 4);
+                ctx.lineTo(-5, targetRadius + 28);
+                ctx.lineTo(5, targetRadius + 28);
+            } else {
+                ctx.moveTo(0, -24);
+                ctx.lineTo(-5, 8);
+                ctx.lineTo(5, 8);
+            }
+            ctx.closePath();
+            ctx.fill();
+            ctx.shadowBlur = 0;
+        };
+
+        const loop = (now) => {
+            const dt = Math.min(0.05, Math.max(0.001, (now - lastTime) / 1000));
+            lastTime = now;
+
+            if (shakeTimer > 0) shakeTimer = Math.max(0, shakeTimer - dt);
+
+            const spinMult = isBoss ? 1 + Math.sin(now * 0.003) * 0.65 : 1;
+            targetAngle = normalizeAngle(targetAngle + baseSpeed * spinMult * dt);
 
             ctx.save();
-            ctx.translate(cw / 2, ch / 3);
-            ctx.rotate(targetAngle);
-            
-            // Draw stuck knives
-            knives.forEach(angle => {
-                ctx.save();
-                ctx.rotate(angle);
-                drawKnife(ctx, true);
-                ctx.restore();
-            });
+            if (shakeTimer > 0) {
+                ctx.translate((Math.random() - 0.5) * 8, (Math.random() - 0.5) * 8);
+            }
 
-            // Target wheel
-            ctx.fillStyle = "#f43f5e"; // rose-500
-            ctx.shadowBlur = 20;
-            ctx.shadowColor = "#f43f5e";
+            ctx.fillStyle = "#050a14";
+            ctx.fillRect(0, 0, cw, ch);
+
+            // Particles
+            for (let i = particles.length - 1; i >= 0; i--) {
+                const pt = particles[i];
+                pt.x += pt.vx * dt;
+                pt.y += pt.vy * dt;
+                pt.alpha -= dt * 2.4;
+                if (pt.alpha <= 0) {
+                    particles.splice(i, 1);
+                    continue;
+                }
+                ctx.save();
+                ctx.globalAlpha = pt.alpha;
+                ctx.fillStyle = pt.color;
+                ctx.beginPath();
+                ctx.arc(pt.x, pt.y, pt.r, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+            }
+
+            // Rotating Target Wheel
+            ctx.save();
+            ctx.translate(centerX, centerY);
+            ctx.rotate(targetAngle);
+
+            for (const ang of stuckKnives) {
+                ctx.save();
+                ctx.rotate(ang);
+                drawBladeShape(true);
+                ctx.restore();
+            }
+
+            for (const orb of orbs) {
+                if (orb.sliced) continue;
+                ctx.save();
+                ctx.rotate(orb.angle);
+                ctx.fillStyle = "#fbbf24";
+                ctx.shadowColor = "#fbbf24";
+                ctx.shadowBlur = 12;
+                ctx.beginPath();
+                ctx.arc(0, targetRadius + 10, 8, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+            }
+
+            ctx.fillStyle = isBoss ? "#eab308" : "#f43f5e";
+            ctx.shadowColor = isBoss ? "#eab308" : "#f43f5e";
+            ctx.shadowBlur = 22;
             ctx.beginPath();
             ctx.arc(0, 0, targetRadius, 0, Math.PI * 2);
             ctx.fill();
             ctx.fillStyle = "#0f172a";
             ctx.beginPath();
-            ctx.arc(0, 0, targetRadius - 10, 0, Math.PI * 2);
+            ctx.arc(0, 0, targetRadius - 12, 0, Math.PI * 2);
             ctx.fill();
             ctx.shadowBlur = 0;
+
+            if (isBoss) {
+                ctx.fillStyle = "#fde047";
+                ctx.font = "900 12px sans-serif";
+                ctx.textAlign = "center";
+                ctx.textBaseline = "middle";
+                ctx.fillText("BOSS", 0, 0);
+            }
             ctx.restore();
 
-            // Draw Flying Knife
+            // Flying Knife
             if (flyingKnife) {
-                flyingKnife.y -= flyingKnife.speed;
+                flyingKnife.y -= flyingKnife.speed * dt;
                 ctx.save();
-                ctx.translate(cw / 2, flyingKnife.y);
-                drawKnife(ctx, false);
+                ctx.translate(centerX, flyingKnife.y);
+                drawBladeShape(false);
                 ctx.restore();
 
-                // Check hit
-                if (flyingKnife.y <= ch / 3 + targetRadius) {
-                    const hitAngle = (-targetAngle + Math.PI / 2) % (Math.PI * 2);
-                    const normalizedHitAngle = hitAngle < 0 ? hitAngle + Math.PI * 2 : hitAngle;
-                    
-                    // Check overlap
-                    const hitThreshold = 0.25; // radians
-                    let didHit = false;
-                    for (let angle of knives) {
-                        const normalizedAngle = angle < 0 ? angle + Math.PI * 2 : angle;
-                        let diff = Math.abs(normalizedHitAngle - normalizedAngle);
-                        if (diff > Math.PI) diff = Math.PI * 2 - diff;
-                        if (diff < hitThreshold) {
-                            didHit = true;
-                            break;
-                        }
-                    }
+                if (flyingKnife.y <= centerY + targetRadius) {
+                    const impactAngle = computeBladeImpactAngle(targetAngle);
+                    const collided = checkBladeCollision(impactAngle, stuckKnives, 0.24);
+                    flyingKnife = null;
 
-                    if (didHit) {
+                    if (collided) {
                         playAudio("boom");
-                        for (let k = 0; k < 15; k++) {
-                            particles.push({
-                                x: cw/2, y: ch/3 + targetRadius,
-                                vx: (Math.random() - 0.5) * 8, vy: (Math.random() - 0.5) * 8,
-                                radius: Math.random() * 4, alpha: 1, color: "#38bdf8"
-                            });
+                        shakeTimer = 0.25;
+                        setPhase("gameover");
+                        if (scoreRef.current > highScoreRef.current) {
+                            highScoreRef.current = scoreRef.current;
+                            setHighScore(scoreRef.current);
+                            localStorage.setItem("neonblade_highscore", String(scoreRef.current));
                         }
-                        setGameOver(true);
-                        flyingKnife = null;
-                        return; // wait for next frame to stop
-                    } else {
-                        playAudio("coin");
-                        knives.push(normalizedHitAngle);
-                        knivesToThrow--;
-                        setScore(s => {
-                            const newScore = s + 10;
-                            if (newScore > highScoreRef.current) {
-                                highScoreRef.current = newScore;
-                                setHighScore(newScore);
-                                localStorage.setItem("neonblade_highscore", String(newScore));
-                                saveBackendGameScore("neonblade", newScore);
-                            }
-                            return newScore;
-                        });
-                        flyingKnife = null;
-
-                        if (knivesToThrow <= 0) {
-                            playAudio("win");
-                            setLevel(l => l + 1);
-                            setIsPlaying(false); // pause to show next level
+                        if (!savedRunRef.current && scoreRef.current > 0) {
+                            savedRunRef.current = true;
+                            saveBackendGameScore("neonblade", scoreRef.current);
                         }
+                        ctx.restore();
+                        return;
                     }
-                }
-            }
 
-            // Draw waiting knives
-            for(let i=0; i<knivesToThrow; i++) {
-                ctx.save();
-                ctx.translate(30, ch - 30 - (i * 20));
-                ctx.rotate(Math.PI / 2);
-                drawKnife(ctx, false);
-                ctx.restore();
-            }
-        };
-
-        const loop = () => {
-            draw();
-            if (!gameOver && isPlaying) animationId = requestAnimationFrame(loop);
-        };
-        animationId = requestAnimationFrame(loop);
-
-        return () => {
-            cancelAnimationFrame(animationId);
-            canvas.removeEventListener("mousedown", handlePointerDown);
-            canvas.removeEventListener("touchstart", handlePointerDown);
-        };
-    }, [isPlaying, gameOver, level, playAudio]);
-
-    return (
-        <div className="flex flex-col items-center gap-4 max-w-md mx-auto w-full select-none">
-            <div className="flex items-center justify-between w-full px-2">
-                <button type="button" onClick={onBack} className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-xs font-bold text-white transition-colors">
-                    <ArrowLeft className="h-4 w-4" /> Back
-                </button>
-                <div className="flex items-center gap-3">
-                    <span className="text-xs font-bold text-white/70">Level: <strong className="text-rose-400">{level}</strong></span>
-                    <span className="text-xs font-bold text-white/70">Score: <strong className="text-cyan-400">{score}</strong></span>
-                    <span className="text-xs font-bold text-amber-300 flex items-center gap-1">
-                        <Trophy className="h-3.5 w-3.5" /> {highScore}
-                    </span>
-                </div>
-            </div>
-
-            <div className="relative w-[340px] h-[450px] sm:w-[380px] sm:h-[500px] rounded-3xl overflow-hidden border-2 border-rose-500/30 shadow-[0_0_40px_rgba(244,63,94,0.15)]">
-                <canvas ref={canvasRef} width={380} height={500} className="w-full h-full bg-[#050a14] touch-none cursor-crosshair" />
-
-                {!isPlaying && !gameOver && (
-                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/75 backdrop-blur-sm gap-3">
-                        <span className="text-5xl animate-spin-slow">🎯</span>
-                        <h3 className="text-xl font-black text-white tracking-tight">Neon Blade {level > 1 ? `Level ${level}` : ''}</h3>
-                        <p className="text-xs text-white/60">Tap to throw knives. Don't hit existing knives!</p>
-                        <button onClick={() => setIsPlaying(true)} className="flex items-center gap-2 px-7 py-3 rounded-2xl bg-rose-500 hover:bg-rose-400 text-black font-black text-sm shadow-[0_0_25px_rgba(244,63,94,0.4)] active:scale-95 transition-all">
-                            <Play className="h-4 w-4 fill-current" /> {level > 1 ? "Next Level" : "Start Game"}
-                        </button>
-                    </div>
-                )}
-
-                {gameOver && (
-                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/85 backdrop-blur-sm gap-3">
-                        <span className="text-5xl animate-bounce">💥</span>
-                        <h3 className="text-xl font-black text-cyan-400">Blades Clashed!</h3>
-                        <p className="text-xs text-white/70">Final Score: <strong className="text-cyan-400 text-sm">{score}</strong></p>
-                        <button onClick={startGame} className="flex items-center gap-2 px-6 py-3 rounded-2xl bg-cyan-400 hover:bg-cyan-300 text-black font-black text-sm shadow-[0_0_25px_rgba(56,189,248,0.4)] active:scale-95 transition-all">
-                            <RotateCcw className="h-4 w-4" /> Try Again
-                        </button>
-                    </div>
-                )}
-            </div>
-            <p className="text-[11px] text-white/40">Tap anywhere to throw a blade. Clear all blades to advance!</p>
-        </div>
-    );
-};
-
-
-/* ═══════════════════════════════════════════════════════════════
-   8. TORNADO SURFERS COMPONENT (Pseudo-3D Track Runner)
-   ═══════════════════════════════════════════════════════════════ */
-const SubwaySurfersGame = ({ onBack, isMuted }) => {
-    const canvasRef = useRef(null);
-    const [score, setScore] = useState(0);
-    const [coins, setCoins] = useState(0);
-    const [gameOver, setGameOver] = useState(false);
-    const [isPlaying, setIsPlaying] = useState(false);
-    const [highScore, setHighScore] = useState(() => Number(localStorage.getItem("subwaysurfers_highscore") || 0));
-    const highScoreRef = useRef(highScore);
-    highScoreRef.current = highScore;
-    const isMutedRef = useRef(isMuted);
-    isMutedRef.current = isMuted;
-
-    const playAudio = useCallback((type) => {
-        if (!isMutedRef.current) soundEngine.play(type);
-    }, []);
-
-    const startGame = () => {
-        playAudio("whoosh");
-        setScore(0);
-        setCoins(0);
-        setGameOver(false);
-        setIsPlaying(true);
-    };
-
-    useEffect(() => {
-        if (!isPlaying || gameOver) return;
-
-        const canvas = canvasRef.current;
-        const ctx = canvas.getContext("2d");
-        let animationId;
-
-        const cw = canvas.width;
-        const ch = canvas.height;
-        const horizonY = ch * 0.28;
-        const vanishingX = cw / 2;
-
-        let targetLane = 0; // -1 = Left, 0 = Center, 1 = Right
-        let lanePosX = 0;
-
-        let jumpY = 0;
-        let jumpVelocity = 0;
-        let isJumping = false;
-
-        let slideTimer = 0;
-        let isDucking = false;
-
-        let currentScore = 0;
-        let currentCoins = 0;
-        let gameSpeed = 5;
-        let distanceTravelled = 0;
-
-        let entities = [];
-        let particles = [];
-        let spawnTimer = 0;
-        let trackOffset = 0;
-
-        const moveLeft = () => {
-            if (targetLane > -1) {
-                targetLane--;
-                playAudio("whoosh");
-            }
-        };
-
-        const moveRight = () => {
-            if (targetLane < 1) {
-                targetLane++;
-                playAudio("whoosh");
-            }
-        };
-
-        const triggerJump = () => {
-            if (!isJumping && !isDucking) {
-                isJumping = true;
-                jumpVelocity = 11;
-                playAudio("boing");
-            }
-        };
-
-        const triggerSlide = () => {
-            if (!isDucking && !isJumping) {
-                isDucking = true;
-                slideTimer = 32;
-                playAudio("whoosh");
-            }
-        };
-
-        const handleKeyDown = (e) => {
-            if (e.key === "ArrowLeft" || e.key === "a" || e.key === "A") {
-                e.preventDefault();
-                moveLeft();
-            } else if (e.key === "ArrowRight" || e.key === "d" || e.key === "D") {
-                e.preventDefault();
-                moveRight();
-            } else if (e.key === "ArrowUp" || e.key === "w" || e.key === "W" || e.code === "Space") {
-                e.preventDefault();
-                triggerJump();
-            } else if (e.key === "ArrowDown" || e.key === "s" || e.key === "S") {
-                e.preventDefault();
-                triggerSlide();
-            }
-        };
-
-        let touchStartX = 0;
-        let touchStartY = 0;
-
-        const handleTouchStart = (e) => {
-            touchStartX = e.touches[0].clientX;
-            touchStartY = e.touches[0].clientY;
-        };
-
-        const handleTouchEnd = (e) => {
-            const deltaX = e.changedTouches[0].clientX - touchStartX;
-            const deltaY = e.changedTouches[0].clientY - touchStartY;
-
-            if (Math.abs(deltaX) > Math.abs(deltaY)) {
-                if (deltaX > 30) moveRight();
-                else if (deltaX < -30) moveLeft();
-            } else {
-                if (deltaY < -30) triggerJump();
-                else if (deltaY > 30) triggerSlide();
-            }
-        };
-
-        window.addEventListener("keydown", handleKeyDown);
-        canvas.addEventListener("touchstart", handleTouchStart, { passive: true });
-        canvas.addEventListener("touchend", handleTouchEnd, { passive: true });
-
-        const project = (lane, z, heightOffset = 0) => {
-            const fov = 300;
-            const scale = fov / (fov + z);
-            const x = vanishingX + lane * (cw * 0.36) * scale;
-            const y = horizonY + (ch - horizonY) * scale - heightOffset * scale;
-            return { x, y, scale };
-        };
-
-        const spawnEntityPattern = () => {
-            const laneChoices = [-1, 0, 1];
-            const randType = Math.random();
-
-            if (randType < 0.4) {
-                const lane = laneChoices[Math.floor(Math.random() * laneChoices.length)];
-                for (let i = 0; i < 5; i++) {
-                    entities.push({ type: "coin", lane, z: 900 + i * 80 });
-                }
-            } else if (randType < 0.7) {
-                const lane = laneChoices[Math.floor(Math.random() * laneChoices.length)];
-                const isLow = Math.random() > 0.5;
-                entities.push({
-                    type: isLow ? "low_hurdle" : "high_barrier",
-                    lane,
-                    z: 950
-                });
-                const otherLane = laneChoices.find((l) => l !== lane);
-                for (let i = 0; i < 3; i++) {
-                    entities.push({ type: "coin", lane: otherLane, z: 920 + i * 70 });
-                }
-            } else {
-                const freeLane = laneChoices[Math.floor(Math.random() * laneChoices.length)];
-                laneChoices.forEach((l) => {
-                    if (l !== freeLane && Math.random() < 0.8) {
-                        entities.push({ type: "train", lane: l, z: 1000 });
-                    }
-                });
-            }
-        };
-
-        const draw = () => {
-            gameSpeed += 0.0008;
-            distanceTravelled += gameSpeed;
-            trackOffset = (trackOffset + gameSpeed * 4) % 40;
-
-            currentScore = Math.floor(distanceTravelled / 4) + currentCoins * 50;
-            setScore(currentScore);
-            if (currentScore > highScoreRef.current) {
-                highScoreRef.current = currentScore;
-                setHighScore(currentScore);
-                localStorage.setItem("subwaysurfers_highscore", String(currentScore));
-                saveBackendGameScore("subwaysurfers", currentScore);
-            }
-
-            lanePosX += (targetLane - lanePosX) * 0.25;
-
-            if (isJumping) {
-                jumpY += jumpVelocity;
-                jumpVelocity -= 0.7;
-                if (jumpY <= 0) {
-                    jumpY = 0;
-                    isJumping = false;
-                }
-            }
-
-            if (isDucking) {
-                slideTimer--;
-                if (slideTimer <= 0) {
-                    isDucking = false;
-                }
-            }
-
-            ctx.fillStyle = "#090514";
-            ctx.fillRect(0, 0, cw, ch);
-
-            const skyGrad = ctx.createLinearGradient(0, 0, 0, horizonY);
-            skyGrad.addColorStop(0, "#1e0b36");
-            skyGrad.addColorStop(1, "#090514");
-            ctx.fillStyle = skyGrad;
-            ctx.fillRect(0, 0, cw, horizonY);
-
-            ctx.fillStyle = "#f43f5e";
-            ctx.shadowBlur = 25;
-            ctx.shadowColor = "#f43f5e";
-            ctx.beginPath();
-            ctx.arc(vanishingX, horizonY - 10, 30, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.shadowBlur = 0;
-
-            [-1.5, -0.5, 0.5, 1.5].forEach((laneEdge) => {
-                const start = project(laneEdge, 1000);
-                const end = project(laneEdge, 0);
-                ctx.beginPath();
-                ctx.moveTo(start.x, start.y);
-                ctx.lineTo(end.x, end.y);
-                ctx.strokeStyle = "rgba(56, 189, 248, 0.3)";
-                ctx.stroke();
-            });
-
-            for (let z = 50 + trackOffset; z < 1000; z += 60) {
-                const leftP = project(-1.5, z);
-                const rightP = project(1.5, z);
-                const scale = leftP.scale;
-                ctx.strokeStyle = `rgba(168, 85, 247, ${scale * 0.8})`;
-                ctx.lineWidth = Math.max(1, 3 * scale);
-                ctx.beginPath();
-                ctx.moveTo(leftP.x, leftP.y);
-                ctx.lineTo(rightP.x, rightP.y);
-                ctx.stroke();
-            }
-
-            spawnTimer++;
-            if (spawnTimer > Math.max(22, 55 - Math.floor(gameSpeed * 2))) {
-                spawnEntityPattern();
-                spawnTimer = 0;
-            }
-
-            entities.sort((a, b) => b.z - a.z);
-
-            for (let i = entities.length - 1; i >= 0; i--) {
-                const ent = entities[i];
-                ent.z -= gameSpeed * 12;
-
-                const pos = project(ent.lane, ent.z);
-                const scale = pos.scale;
-
-                if (ent.z <= 0) {
-                    entities.splice(i, 1);
-                    continue;
-                }
-
-                if (ent.type === "coin") {
-                    const coinRadius = 13 * scale;
-                    const coinY = pos.y - 20 * scale;
-
-                    ctx.fillStyle = "#fbbf24";
-                    ctx.shadowBlur = 10 * scale;
-                    ctx.shadowColor = "#fbbf24";
-                    ctx.beginPath();
-                    ctx.arc(pos.x, coinY, coinRadius, 0, Math.PI * 2);
-                    ctx.fill();
-                    ctx.fillStyle = "#f59e0b";
-                    ctx.beginPath();
-                    ctx.arc(pos.x, coinY, coinRadius * 0.6, 0, Math.PI * 2);
-                    ctx.fill();
-                    ctx.shadowBlur = 0;
-
-                    if (ent.z > 30 && ent.z < 130 && Math.abs(ent.lane - lanePosX) < 0.6) {
-                        const playerYCenter = ch - 50 - jumpY;
-                        if (Math.abs(coinY - playerYCenter) < 45) {
-                            playAudio("coin");
-                            currentCoins++;
-                            setCoins(currentCoins);
-                            for (let p = 0; p < 6; p++) {
+                    // Check golden orb slice
+                    let orbBonus = 0;
+                    for (const orb of orbs) {
+                        if (!orb.sliced && angularDistance(impactAngle, orb.angle) < 0.28) {
+                            orb.sliced = true;
+                            orbBonus += 25;
+                            for (let k = 0; k < 10; k++) {
                                 particles.push({
-                                    x: pos.x,
-                                    y: coinY,
-                                    vx: (Math.random() - 0.5) * 6,
-                                    vy: (Math.random() - 0.5) * 6,
+                                    x: centerX,
+                                    y: centerY + targetRadius,
+                                    vx: (Math.random() - 0.5) * 200,
+                                    vy: (Math.random() - 0.5) * 200,
+                                    r: 3,
                                     alpha: 1,
-                                    color: "#fbbf24"
+                                    color: "#fbbf24",
                                 });
                             }
-                            entities.splice(i, 1);
-                            continue;
                         }
                     }
-                } else if (ent.type === "low_hurdle") {
-                    const w = 70 * scale;
-                    const h = 25 * scale;
-                    ctx.fillStyle = "#f43f5e";
-                    ctx.shadowBlur = 12 * scale;
-                    ctx.shadowColor = "#f43f5e";
-                    ctx.fillRect(pos.x - w / 2, pos.y - h, w, h);
-                    ctx.shadowBlur = 0;
 
-                    ctx.fillStyle = "#ffffff";
-                    ctx.fillRect(pos.x - w / 2 + 5 * scale, pos.y - h + 5 * scale, w - 10 * scale, 4 * scale);
+                    playAudio(orbBonus > 0 ? "tada" : "coin");
+                    stuckKnives.push(impactAngle);
+                    knivesLeft -= 1;
+                    shakeTimer = 0.08;
+                    const gained = 10 + orbBonus;
+                    const nextScore = scoreRef.current + gained;
+                    scoreRef.current = nextScore;
+                    setScore(nextScore);
 
-                    if (ent.z > 30 && ent.z < 120 && Math.abs(ent.lane - lanePosX) < 0.55) {
-                        if (jumpY < 32) {
-                            playAudio("boom");
-                            setGameOver(true);
-                            return;
-                        }
-                    }
-                } else if (ent.type === "high_barrier") {
-                    const w = 75 * scale;
-                    const h = 30 * scale;
-                    const barrierY = pos.y - 50 * scale;
-                    ctx.fillStyle = "#e11d48";
-                    ctx.shadowBlur = 12 * scale;
-                    ctx.shadowColor = "#e11d48";
-                    ctx.fillRect(pos.x - w / 2, barrierY, w, h);
-
-                    ctx.fillRect(pos.x - w / 2, barrierY, 6 * scale, 50 * scale);
-                    ctx.fillRect(pos.x + w / 2 - 6 * scale, barrierY, 6 * scale, 50 * scale);
-                    ctx.shadowBlur = 0;
-
-                    if (ent.z > 30 && ent.z < 120 && Math.abs(ent.lane - lanePosX) < 0.55) {
-                        if (!isDucking) {
-                            playAudio("boom");
-                            setGameOver(true);
-                            return;
-                        }
-                    }
-                } else if (ent.type === "train") {
-                    const w = 90 * scale;
-                    const h = 110 * scale;
-                    const trainY = pos.y - h;
-
-                    ctx.fillStyle = "#0284c7";
-                    ctx.shadowBlur = 15 * scale;
-                    ctx.shadowColor = "#0284c7";
-                    ctx.fillRect(pos.x - w / 2, trainY, w, h);
-                    ctx.shadowBlur = 0;
-
-                    ctx.fillStyle = "#38bdf8";
-                    ctx.fillRect(pos.x - w * 0.35, trainY + 15 * scale, w * 0.7, 30 * scale);
-
-                    ctx.fillStyle = "#fbbf24";
-                    ctx.beginPath();
-                    ctx.arc(pos.x - w * 0.3, trainY + h - 20 * scale, 8 * scale, 0, Math.PI * 2);
-                    ctx.arc(pos.x + w * 0.3, trainY + h - 20 * scale, 8 * scale, 0, Math.PI * 2);
-                    ctx.fill();
-
-                    if (ent.z > 30 && ent.z < 130 && Math.abs(ent.lane - lanePosX) < 0.6) {
-                        playAudio("boom");
-                        setGameOver(true);
+                    if (knivesLeft <= 0) {
+                        playAudio("win");
+                        setLevel((l) => l + 1);
+                        setPhase("levelclear");
+                        ctx.restore();
                         return;
                     }
                 }
             }
 
-            for (let i = particles.length - 1; i >= 0; i--) {
-                const p = particles[i];
-                p.x += p.vx;
-                p.y += p.vy;
-                p.alpha -= 0.04;
-                if (p.alpha <= 0) {
-                    particles.splice(i, 1);
-                    continue;
-                }
+            // Waiting knives stock
+            for (let i = 0; i < knivesLeft; i++) {
                 ctx.save();
-                ctx.globalAlpha = p.alpha;
-                ctx.fillStyle = p.color;
-                ctx.beginPath();
-                ctx.arc(p.x, p.y, 4, 0, Math.PI * 2);
-                ctx.fill();
+                ctx.translate(28, ch - 28 - i * 18);
+                ctx.rotate(Math.PI / 2);
+                drawBladeShape(false);
                 ctx.restore();
             }
 
-            const playerPos = project(lanePosX, 40);
-            const playerX = playerPos.x;
-            const playerBaseY = ch - 50;
-            const playerY = playerBaseY - jumpY;
-
-            const playerWidth = 36 * (isDucking ? 1.2 : 1.0);
-            const playerHeight = isDucking ? 24 : 52;
-
-            ctx.save();
-            ctx.translate(playerX, playerY);
-
-            ctx.fillStyle = "#a855f7";
-            ctx.shadowBlur = 15;
-            ctx.shadowColor = "#a855f7";
-            ctx.beginPath();
-            ctx.ellipse(0, 10, 24, 6, 0, 0, Math.PI * 2);
-            ctx.fill();
-
-            ctx.fillStyle = "#06b6d4";
-            ctx.shadowColor = "#06b6d4";
-            ctx.fillRect(-playerWidth / 2, -playerHeight, playerWidth, playerHeight * 0.7);
-
-            ctx.fillStyle = "#f43f5e";
-            ctx.beginPath();
-            ctx.arc(0, -playerHeight - 8, 12, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.shadowBlur = 0;
+            // Standby blade at bottom
+            if (!flyingKnife && knivesLeft > 0) {
+                ctx.save();
+                ctx.translate(centerX, ch - 60);
+                drawBladeShape(false);
+                ctx.restore();
+            }
 
             ctx.restore();
+            animationId = requestAnimationFrame(loop);
         };
 
-        const loop = () => {
-            draw();
-            if (!gameOver) animationId = requestAnimationFrame(loop);
-        };
         animationId = requestAnimationFrame(loop);
-
         return () => {
             cancelAnimationFrame(animationId);
-            window.removeEventListener("keydown", handleKeyDown);
-            canvas.removeEventListener("touchstart", handleTouchStart);
-            canvas.removeEventListener("touchend", handleTouchEnd);
+            canvas.removeEventListener("pointerdown", onPointerDown);
+            window.removeEventListener("keydown", onKeyDown);
         };
-    }, [isPlaying, gameOver, playAudio]);
+    }, [phase, level, playAudio]);
 
     return (
-        <div className="flex flex-col items-center gap-4 max-w-md mx-auto w-full select-none">
-            <div className="flex items-center justify-between w-full px-2">
-                <button
-                    type="button"
-                    onClick={onBack}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-xs font-bold text-white transition-colors"
-                >
-                    <ArrowLeft className="h-4 w-4" /> Back to Arcade
+        <div className="flex flex-col items-center gap-3.5 max-w-md mx-auto w-full select-none">
+            <div className="flex items-center justify-between w-full px-1">
+                <button type="button" onClick={onBack} className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/10 text-xs font-bold text-white cursor-pointer">
+                    <ArrowLeft className="h-4 w-4" /> Back
                 </button>
                 <div className="flex items-center gap-3">
+                    <span className="text-xs font-bold text-white/75">Lvl <strong className="text-rose-400">{level}</strong></span>
+                    <span className="text-xs font-bold text-white/75">Score: <strong className="text-cyan-400">{score}</strong></span>
                     <span className="text-xs font-bold text-amber-300 flex items-center gap-1">
-                        🪙 {coins}
-                    </span>
-                    <span className="text-xs font-bold text-white/70">
-                        Score: <strong className="text-cyan-400">{score}</strong>
-                    </span>
-                    <span className="text-xs font-bold text-amber-300 flex items-center gap-1">
-                        <Trophy className="h-3.5 w-3.5" /> {highScore}
+                        <Trophy className="h-3.5 w-3.5" /> {Math.max(highScore, score)}
                     </span>
                 </div>
             </div>
 
-            <div className="relative w-[340px] h-[450px] sm:w-[380px] sm:h-[500px] rounded-3xl overflow-hidden border-2 border-cyan-500/30 shadow-[0_0_40px_rgba(6,182,212,0.15)]">
-                <canvas ref={canvasRef} width={380} height={500} className="w-full h-full bg-[#090514] touch-none" />
+            <div className="relative w-full max-w-[380px] aspect-[380/480] rounded-3xl overflow-hidden border-2 border-rose-500/35 shadow-[0_0_40px_rgba(244,63,94,0.18)]">
+                <canvas ref={canvasRef} width={380} height={480} className="w-full h-full bg-[#050a14] touch-none cursor-crosshair" />
 
-                {!isPlaying && !gameOver && (
-                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/75 backdrop-blur-sm gap-3">
-                        <span className="text-5xl animate-bounce">🏃‍♂️💨</span>
-                        <h3 className="text-xl font-black text-white tracking-tight">Tornado Surfers</h3>
-                        <p className="text-xs text-white/60 max-w-[240px] text-center">
-                            Dodge trains, jump hurdles, duck barriers & collect golden coins!
-                        </p>
-                        <button
-                            type="button"
-                            onClick={startGame}
-                            className="mt-2 flex items-center gap-2 px-6 py-2.5 rounded-2xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-extrabold text-sm shadow-lg hover:scale-105 transition-all"
-                        >
-                            <Play className="h-4 w-4 fill-white" /> Start Surfing
+                {(phase === "ready" || phase === "levelclear") && (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/75 backdrop-blur-sm gap-3 p-4 text-center">
+                        <span className="text-5xl">🎯</span>
+                        <h3 className="text-xl font-black text-white">
+                            {phase === "levelclear" ? `Stage ${level - 1} Cleared!` : "Neon Blade"}
+                        </h3>
+                        <p className="text-xs text-white/65">Tap or press Spacebar to throw blades. Slice gold orbs for +25!</p>
+                        <button type="button" onClick={() => setPhase("playing")} className="flex items-center gap-2 px-7 py-3 rounded-2xl bg-rose-500 hover:bg-rose-400 text-black font-black text-sm cursor-pointer active:scale-95">
+                            <Play className="h-4 w-4 fill-current" /> {phase === "levelclear" ? `Start Stage ${level}` : "Start Game"}
                         </button>
                     </div>
                 )}
 
-                {gameOver && (
-                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/85 backdrop-blur-md gap-3">
+                {phase === "gameover" && (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/85 backdrop-blur-sm gap-3">
                         <span className="text-5xl">💥</span>
-                        <h3 className="text-2xl font-black text-rose-400 tracking-tight">GAME OVER!</h3>
-                        <div className="flex items-center gap-4 text-sm font-bold">
-                            <span className="text-white/80">Coins: <strong className="text-amber-300">🪙 {coins}</strong></span>
-                            <span className="text-white/80">Score: <strong className="text-cyan-400">{score}</strong></span>
-                        </div>
-                        <button
-                            type="button"
-                            onClick={startGame}
-                            className="mt-2 flex items-center gap-2 px-6 py-2.5 rounded-2xl bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white font-extrabold text-sm shadow-lg hover:scale-105 transition-all"
-                        >
+                        <h3 className="text-xl font-black text-cyan-400">Blades Clashed!</h3>
+                        <p className="text-xs text-white/75">Final Score: <strong className="text-cyan-400 text-sm">{score}</strong></p>
+                        <button type="button" onClick={startFresh} className="flex items-center gap-2 px-6 py-3 rounded-2xl bg-cyan-400 hover:bg-cyan-300 text-black font-black text-sm cursor-pointer active:scale-95">
                             <RotateCcw className="h-4 w-4" /> Try Again
                         </button>
                     </div>
                 )}
-            </div>
-
-            <div className="flex flex-col items-center gap-2 w-full max-w-[380px] sm:hidden pt-1">
-                <div className="flex items-center justify-center gap-3 w-full">
-                    <button
-                        type="button"
-                        onClick={() => {
-                            window.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft" }));
-                        }}
-                        className="flex-1 py-2.5 rounded-xl bg-white/10 active:bg-cyan-600/50 border border-white/10 text-white text-xs font-bold shadow"
-                    >
-                        ◀ Left
-                    </button>
-                    <button
-                        type="button"
-                        onClick={() => {
-                            window.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowUp" }));
-                        }}
-                        className="flex-1 py-2.5 rounded-xl bg-cyan-600/40 active:bg-cyan-600/80 border border-cyan-400/30 text-cyan-200 text-xs font-bold shadow"
-                    >
-                        ▲ Jump
-                    </button>
-                    <button
-                        type="button"
-                        onClick={() => {
-                            window.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown" }));
-                        }}
-                        className="flex-1 py-2.5 rounded-xl bg-fuchsia-600/40 active:bg-fuchsia-600/80 border border-fuchsia-400/30 text-fuchsia-200 text-xs font-bold shadow"
-                    >
-                        ▼ Duck
-                    </button>
-                    <button
-                        type="button"
-                        onClick={() => {
-                            window.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight" }));
-                        }}
-                        className="flex-1 py-2.5 rounded-xl bg-white/10 active:bg-cyan-600/50 border border-white/10 text-white text-xs font-bold shadow"
-                    >
-                        Right ▶
-                    </button>
-                </div>
             </div>
         </div>
     );
 };
 
 /* ═══════════════════════════════════════════════════════════════
-   MAIN ARCADE DASHBOARD PAGE
+   MAIN ARCADE LOBBY COMPONENT
    ═══════════════════════════════════════════════════════════════ */
 export default function Arcade() {
     const [selectedGame, setSelectedGame] = useState(null);
@@ -2136,15 +1931,15 @@ export default function Arcade() {
             emoji: "🐍",
             tag: "Classic Retro",
             color: "from-emerald-500 to-teal-700",
-            desc: "Eat glowing apples, grow bigger, and beat your personal best!"
+            desc: "Swipe or steer, eat golden bonus apples, and choose Classic or Portal Walls!"
         },
         {
             id: "flappy",
             title: "Flappy Tornado",
             emoji: "🌪️",
-            tag: "Action Arcade",
+            tag: "Action 60fps",
             color: "from-cyan-500 to-blue-700",
-            desc: "Fly through the cloud pillars without crashing to set high scores!"
+            desc: "Soar through neon wind tunnels and collect +3 golden wind crystals!"
         },
         {
             id: "2048",
@@ -2152,7 +1947,7 @@ export default function Arcade() {
             emoji: "🔢✨",
             tag: "Logic Puzzle",
             color: "from-indigo-600 to-violet-800",
-            desc: "Swipe and merge numbers up to the golden 2048 tile!"
+            desc: "Touch-swipe tiles, undo mistakes, hit 2048, and keep pushing endless combos!"
         },
         {
             id: "memory",
@@ -2160,23 +1955,23 @@ export default function Arcade() {
             emoji: "🧠💖",
             tag: "Brain Game",
             color: "from-fuchsia-500 to-pink-700",
-            desc: "Test your memory and flip matching pairs of cute animal cards!"
+            desc: "4×4 or 4×5 grids with live timer, match streak multipliers & high scores!"
         },
         {
             id: "zombie",
             title: "Zombie Survival",
             emoji: "🧟🔫",
-            tag: "Action 14+",
+            tag: "Arena Shooter",
             color: "from-lime-500 to-green-700",
-            desc: "Survive the undead! Turn and shoot in 360 degrees to stay alive."
+            desc: "Move with WASD, blast waves with 3-way spread drops, bosses & EMP bombs!"
         },
         {
             id: "neondodge",
             title: "Neon Dodge",
             emoji: "⚡🛸",
-            tag: "Fast Runner",
+            tag: "Hyper Runner",
             color: "from-purple-500 to-fuchsia-700",
-            desc: "Dodge falling neon hazards at breakneck speeds!"
+            desc: "Pilot the cyber jet, grab S-shields, and stack +15 near-miss graze combos!"
         },
         {
             id: "neonblade",
@@ -2184,33 +1979,32 @@ export default function Arcade() {
             emoji: "🎯🗡️",
             tag: "Precision",
             color: "from-rose-500 to-red-700",
-            desc: "Throw glowing blades into the spinning target without hitting the others!"
+            desc: "Laser-accurate throws, golden orbs, and undulating boss cores!"
         },
         {
             id: "subwaysurfers",
             title: "Tornado Surfers",
-            emoji: "🏃‍♂️💨",
-            tag: "3D Runner",
-            color: "from-cyan-500 to-blue-700",
-            desc: "Dodge trains, jump hurdles, duck barriers & collect golden coins!"
+            emoji: "🏄‍♂️⚡",
+            tag: "3D Rail Runner",
+            color: "from-cyan-500 to-fuchsia-600",
+            desc: "True 3D trains, rooftop ramps, Hoverboards, Magnet, 2× & Jetpack!"
         }
     ];
 
     return (
-        <main className="min-h-0 flex-1 overflow-y-auto p-4 md:p-8 text-white select-none">
+        <main className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden custom-scrollbar p-4 md:p-8 pb-24 lg:pb-8 text-white select-none">
             <section className="mx-auto flex w-full max-w-5xl flex-col gap-6">
-                {/* Header */}
-                <header className="rounded-3xl border border-white/10 bg-gradient-to-r from-violet-950/40 via-black/50 to-indigo-950/40 p-6 md:p-8 backdrop-blur-2xl shadow-xl flex items-center justify-between">
+                <header className="rounded-3xl border border-white/10 bg-gradient-to-r from-violet-950/40 via-black/50 to-indigo-950/40 p-5 md:p-8 backdrop-blur-2xl shadow-xl flex items-center justify-between gap-4">
                     <div>
                         <div className="mb-2 inline-flex items-center gap-2 rounded-xl border border-white/10 bg-black/30 px-3 py-1 text-xs font-bold uppercase tracking-wider text-violet-300">
                             <Gamepad2 className="h-4 w-4" />
-                            Kids Fun Arcade
+                            ChatTornado Arcade
                         </div>
-                        <h1 className="text-3xl sm:text-4xl font-black tracking-tight text-white flex items-center gap-2">
+                        <h1 className="text-2xl sm:text-4xl font-black tracking-tight text-white flex items-center gap-2">
                             Mini Games Zone <Sparkles className="h-6 w-6 text-amber-300" />
                         </h1>
-                        <p className="mt-2 text-xs sm:text-sm text-white/60 max-w-xl">
-                            Play fun casual mini-games directly inside ChatTornado without leaving the app!
+                        <p className="mt-1.5 text-xs sm:text-sm text-white/60 max-w-xl">
+                            8 upgraded 60fps arcade games with mobile swipe controls, combos & synced high scores!
                         </p>
                     </div>
 
@@ -2219,19 +2013,16 @@ export default function Arcade() {
                             type="button"
                             onClick={() => setIsMuted((m) => !m)}
                             title={isMuted ? "Unmute Sound FX" : "Mute Sound FX"}
-                            className="p-3 rounded-2xl bg-white/10 hover:bg-white/20 text-white transition-colors border border-white/10 shadow-lg"
+                            className="p-3 rounded-2xl bg-white/10 hover:bg-white/20 text-white transition-colors border border-white/10 shadow-lg cursor-pointer"
                         >
                             {isMuted ? <VolumeX className="h-5 w-5 text-rose-400" /> : <Volume2 className="h-5 w-5 text-emerald-400" />}
                         </button>
-                        <div className="hidden sm:flex text-6xl">
-                            🎮
-                        </div>
+                        <div className="hidden sm:flex text-5xl">🎮</div>
                     </div>
                 </header>
 
-                {/* Content Area */}
                 {selectedGame === "subwaysurfers" ? (
-                    <SubwaySurfersGame onBack={handleBack} isMuted={isMuted} />
+                    <TornadoSurfersGame onBack={handleBack} isMuted={isMuted} onSaveScore={saveBackendGameScore} />
                 ) : selectedGame === "snake" ? (
                     <SnakeGame onBack={handleBack} isMuted={isMuted} />
                 ) : selectedGame === "flappy" ? (
@@ -2247,7 +2038,6 @@ export default function Arcade() {
                 ) : selectedGame === "neonblade" ? (
                     <NeonBlade onBack={handleBack} isMuted={isMuted} />
                 ) : (
-                    /* Games Selection Grid */
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                         {GAMES.map((game) => (
                             <motion.div
