@@ -2001,8 +2001,15 @@ export default function Arcade() {
     ];
 
     return (
-        <main className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden custom-scrollbar p-4 md:p-8 pb-24 lg:pb-8 text-white select-none">
-            <section className="mx-auto flex w-full max-w-5xl flex-col gap-6">
+        <main
+            className={`min-h-0 flex-1 overflow-y-auto overflow-x-hidden custom-scrollbar text-white select-none ${
+                selectedGame === "vortexbastion"
+                    ? "p-2 sm:p-4 pb-20 lg:pb-6"
+                    : "p-4 md:p-8 pb-24 lg:pb-8"
+            }`}
+        >
+            <section className="mx-auto flex w-full max-w-5xl flex-col gap-4 sm:gap-6">
+                {!selectedGame && (
                 <header className="rounded-3xl border border-white/10 bg-gradient-to-r from-violet-950/40 via-black/50 to-indigo-950/40 p-5 md:p-8 backdrop-blur-2xl shadow-xl flex items-center justify-between gap-4">
                     <div>
                         <div className="mb-2 inline-flex items-center gap-2 rounded-xl border border-white/10 bg-black/30 px-3 py-1 text-xs font-bold uppercase tracking-wider text-violet-300">
@@ -2013,7 +2020,7 @@ export default function Arcade() {
                             Mini Games Zone <Sparkles className="h-6 w-6 text-amber-300" />
                         </h1>
                         <p className="mt-1.5 text-xs sm:text-sm text-white/60 max-w-xl">
-                            8 upgraded 60fps arcade games with mobile swipe controls, combos & synced high scores!
+                            9 upgraded 60fps arcade games with mobile swipe controls, combos & synced high scores!
                         </p>
                     </div>
 
@@ -2029,9 +2036,15 @@ export default function Arcade() {
                         <div className="hidden sm:flex text-5xl">🎮</div>
                     </div>
                 </header>
+                )}
 
                 {selectedGame === "vortexbastion" ? (
-                    <VortexBastionGame onBack={handleBack} isMuted={isMuted} onSaveScore={saveBackendGameScore} />
+                    <VortexBastionGame
+                        onBack={handleBack}
+                        isMuted={isMuted}
+                        onToggleMute={() => setIsMuted((m) => !m)}
+                        onSaveScore={saveBackendGameScore}
+                    />
                 ) : selectedGame === "subwaysurfers" ? (
                     <TornadoSurfersGame onBack={handleBack} isMuted={isMuted} onSaveScore={saveBackendGameScore} />
                 ) : selectedGame === "snake" ? (

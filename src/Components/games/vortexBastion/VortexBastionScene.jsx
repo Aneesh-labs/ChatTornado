@@ -398,6 +398,35 @@ const VortexBastionScene = ({
     ghostGroup.visible = false;
     scene.add(ghostGroup);
 
+    // Tactical Tile Selector Bracket (4 neon corners around tapped tile)
+    const bracketMat = new THREE.MeshBasicMaterial({ color: 0x22d3ee, side: THREE.DoubleSide });
+    const tileBracket = new THREE.Group();
+    const cornerArmGeo = new THREE.PlaneGeometry(0.18, 0.045);
+    [
+      [-0.4, -0.45, 0],
+      [-0.45, -0.4, Math.PI / 2],
+      [0.4, -0.45, 0],
+      [0.45, -0.4, Math.PI / 2],
+      [-0.4, 0.45, 0],
+      [-0.45, 0.4, Math.PI / 2],
+      [0.4, 0.45, 0],
+      [0.45, 0.4, Math.PI / 2],
+    ].forEach(([cx, cz, rot]) => {
+      const m = new THREE.Mesh(cornerArmGeo, bracketMat);
+      m.rotation.x = -Math.PI / 2;
+      m.rotation.z = rot;
+      m.position.set(cx, 0.09, cz);
+      tileBracket.add(m);
+    });
+    tileBracket.visible = false;
+    scene.add(tileBracket);
+
+    // 3D Physics Shrapnel Sparks Layer
+    const sparksLayer = new THREE.Group();
+    scene.add(sparksLayer);
+    const activeSparks = [];
+    const sparkGeo = new THREE.BoxGeometry(0.08, 0.08, 0.08);
+
     // Shared projectile geometry
     const projGeo = new THREE.SphereGeometry(0.095, 8, 8);
 
@@ -635,6 +664,21 @@ const VortexBastionScene = ({
         ) {
           if (mesh) towersLayer.remove(mesh);
           mesh = buildTurretMesh(t.type, t.tier, t.branch);
+          if (t.tier >= 2) {
+            const aura = new THREE.Sprite(
+              new THREE.SpriteMaterial({
+                map: glowTex,
+                color: TURRET_CATALOG[t.type]?.colorHex || 0x38bdf8,
+                transparent: true,
+                opacity: t.tier === 3 ? 0.8 : 0.5,
+                blending: THREE.AdditiveBlending,
+                depthWrite: false,
+              })
+            );
+            aura.position.y = 0.08;
+            aura.scale.setScalar(t.tier === 3 ? 1.55 : 1.15);
+            mesh.add(aura);
+          }
           mesh.position.set(t.wx, 0.04, t.wz);
           towersLayer.add(mesh);
           turretMeshMap.set(t.id, mesh);
@@ -670,6 +714,12 @@ const VortexBastionScene = ({
         rangeFillMesh.position.set(gw.x, 0.065, gw.z);
         rangeFillMesh.scale.set(rad, rad, 1);
         rangeFillMesh.material.color.setHex(gCol);
+
+        tileBracket.visible = true;
+        tileBracket.position.set(gw.x, 0, gw.z);
+        const pulseScale = 1 + Math.sin(elapsed * 7) * 0.06;
+        tileBracket.scale.set(pulseScale, 1, pulseScale);
+        bracketMat.color.setHex(gCol);
       } else if (selectedTower) {
         const tCol = TURRET_CATALOG[selectedTower.type]?.colorHex || 0x38bdf8;
         ghostGroup.visible = false;
@@ -682,10 +732,16 @@ const VortexBastionScene = ({
         rangeFillMesh.position.set(selectedTower.wx, 0.065, selectedTower.wz);
         rangeFillMesh.scale.set(selectedTower.stats.range, selectedTower.stats.range, 1);
         rangeFillMesh.material.color.setHex(tCol);
+
+        tileBracket.visible = true;
+        tileBracket.position.set(selectedTower.wx, 0, selectedTower.wz);
+        tileBracket.scale.set(1.04, 1, 1.04);
+        bracketMat.color.setHex(tCol);
       } else {
         ghostGroup.visible = false;
         rangeMesh.visible = false;
         rangeFillMesh.visible = false;
+        tileBracket.visible = false;
       }
 
       // Sync Enemies
@@ -743,10 +799,64 @@ const VortexBastionScene = ({
             projGeo,
             new THREE.MeshBasicMaterial({ color: p.color || 0x38bdf8 })
           );
+          const halo = new THREE.Sprite(
+            new THREE.SpriteMaterial({
+              map: glowTex,
+              color: p.color || 0x38bdf8,
+              transparent: true,
+              opacity: 0.9,
+              blending: THREE.AdditiveBlending,
+              depthWrite: false,
+            })
+          );
+          halo.scale.setScalar(0.42);
+          mesh.add(halo);
           projectilesLayer.add(mesh);
           projMeshMap.set(p.id, mesh);
         }
         mesh.position.set(p.x, p.y, p.z);
+      }
+
+      // Drain queued 3D shrapnel bursts & update spark physics
+      if (sim.burstQueue?.length) {
+        while (sim.burstQueue.length > 0) {
+          const b = sim.burstQueue.pop();
+          for (let k = 0; k < b.count; k++) {
+            const mat = new THREE.MeshBasicMaterial({ color: b.color, transparent: true, opacity: 1 });
+            const sp = new THREE.Mesh(sparkGeo, mat);
+            sp.position.set(b.x, b.y, b.z);
+            sparksLayer.add(sp);
+            activeSparks.push({
+              mesh: sp,
+              vx: (Math.random() - 0.5) * 4.2,
+              vy: 1.8 + Math.random() * 2.8,
+              vz: (Math.random() - 0.5) * 4.2,
+              life: 0.55,
+              maxLife: 0.55,
+            });
+          }
+        }
+      }
+      for (let i = activeSparks.length - 1; i >= 0; i--) {
+        const s = activeSparks[i];
+        s.life -= dt;
+        if (s.life <= 0) {
+          sparksLayer.remove(s.mesh);
+          s.mesh.material.dispose();
+          activeSparks.splice(i, 1);
+          continue;
+        }
+        s.vy -= 9.8 * dt;
+        s.mesh.position.x += s.vx * dt;
+        s.mesh.position.y += s.vy * dt;
+        s.mesh.position.z += s.vz * dt;
+        if (s.mesh.position.y < 0.08) {
+          s.mesh.position.y = 0.08;
+          s.vy *= -0.45;
+        }
+        s.mesh.rotation.x += dt * 8;
+        s.mesh.rotation.y += dt * 6;
+        s.mesh.material.opacity = Math.max(0, s.life / s.maxLife);
       }
 
       // Render transient VFX (cryo rings, lightning arcs, rail beams, explosions)

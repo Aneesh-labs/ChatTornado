@@ -19,6 +19,8 @@ import {
   Flame,
   Radio,
   HelpCircle,
+  Volume2,
+  VolumeX,
 } from "lucide-react";
 import { soundEngine } from "../../../utils/soundEffects";
 import {
@@ -61,7 +63,7 @@ function getWaveThreatChips(nextWave) {
   return chips;
 }
 
-const VortexBastionGame = ({ onBack, isMuted, onSaveScore }) => {
+const VortexBastionGame = ({ onBack, isMuted, onToggleMute, onSaveScore }) => {
   const simRef = useRef(createCombatState(createInitialGrid()));
   const savedScoreRef = useRef(false);
 
@@ -123,8 +125,15 @@ const VortexBastionGame = ({ onBack, isMuted, onSaveScore }) => {
     autoWaveRef.current = autoWave;
   }, [autoWave]);
 
+  const lastSoundTimeRef = useRef(0);
   const playAudio = useCallback((type) => {
-    if (!isMutedRef.current) soundEngine.play(type);
+    if (isMutedRef.current) return;
+    if (type === "coin" || type === "laser") {
+      const now = performance.now();
+      if (now - lastSoundTimeRef.current < 75) return;
+      lastSoundTimeRef.current = now;
+    }
+    soundEngine.play(type);
   }, []);
 
   const syncHud = useCallback(
@@ -349,7 +358,13 @@ const VortexBastionGame = ({ onBack, isMuted, onSaveScore }) => {
   const threatChips = getWaveThreatChips(hud.wave + 1);
 
   return (
-    <div className="w-full max-w-3xl mx-auto flex flex-col rounded-[28px] overflow-hidden border border-cyan-500/30 bg-[#050814] shadow-[0_0_60px_rgba(6,182,212,0.2)] select-none">
+    <div
+      className={`w-full max-w-3xl mx-auto flex flex-col rounded-[28px] overflow-hidden border bg-[#050814] transition-all select-none ${
+        corePct <= 25
+          ? "border-rose-500/65 shadow-[0_0_60px_rgba(244,63,94,0.35)]"
+          : "border-cyan-500/35 shadow-[0_0_60px_rgba(6,182,212,0.22)]"
+      }`}
+    >
       {/* ─── Integrated Top Sci-Fi Command Header ──────────────────── */}
       <div className="flex items-center justify-between gap-2 px-3 py-2.5 bg-gradient-to-r from-slate-950 via-[#091226] to-slate-950 border-b border-cyan-500/20">
         <div className="flex items-center gap-2 min-w-0">
@@ -419,6 +434,16 @@ const VortexBastionGame = ({ onBack, isMuted, onSaveScore }) => {
             <Camera className="w-3.5 h-3.5" />
             <span className="hidden xs:inline">{cameraPreset}</span>
           </button>
+          {onToggleMute && (
+            <button
+              type="button"
+              onClick={onToggleMute}
+              aria-label={isMuted ? "Unmute Audio" : "Mute Audio"}
+              className="p-2 rounded-xl bg-white/[0.06] hover:bg-white/15 border border-white/10 text-white cursor-pointer"
+            >
+              {isMuted ? <VolumeX className="w-3.5 h-3.5 text-rose-400" /> : <Volume2 className="w-3.5 h-3.5 text-emerald-400" />}
+            </button>
+          )}
           <button
             type="button"
             onClick={() => setShowGuide((g) => !g)}
@@ -431,7 +456,7 @@ const VortexBastionGame = ({ onBack, isMuted, onSaveScore }) => {
       </div>
 
       {/* ─── Edge-to-Edge 3D WebGL Battlefield ──────────────────────── */}
-      <div className="relative w-full h-[54dvh] min-h-[370px] sm:h-[58dvh] max-h-[600px] bg-[#040712]">
+      <div className="relative w-full h-[60dvh] min-h-[395px] sm:h-[64dvh] max-h-[650px] bg-[#040712]">
         <VortexBastionScene
           simRef={simRef}
           activePath={activePath}
@@ -645,8 +670,9 @@ const VortexBastionGame = ({ onBack, isMuted, onSaveScore }) => {
                       </div>
                     </div>
                     <p className="text-[10px] text-white/65">
-                      DMG <strong className="text-white">{selectedTowerSnapshot.stats.damage}</strong> • RNG{" "}
-                      <strong className="text-white">{selectedTowerSnapshot.stats.range}</strong> • KILLS{" "}
+                      ATK <strong className="text-white">{selectedTowerSnapshot.stats.damage}</strong> • RNG{" "}
+                      <strong className="text-white">{selectedTowerSnapshot.stats.range}</strong> • TOTAL DMG{" "}
+                      <strong className="text-amber-300">{selectedTowerSnapshot.damageDealt || 0}</strong> • KILLS{" "}
                       <strong className="text-lime-300">{selectedTowerSnapshot.kills}</strong>
                     </p>
                   </div>
@@ -887,6 +913,7 @@ const VortexBastionGame = ({ onBack, isMuted, onSaveScore }) => {
 VortexBastionGame.propTypes = {
   onBack: PropTypes.func.isRequired,
   isMuted: PropTypes.bool,
+  onToggleMute: PropTypes.func,
   onSaveScore: PropTypes.func,
 };
 

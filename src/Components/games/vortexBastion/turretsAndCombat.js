@@ -253,6 +253,7 @@ export function createCombatState(grid) {
     enemies: [],
     projectiles: [],
     effects: [],
+    burstQueue: [],
     popups: [],
     spawnQueue: [],
     spawnCooldown: 0,
@@ -289,6 +290,7 @@ export function placeTurret(state, type, cell) {
     cooldown: 0,
     recoil: 0,
     kills: 0,
+    damageDealt: 0,
     stats: computeTurretStats(type, 1, null),
   };
   state.towers.push(tower);
@@ -593,7 +595,9 @@ export function applyEnemyDamage(state, enemy, rawDmg, sourceTower, damageType =
       : (enemy.armor || 0) * (enemy.armorShredTimer > 0 ? 0.35 : 1);
 
   const mult = 1 + (enemy.vulnBonus || 0);
-  let remaining = Math.max(1, Math.round((rawDmg - effectiveArmor) * mult));
+  const dealtTotal = Math.max(1, Math.round((rawDmg - effectiveArmor) * mult));
+  let remaining = dealtTotal;
+  if (sourceTower) sourceTower.damageDealt = (sourceTower.damageDealt || 0) + dealtTotal;
 
   // Energy Shield absorbs damage first; Tesla / Electric deals 2.5x shield damage!
   if (enemy.shield > 0) {
@@ -640,16 +644,26 @@ export function applyEnemyDamage(state, enemy, rawDmg, sourceTower, damageType =
     state.kills += 1;
     state.score += enemy.reward * 5;
     if (sourceTower) sourceTower.kills += 1;
+    const fxCol = enemy.kind === "juggernaut" ? 0xf97316 : enemy.kind === "boss" ? 0xe11d48 : 0xf43f5e;
     state.effects.push({
       id: `fx_${state.nextId++}`,
       kind: "explosion",
       x: enemy.wx,
       y: 0.45,
       z: enemy.wz,
-      color: enemy.kind === "juggernaut" ? 0xf97316 : 0xf43f5e,
+      color: fxCol,
       life: 0.4,
       maxLife: 0.4,
     });
+    if (state.burstQueue) {
+      state.burstQueue.push({
+        x: enemy.wx,
+        y: 0.42,
+        z: enemy.wz,
+        color: fxCol,
+        count: enemy.kind === "boss" ? 22 : 10,
+      });
+    }
     if (state.popups) {
       state.popups.push({
         id: `pop_${state.nextId++}`,
