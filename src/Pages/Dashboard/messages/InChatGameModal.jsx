@@ -1,8 +1,10 @@
 import React from "react";
 import PropTypes from "prop-types";
+import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { Gamepad2, X, Trophy, Sparkles } from "lucide-react";
+import { Gamepad2, X, Trophy, Sparkles, Compass } from "lucide-react";
 import { soundEngine } from "../../../utils/soundEffects";
+import { createNullNorthMatch } from "../../../Components/games/nullNorth/nullNorthApi";
 
 const AVAILABLE_GAMES = [
     {
@@ -134,8 +136,29 @@ const AVAILABLE_GAMES = [
     }
 ];
 
-export default function InChatGameModal({ isOpen, onClose, onStartGame, recipientName = "Friend" }) {
+export default function InChatGameModal({ isOpen, onClose, onStartGame, recipientName = "Friend", selectedUser = null }) {
+    const navigate = useNavigate();
     if (!isOpen) return null;
+
+    const handleLaunchNullNorth = async () => {
+        soundEngine.play("tada");
+        onClose?.();
+        try {
+            const isGroup = Boolean(selectedUser?.is_group);
+            const res = await createNullNorthMatch({
+                group_id: isGroup && selectedUser?.id ? Number(selectedUser.id) : undefined,
+                dm_partner_id: !isGroup && selectedUser?.id ? Number(selectedUser.id) : undefined,
+                player_limit: isGroup ? 4 : 2,
+            });
+            if (res?.match_code) {
+                navigate(`/arcade?nullnorth=${encodeURIComponent(res.match_code)}`);
+                return;
+            }
+        } catch {
+            // fallback to hub
+        }
+        navigate("/arcade?nullnorth=HUB");
+    };
 
     const handleSelectGame = (gameDef) => {
         soundEngine.play("coin");
@@ -189,6 +212,28 @@ export default function InChatGameModal({ isOpen, onClose, onStartGame, recipien
                         </button>
                     </div>
 
+                    {/* Featured Co-Op Escape Invite */}
+                    {selectedUser && !selectedUser.is_bot && selectedUser.username !== "VORTEX-9" && (
+                        <button
+                            type="button"
+                            onClick={handleLaunchNullNorth}
+                            className="mb-3 w-full group relative flex items-center justify-between overflow-hidden rounded-2xl border border-cyan-400/40 bg-gradient-to-r from-cyan-500/15 via-sky-500/10 to-violet-500/15 p-4 text-left transition-all hover:border-cyan-300 cursor-pointer"
+                        >
+                            <div className="flex items-center gap-3.5">
+                                <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-cyan-500 to-indigo-600 text-white shadow-lg">
+                                    <Compass className="w-6 h-6" />
+                                </div>
+                                <div>
+                                    <div className="text-sm font-black text-white">NULL//NORTH</div>
+                                    <div className="text-xs text-cyan-200/85">Invite to Asymmetric Co-Op Escape!</div>
+                                </div>
+                            </div>
+                            <div className="rounded-xl bg-cyan-400 px-3 py-1.5 text-xs font-black text-slate-950">
+                                Invite →
+                            </div>
+                        </button>
+                    )}
+
                     {/* Games List */}
                     <div className="flex flex-col gap-3">
                         {AVAILABLE_GAMES.map((game) => (
@@ -237,4 +282,5 @@ InChatGameModal.propTypes = {
     onClose: PropTypes.func.isRequired,
     onStartGame: PropTypes.func.isRequired,
     recipientName: PropTypes.string,
+    selectedUser: PropTypes.object,
 };

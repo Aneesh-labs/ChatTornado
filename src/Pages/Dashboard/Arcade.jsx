@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
+import { useSearchParams } from "react-router-dom";
 import { motion } from "framer-motion";
 import {
     Gamepad2,
@@ -13,12 +14,14 @@ import {
     Undo2,
     Shield,
     Bomb,
+    Compass,
 } from "lucide-react";
 import { soundEngine } from "../../utils/soundEffects";
 import API from "../../Services/API";
 import TornadoSurfersGame from "../../Components/games/TornadoSurfersGame";
 import VortexBastionGame from "../../Components/games/vortexBastion/VortexBastionGame";
 import NeonBladeGame from "../../Components/games/NeonBladeGame";
+import NullNorthGame from "../../Components/games/nullNorth/NullNorthGame";
 import {
     SNAKE_GRID,
     queueSnakeDirection,
@@ -280,7 +283,7 @@ const SnakeGame = ({ onBack, isMuted }) => {
     };
 
     return (
-        <div className="flex flex-col items-center gap-3.5 max-w-md mx-auto w-full select-none">
+        <div className="flex flex-col items-center gap-4 max-w-xl mx-auto w-full select-none">
             <div className="flex items-center justify-between w-full px-1">
                 <button
                     type="button"
@@ -320,7 +323,7 @@ const SnakeGame = ({ onBack, isMuted }) => {
             <div
                 onTouchStart={onTouchStart}
                 onTouchEnd={onTouchEnd}
-                className="relative w-[324px] h-[324px] sm:w-[360px] sm:h-[360px] rounded-3xl bg-[#080d18] border-2 border-emerald-500/35 shadow-[0_0_40px_rgba(16,185,129,0.18)] overflow-hidden touch-none"
+                className="relative w-full max-w-[440px] aspect-square rounded-3xl bg-[#080d18] border-2 border-emerald-500/35 shadow-[0_0_40px_rgba(16,185,129,0.18)] overflow-hidden touch-none"
             >
                 <canvas ref={canvasRef} width={360} height={360} className="w-full h-full block" />
 
@@ -369,13 +372,13 @@ const SnakeGame = ({ onBack, isMuted }) => {
             </div>
 
             {/* Mobile D-Pad */}
-            <div className="grid grid-cols-3 gap-1.5 w-44">
+            <div className="grid grid-cols-3 gap-2 w-56">
                 <div />
-                <button type="button" onClick={() => pushDirection([0, -1])} aria-label="Snake Up" className="h-10 rounded-xl bg-white/10 active:bg-emerald-500/40 font-bold text-white cursor-pointer">▲</button>
+                <button type="button" onClick={() => pushDirection([0, -1])} aria-label="Snake Up" className="h-12 rounded-2xl bg-white/10 active:bg-emerald-500/40 font-bold text-white cursor-pointer">▲</button>
                 <div />
-                <button type="button" onClick={() => pushDirection([-1, 0])} aria-label="Snake Left" className="h-10 rounded-xl bg-white/10 active:bg-emerald-500/40 font-bold text-white cursor-pointer">◀</button>
-                <button type="button" onClick={() => pushDirection([0, 1])} aria-label="Snake Down" className="h-10 rounded-xl bg-white/10 active:bg-emerald-500/40 font-bold text-white cursor-pointer">▼</button>
-                <button type="button" onClick={() => pushDirection([1, 0])} aria-label="Snake Right" className="h-10 rounded-xl bg-white/10 active:bg-emerald-500/40 font-bold text-white cursor-pointer">▶</button>
+                <button type="button" onClick={() => pushDirection([-1, 0])} aria-label="Snake Left" className="h-12 rounded-2xl bg-white/10 active:bg-emerald-500/40 font-bold text-white cursor-pointer">◀</button>
+                <button type="button" onClick={() => pushDirection([0, 1])} aria-label="Snake Down" className="h-12 rounded-2xl bg-white/10 active:bg-emerald-500/40 font-bold text-white cursor-pointer">▼</button>
+                <button type="button" onClick={() => pushDirection([1, 0])} aria-label="Snake Right" className="h-12 rounded-2xl bg-white/10 active:bg-emerald-500/40 font-bold text-white cursor-pointer">▶</button>
             </div>
         </div>
     );
@@ -551,7 +554,7 @@ const FlappyTornadoGame = ({ onBack, isMuted }) => {
     }, [phase, playAudio]);
 
     return (
-        <div className="flex flex-col items-center gap-3.5 max-w-md mx-auto w-full select-none">
+        <div className="flex flex-col items-center gap-4 max-w-xl mx-auto w-full select-none">
             <div className="flex items-center justify-between w-full px-1">
                 <button
                     type="button"
@@ -573,7 +576,7 @@ const FlappyTornadoGame = ({ onBack, isMuted }) => {
                     if (e.target.closest("button")) return;
                     flap();
                 }}
-                className="relative w-full max-w-[380px] aspect-[380/340] rounded-3xl overflow-hidden border-2 border-cyan-500/35 shadow-[0_0_40px_rgba(6,182,212,0.18)] cursor-pointer touch-none"
+                className="relative w-full max-w-[480px] aspect-[380/340] rounded-3xl overflow-hidden border-2 border-cyan-500/35 shadow-[0_0_40px_rgba(6,182,212,0.18)] cursor-pointer touch-none"
             >
                 <canvas ref={canvasRef} width={380} height={340} className="w-full h-full block" />
 
@@ -692,7 +695,7 @@ const MemoryMatchGame = ({ onBack, isMuted }) => {
     };
 
     return (
-        <div className="flex flex-col items-center gap-3.5 max-w-md mx-auto w-full select-none">
+        <div className="flex flex-col items-center gap-4 max-w-xl mx-auto w-full select-none">
             <div className="flex items-center justify-between w-full px-1 flex-wrap gap-2">
                 <button
                     type="button"
@@ -745,9 +748,11 @@ const MemoryMatchGame = ({ onBack, isMuted }) => {
                         <motion.button
                             key={card.id}
                             type="button"
+                            animate={{ scale: isCardFlipped ? 1.03 : 1 }}
+                            transition={{ type: "spring", stiffness: 360, damping: 24 }}
                             whileTap={!isCardFlipped ? { scale: 0.94 } : {}}
                             onClick={() => handleCardClick(idx)}
-                            className={`w-15 h-16 sm:w-18 sm:h-20 rounded-2xl flex items-center justify-center text-3xl font-bold border transition-all cursor-pointer ${
+                            className={`w-16 h-18 sm:w-20 sm:h-24 rounded-2xl flex items-center justify-center text-3xl sm:text-4xl font-bold border transition-all cursor-pointer ${
                                 isMatchedCard
                                     ? "bg-gradient-to-br from-emerald-500/35 to-teal-700/40 border-emerald-400 text-white shadow-[0_0_16px_rgba(16,185,129,0.4)]"
                                     : isCardFlipped
@@ -931,7 +936,7 @@ const Game2048 = ({ onBack, isMuted }) => {
     };
 
     return (
-        <div className="flex flex-col items-center gap-3.5 max-w-md mx-auto w-full select-none">
+        <div className="flex flex-col items-center gap-4 max-w-xl mx-auto w-full select-none">
             <div className="flex items-center justify-between w-full px-1">
                 <button
                     type="button"
@@ -967,7 +972,7 @@ const Game2048 = ({ onBack, isMuted }) => {
             <div
                 onTouchStart={onTouchStart}
                 onTouchEnd={onTouchEnd}
-                className="relative w-[300px] h-[300px] sm:w-[340px] sm:h-[340px] p-3 rounded-3xl bg-[#0a0f1d] border-2 border-indigo-500/35 shadow-2xl touch-none"
+                className="relative w-[320px] h-[320px] sm:w-[400px] sm:h-[400px] p-3.5 rounded-3xl bg-[#0a0f1d] border-2 border-indigo-500/35 shadow-2xl touch-none"
             >
                 <div className="grid grid-cols-4 grid-rows-4 gap-2.5 w-full h-full">
                     {board.flatMap((row, r) =>
@@ -1014,13 +1019,13 @@ const Game2048 = ({ onBack, isMuted }) => {
                 )}
             </div>
 
-            <div className="grid grid-cols-3 gap-2 w-48">
+            <div className="grid grid-cols-3 gap-2 w-56">
                 <div />
-                <button type="button" onClick={() => move("up")} className="h-10 rounded-xl bg-white/10 active:bg-indigo-500 font-bold text-white cursor-pointer">▲</button>
+                <button type="button" onClick={() => move("up")} className="h-12 rounded-2xl bg-white/10 active:bg-indigo-500 font-bold text-white cursor-pointer">▲</button>
                 <div />
-                <button type="button" onClick={() => move("left")} className="h-10 rounded-xl bg-white/10 active:bg-indigo-500 font-bold text-white cursor-pointer">◀</button>
-                <button type="button" onClick={() => move("down")} className="h-10 rounded-xl bg-white/10 active:bg-indigo-500 font-bold text-white cursor-pointer">▼</button>
-                <button type="button" onClick={() => move("right")} className="h-10 rounded-xl bg-white/10 active:bg-indigo-500 font-bold text-white cursor-pointer">▶</button>
+                <button type="button" onClick={() => move("left")} className="h-12 rounded-2xl bg-white/10 active:bg-indigo-500 font-bold text-white cursor-pointer">◀</button>
+                <button type="button" onClick={() => move("down")} className="h-12 rounded-2xl bg-white/10 active:bg-indigo-500 font-bold text-white cursor-pointer">▼</button>
+                <button type="button" onClick={() => move("right")} className="h-12 rounded-2xl bg-white/10 active:bg-indigo-500 font-bold text-white cursor-pointer">▶</button>
             </div>
         </div>
     );
@@ -1269,7 +1274,7 @@ const ZombieShooter = ({ onBack, isMuted }) => {
     }, [phase, playAudio, detonateBomb]);
 
     return (
-        <div className="flex flex-col items-center gap-3.5 max-w-md mx-auto w-full select-none">
+        <div className="flex flex-col items-center gap-4 max-w-xl mx-auto w-full select-none">
             <div className="flex items-center justify-between w-full px-1 flex-wrap gap-2">
                 <button type="button" onClick={onBack} className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/10 text-xs font-bold text-white cursor-pointer">
                     <ArrowLeft className="h-4 w-4" /> Back
@@ -1300,7 +1305,7 @@ const ZombieShooter = ({ onBack, isMuted }) => {
                 </div>
             </div>
 
-            <div className="relative w-full max-w-[400px] aspect-square rounded-3xl overflow-hidden border-2 border-lime-500/35 shadow-[0_0_40px_rgba(132,204,22,0.18)]">
+            <div className="relative w-full max-w-[480px] aspect-square rounded-3xl overflow-hidden border-2 border-lime-500/35 shadow-[0_0_40px_rgba(132,204,22,0.18)]">
                 <canvas ref={canvasRef} width={400} height={400} className="w-full h-full bg-[#080d19] touch-none" />
 
                 {phase === "ready" && (
@@ -1511,7 +1516,7 @@ const NeonDodge = ({ onBack, isMuted }) => {
     }, [phase, playAudio]);
 
     return (
-        <div className="flex flex-col items-center gap-3.5 max-w-md mx-auto w-full select-none">
+        <div className="flex flex-col items-center gap-4 max-w-xl mx-auto w-full select-none">
             <div className="flex items-center justify-between w-full px-1">
                 <button type="button" onClick={onBack} className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/10 text-xs font-bold text-white cursor-pointer">
                     <ArrowLeft className="h-4 w-4" /> Back
@@ -1529,7 +1534,7 @@ const NeonDodge = ({ onBack, isMuted }) => {
                 </div>
             </div>
 
-            <div className="relative w-full max-w-[380px] aspect-[380/450] rounded-3xl overflow-hidden border-2 border-purple-500/35 shadow-[0_0_40px_rgba(168,85,247,0.18)]">
+            <div className="relative w-full max-w-[460px] aspect-[380/450] rounded-3xl overflow-hidden border-2 border-purple-500/35 shadow-[0_0_40px_rgba(168,85,247,0.18)]">
                 <canvas ref={canvasRef} width={380} height={450} className="w-full h-full bg-[#0a0519] touch-none" />
 
                 {phase === "ready" && (
@@ -1562,9 +1567,20 @@ const NeonDodge = ({ onBack, isMuted }) => {
    MAIN ARCADE LOBBY COMPONENT
    ═══════════════════════════════════════════════════════════════ */
 export default function Arcade() {
-    const [selectedGame, setSelectedGame] = useState(null);
+    const [searchParams, setSearchParams] = useSearchParams();
+    const initialNullNorth = searchParams.get("nullnorth") || "";
+    const [selectedGame, setSelectedGame] = useState(() => (initialNullNorth ? "nullnorth" : null));
+    const [nullNorthInviteCode, setNullNorthInviteCode] = useState(() =>
+        initialNullNorth && initialNullNorth !== "HUB" ? initialNullNorth : ""
+    );
     const [isMuted, setIsMuted] = useState(false);
-    const handleBack = useCallback(() => setSelectedGame(null), []);
+    const handleBack = useCallback(() => {
+        setSelectedGame(null);
+        setNullNorthInviteCode("");
+        if (searchParams.has("nullnorth")) {
+            setSearchParams({}, { replace: true });
+        }
+    }, [searchParams, setSearchParams]);
 
     useEffect(() => {
         const fetchStats = async () => {
@@ -1682,7 +1698,7 @@ export default function Arcade() {
                             Mini Games Zone <Sparkles className="h-6 w-6 text-amber-300" />
                         </h1>
                         <p className="mt-1.5 text-xs sm:text-sm text-white/60 max-w-xl">
-                            9 upgraded 60fps arcade games with mobile swipe controls, combos & synced high scores!
+                            10 upgraded 60fps &amp; 3D WebGL arcade games including live multiplayer Co-Op escape!
                         </p>
                     </div>
 
@@ -1700,7 +1716,13 @@ export default function Arcade() {
                 </header>
                 )}
 
-                {selectedGame === "vortexbastion" ? (
+                {selectedGame === "nullnorth" ? (
+                    <NullNorthGame
+                        onBack={handleBack}
+                        isMuted={isMuted}
+                        initialMatchCode={nullNorthInviteCode}
+                    />
+                ) : selectedGame === "vortexbastion" ? (
                     <VortexBastionGame
                         onBack={handleBack}
                         isMuted={isMuted}
@@ -1724,7 +1746,38 @@ export default function Arcade() {
                 ) : selectedGame === "neonblade" ? (
                     <NeonBladeGame onBack={handleBack} isMuted={isMuted} onSaveScore={saveBackendGameScore} />
                 ) : (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div className="space-y-5">
+                        {/* Featured Multiplayer Flagship: NULL//NORTH */}
+                        <motion.div
+                            whileHover={{ scale: 1.01, y: -2 }}
+                            whileTap={{ scale: 0.99 }}
+                            onClick={() => {
+                                if (!isMuted) soundEngine.play("tada");
+                                setSelectedGame("nullnorth");
+                            }}
+                            className="relative overflow-hidden rounded-3xl border border-cyan-400/35 bg-gradient-to-r from-[#091526] via-[#070b14] to-[#140a24] p-6 sm:p-7 shadow-2xl cursor-pointer hover:border-cyan-300/60 transition-all"
+                        >
+                            <div className="pointer-events-none absolute -top-20 -right-20 w-64 h-64 rounded-full bg-cyan-500/15 blur-3xl" />
+                            <div className="relative flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                                <div className="space-y-2 max-w-2xl">
+                                    <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-cyan-500/15 border border-cyan-400/35 text-xs font-black text-cyan-300 uppercase tracking-wider">
+                                        <Compass className="w-3.5 h-3.5" /> NEW • 2–4 Player Asymmetric Co-Op
+                                    </div>
+                                    <h2 className="text-2xl sm:text-3xl font-black text-white">
+                                        NULL<span className="text-cyan-400">//</span>NORTH
+                                    </h2>
+                                    <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
+                                        You can see the maze. Your teammate can see the truth. Neither can escape alone — play Cartographer, Seer, Decoder, or Architect with ChatTornado invites &amp; real-time WebSocket sync!
+                                    </p>
+                                </div>
+                                <div className="shrink-0 px-5 py-3 rounded-2xl bg-gradient-to-r from-cyan-500 to-sky-400 text-slate-950 font-black text-sm text-center shadow-lg shadow-cyan-500/20">
+                                    Enter NULL//NORTH →
+                                </div>
+                            </div>
+                        </motion.div>
+
+                        {/* Spacious 3-Column Games Grid */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
                         {GAMES.map((game) => (
                             <motion.div
                                 key={game.id}
@@ -1763,6 +1816,7 @@ export default function Arcade() {
                                 </div>
                             </motion.div>
                         ))}
+                        </div>
                     </div>
                 )}
             </section>

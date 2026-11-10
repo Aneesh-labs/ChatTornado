@@ -38,18 +38,22 @@ run_migrations()
 from contextlib import asynccontextmanager
 import asyncio
 from scheduler_service import background_scheduler_worker
+from null_north_routes import null_north_tick_worker
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup: Launch the persistent Future Messages background scheduler
+    # Startup: Launch persistent Future Messages & NULL//NORTH dimension workers
     scheduler_task = asyncio.create_task(background_scheduler_worker())
+    null_north_task = asyncio.create_task(null_north_tick_worker())
     yield
-    # Shutdown: Cleanly cancel background worker
+    # Shutdown: Cleanly cancel background workers
     scheduler_task.cancel()
-    try:
-        await scheduler_task
-    except asyncio.CancelledError:
-        pass
+    null_north_task.cancel()
+    for t in (scheduler_task, null_north_task):
+        try:
+            await t
+        except asyncio.CancelledError:
+            pass
 
 # ============================================================================
 # FastAPI App
@@ -163,6 +167,7 @@ from dna_routes import router as dna_router
 from branch_routes import router as branch_router
 from future_message_routes import router as future_message_router
 from tor_routes import router as tor_router
+from null_north_routes import router as null_north_router
 from vortex.vault_routes import router as vortex_vault_router
 from vortex.group_vault_routes import router as vortex_group_vault_router
 from vortex.admin_routes import router as vortex_admin_router
@@ -188,6 +193,7 @@ app.include_router(dna_router)
 app.include_router(branch_router)
 app.include_router(future_message_router)
 app.include_router(tor_router)
+app.include_router(null_north_router)
 
 UPLOAD_DIR = Path(os.getenv("UPLOAD_DIR", Path(__file__).parent / "uploads"))
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)

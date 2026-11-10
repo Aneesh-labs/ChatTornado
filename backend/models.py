@@ -616,5 +616,116 @@ class VortexSecurityAuditLog(Base):
     )
 
 
+# ============================================================================
+# NULL//NORTH CO-OP MULTIPLAYER LABYRINTH MODELS
+# ============================================================================
+
+class NullNorthMatch(Base):
+    __tablename__ = "null_north_matches"
+
+    id: Mapped[int] = mapped_column(primary_key=True, index=True, autoincrement=True)
+    match_code: Mapped[str] = mapped_column(String(12), unique=True, nullable=False, index=True)
+    host_user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    group_id: Mapped[Optional[int]] = mapped_column(ForeignKey("groups.id", ondelete="SET NULL"), nullable=True, index=True)
+    dm_partner_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    status: Mapped[str] = mapped_column(String(24), default="lobby", nullable=False, index=True)  # lobby | active | completed | failed | abandoned
+    game_mode: Mapped[str] = mapped_column(String(24), default="classic", nullable=False)  # classic | endless | duel
+    difficulty: Mapped[str] = mapped_column(String(24), default="standard", nullable=False)  # standard | hard | nightmare
+    player_limit: Mapped[int] = mapped_column(Integer, default=4, nullable=False)
+    solo_bots: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    world_seed: Mapped[str] = mapped_column(String(64), nullable=False)
+    current_tick: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    collapse_seconds_left: Mapped[int] = mapped_column(Integer, default=720, nullable=False)
+    instability_countdown: Mapped[int] = mapped_column(Integer, default=45, nullable=False)
+    extraction_progress: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    started_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+
+    host: Mapped["User"] = relationship("User", foreign_keys=[host_user_id])
+    players: Mapped[List["NullNorthPlayer"]] = relationship("NullNorthPlayer", back_populates="match", cascade="all, delete-orphan")
+    world_state: Mapped[Optional["NullNorthWorldState"]] = relationship("NullNorthWorldState", back_populates="match", uselist=False, cascade="all, delete-orphan")
+
+
+class NullNorthPlayer(Base):
+    __tablename__ = "null_north_players"
+
+    id: Mapped[int] = mapped_column(primary_key=True, index=True, autoincrement=True)
+    match_id: Mapped[int] = mapped_column(ForeignKey("null_north_matches.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    assigned_role: Mapped[str] = mapped_column(String(24), default="AUTO", nullable=False)  # AUTO | CARTOGRAPHER | SEER | DECODER | ARCHITECT
+    secondary_role: Mapped[Optional[str]] = mapped_column(String(24), nullable=True)
+    energy: Mapped[int] = mapped_column(Integer, default=100, nullable=False)
+    hp: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
+    current_room_id: Mapped[str] = mapped_column(String(24), default="R0", nullable=False)
+    is_ready: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    player_status: Mapped[str] = mapped_column(String(24), default="active", nullable=False)  # active | extracted | incapacitated | disconnected
+    actions_taken: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    joined_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+    match: Mapped["NullNorthMatch"] = relationship("NullNorthMatch", back_populates="players")
+    user: Mapped["User"] = relationship("User", foreign_keys=[user_id])
+
+    __table_args__ = (
+        UniqueConstraint("match_id", "user_id", name="uq_null_north_match_user"),
+        Index("idx_null_north_players_match_user", "match_id", "user_id"),
+    )
+
+
+class NullNorthWorldState(Base):
+    __tablename__ = "null_north_world_states"
+
+    id: Mapped[int] = mapped_column(primary_key=True, index=True, autoincrement=True)
+    match_id: Mapped[int] = mapped_column(ForeignKey("null_north_matches.id", ondelete="CASCADE"), unique=True, nullable=False, index=True)
+    state_version: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    current_tick: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    world_data: Mapped[dict] = mapped_column(JSON, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    match: Mapped["NullNorthMatch"] = relationship("NullNorthMatch", back_populates="world_state")
+
+
+class NullNorthAction(Base):
+    __tablename__ = "null_north_actions"
+
+    id: Mapped[int] = mapped_column(primary_key=True, index=True, autoincrement=True)
+    match_id: Mapped[int] = mapped_column(ForeignKey("null_north_matches.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    action_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    action_payload: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    tick: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    status: Mapped[str] = mapped_column(String(20), default="accepted", nullable=False)
+    reason: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class NullNorthEvent(Base):
+    __tablename__ = "null_north_events"
+
+    id: Mapped[int] = mapped_column(primary_key=True, index=True, autoincrement=True)
+    match_id: Mapped[int] = mapped_column(ForeignKey("null_north_matches.id", ondelete="CASCADE"), nullable=False, index=True)
+    event_type: Mapped[str] = mapped_column(String(40), nullable=False)
+    event_payload: Mapped[dict] = mapped_column(JSON, nullable=False)
+    tick: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class NullNorthStatistics(Base):
+    __tablename__ = "null_north_statistics"
+
+    id: Mapped[int] = mapped_column(primary_key=True, index=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), unique=True, nullable=False, index=True)
+    matches_played: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    victories: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    defeats: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    puzzles_solved: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    rooms_explored: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    xp: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    best_escape_seconds: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    user: Mapped["User"] = relationship("User", foreign_keys=[user_id])
+
+
 
 

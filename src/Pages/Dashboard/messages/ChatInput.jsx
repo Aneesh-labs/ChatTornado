@@ -1582,6 +1582,7 @@ const ChatInput = React.memo(({ onSend, replyTo, onCancelReply, selectedUser, so
                 isOpen={gameModalOpen}
                 onClose={() => setGameModalOpen(false)}
                 recipientName={selectedUser?.username || "Friend"}
+                selectedUser={selectedUser}
                 onStartGame={(gamePayload) => {
                     onSend("🎮 GAME:" + JSON.stringify(gamePayload), { ai_mode: aiMode });
                 }}

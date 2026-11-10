@@ -880,6 +880,38 @@ async def websocket_endpoint(websocket: WebSocket):
                 continue
 
             # ==========================
+            # NULL//NORTH Isolated Squad Comms
+            # ==========================
+            if data.get("type") == "null_north_chat":
+                match_id = data.get("match_id")
+                chat_text = str(data.get("text", "")).strip()[:500]
+                if match_id and chat_text:
+                    try:
+                        from models import NullNorthPlayer
+                        m_id = int(match_id)
+                        sender_p = db.query(NullNorthPlayer).filter(
+                            NullNorthPlayer.match_id == m_id,
+                            NullNorthPlayer.user_id == user_id
+                        ).first()
+                        if sender_p:
+                            members = db.query(NullNorthPlayer).filter(NullNorthPlayer.match_id == m_id).all()
+                            u_row = db.query(User).filter(User.id == user_id).first()
+                            comms_packet = {
+                                "type": "null_north_chat_message",
+                                "match_id": m_id,
+                                "sender_id": user_id,
+                                "sender_name": u_row.username if u_row else f"Operative #{user_id}",
+                                "role": sender_p.assigned_role,
+                                "text": chat_text,
+                                "timestamp": datetime.utcnow().isoformat()
+                            }
+                            for mem in members:
+                                await manager.send_personal_message(mem.user_id, comms_packet)
+                    except Exception as nn_err:
+                        logger.warning("NULL//NORTH comms relay error: %s", nn_err)
+                continue
+
+            # ==========================
             # Capsule Unlock Handshake
             # ==========================
             if data.get("type") == "unlock_capsule":

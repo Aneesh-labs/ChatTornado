@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useMemo } from "react";
 import PropTypes from "prop-types";
+import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { ShieldCheck, KeyRound, Activity, Smartphone, Lock, MoreVertical, AlertTriangle, Sparkles, Brain, Download, Cpu, Ban, UserCheck, ShieldAlert, Users, BadgeCheck, Dna, GitFork, Clock, Tv, Ghost, Flame, Shield, Phone, PhoneCall, Video, Search, RotateCw, ChevronLeft, ChevronDown, CheckSquare, ListChecks, Terminal, Zap } from "lucide-react";
+import { ShieldCheck, KeyRound, Activity, Smartphone, Lock, MoreVertical, AlertTriangle, Sparkles, Brain, Download, Cpu, Ban, UserCheck, ShieldAlert, Users, BadgeCheck, Dna, GitFork, Clock, Tv, Ghost, Flame, Shield, Phone, PhoneCall, Video, Search, RotateCw, ChevronLeft, ChevronDown, CheckSquare, ListChecks, Terminal, Zap, Compass } from "lucide-react";
+import { createNullNorthMatch } from "../../../Components/games/nullNorth/nullNorthApi";
 import { toggleShieldActive } from "../../../Services/privacyShieldService";
 import { triggerPanicEscape } from "../../../utils/panicKey";
 import { IconBtn, Avatar, useTheme } from "./constants";
@@ -50,6 +52,7 @@ const ChatHeader = React.memo(({
     quantumHud = null,
 }) => {
     const theme = useTheme();
+    const navigate = useNavigate();
     const [showMoreMenu, setShowMoreMenu] = useState(false);
     const [showQuantumMenu, setShowQuantumMenu] = useState(false);
     const [showPersonalizeModal, setShowPersonalizeModal] = useState(false);
@@ -678,6 +681,27 @@ const ChatHeader = React.memo(({
                                                     <Tv className="w-4 h-4 text-violet-400" />
                                                     Watch Together
                                                 </button>
+                                                <button
+                                                    onClick={async () => {
+                                                        setShowMoreMenu(false);
+                                                        try {
+                                                            const res = await createNullNorthMatch({
+                                                                group_id: isGroup ? Number(user?.id) : undefined,
+                                                                dm_partner_id: !isGroup ? Number(user?.id) : undefined,
+                                                                player_limit: isGroup ? 4 : 2,
+                                                            });
+                                                            if (res?.match_code) {
+                                                                navigate(`/arcade?nullnorth=${encodeURIComponent(res.match_code)}`);
+                                                            }
+                                                        } catch {
+                                                            navigate("/arcade?nullnorth=HUB");
+                                                        }
+                                                    }}
+                                                    className="flex items-center gap-2 px-3 py-2 text-xs font-semibold text-cyan-300 hover:text-white hover:bg-cyan-500/15 rounded-lg text-left"
+                                                >
+                                                    <Compass className="w-4 h-4 text-cyan-400" />
+                                                    Invite to NULL//NORTH
+                                                </button>
                                                 <button onClick={() => { onToggleVanishMode?.(); setShowMoreMenu(false); }} className="flex items-center gap-2 px-3 py-2 text-xs text-purple-300 hover:text-white hover:bg-purple-500/10 rounded-lg text-left">
                                                     <Ghost className="w-4 h-4 text-purple-400" />
                                                     {isVanishModeActive ? "Turn Off Vanish Mode" : "Vanish Mode"}
@@ -1015,6 +1039,29 @@ const ChatHeader = React.memo(({
                                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                                                 </svg>
                                                 <span>Reload Chat</span>
+                                            </button>
+                                        )}
+                                        {!isBotUser && (
+                                            <button
+                                                onClick={async () => {
+                                                    setShowMoreMenu(false);
+                                                    try {
+                                                        const res = await createNullNorthMatch({
+                                                            group_id: isGroup ? Number(user?.id) : undefined,
+                                                            dm_partner_id: !isGroup ? Number(user?.id) : undefined,
+                                                            player_limit: isGroup ? 4 : 2,
+                                                        });
+                                                        if (res?.match_code) {
+                                                            navigate(`/arcade?nullnorth=${encodeURIComponent(res.match_code)}`);
+                                                        }
+                                                    } catch {
+                                                        navigate("/arcade?nullnorth=HUB");
+                                                    }
+                                                }}
+                                                className="flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-cyan-300 hover:text-white hover:bg-cyan-500/15 rounded-lg text-left cursor-pointer transition-colors"
+                                            >
+                                                <Compass className="w-4 h-4 text-cyan-400" />
+                                                <span>Invite to NULL//NORTH</span>
                                             </button>
                                         )}
                                         <button onClick={() => { setShowExportModal(true); setShowMoreMenu(false); }} className="flex items-center gap-2.5 px-3 py-2 text-xs text-white/80 hover:text-white hover:bg-white/10 rounded-lg text-left cursor-pointer">

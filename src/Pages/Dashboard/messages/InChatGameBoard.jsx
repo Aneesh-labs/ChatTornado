@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef } from "react";
 import PropTypes from "prop-types";
+import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { soundEngine } from "../../../utils/soundEffects";
-import { Trophy, RefreshCw, Sparkles, Gamepad2 } from "lucide-react";
+import { Trophy, RefreshCw, Sparkles, Gamepad2, Compass, Users } from "lucide-react";
 
 // Check 3-in-a-row for Tic-Tac-Toe
 const checkTicTacToeWinner = (board) => {
@@ -241,6 +242,10 @@ export default function InChatGameBoard({ gameData, messageId, myUserId, senderI
     }, [gameData, myUserId]);
 
     if (!localGame) return null;
+
+    if (localGame.type === "NULLNORTH_INVITE") {
+        return <NullNorthInviteCard invite={localGame} />;
+    }
 
     const isMeSender = String(myUserId) === String(senderId);
 
@@ -1435,6 +1440,54 @@ export default function InChatGameBoard({ gameData, messageId, myUserId, senderI
 
     return null;
 }
+
+function NullNorthInviteCard({ invite }) {
+    const navigate = useNavigate();
+    return (
+        <div className="flex flex-col gap-3 rounded-2xl border border-cyan-400/35 bg-gradient-to-br from-[#091221] via-[#070a12] to-[#130b24] p-4 backdrop-blur-xl w-[265px] sm:w-[295px] shadow-xl">
+            <div className="flex items-center justify-between gap-2">
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-cyan-500/15 border border-cyan-400/35 text-[11px] font-black text-cyan-300">
+                    <Compass className="w-3 h-3" /> NULL//NORTH
+                </span>
+                <span className="text-[11px] font-mono font-bold text-slate-300">
+                    #{invite.match_code}
+                </span>
+            </div>
+
+            <div>
+                <h4 className="text-sm font-black text-white">Asymmetric Co-Op Escape</h4>
+                <p className="text-xs text-slate-300 mt-0.5 leading-snug">
+                    You see the maze. Your squad sees the truth. Coordinate to escape.
+                </p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2 text-xs">
+                <div className="p-2 rounded-xl bg-white/[0.04] border border-white/10">
+                    <div className="text-[11px] text-slate-400">Host</div>
+                    <div className="font-bold text-white truncate">{invite.host_username || "Operative"}</div>
+                </div>
+                <div className="p-2 rounded-xl bg-white/[0.04] border border-white/10">
+                    <div className="text-[11px] text-slate-400">Capacity</div>
+                    <div className="font-bold text-cyan-300 flex items-center gap-1">
+                        <Users className="w-3.5 h-3.5" /> {invite.joined_count || 1}/{invite.player_limit || 4}
+                    </div>
+                </div>
+            </div>
+
+            <button
+                type="button"
+                onClick={() => navigate(`/arcade?nullnorth=${encodeURIComponent(invite.match_code || "")}`)}
+                className="w-full py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 to-sky-400 hover:brightness-110 text-slate-950 font-black text-xs cursor-pointer transition active:scale-95"
+            >
+                Join NULL//NORTH Match →
+            </button>
+        </div>
+    );
+}
+
+NullNorthInviteCard.propTypes = {
+    invite: PropTypes.object.isRequired,
+};
 
 InChatGameBoard.propTypes = {
     gameData: PropTypes.object.isRequired,
