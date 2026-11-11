@@ -81,6 +81,28 @@ const SettingsScreen = ({ settings, onChangeSetting, onClose }) => (
       <div className="flex-1 overflow-y-auto as-scroll p-8 space-y-8">
         <section>
           <div className="as-tech-label uppercase text-[#B99A70] mb-3">Graphics &amp; Display</div>
+          <div className="flex items-center justify-between gap-4 py-2">
+            <div>
+              <span className="text-sm text-[#D5D2C8]">Performance mode</span>
+              <div className="as-tech-label text-[#8F938C] mt-0.5">Low Power disables heavy shadows for phones</div>
+            </div>
+            <div className="flex gap-1.5 flex-wrap justify-end">
+              {["Auto", "Low Power", "Quality"].map((mode) => (
+                <button
+                  key={mode}
+                  type="button"
+                  onClick={() => onChangeSetting("performanceMode", mode)}
+                  className={`px-2.5 py-1 rounded-[2px] border text-xs cursor-pointer ${
+                    (settings.performanceMode || "Auto") === mode
+                      ? "bg-[#303735] border-[#B99A70]/65 text-[#F5F3ED]"
+                      : "border-[#E8E9E2]/15 text-[#8F938C]"
+                  }`}
+                >
+                  {mode}
+                </button>
+              ))}
+            </div>
+          </div>
           <div className="flex items-center justify-between py-2">
             <span className="text-sm text-[#D5D2C8]">Graphics preset</span>
             <div className="flex gap-2">

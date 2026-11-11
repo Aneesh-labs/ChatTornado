@@ -62,6 +62,7 @@ const AfterspaceWorld3D = ({
   simRef,
   inputRef,
   settingsRef,
+  performanceMode = "Auto",
   previewTemporalIndex = null,
   onSyncHud,
   onDiscoveryEvent,
@@ -89,24 +90,33 @@ const AfterspaceWorld3D = ({
 
     const width = container.clientWidth || window.innerWidth;
     const height = container.clientHeight || window.innerHeight;
+    const autoLow =
+      width < 768 ||
+      (typeof navigator !== "undefined" && navigator.hardwareConcurrency > 0 && navigator.hardwareConcurrency <= 4);
+    const lowPower =
+      performanceMode === "Low Power" || (performanceMode !== "Quality" && autoLow);
 
     const scene = new THREE.Scene();
     scene.fog = new THREE.FogExp2(0x1f2324, 0.0145);
 
-    const camera = new THREE.PerspectiveCamera(56, width / height, 0.1, 220);
+    const camera = new THREE.PerspectiveCamera(width < 640 ? 64 : 56, width / height, 0.1, lowPower ? 175 : 220);
     camera.position.set(-5.8, 5.4, 27.5);
 
     const renderer = new THREE.WebGLRenderer({
-      antialias: true,
-      powerPreference: "high-performance",
+      antialias: !lowPower,
+      powerPreference: lowPower ? "default" : "high-performance",
     });
-    const dprCap = settingsRef.current?.graphicsPreset === "Medium" ? 1.25 : 1.75;
+    const dprCap = lowPower ? 1.05 : settingsRef.current?.graphicsPreset === "Medium" ? 1.25 : 1.5;
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, dprCap));
     renderer.setSize(width, height);
-    renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-    renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.08;
+    renderer.shadowMap.enabled = !lowPower;
+    if (!lowPower) {
+      renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+      renderer.toneMapping = THREE.ACESFilmicToneMapping;
+      renderer.toneMappingExposure = 1.08;
+    } else {
+      renderer.toneMapping = THREE.NoToneMapping;
+    }
     container.appendChild(renderer.domElement);
 
     // GLSL Atmospheric Twilight-Observatory Sky Dome
@@ -116,7 +126,7 @@ const AfterspaceWorld3D = ({
       uHorizon: { value: new THREE.Color(0x5b4d42) },
     };
     const skyDome = new THREE.Mesh(
-      new THREE.SphereGeometry(165, 32, 24),
+      new THREE.SphereGeometry(165, lowPower ? 16 : 32, lowPower ? 12 : 24),
       new THREE.ShaderMaterial({
         vertexShader: SKY_VERT,
         fragmentShader: SKY_FRAG,
@@ -127,21 +137,23 @@ const AfterspaceWorld3D = ({
     );
     scene.add(skyDome);
 
-    // Sculptural Sunset / Dusk Lighting + Soft Cast Shadows
-    const hemi = new THREE.HemisphereLight(0xedeae1, 0x161b1b, 0.65);
+    // Sculptural Sunset / Dusk Lighting + Soft Cast Shadows (disabled on low-end mobile GPUs for 60 FPS)
+    const hemi = new THREE.HemisphereLight(0xedeae1, 0x161b1b, lowPower ? 0.85 : 0.65);
     scene.add(hemi);
 
-    const sunLight = new THREE.DirectionalLight(0xf3eadc, 2.0);
+    const sunLight = new THREE.DirectionalLight(0xf3eadc, lowPower ? 1.85 : 2.0);
     sunLight.position.set(22, 32, 16);
-    sunLight.castShadow = true;
-    sunLight.shadow.mapSize.set(2048, 2048);
-    sunLight.shadow.camera.near = 4;
-    sunLight.shadow.camera.far = 115;
-    sunLight.shadow.camera.left = -36;
-    sunLight.shadow.camera.right = 36;
-    sunLight.shadow.camera.top = 36;
-    sunLight.shadow.camera.bottom = -36;
-    sunLight.shadow.bias = -0.0005;
+    if (!lowPower) {
+      sunLight.castShadow = true;
+      sunLight.shadow.mapSize.set(1024, 1024);
+      sunLight.shadow.camera.near = 4;
+      sunLight.shadow.camera.far = 115;
+      sunLight.shadow.camera.left = -36;
+      sunLight.shadow.camera.right = 36;
+      sunLight.shadow.camera.top = 36;
+      sunLight.shadow.camera.bottom = -36;
+      sunLight.shadow.bias = -0.0005;
+    }
     scene.add(sunLight);
 
     const bounceLight = new THREE.DirectionalLight(0x8496a1, 0.55);
@@ -228,21 +240,21 @@ const AfterspaceWorld3D = ({
     // Architectural Materials (Travertine Limestone, Basalt, Obsidian Mirror, Aged Brass, Sage)
     const basaltMat = new THREE.MeshStandardMaterial({
       map: basaltTex,
-      bumpMap: basaltTex,
+      bumpMap: lowPower ? null : basaltTex,
       bumpScale: 0.04,
       roughness: 0.88,
       metalness: 0.08,
     });
     const slateMat = new THREE.MeshStandardMaterial({
       map: slateTex,
-      bumpMap: slateTex,
+      bumpMap: lowPower ? null : slateTex,
       bumpScale: 0.035,
       roughness: 0.82,
       metalness: 0.14,
     });
     const travertineMat = new THREE.MeshStandardMaterial({
       map: travTex,
-      bumpMap: travTex,
+      bumpMap: lowPower ? null : travTex,
       bumpScale: 0.03,
       roughness: 0.84,
       metalness: 0.04,
@@ -303,7 +315,8 @@ const AfterspaceWorld3D = ({
     };
 
     // Sculpted Sandstone-Basalt Canyon Valley Terrain around the Sanctuary
-    const terrainGeo = new THREE.PlaneGeometry(240, 240, 56, 56);
+    const terrainSegs = lowPower ? 22 : 56;
+    const terrainGeo = new THREE.PlaneGeometry(240, 240, terrainSegs, terrainSegs);
     terrainGeo.rotateX(-Math.PI / 2);
     const tPos = terrainGeo.attributes.position;
     for (let i = 0; i < tPos.count; i += 1) {
@@ -328,7 +341,7 @@ const AfterspaceWorld3D = ({
     canyonTerrain.receiveShadow = true;
     scene.add(canyonTerrain);
 
-    // Subtle Volumetric Sunlight Shafts streaming through Ancient Gate Oculus & Observatory
+    // Subtle Volumetric Sunlight Shafts streaming through Ancient Gate Oculus & Observatory (desktop quality only)
     const shaftGeo = new THREE.CylinderGeometry(0.95, 3.8, 22, 18, 1, true);
     const shaftMat = new THREE.MeshBasicMaterial({
       color: 0xedeae1,
@@ -338,17 +351,19 @@ const AfterspaceWorld3D = ({
       depthWrite: false,
       blending: THREE.AdditiveBlending,
     });
-    const rayPositions = [
-      [-1.5, 9.5, 11.5],
-      [-2.0, 9.8, -1.8],
-      [-2.2, 10.2, -19.2],
-    ];
-    rayPositions.forEach(([rx, ry, rz]) => {
-      const ray = new THREE.Mesh(shaftGeo, shaftMat);
-      ray.position.set(rx, ry, rz);
-      ray.rotation.set(0.18, 0, -0.38);
-      scene.add(ray);
-    });
+    if (!lowPower) {
+      const rayPositions = [
+        [-1.5, 9.5, 11.5],
+        [-2.0, 9.8, -1.8],
+        [-2.2, 10.2, -19.2],
+      ];
+      rayPositions.forEach(([rx, ry, rz]) => {
+        const ray = new THREE.Mesh(shaftGeo, shaftMat);
+        ray.position.set(rx, ry, rz);
+        ray.rotation.set(0.18, 0, -0.38);
+        scene.add(ray);
+      });
+    }
 
     // Subtle Smooth Step Rhythm & Eye-Elevation
     let walkBob = 0;
@@ -641,7 +656,7 @@ const AfterspaceWorld3D = ({
     scene.add(coopGroup);
 
     // Subtle Atmospheric Dust Motes
-    const dustCount = 140;
+    const dustCount = lowPower ? 42 : 140;
     const dustPos = new Float32Array(dustCount * 3);
     for (let i = 0; i < dustCount; i += 1) {
       dustPos[i * 3] = (Math.random() - 0.5) * 44;
@@ -755,9 +770,11 @@ const AfterspaceWorld3D = ({
         ringC.rotation.y -= dt * 0.08;
         residueCore.rotation.y += dt * 0.38;
         residueGroup.position.y = 1.65 + Math.sin(elapsed * 1.1) * 0.09;
-        dustPoints.rotation.y = Math.sin(elapsed * 0.02) * 0.05;
-        rippleTex.offset.x = (rippleTex.offset.x + dt * 0.018) % 1;
-        rippleTex.offset.y = (rippleTex.offset.y + dt * 0.012) % 1;
+        if (!lowPower) {
+          dustPoints.rotation.y = Math.sin(elapsed * 0.02) * 0.05;
+          rippleTex.offset.x = (rippleTex.offset.x + dt * 0.018) % 1;
+          rippleTex.offset.y = (rippleTex.offset.y + dt * 0.012) % 1;
+        }
       }
 
       artifactMeshes.forEach(({ group, gem }, id) => {
@@ -867,8 +884,9 @@ const AfterspaceWorld3D = ({
         focusRing.visible = false;
       }
 
-      // Smooth Optical Lens FOV shift during Scanner Observation Mode
-      const targetFov = s.scannerActive ? 60.5 : 56;
+      // Smooth Optical Lens FOV shift during Scanner / Dash Observation Mode
+      const baseFov = width < 640 ? 64 : 56;
+      const targetFov = s.scannerActive ? baseFov + 4.5 : (s.player.dashTimer || 0) > 0 ? baseFov + 3.0 : baseFov;
       if (Math.abs(camera.fov - targetFov) > 0.05) {
         camera.fov += (targetFov - camera.fov) * Math.min(1, dt * 6);
         camera.updateProjectionMatrix();
@@ -891,11 +909,12 @@ const AfterspaceWorld3D = ({
           inputRef.current.backward ||
           inputRef.current.left ||
           inputRef.current.right;
-        if (isWalking && !reducedMotion) {
+        if (isWalking && !reducedMotion && (s.player.jumpY || 0) <= 0.02) {
           walkBob += dt * (inputRef.current.sprint ? 11.5 : 8.5);
         }
-        const bobOffset = isWalking && !reducedMotion ? Math.sin(walkBob) * 0.032 : 0;
-        const eyeY = 1.72 + s.player.y + bobOffset;
+        const bobOffset =
+          isWalking && !reducedMotion && (s.player.jumpY || 0) <= 0.02 ? Math.sin(walkBob) * 0.032 : 0;
+        const eyeY = 1.72 + s.player.y + (s.player.jumpY || 0) + bobOffset;
         camTarget.set(s.player.x, eyeY, s.player.z);
         camera.position.lerp(camTarget, Math.min(1, dt * 10));
         camera.rotation.order = "YXZ";
@@ -945,15 +964,17 @@ const AfterspaceWorld3D = ({
       slateTex.dispose();
       travTex.dispose();
       rippleTex.dispose();
+      shaftGeo.dispose();
+      shaftMat.dispose();
       renderer.dispose();
       if (dom.parentNode === container) container.removeChild(dom);
     };
-  }, [inputRef, settingsRef, simRef]);
+  }, [inputRef, performanceMode, settingsRef, simRef]);
 
   return (
     <div
       ref={containerRef}
-      className="absolute inset-0 cursor-grab active:cursor-grabbing"
+      className="absolute inset-0 touch-none cursor-grab active:cursor-grabbing"
       aria-label="AFTERSPACE 3D Observatory Environment"
     />
   );
@@ -963,6 +984,7 @@ AfterspaceWorld3D.propTypes = {
   simRef: PropTypes.object.isRequired,
   inputRef: PropTypes.object.isRequired,
   settingsRef: PropTypes.object.isRequired,
+  performanceMode: PropTypes.string,
   previewTemporalIndex: PropTypes.number,
   onSyncHud: PropTypes.func,
   onDiscoveryEvent: PropTypes.func,

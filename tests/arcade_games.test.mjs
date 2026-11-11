@@ -38,6 +38,14 @@ import {
   JETPACK_Y,
 } from "../src/Components/games/tornadoSurfersEngine.js";
 
+import {
+  createInitialAfterspaceState,
+  triggerAfterspaceJump,
+  triggerAfterspaceDash,
+  stepAfterspaceState,
+  DEFAULT_SETTINGS,
+} from "../src/Components/games/afterspace/afterspaceEngine.js";
+
 /* ═══════════════════════════════════════════════════════════════
    1. SUPER SNAKE TESTS
    ═══════════════════════════════════════════════════════════════ */
@@ -442,4 +450,64 @@ test("10. Tornado Surfers tight physics: wave spacing >= tail + gap, Express ant
   coyoteRun.coyoteTimer = 0.08;
   assert.equal(triggerJump(coyoteRun), true);
   assert.ok(coyoteRun.vy > 12);
+});
+
+test("11. Tornado Surfers regression: riding ramp onto train roof, landing on roof lip, and rooftop lane-swap never crash", () => {
+  // A) Full ramp -> train rooftop traversal at 30fps and 60fps
+  for (const dt of [1 / 60, 1 / 30]) {
+    const r = createInitialRunnerState();
+    r.phase = "playing";
+    r.spawnTimer = 999; // isolate ramp + train only
+    r.entities = [
+      { id: "ramp_test", kind: "ramp", lane: 1, z: 0.16, zEnd: 0.30, hit: false },
+      { id: "train_test", kind: "train", lane: 1, z: 0.30, zEnd: 0.62, moving: false, hit: false },
+    ];
+    let reachedRoof = false;
+    for (let f = 0; f < 90; f++) {
+      const ev = stepRunnerState(r, dt);
+      assert.equal(ev.crashed, false, `Crashed unexpectedly at frame ${f} (dt=${dt}, y=${r.y})`);
+      assert.equal(r.phase, "playing");
+      if (r.y >= TRAIN_ROOF_Y - 0.01) reachedRoof = true;
+    }
+    assert.equal(reachedRoof, true, "Runner should smoothly reach train roof top");
+  }
+
+  // B) Landing slightly below roof top edge (within ROOF_SAFE_Y) snaps cleanly onto train roof
+  const lip = createInitialRunnerState();
+  lip.phase = "playing";
+  lip.spawnTimer = 999;
+  lip.y = TRAIN_ROOF_Y - 0.30; // 0.85, previously inside dead-zone 0.79..0.93!
+  lip.vy = -1.5;
+  lip.entities = [
+    { id: "lip_train", kind: "train", lane: 1, z: PLAYER_HIT_Z + 0.028, zEnd: PLAYER_HIT_Z + 0.32, moving: true, hit: false },
+  ];
+  const lipEv = stepRunnerState(lip, 1 / 60);
+  assert.equal(lipEv.crashed, false);
+  assert.equal(lip.phase, "playing");
+  assert.ok(Math.abs(lip.y - TRAIN_ROOF_Y) < 0.01);
+
+  // C) Lateral lane change while on a train roof at 0.85 transfers without stumbling or ending
+  const swap = createInitialRunnerState();
+  swap.phase = "playing";
+  swap.lane = 1;
+  swap.y = TRAIN_ROOF_Y - 0.30;
+  swap.entities = [
+    { id: "adj_roof", kind: "train", lane: 2, z: PLAYER_HIT_Z, zEnd: PLAYER_HIT_Z + 0.25, hit: false },
+  ];
+  assert.equal(triggerLaneMove(swap, 1), true);
+  assert.equal(swap.lane, 2);
+  assert.equal(swap.phase, "playing");
+});
+
+test("12. AFTERSPACE v2.0: Auto/Low Power default settings, jump arc, and kinetic dash burst", () => {
+  assert.equal(DEFAULT_SETTINGS.performanceMode, "Auto");
+  const st = createInitialAfterspaceState({ startInWorld: true });
+  assert.equal(triggerAfterspaceJump(st), true);
+  assert.ok(st.player.vy > 5);
+  stepAfterspaceState(st, { forward: true, backward: false, left: false, right: false }, 0.05);
+  assert.ok(st.player.jumpY > 0);
+  assert.equal(triggerAfterspaceDash(st), true);
+  assert.ok(st.player.dashTimer > 0.2);
+  // Cannot re-trigger dash during cooldown
+  assert.equal(triggerAfterspaceDash(st), false);
 });

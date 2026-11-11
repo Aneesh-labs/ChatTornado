@@ -1679,11 +1679,11 @@ export default function Arcade() {
         },
         {
             id: "afterspace",
-            title: "AFTERSPACE",
+            title: "AFTERSPACE v2.0",
             emoji: "◈",
-            tag: "4D Observatory",
+            tag: "v2.0 • 4D Observatory",
             color: "from-stone-500 to-neutral-800",
-            desc: "Echoes of the Fourth Dimension — Quiet Cosmic Minimalism, 4D tesseract & temporal shifts."
+            desc: "Version 2.0: Mobile-fast 3D renderer, vault/dash mechanics, AI guide, and 4D tesseract."
         }
     ];
 

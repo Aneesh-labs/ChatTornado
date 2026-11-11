@@ -24,6 +24,9 @@ const GameHUD = ({
   onAskGuide,
   onPause,
   onTouchMove,
+  onJump,
+  onDash,
+  dashReady = true,
 }) => {
   const interactOpacity = nearestInteractable ? "opacity-100" : "opacity-65 hover:opacity-100";
 
@@ -257,22 +260,46 @@ const GameHUD = ({
           </div>
         </div>
 
-        {/* Bottom-Right Compact Objective Reminder (Type C direct text, clickable to Tab overview) */}
-        <button
-          type="button"
-          onClick={() => onOpenOverlay("mission")}
-          className={`pointer-events-auto text-right transition-opacity duration-300 ${interactOpacity} as-direct-shadow cursor-pointer group`}
-        >
-          <div className="as-tech-label uppercase text-[#8F938C] group-hover:text-[#B99A70] transition-colors">
-            Expedition record [Tab]
+        {/* Bottom-Right Compact Objective Reminder + Mobile Action Controls */}
+        <div className="flex flex-col items-end gap-2.5">
+          <div className="pointer-events-auto flex items-center gap-2 sm:hidden">
+            <button
+              type="button"
+              onClick={onDash}
+              disabled={!dashReady}
+              className={`h-9 px-3 rounded-[2px] border text-xs tracking-wider uppercase transition-colors ${
+                dashReady
+                  ? "bg-[#151A19]/80 border-[#8496A1]/60 text-[#F5F3ED] active:bg-[#202625]"
+                  : "bg-[#151A19]/45 border-[#E8E9E2]/10 text-[#636C66]"
+              }`}
+            >
+              Dash
+            </button>
+            <button
+              type="button"
+              onClick={onJump}
+              className="h-9 px-3.5 rounded-[2px] border border-[#B99A70]/60 bg-[#151A19]/80 text-xs tracking-wider uppercase text-[#F5F3ED] active:bg-[#202625]"
+            >
+              Jump
+            </button>
           </div>
-          <div className="as-secondary text-[#E8E9E2] mt-0.5 max-w-[260px]">
-            {activeObjective ? activeObjective.title : "Threshold stabilized."}
-          </div>
-          <div className="hidden md:block text-xs text-[#8F938C] mt-1">
-            WASD Move • Drag / Dbl-Click Look
-          </div>
-        </button>
+
+          <button
+            type="button"
+            onClick={() => onOpenOverlay("mission")}
+            className={`pointer-events-auto text-right transition-opacity duration-300 ${interactOpacity} as-direct-shadow cursor-pointer group`}
+          >
+            <div className="as-tech-label uppercase text-[#8F938C] group-hover:text-[#B99A70] transition-colors">
+              Expedition record [Tab]
+            </div>
+            <div className="as-secondary text-[#E8E9E2] mt-0.5 max-w-[260px]">
+              {activeObjective ? activeObjective.title : "Threshold stabilized."}
+            </div>
+            <div className="hidden md:block text-xs text-[#8F938C] mt-1">
+              WASD Move • Space Jump • Shift Dash • Drag Look
+            </div>
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -300,6 +327,9 @@ GameHUD.propTypes = {
   onAskGuide: PropTypes.func,
   onPause: PropTypes.func.isRequired,
   onTouchMove: PropTypes.func.isRequired,
+  onJump: PropTypes.func,
+  onDash: PropTypes.func,
+  dashReady: PropTypes.bool,
 };
 
 export default GameHUD;

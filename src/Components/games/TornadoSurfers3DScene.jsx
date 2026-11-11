@@ -540,15 +540,22 @@ const TornadoSurfers3DScene = ({
 
     const width = container.clientWidth || 640;
     const height = container.clientHeight || 560;
+    const isLowEnd =
+      width < 768 ||
+      (typeof navigator !== "undefined" && navigator.hardwareConcurrency > 0 && navigator.hardwareConcurrency <= 4);
+
     const aspect = width / Math.max(1, height);
-    const camera = new THREE.PerspectiveCamera(aspect < 0.75 ? 66 : 58, aspect, 0.1, 95);
+    const camera = new THREE.PerspectiveCamera(aspect < 0.75 ? 66 : 58, aspect, 0.1, isLowEnd ? 78 : 95);
     camera.position.set(0, 4.3, 6.2);
 
-    const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    const renderer = new THREE.WebGLRenderer({
+      antialias: !isLowEnd,
+      powerPreference: isLowEnd ? "default" : "high-performance",
+    });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, isLowEnd ? 1.15 : 1.5));
     renderer.setSize(width, height);
     renderer.shadowMap.enabled = false;
-    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMapping = isLowEnd ? THREE.NoToneMapping : THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.25;
     container.appendChild(renderer.domElement);
 
@@ -607,13 +614,15 @@ const TornadoSurfers3DScene = ({
     sunOrb.position.set(0, 8.2, -55);
     scene.add(sunOrb);
 
+    const sleeperCount = isLowEnd ? 12 : 20;
+    const sleeperStep = isLowEnd ? 4.2 : 2.8;
     const sleeperGroup = new THREE.Group();
     const sleeperMeshes = [];
     const sleeperGeo = new THREE.BoxGeometry(8.2, 0.04, 0.28);
     const sleeperMat = new THREE.MeshBasicMaterial({ color: 0x064e3b });
-    for (let i = 0; i < 20; i++) {
+    for (let i = 0; i < sleeperCount; i++) {
       const m = new THREE.Mesh(sleeperGeo, sleeperMat);
-      m.position.set(0, 0.015, -i * 2.8 + 4);
+      m.position.set(0, 0.015, -i * sleeperStep + 4);
       sleeperGroup.add(m);
       sleeperMeshes.push(m);
     }
@@ -622,11 +631,13 @@ const TornadoSurfers3DScene = ({
     const sceneryGroup = new THREE.Group();
     const gantryArches = [];
     const buildings = [];
+    const archCount = isLowEnd ? 4 : 6;
+    const archSpacing = isLowEnd ? 13.5 : 9.5;
     const archPostMat = new THREE.MeshStandardMaterial({ color: 0x064e3b, metalness: 0.6 });
     const bMatEmerald = new THREE.MeshBasicMaterial({ map: bTexEmerald });
     const bMatMint = new THREE.MeshBasicMaterial({ map: bTexMint });
-    for (let i = 0; i < 6; i++) {
-      const gz = -i * 9.5;
+    for (let i = 0; i < archCount; i++) {
+      const gz = -i * archSpacing;
       const arch = new THREE.Group();
       const beamMat = new THREE.MeshBasicMaterial({ color: i % 2 === 0 ? 0x34d399 : 0x6ee7b7 });
       for (const sx of [-4.1, 4.1]) {
@@ -659,20 +670,22 @@ const TornadoSurfers3DScene = ({
 
     // High-speed emerald wind streaks streaming cleanly along track outer edges
     const windStreaks = [];
+    const streakCount = isLowEnd ? 6 : 16;
+    const streakSpacing = isLowEnd ? 8.0 : 4.2;
     const streakMat = new THREE.MeshBasicMaterial({
       color: 0x6ee7b7,
       transparent: true,
       opacity: 0.42,
     });
-    for (let i = 0; i < 16; i += 1) {
+    for (let i = 0; i < streakCount; i += 1) {
       const ws = new THREE.Mesh(geos.unitBox, streakMat);
       ws.scale.set(0.035, 0.035, 2.6 + (i % 3) * 1.4);
-      ws.position.set((i % 2 === 0 ? -1 : 1) * (4.4 + (i % 4) * 0.65), 1.0 + (i % 5) * 0.9, -i * 4.2);
+      ws.position.set((i % 2 === 0 ? -1 : 1) * (4.4 + (i % 4) * 0.65), 1.0 + (i % 5) * 0.9, -i * streakSpacing);
       scene.add(ws);
       windStreaks.push(ws);
     }
 
-    const runnerMesh = buildArticulatedRunner3D(glowTex);
+    const runnerMesh = buildArticulatedRunner3D(isLowEnd ? null : glowTex);
     scene.add(runnerMesh);
     scene.add(runnerMesh.userData.dropHalo);
 
@@ -744,19 +757,19 @@ const TornadoSurfers3DScene = ({
       const scrollStep = s.phase === "playing" ? s.speed * WORLD_DEPTH * dt : 0;
       for (const m of sleeperMeshes) {
         m.position.z += scrollStep;
-        if (m.position.z > 6) m.position.z -= 20 * 2.8;
+        if (m.position.z > 6) m.position.z -= sleeperCount * sleeperStep;
       }
       for (const a of gantryArches) {
         a.position.z += scrollStep;
-        if (a.position.z > 8) a.position.z -= 6 * 9.5;
+        if (a.position.z > 8) a.position.z -= archCount * archSpacing;
       }
       for (const b of buildings) {
         b.position.z += scrollStep;
-        if (b.position.z > 8) b.position.z -= 6 * 9.5;
+        if (b.position.z > 8) b.position.z -= archCount * archSpacing;
       }
       for (const ws of windStreaks) {
         ws.position.z += scrollStep * 1.45;
-        if (ws.position.z > 8) ws.position.z -= 16 * 4.2;
+        if (ws.position.z > 8) ws.position.z -= streakCount * streakSpacing;
       }
 
       const rx = s.laneX * LANE_WIDTH;
@@ -949,7 +962,7 @@ const TornadoSurfers3DScene = ({
       for (const ent of s.entities) {
         let entry = entityMeshMap.get(ent.id);
         if (!entry) {
-          const mesh = buildEntityMesh3D(ent, glowTex, geos);
+          const mesh = buildEntityMesh3D(ent, isLowEnd ? null : glowTex, geos);
           entityLayer.add(mesh);
           entry = { mesh, kind: ent.kind, lastEz: -40 };
           entityMeshMap.set(ent.id, entry);
@@ -1005,10 +1018,12 @@ const TornadoSurfers3DScene = ({
       }
 
       if (s.burstQueue?.length) {
+        const sparkCap = isLowEnd ? 24 : 80;
         while (s.burstQueue.length > 0) {
           const b = s.burstQueue.pop();
-          for (let k = 0; k < b.count; k++) {
-            if (activeSparks.length >= 80) {
+          const spawnCount = isLowEnd ? Math.min(4, b.count) : b.count;
+          for (let k = 0; k < spawnCount; k++) {
+            if (activeSparks.length >= sparkCap) {
               const evicted = activeSparks.shift();
               sparksLayer.remove(evicted.mesh);
               evicted.mesh.material.dispose();
@@ -1157,7 +1172,7 @@ const TornadoSurfers3DScene = ({
     if (!pointerDragRef.current || pointerDragRef.current.swiped) return;
     const dx = x - pointerDragRef.current.x;
     const dy = y - pointerDragRef.current.y;
-    if (Math.max(Math.abs(dx), Math.abs(dy)) < 18) return;
+    if (Math.max(Math.abs(dx), Math.abs(dy)) < 13) return;
     pointerDragRef.current.swiped = true;
     if (Math.abs(dx) > Math.abs(dy)) {
       callbacksRef.current.onSwipeMove?.(dx > 0 ? 1 : -1);
@@ -1183,8 +1198,12 @@ const TornadoSurfers3DScene = ({
   return (
     <div
       ref={mountRef}
-      onTouchStart={(e) => startGesture(e.touches[0].clientX, e.touches[0].clientY)}
-      onTouchMove={(e) => moveGesture(e.touches[0].clientX, e.touches[0].clientY)}
+      onTouchStart={(e) => {
+        if (e.touches?.length) startGesture(e.touches[0].clientX, e.touches[0].clientY);
+      }}
+      onTouchMove={(e) => {
+        if (e.touches?.length) moveGesture(e.touches[0].clientX, e.touches[0].clientY);
+      }}
       onTouchEnd={endGesture}
       onMouseDown={(e) => startGesture(e.clientX, e.clientY)}
       onMouseMove={(e) => {

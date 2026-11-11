@@ -487,6 +487,7 @@ export function getRegionAtZ(z) {
 
 export const DEFAULT_SETTINGS = {
   resolutionScale: 1.0,
+  performanceMode: "Auto", // Auto | Low Power | Quality
   graphicsPreset: "High",
   shadows: "Soft",
   ambientEffects: true,
@@ -528,6 +529,10 @@ export function createInitialAfterspaceState(options = {}) {
       x: 0,
       y: 0,
       z: 24.5,
+      jumpY: 0,
+      vy: 0,
+      dashTimer: 0,
+      dashCooldown: 0,
       yaw: 0, // 0 faces north (-Z)
       pitch: -0.05,
     },
@@ -629,15 +634,29 @@ export function stepAfterspaceState(state, input, dt) {
     state.player.yaw += turnDir * 1.9 * safeDt;
   }
 
+  // v2.0 Vertical vault & low-gravity temporal arc (T+100 slows descent gracefully)
+  state.player.dashCooldown = Math.max(0, (state.player.dashCooldown || 0) - safeDt);
+  state.player.dashTimer = Math.max(0, (state.player.dashTimer || 0) - safeDt);
+  if ((state.player.jumpY || 0) > 0 || (state.player.vy || 0) !== 0) {
+    const grav = state.temporalIndex === 2 ? 12.6 : 17.5;
+    state.player.vy -= grav * safeDt;
+    state.player.jumpY = (state.player.jumpY || 0) + state.player.vy * safeDt;
+    if (state.player.jumpY <= 0) {
+      state.player.jumpY = 0;
+      state.player.vy = 0;
+    }
+  }
+
   // Movement relative to camera yaw (yaw=0 looks along -Z)
   const moveForward = (input.forward ? 1 : 0) - (input.backward ? 1 : 0);
   const moveRight = (input.right ? 1 : 0) - (input.left ? 1 : 0);
-  const speed = input.sprint ? 8.6 : 6.2;
+  const dashBoost = state.player.dashTimer > 0 ? 15.2 : 0;
+  const speed = dashBoost || (input.sprint ? 8.6 : 6.2);
 
-  if (moveForward !== 0 || moveRight !== 0) {
+  if (moveForward !== 0 || moveRight !== 0 || dashBoost > 0) {
     const len = Math.hypot(moveForward, moveRight);
-    const nf = moveForward / len;
-    const nr = moveRight / len;
+    const nf = len > 0 ? moveForward / len : 1;
+    const nr = len > 0 ? moveRight / len : 0;
     const sinY = Math.sin(state.player.yaw);
     const cosY = Math.cos(state.player.yaw);
     const vx = (-sinY * nf + cosY * nr) * speed * safeDt;
@@ -812,6 +831,22 @@ export function triggerExamineAction(state) {
   }
 
   return { handled: true, entry };
+}
+
+export function triggerAfterspaceJump(state) {
+  if (state.screen !== "playing" || state.activeOverlay) return false;
+  if ((state.player.jumpY || 0) > 0.04) return false;
+  state.player.vy = state.temporalIndex === 2 ? 6.6 : 5.8;
+  state.player.jumpY = 0.01;
+  return true;
+}
+
+export function triggerAfterspaceDash(state) {
+  if (state.screen !== "playing" || state.activeOverlay) return false;
+  if ((state.player.dashCooldown || 0) > 0) return false;
+  state.player.dashTimer = 0.28;
+  state.player.dashCooldown = 1.4;
+  return true;
 }
 
 export function shiftTemporalState(state, targetIndex) {

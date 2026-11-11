@@ -25,7 +25,7 @@ const MainMenu = ({
     <div className="fixed inset-0 z-20 flex flex-col justify-between p-8 sm:p-12 md:p-16 bg-gradient-to-r from-[#151A19]/75 via-[#151A19]/25 to-transparent">
       {/* Top Bar: Quiet Return to ChatTornado Arcade */}
       <div className="flex items-center justify-between">
-        <span className="as-tech-label uppercase text-[#8F938C]">Observatory Build</span>
+        <span className="as-tech-label uppercase text-[#8F938C]">Observatory v2.0 • Mobile + Web</span>
         <button
           type="button"
           onClick={onExitArcade}
@@ -105,7 +105,7 @@ const MainMenu = ({
         </div>
 
         <div className="flex items-center gap-4 as-direct-shadow">
-          <span className="as-tech-label text-[#8F938C]">VERSION 0.1</span>
+          <span className="as-tech-label text-[#B99A70]">VERSION 2.0</span>
           <button
             type="button"
             onClick={onToggleMute}

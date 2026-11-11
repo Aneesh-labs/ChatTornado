@@ -28,6 +28,8 @@ import {
   findNearestInteractable,
   getRegionAtZ,
   shiftTemporalState,
+  triggerAfterspaceDash,
+  triggerAfterspaceJump,
   triggerExamineAction,
   updateHypercubeAngle,
 } from "./afterspaceEngine";
@@ -379,7 +381,12 @@ const AfterspaceGame = ({ onBack, isMuted = false, onSaveScore }) => {
       if (s.screen !== "playing") return;
 
       const k = e.key.toLowerCase();
-      if (k === "e" && !s.activeOverlay) {
+      if (e.key === " " && !s.activeOverlay) {
+        e.preventDefault();
+        if (triggerAfterspaceJump(s)) afterspaceSound.playClick();
+      } else if (e.key === "Shift" && !e.repeat && !s.activeOverlay) {
+        if (triggerAfterspaceDash(s)) afterspaceSound.playClick();
+      } else if (k === "e" && !s.activeOverlay) {
         e.preventDefault();
         handleExamine();
       } else if (k === "q" && !s.activeOverlay) {
@@ -445,6 +452,7 @@ const AfterspaceGame = ({ onBack, isMuted = false, onSaveScore }) => {
         simRef={simRef}
         inputRef={inputRef}
         settingsRef={settingsRef}
+        performanceMode={settings.performanceMode || "Auto"}
         previewTemporalIndex={timelineOpen ? previewTemporalIdx : null}
         onSyncHud={forceSync}
         onDiscoveryEvent={handleDiscoveryEvent}
@@ -525,6 +533,13 @@ const AfterspaceGame = ({ onBack, isMuted = false, onSaveScore }) => {
             onTouchMove={(dir, active) => {
               inputRef.current[dir] = active;
             }}
+            onJump={() => {
+              if (triggerAfterspaceJump(simRef.current)) afterspaceSound.playClick();
+            }}
+            onDash={() => {
+              if (triggerAfterspaceDash(simRef.current)) afterspaceSound.playClick();
+            }}
+            dashReady={(snap.player.dashCooldown || 0) <= 0.01}
           />
 
           {snap.scannerActive && (

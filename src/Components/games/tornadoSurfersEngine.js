@@ -8,6 +8,8 @@
 export const MAX_Z = 1.0;
 export const PLAYER_HIT_Z = 0.085;
 export const TRAIN_ROOF_Y = 1.15;
+export const TRAIN_ROOF_GRACE = 0.38;
+export const ROOF_SAFE_Y = TRAIN_ROOF_Y - TRAIN_ROOF_GRACE;
 export const JETPACK_Y = 2.45;
 export const GRAVITY = 34;
 export const JUMP_VELOCITY = 12.6;
@@ -161,7 +163,7 @@ export function triggerLaneMove(state, delta) {
       Math.round(e.lane) === next &&
       e.z <= PLAYER_HIT_Z + 0.015 &&
       (e.zEnd ?? e.z + 0.24) >= PLAYER_HIT_Z - 0.015 &&
-      state.y < TRAIN_ROOF_Y - 0.25
+      state.y < ROOF_SAFE_Y
   );
 
   if (targetHitTrain && state.invulnTimer <= 0 && state.jetpackTimer <= 0) {
@@ -459,12 +461,19 @@ export function stepRunnerState(state, rawDt, rng = Math.random) {
   const targetLean = Math.max(-0.42, Math.min(0.42, -dx * 0.78));
   state.leanAngle += (targetLean - state.leanAngle) * Math.min(1, dt * 22);
 
+  // Move existing entities BEFORE computing roof support & collision so groundY and overlapsZ stay strictly synchronized!
+  for (const ent of state.entities) {
+    const stepDz = ent.moving ? dz * 1.45 : dz;
+    ent.z -= stepDz;
+    if (ent.zEnd !== undefined) ent.zEnd -= stepDz;
+  }
+
   // Surface elevation (ground / ramp / walkable train roof)
   const prevGroundY = state.groundY;
   let surfaceY = 0;
   for (const ent of state.entities) {
-    if (Math.abs(ent.lane - (state.laneX + 1)) > 0.5) continue;
-    if (ent.kind === "ramp" && ent.z <= PLAYER_HIT_Z + 0.05 && (ent.zEnd ?? ent.z + 0.14) >= PLAYER_HIT_Z - 0.04) {
+    if (Math.abs(ent.lane - (state.laneX + 1)) > 0.52) continue;
+    if (ent.kind === "ramp" && ent.z <= PLAYER_HIT_Z + 0.055 && (ent.zEnd ?? ent.z + 0.14) >= PLAYER_HIT_Z - 0.045) {
       const len = (ent.zEnd ?? ent.z + 0.14) - ent.z;
       const rampFrac = Math.max(0, Math.min(1, (PLAYER_HIT_Z - ent.z) / Math.max(0.05, len)));
       surfaceY = Math.max(surfaceY, rampFrac * TRAIN_ROOF_Y);
@@ -472,8 +481,8 @@ export function stepRunnerState(state, rawDt, rng = Math.random) {
         state.y = surfaceY;
       }
     }
-    if (ent.kind === "train" && ent.z <= PLAYER_HIT_Z + 0.04 && (ent.zEnd ?? ent.z + 0.24) >= PLAYER_HIT_Z - 0.03) {
-      if (state.y >= TRAIN_ROOF_Y - 0.36) {
+    if (ent.kind === "train" && ent.z <= PLAYER_HIT_Z + 0.05 && (ent.zEnd ?? ent.z + 0.24) >= PLAYER_HIT_Z - 0.045) {
+      if (state.y >= ROOF_SAFE_Y) {
         surfaceY = Math.max(surfaceY, TRAIN_ROOF_Y);
       }
     }
@@ -544,10 +553,6 @@ export function stepRunnerState(state, rawDt, rng = Math.random) {
 
   const playerIsSliding = state.slideTimer > 0;
   for (const ent of state.entities) {
-    const stepDz = ent.moving ? dz * 1.45 : dz;
-    ent.z -= stepDz;
-    if (ent.zEnd !== undefined) ent.zEnd -= stepDz;
-
     const isCoinOrPower =
       ent.kind === "coin" ||
       ent.kind === "magnet" ||
@@ -646,11 +651,11 @@ export function stepRunnerState(state, rawDt, rng = Math.random) {
     if (ent.kind === "low_barrier") {
       if (state.y < 0.46) collides = true;
     } else if (ent.kind === "high_gate") {
-      if (!playerIsSliding && state.y < 1.38 && state.y + 0.85 > 0.56) {
+      if (state.groundY < TRAIN_ROOF_Y - 0.1 && !playerIsSliding && state.y < 1.38 && state.y + 0.85 > 0.56) {
         collides = true;
       }
     } else if (ent.kind === "train") {
-      if (state.y < TRAIN_ROOF_Y - 0.22) {
+      if (state.y < ROOF_SAFE_Y && state.groundY < TRAIN_ROOF_Y - 0.1) {
         collides = true;
       }
     }
