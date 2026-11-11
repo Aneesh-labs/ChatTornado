@@ -238,6 +238,7 @@ const TornadoSurfersGame = ({ onBack, isMuted = false, onSaveScore }) => {
       syncHudFromEngine();
     } else if (s.phase === "paused") {
       s.phase = "playing";
+      s.invulnTimer = Math.max(s.invulnTimer, 0.85);
       syncHudFromEngine();
     }
   }, [syncHudFromEngine]);

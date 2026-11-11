@@ -91,6 +91,7 @@ export function createInitialRunnerState() {
     groundY: 0,
     coyoteTimer: 0,
     slideTimer: 0,
+    slideBufferTimer: 0,
     slamPending: false,
     jumpBufferTimer: 0,
     stumbleTimer: 0,
@@ -124,8 +125,9 @@ export function triggerJump(state) {
   if (state.phase !== "playing") return false;
   if (state.jetpackTimer > 0) return false;
   state.slideTimer = 0;
+  state.slideBufferTimer = 0;
   state.slamPending = false;
-  const onSurface = state.y <= state.groundY + 0.06 || state.coyoteTimer > 0;
+  const onSurface = state.y <= state.groundY + 0.08 || state.coyoteTimer > 0;
   if (onSurface) {
     const mult = state.sneakersTimer > 0 ? 1.36 : 1.0;
     state.vy = JUMP_VELOCITY * mult;
@@ -134,19 +136,23 @@ export function triggerJump(state) {
     state.jumpBufferTimer = 0;
     return true;
   }
-  state.jumpBufferTimer = 0.16;
+  state.jumpBufferTimer = 0.22;
   return false;
 }
 
 export function triggerSlideOrSlam(state) {
   if (state.phase !== "playing") return false;
   if (state.jetpackTimer > 0) return false;
-  if (state.y > state.groundY + 0.08) {
+  if (state.y > state.groundY + 0.14) {
     state.vy = Math.min(state.vy, SLAM_VELOCITY);
     state.slamPending = true;
+    state.slideBufferTimer = 0.2;
     return true;
   }
-  state.slideTimer = 0.68;
+  state.y = state.groundY;
+  state.vy = 0;
+  state.slideTimer = 0.72;
+  state.slideBufferTimer = 0;
   return true;
 }
 
@@ -161,8 +167,8 @@ export function triggerLaneMove(state, delta) {
       e.kind === "train" &&
       !e.hit &&
       Math.round(e.lane) === next &&
-      e.z <= PLAYER_HIT_Z + 0.015 &&
-      (e.zEnd ?? e.z + 0.24) >= PLAYER_HIT_Z - 0.015 &&
+      e.z <= PLAYER_HIT_Z + 0.012 &&
+      (e.zEnd ?? e.z + 0.24) >= PLAYER_HIT_Z + 0.004 &&
       state.y < ROOF_SAFE_Y
   );
 
@@ -422,8 +428,9 @@ export function stepRunnerState(state, rawDt, rng = Math.random) {
   state.speed = effectiveSpeed;
   state.stridePhase += dt * (effectiveSpeed / BASE_SPEED) * 14;
 
-  // Timers
+  // Timers & buffered input queues
   if (state.slideTimer > 0) state.slideTimer = Math.max(0, state.slideTimer - dt);
+  if (state.slideBufferTimer > 0) state.slideBufferTimer = Math.max(0, state.slideBufferTimer - dt);
   if (state.jumpBufferTimer > 0) state.jumpBufferTimer = Math.max(0, state.jumpBufferTimer - dt);
   if (state.stumbleTimer > 0) state.stumbleTimer = Math.max(0, state.stumbleTimer - dt);
   if (state.chaserTimer > 0) state.chaserTimer = Math.max(0, state.chaserTimer - dt);
@@ -442,7 +449,12 @@ export function stepRunnerState(state, rawDt, rng = Math.random) {
   if (state.jetpackTimer > 0) {
     state.jetpackTimer = Math.max(0, state.jetpackTimer - dt);
     if (state.jetpackTimer === 0 && wasJetpack) {
-      state.invulnTimer = Math.max(state.invulnTimer, 1.45);
+      state.invulnTimer = Math.max(state.invulnTimer, 2.0);
+      for (const other of state.entities) {
+        if (other.z < 0.25 && other.z > -0.1 && (other.kind === "train" || other.kind === "low_barrier" || other.kind === "high_gate")) {
+          other.hit = true;
+        }
+      }
     }
   }
 
@@ -488,15 +500,15 @@ export function stepRunnerState(state, rawDt, rng = Math.random) {
     }
   }
   state.groundY = surfaceY;
-  if (state.y <= prevGroundY + 0.06 && surfaceY < prevGroundY) {
-    state.coyoteTimer = 0.085;
-  } else if (state.y <= state.groundY + 0.04) {
-    state.coyoteTimer = 0.085;
+  if (state.y <= prevGroundY + 0.08 && surfaceY < prevGroundY) {
+    state.coyoteTimer = 0.12;
+  } else if (state.y <= state.groundY + 0.06) {
+    state.coyoteTimer = 0.12;
   } else if (state.coyoteTimer > 0) {
     state.coyoteTimer = Math.max(0, state.coyoteTimer - dt);
   }
 
-  // Vertical motion
+  // Vertical motion + buffered jump/slide consumption on landing
   if (state.jetpackTimer > 0) {
     state.y += (JETPACK_Y - state.y) * Math.min(1, dt * 7);
     state.vy = 0;
@@ -507,9 +519,10 @@ export function stepRunnerState(state, rawDt, rng = Math.random) {
     if (state.y <= state.groundY) {
       state.y = state.groundY;
       state.vy = 0;
-      if (state.slamPending) {
+      if (state.slamPending || state.slideBufferTimer > 0) {
         state.slamPending = false;
-        state.slideTimer = 0.45;
+        state.slideBufferTimer = 0;
+        state.slideTimer = 0.62;
       }
       if (state.jumpBufferTimer > 0) {
         triggerJump(state);
@@ -564,10 +577,13 @@ export function stepRunnerState(state, rawDt, rng = Math.random) {
     if (isCoinOrPower) {
       if (ent.collected) continue;
 
-      if (ent.kind === "coin" && state.magnetTimer > 0 && ent.z < 0.5 && ent.z > -0.05) {
+      if (ent.kind === "coin" && (state.magnetTimer > 0 || state.sneakersTimer > 0) && ent.z < 0.52 && ent.z > -0.05) {
         const laneTarget = state.laneX + 1;
-        ent.lane += (laneTarget - ent.lane) * Math.min(1, dt * 14);
-        ent.y = (ent.y ?? 0.34) + (state.y + 0.34 - (ent.y ?? 0.34)) * Math.min(1, dt * 14);
+        const pull = state.magnetTimer > 0 ? 15 : 6;
+        if (state.magnetTimer > 0 || Math.abs(ent.lane - laneTarget) < 0.85) {
+          ent.lane += (laneTarget - ent.lane) * Math.min(1, dt * pull);
+          ent.y = (ent.y ?? 0.34) + (state.y + 0.34 - (ent.y ?? 0.34)) * Math.min(1, dt * pull);
+        }
       }
 
       const entY = ent.y ?? 0.34;
@@ -575,7 +591,7 @@ export function stepRunnerState(state, rawDt, rng = Math.random) {
       const zDist = Math.abs(ent.z - PLAYER_HIT_Z);
       const yDist = Math.abs(entY - (state.y + 0.35));
 
-      if (laneDist < 0.56 && zDist < 0.08 && yDist < 0.68) {
+      if (laneDist < 0.68 && zDist < 0.095 && yDist < 0.78) {
         ent.collected = true;
         if (ent.kind === "coin") {
           state.coins += mult;
@@ -595,11 +611,11 @@ export function stepRunnerState(state, rawDt, rng = Math.random) {
           });
         } else {
           events.powerupPicked = ent.kind;
-          if (ent.kind === "magnet") state.magnetTimer = 9.0;
-          if (ent.kind === "multiplier") state.multiplierTimer = 10.0;
-          if (ent.kind === "jetpack") state.jetpackTimer = 6.5;
+          if (ent.kind === "magnet") state.magnetTimer = Math.min(18.0, (state.magnetTimer || 0) > 0 ? state.magnetTimer + 6.5 : 9.0);
+          if (ent.kind === "multiplier") state.multiplierTimer = Math.min(20.0, (state.multiplierTimer || 0) > 0 ? state.multiplierTimer + 7.0 : 10.0);
+          if (ent.kind === "jetpack") state.jetpackTimer = Math.min(12.0, (state.jetpackTimer || 0) > 0 ? state.jetpackTimer + 4.5 : 6.5);
           if (ent.kind === "board_pickup") state.hoverboards += 1;
-          if (ent.kind === "sneakers") state.sneakersTimer = 8.5;
+          if (ent.kind === "sneakers") state.sneakersTimer = Math.min(16.0, (state.sneakersTimer || 0) > 0 ? state.sneakersTimer + 6.0 : 8.5);
           const labels = {
             magnet: "MAGNET!",
             multiplier: "2X SCORE!",
@@ -628,7 +644,7 @@ export function stepRunnerState(state, rawDt, rng = Math.random) {
     if (!overlapsZ) continue;
 
     const laneDist = Math.abs(ent.lane - (state.laneX + 1));
-    if (laneDist >= 0.44) {
+    if (laneDist >= 0.38) {
       // Stunt graze bonus if jumping cleanly right past a train roof or low hurdle!
       if (!ent.stunted && laneDist < 1.15 && state.y > 0.7 && ent.kind === "train") {
         ent.stunted = true;
@@ -649,10 +665,21 @@ export function stepRunnerState(state, rawDt, rng = Math.random) {
 
     let collides = false;
     if (ent.kind === "low_barrier") {
-      if (state.y < 0.46) collides = true;
+      if (state.y < 0.44) collides = true;
+      else if (!ent.clearedBonus) {
+        ent.clearedBonus = true;
+        state.combo += 1;
+        state.comboTimer = 1.6;
+        state.score += 25 * mult;
+      }
     } else if (ent.kind === "high_gate") {
       if (state.groundY < TRAIN_ROOF_Y - 0.1 && !playerIsSliding && state.y < 1.38 && state.y + 0.85 > 0.56) {
         collides = true;
+      } else if (playerIsSliding && !ent.clearedBonus) {
+        ent.clearedBonus = true;
+        state.combo += 1;
+        state.comboTimer = 1.6;
+        state.score += 25 * mult;
       }
     } else if (ent.kind === "train") {
       if (state.y < ROOF_SAFE_Y && state.groundY < TRAIN_ROOF_Y - 0.1) {

@@ -1165,15 +1165,20 @@ const TornadoSurfers3DScene = ({
   }, [simRef]);
 
   const startGesture = (x, y) => {
-    pointerDragRef.current = { x, y, swiped: false };
+    pointerDragRef.current = { x, y, didSwipe: false, lastActionAt: 0 };
   };
 
   const moveGesture = (x, y) => {
-    if (!pointerDragRef.current || pointerDragRef.current.swiped) return;
+    if (!pointerDragRef.current) return;
+    const now = performance.now();
+    if (now - pointerDragRef.current.lastActionAt < 85) return;
     const dx = x - pointerDragRef.current.x;
     const dy = y - pointerDragRef.current.y;
     if (Math.max(Math.abs(dx), Math.abs(dy)) < 13) return;
-    pointerDragRef.current.swiped = true;
+    pointerDragRef.current.didSwipe = true;
+    pointerDragRef.current.lastActionAt = now;
+    pointerDragRef.current.x = x;
+    pointerDragRef.current.y = y;
     if (Math.abs(dx) > Math.abs(dy)) {
       callbacksRef.current.onSwipeMove?.(dx > 0 ? 1 : -1);
     } else if (dy < 0) {
@@ -1185,7 +1190,7 @@ const TornadoSurfers3DScene = ({
 
   const endGesture = () => {
     if (!pointerDragRef.current) return;
-    if (!pointerDragRef.current.swiped) {
+    if (!pointerDragRef.current.didSwipe) {
       const now = Date.now();
       if (now - lastTapRef.current < 260) {
         callbacksRef.current.onDoubleTap?.();

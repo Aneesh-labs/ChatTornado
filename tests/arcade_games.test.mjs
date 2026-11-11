@@ -511,3 +511,37 @@ test("12. AFTERSPACE v2.0: Auto/Low Power default settings, jump arc, and kineti
   // Cannot re-trigger dash during cooldown
   assert.equal(triggerAfterspaceDash(st), false);
 });
+
+test("13. Tornado Surfers convenience & fairness: stacked powerups, pre-land slide buffer, hurdle vault bonus & jetpack landing shield", () => {
+  // A) Pre-landing slam buffers slide smoothly onto touchdown
+  const s = createInitialRunnerState();
+  s.phase = "playing";
+  s.spawnTimer = 999;
+  s.y = 0.22;
+  s.vy = -4;
+  assert.equal(triggerSlideOrSlam(s), true);
+  assert.ok(s.slideBufferTimer > 0);
+  stepRunnerState(s, 0.05);
+  assert.equal(s.y, 0);
+  assert.ok(s.slideTimer > 0.4);
+
+  // B) Powerup stacking extends duration instead of overwriting
+  s.magnetTimer = 7.0;
+  s.entities = [{ id: "m_stack", kind: "magnet", lane: 1, y: 0.35, z: PLAYER_HIT_Z + 0.01, collected: false }];
+  stepRunnerState(s, 0.016);
+  assert.ok(s.magnetTimer > 12.0);
+
+  // C) Vaulting a low barrier awards +25 combo bonus cleanly
+  s.y = 0.7;
+  s.score = 0;
+  s.entities = [{ id: "bar1", kind: "low_barrier", lane: 1, z: PLAYER_HIT_Z + 0.01, zEnd: PLAYER_HIT_Z + 0.05, hit: false }];
+  const ev = stepRunnerState(s, 0.016);
+  assert.equal(ev.crashed, false);
+  assert.ok(s.score >= 25);
+
+  // D) Jetpack exit gives 2.0s landing shield
+  s.jetpackTimer = 0.02;
+  stepRunnerState(s, 0.04);
+  assert.equal(s.jetpackTimer, 0);
+  assert.ok(s.invulnTimer >= 1.95);
+});
