@@ -1,5 +1,6 @@
 import React from "react";
 import PropTypes from "prop-types";
+import { EXPLORER_CHARACTERS } from "../../afterspaceEngine";
 
 const DIFFICULTIES = [
   {
@@ -19,6 +20,8 @@ const DIFFICULTIES = [
 const ExpeditionSetup = ({
   expeditionMode,
   difficulty,
+  selectedCharacterId = "aria",
+  onChangeCharacter,
   onChangeMode,
   onChangeDifficulty,
   onBegin,
@@ -83,6 +86,31 @@ const ExpeditionSetup = ({
             <p className="as-body text-[#BEBDB2] mt-4">
               An abandoned structure lies beyond the known limits of your instruments. No record explains its origin.
             </p>
+
+            {/* Explorer Character Roster */}
+            <div className="mt-6">
+              <div className="as-tech-label uppercase text-[#8F938C] mb-2">Explorer Profile</div>
+              <div className="grid grid-cols-3 gap-2">
+                {EXPLORER_CHARACTERS.map((ch) => {
+                  const active = selectedCharacterId === ch.id;
+                  return (
+                    <button
+                      key={ch.id}
+                      type="button"
+                      onClick={() => onChangeCharacter?.(ch.id)}
+                      className={`text-left px-3 py-2.5 rounded-[2px] border transition-colors cursor-pointer ${
+                        active
+                          ? "bg-[#303735] border-[#B99A70]/65 text-[#F5F3ED]"
+                          : "border-[#E8E9E2]/12 text-[#8F938C] hover:text-[#E8E9E2]"
+                      }`}
+                    >
+                      <div className="text-xs font-medium">{ch.name}</div>
+                      <div className="text-[11px] opacity-75 mt-0.5">{ch.title}</div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
 
             {/* Expedition Type */}
             <div className="mt-7">
@@ -152,6 +180,8 @@ const ExpeditionSetup = ({
 ExpeditionSetup.propTypes = {
   expeditionMode: PropTypes.string.isRequired,
   difficulty: PropTypes.string.isRequired,
+  selectedCharacterId: PropTypes.string,
+  onChangeCharacter: PropTypes.func,
   onChangeMode: PropTypes.func.isRequired,
   onChangeDifficulty: PropTypes.func.isRequired,
   onBegin: PropTypes.func.isRequired,

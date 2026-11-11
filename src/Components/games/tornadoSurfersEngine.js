@@ -15,6 +15,67 @@ export const SLAM_VELOCITY = -26;
 export const BASE_SPEED = 0.36; // world z-units per second
 export const MAX_SPEED = 0.86;
 
+export const RUNNER_CHARACTERS = [
+  {
+    id: "vanguard",
+    name: "Vanguard Emerald",
+    role: "Interceptor Scout",
+    unlockCoins: 0,
+    unlockScore: 0,
+    colors: { torso: 0x10b981, emissive: 0x059669, limb: 0x064e3b, trim: 0x6ee7b7, scarf: 0xa7f3d0, head: 0xf0fdf4 },
+    perk: "Balanced aerodynamics & quick lane recovery",
+  },
+  {
+    id: "solarflare",
+    name: "Solar Flare",
+    role: "Rooftop Stunt Pilot",
+    unlockCoins: 60,
+    unlockScore: 1200,
+    colors: { torso: 0xf59e0b, emissive: 0xd97706, limb: 0x451a03, trim: 0xfde047, scarf: 0xfdba74, head: 0xfffbeb },
+    perk: "High-visibility amber visor & blazing scarf trail",
+  },
+  {
+    id: "glacier",
+    name: "Glacier Phantom",
+    role: "Cryo Rail Skater",
+    unlockCoins: 150,
+    unlockScore: 2800,
+    colors: { torso: 0x06b6d4, emissive: 0x0e7490, limb: 0x083344, trim: 0xa5f3fc, scarf: 0xe0f2fe, head: 0xecfeff },
+    perk: "Sub-zero titanium weave & frost-edge hoverboard",
+  },
+  {
+    id: "chrono",
+    name: "Singularity Chrono",
+    role: "Fourth-Axis Nomad",
+    unlockCoins: 300,
+    unlockScore: 5000,
+    colors: { torso: 0xb99a70, emissive: 0x847a85, limb: 0x202625, trim: 0xedeae1, scarf: 0xd5d2c8, head: 0xf5f3ed },
+    perk: "Observatory alloy chassis & antique-gold telemetry rig",
+  },
+];
+
+export const PRIZE_CATALOG = [
+  { id: "prize_first_run", name: "First Mile Medal", badge: "M1", desc: "Reach 500 points in a single run", req: (st) => st.bestScore >= 500 },
+  { id: "prize_coin_bag", name: "Track Collector Seal", badge: "C50", desc: "Gather 50 total career coins", req: (st) => st.totalCoins >= 50 },
+  { id: "prize_stunt_ace", name: "Rooftop Stunt Crest", badge: "S5", desc: "Complete 5 career rooftop stunts", req: (st) => st.totalStunts >= 5 },
+  { id: "prize_skyline", name: "Skyline Sprinter Trophy", badge: "2K", desc: "Reach 2,000 points in a single run", req: (st) => st.bestScore >= 2000 },
+  { id: "prize_baron", name: "Coin Baron Vault", badge: "C200", desc: "Gather 200 total career coins", req: (st) => st.totalCoins >= 200 },
+  { id: "prize_centurion", name: "Apex Surfer Relic", badge: "5K", desc: "Reach 5,000 points in a single run", req: (st) => st.bestScore >= 5000 },
+];
+
+export function evaluateSurferRewards(careerStats) {
+  const safe = {
+    bestScore: Number(careerStats?.bestScore || 0),
+    totalCoins: Number(careerStats?.totalCoins || 0),
+    totalStunts: Number(careerStats?.totalStunts || 0),
+  };
+  const unlockedCharacters = RUNNER_CHARACTERS.filter(
+    (c) => safe.totalCoins >= c.unlockCoins || safe.bestScore >= c.unlockScore
+  ).map((c) => c.id);
+  const unlockedPrizes = PRIZE_CATALOG.filter((p) => p.req(safe)).map((p) => p.id);
+  return { unlockedCharacters, unlockedPrizes };
+}
+
 export function createInitialRunnerState() {
   return {
     phase: "ready", // "ready" | "playing" | "paused" | "gameover"

@@ -18,6 +18,10 @@ import {
   Wind,
   AlertTriangle,
   Sparkles,
+  Award,
+  Bot,
+  Volume2,
+  UserCheck,
 } from "lucide-react";
 import { soundEngine } from "../../utils/soundEffects";
 import TornadoSurfers3DScene from "./TornadoSurfers3DScene";
@@ -29,7 +33,18 @@ import {
   triggerHoverboard,
   stepRunnerState,
   BASE_SPEED,
+  RUNNER_CHARACTERS,
+  PRIZE_CATALOG,
+  evaluateSurferRewards,
 } from "./tornadoSurfersEngine";
+import {
+  loadArcadeAiProfile,
+  saveArcadeAiProfile,
+  saveBackendPersonaPreference,
+  askPersonalizedCompanion,
+  requestLiveVoiceToken,
+  speakCompanionLine,
+} from "../../Services/arcadeAiService";
 
 const POWERUP_BARS = [
   { key: "hoverboardTimer", label: "BOARD", max: 18.0, color: "bg-emerald-400", text: "text-emerald-200", Icon: Shield },
@@ -39,11 +54,26 @@ const POWERUP_BARS = [
   { key: "multiplierTimer", label: "2X MULT", max: 10.0, color: "bg-amber-400", text: "text-amber-200", Icon: Zap },
 ];
 
+const loadCareerStats = (best) => {
+  try {
+    const raw = localStorage.getItem("subwaysurfers_career_v1");
+    const parsed = raw ? JSON.parse(raw) : {};
+    return {
+      bestScore: Math.max(best, Number(parsed.bestScore || 0)),
+      totalCoins: Number(parsed.totalCoins || 0),
+      totalStunts: Number(parsed.totalStunts || 0),
+    };
+  } catch (_) {
+    return { bestScore: best, totalCoins: 0, totalStunts: 0 };
+  }
+};
+
 const TornadoSurfersGame = ({ onBack, isMuted = false, onSaveScore }) => {
   const stateRef = useRef(createInitialRunnerState());
   const savedThisRunRef = useRef(false);
   const hudAccumRef = useRef(0);
   const lastCoinAudioRef = useRef(0);
+  const lastInteractionIdRef = useRef(null);
 
   const isMutedRef = useRef(isMuted);
   useEffect(() => {
@@ -62,6 +92,20 @@ const TornadoSurfersGame = ({ onBack, isMuted = false, onSaveScore }) => {
   useEffect(() => {
     highScoreRef.current = highScore;
   }, [highScore]);
+
+  const [careerStats, setCareerStats] = useState(() => loadCareerStats(highScore));
+  const [aiProfile, setAiProfile] = useState(loadArcadeAiProfile);
+  const [aiReply, setAiReply] = useState("");
+  const [aiLoading, setAiLoading] = useState(false);
+  const [newPrizeBanner, setNewPrizeBanner] = useState(null);
+  const [liveStatus, setLiveStatus] = useState("");
+
+  const rewards = evaluateSurferRewards(careerStats);
+  const selectedCharId = rewards.unlockedCharacters.includes(aiProfile.selectedSurferId)
+    ? aiProfile.selectedSurferId
+    : "vanguard";
+  const selectedChar =
+    RUNNER_CHARACTERS.find((c) => c.id === selectedCharId) || RUNNER_CHARACTERS[0];
 
   const [isNewBest, setIsNewBest] = useState(false);
 
@@ -106,6 +150,36 @@ const TornadoSurfersGame = ({ onBack, isMuted = false, onSaveScore }) => {
     }
   }, []);
 
+  const askCoach = useCallback(
+    async (customPrompt, statsOverride = null) => {
+      setAiLoading(true);
+      const st = statsOverride || careerStats;
+      const rew = evaluateSurferRewards(st);
+      const unlockedNames = PRIZE_CATALOG.filter((p) => rew.unlockedPrizes.includes(p.id)).map(
+        (p) => p.name
+      );
+      const res = await askPersonalizedCompanion({
+        gameId: "subwaysurfers",
+        prompt: customPrompt,
+        playerContext: {
+          callsign: aiProfile.callsign,
+          playstyle: aiProfile.playstyle,
+          character: selectedChar.name,
+          prizes: unlockedNames,
+          score: stateRef.current.score || st.bestScore,
+        },
+        previousInteractionId: lastInteractionIdRef.current,
+      });
+      if (res.interaction_id) lastInteractionIdRef.current = res.interaction_id;
+      setAiReply(res.reply);
+      setAiLoading(false);
+      if (aiProfile.voiceEnabled && !isMutedRef.current) {
+        speakCompanionLine(res.reply, true);
+      }
+    },
+    [aiProfile, careerStats, selectedChar.name]
+  );
+
   const handleCrashRecord = useCallback(
     (s) => {
       playAudio("boom");
@@ -119,9 +193,30 @@ const TornadoSurfersGame = ({ onBack, isMuted = false, onSaveScore }) => {
         savedThisRunRef.current = true;
         onSaveScoreRef.current("subwaysurfers", s.score);
       }
+      setCareerStats((prev) => {
+        const prevRew = evaluateSurferRewards(prev);
+        const next = {
+          bestScore: Math.max(prev.bestScore, s.score),
+          totalCoins: prev.totalCoins + s.coins,
+          totalStunts: prev.totalStunts + s.stunts,
+        };
+        try {
+          localStorage.setItem("subwaysurfers_career_v1", JSON.stringify(next));
+        } catch (_) {}
+        const nextRew = evaluateSurferRewards(next);
+        const earnedPrize = nextRew.unlockedPrizes.find((id) => !prevRew.unlockedPrizes.includes(id));
+        if (earnedPrize) {
+          const prizeObj = PRIZE_CATALOG.find((p) => p.id === earnedPrize);
+          if (prizeObj) setNewPrizeBanner(prizeObj.name);
+        }
+        return next;
+      });
       syncHudFromEngine();
+      askCoach(
+        `Run ended with ${s.score} points, ${s.coins} coins, and ${s.stunts} stunts. Give one concise personalized tip.`
+      );
     },
-    [playAudio, syncHudFromEngine]
+    [askCoach, playAudio, syncHudFromEngine]
   );
 
   const startNewRun = useCallback(() => {
@@ -131,6 +226,7 @@ const TornadoSurfersGame = ({ onBack, isMuted = false, onSaveScore }) => {
     savedThisRunRef.current = false;
     hudAccumRef.current = 0;
     setIsNewBest(false);
+    setNewPrizeBanner(null);
     syncHudFromEngine();
     playAudio("whoosh");
   }, [playAudio, syncHudFromEngine]);
@@ -281,6 +377,7 @@ const TornadoSurfersGame = ({ onBack, isMuted = false, onSaveScore }) => {
       <div className="absolute inset-0">
         <TornadoSurfers3DScene
           simRef={stateRef}
+          characterId={selectedCharId}
           onStep={handleStep}
           onSwipeMove={handleMove}
           onSwipeJump={handleJump}
@@ -472,41 +569,180 @@ const TornadoSurfersGame = ({ onBack, isMuted = false, onSaveScore }) => {
         </div>
       )}
 
-      {/* READY OVERLAY (Clean Translucent Emerald Glass) */}
+      {/* READY OVERLAY (Characters, Prize Vault & Personalized Gemini Coach) */}
       {hud.phase === "ready" && (
-        <div className="absolute inset-0 z-20 flex items-center justify-center p-5 bg-emerald-950/45 backdrop-blur-sm">
-          <div className="w-full max-w-md rounded-3xl border border-emerald-400/35 bg-emerald-950/85 backdrop-blur-xl p-6 sm:p-7 shadow-2xl text-center">
-            <div className="inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full bg-emerald-400/20 border border-emerald-300/35 text-xs font-extrabold text-emerald-200 mb-3">
-              <Zap className="w-4 h-4" />
-              EMERALD 3D WEB RUNNER
-            </div>
-
-            <h2 className="text-3xl sm:text-4xl font-black tracking-tight text-white">
-              Tornado Surfers
-            </h2>
-            <p className="mt-2 text-sm text-emerald-100/85 leading-relaxed">
-              Weave through Express Trains, leap roofs with Super Boots, and trigger your Hoverboard Shield on the track.
-            </p>
-
-            <div className="mt-5 grid grid-cols-2 gap-2.5 text-left text-xs">
-              <div className="p-3 rounded-2xl bg-emerald-900/55 border border-emerald-400/25">
-                <div className="font-extrabold text-emerald-200">Keyboard</div>
-                <div className="text-emerald-100/80 mt-0.5">WASD / Arrows • Space Shield</div>
+        <div className="absolute inset-0 z-20 flex items-center justify-center p-4 bg-emerald-950/50 backdrop-blur-sm overflow-y-auto">
+          <div className="w-full max-w-2xl rounded-3xl border border-emerald-400/35 bg-emerald-950/90 backdrop-blur-xl p-5 sm:p-7 shadow-2xl">
+            <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-400/20 border border-emerald-300/35 text-xs font-extrabold text-emerald-200">
+                <Zap className="w-4 h-4" />
+                EMERALD 3D RUNNER
               </div>
-              <div className="p-3 rounded-2xl bg-emerald-900/55 border border-emerald-400/25">
-                <div className="font-extrabold text-lime-200">Mouse / Trackpad</div>
-                <div className="text-emerald-100/80 mt-0.5">Drag track or click dock</div>
+              <div className="inline-flex items-center gap-1.5 text-xs font-bold text-amber-200">
+                <Award className="w-4 h-4 text-amber-300" />
+                {rewards.unlockedPrizes.length}/{PRIZE_CATALOG.length} Prizes • {careerStats.totalCoins} Career Coins
               </div>
             </div>
 
-            <button
-              type="button"
-              onClick={startNewRun}
-              className="mt-5 w-full py-4 rounded-2xl bg-gradient-to-r from-emerald-400 to-lime-300 hover:brightness-105 text-emerald-950 font-black text-base tracking-wide flex items-center justify-center gap-2 shadow-xl shadow-emerald-500/25 transition-transform active:scale-95"
-            >
-              <Play className="w-5 h-5 fill-current" />
-              START RUN
-            </button>
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-5">
+              {/* Left: Runner Character Picker + Prizes */}
+              <div className="md:col-span-7 space-y-3">
+                <div>
+                  <h2 className="text-2xl sm:text-3xl font-black tracking-tight text-white">
+                    Tornado Surfers
+                  </h2>
+                  <p className="mt-1 text-xs text-emerald-100/80">
+                    Choose your runner &amp; unlock Vault Prizes through coins, stunts, and distance.
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  {RUNNER_CHARACTERS.map((char) => {
+                    const unlocked = rewards.unlockedCharacters.includes(char.id);
+                    const active = selectedCharId === char.id;
+                    return (
+                      <button
+                        key={char.id}
+                        type="button"
+                        disabled={!unlocked}
+                        onClick={() => {
+                          const next = saveArcadeAiProfile({ selectedSurferId: char.id });
+                          setAiProfile(next);
+                        }}
+                        className={`text-left p-2.5 rounded-2xl border text-xs transition-all ${
+                          !unlocked
+                            ? "border-emerald-400/15 bg-emerald-950/60 text-emerald-100/45 cursor-not-allowed"
+                            : active
+                            ? "border-lime-300 bg-emerald-900/85 text-white cursor-pointer"
+                            : "border-emerald-400/25 bg-emerald-900/40 text-emerald-100 hover:border-emerald-300/50 cursor-pointer"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between font-extrabold">
+                          <span>{char.name}</span>
+                          {unlocked ? (active ? "ACTIVE" : "READY") : `${char.unlockCoins}c`}
+                        </div>
+                        <div className="text-[11px] opacity-75 mt-0.5">{char.role}</div>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <div className="p-3 rounded-2xl bg-emerald-900/40 border border-emerald-400/20">
+                  <div className="text-xs font-extrabold text-amber-200 mb-1.5">Prize Vault</div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {PRIZE_CATALOG.map((pr) => {
+                      const won = rewards.unlockedPrizes.includes(pr.id);
+                      return (
+                        <span
+                          key={pr.id}
+                          title={pr.desc}
+                          className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border ${
+                            won
+                              ? "bg-amber-400/20 border-amber-300/50 text-amber-200"
+                              : "bg-emerald-950/60 border-emerald-400/15 text-emerald-100/40"
+                          }`}
+                        >
+                          {pr.badge} • {pr.name}
+                        </span>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+
+              {/* Right: Personalized Gemini 3.8 Flash & Live Voice AI Coach */}
+              <div className="md:col-span-5 flex flex-col justify-between p-4 rounded-2xl bg-emerald-900/45 border border-emerald-400/25 space-y-3">
+                <div className="space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <span className="inline-flex items-center gap-1.5 text-xs font-extrabold text-emerald-200">
+                      <Bot className="w-4 h-4 text-lime-300" />
+                      Personal AI Coach
+                    </span>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        const nextVoice = !aiProfile.voiceEnabled;
+                        const next = saveArcadeAiProfile({ voiceEnabled: nextVoice });
+                        setAiProfile(next);
+                        if (nextVoice) {
+                          const tok = await requestLiveVoiceToken("subwaysurfers");
+                          setLiveStatus(tok.available ? "Gemini Live ready" : "Browser Voice active");
+                        } else {
+                          setLiveStatus("");
+                        }
+                      }}
+                      className={`px-2 py-0.5 rounded-lg border text-[11px] font-bold flex items-center gap-1 cursor-pointer ${
+                        aiProfile.voiceEnabled
+                          ? "border-lime-300 text-lime-200 bg-emerald-800/70"
+                          : "border-emerald-400/25 text-emerald-200/75"
+                      }`}
+                    >
+                      <Volume2 className="w-3 h-3" />
+                      {aiProfile.voiceEnabled ? "Voice ON" : "Voice"}
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-1.5 text-xs">
+                    <input
+                      type="text"
+                      value={aiProfile.callsign}
+                      maxLength={18}
+                      onChange={(e) => {
+                        const next = saveArcadeAiProfile({ callsign: e.target.value });
+                        setAiProfile(next);
+                      }}
+                      placeholder="Callsign"
+                      aria-label="Player Callsign"
+                      className="px-2.5 py-1.5 rounded-xl bg-emerald-950/80 border border-emerald-400/25 text-white text-xs"
+                    />
+                    <select
+                      value={aiProfile.playstyle}
+                      onChange={(e) => {
+                        const next = saveArcadeAiProfile({ playstyle: e.target.value });
+                        setAiProfile(next);
+                      }}
+                      aria-label="Playstyle"
+                      className="px-2 py-1.5 rounded-xl bg-emerald-950/80 border border-emerald-400/25 text-emerald-100 text-xs"
+                    >
+                      <option value="Adaptive Strategist">Adaptive</option>
+                      <option value="Speedrunner">Speedrunner</option>
+                      <option value="Collector">Collector</option>
+                    </select>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      saveBackendPersonaPreference(aiProfile);
+                      askCoach(`Give ${aiProfile.callsign} a short personalized briefing for ${selectedChar.name}.`);
+                    }}
+                    className="w-full py-1.5 px-3 rounded-xl bg-emerald-800/70 hover:bg-emerald-700/80 border border-emerald-300/30 text-xs font-bold text-emerald-100 flex items-center justify-center gap-1.5 cursor-pointer"
+                  >
+                    <UserCheck className="w-3.5 h-3.5" />
+                    {aiLoading ? "Personalizing..." : "Sync Profile & Ask Gemini AI"}
+                  </button>
+
+                  {liveStatus && (
+                    <div className="text-[11px] text-lime-200/80 font-mono">{liveStatus}</div>
+                  )}
+
+                  {aiReply && (
+                    <div className="p-2.5 rounded-xl bg-emerald-950/75 border border-emerald-400/20 text-xs text-emerald-100/90 leading-relaxed">
+                      {aiReply}
+                    </div>
+                  )}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={startNewRun}
+                  className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-emerald-400 to-lime-300 hover:brightness-105 text-emerald-950 font-black text-sm tracking-wide flex items-center justify-center gap-2 shadow-xl shadow-emerald-500/25 transition-transform active:scale-95 cursor-pointer"
+                >
+                  <Play className="w-4 h-4 fill-current" />
+                  START RUN AS {selectedChar.name.toUpperCase()}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}
@@ -551,7 +787,18 @@ const TornadoSurfersGame = ({ onBack, isMuted = false, onSaveScore }) => {
                 NEW HIGH SCORE!
               </div>
             )}
+            {newPrizeBanner && (
+              <div className="inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full bg-amber-400/20 border border-amber-300/45 text-xs font-black text-amber-200 mb-2 ml-1">
+                <Award className="w-4 h-4" />
+                PRIZE UNLOCKED: {newPrizeBanner}
+              </div>
+            )}
             <h3 className="text-3xl font-black text-white">RUN ENDED</h3>
+            {aiReply && (
+              <p className="mt-2 p-2.5 rounded-xl bg-emerald-900/45 border border-emerald-400/20 text-xs text-emerald-100/90 leading-relaxed">
+                {aiReply}
+              </p>
+            )}
 
             <div className="mt-5 grid grid-cols-2 gap-2.5">
               <div className="p-3 rounded-2xl bg-emerald-900/50 border border-emerald-400/25">

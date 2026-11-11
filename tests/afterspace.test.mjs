@@ -1,6 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  ARTIFACT_CATALOG,
+  EXPLORER_CHARACTERS,
   TESSERACT_TOPOLOGY,
   createInitialAfterspaceState,
   project4Dto3D,
@@ -11,6 +13,11 @@ import {
   triggerExamineAction,
   stepAfterspaceState,
 } from "../src/Components/games/afterspace/afterspaceEngine.js";
+import {
+  RUNNER_CHARACTERS,
+  PRIZE_CATALOG,
+  evaluateSurferRewards,
+} from "../src/Components/games/tornadoSurfersEngine.js";
 
 test("AFTERSPACE 4D Tesseract topology has 16 vertices & 32 edges and projects cleanly", () => {
   assert.equal(TESSERACT_TOPOLOGY.vertices.length, 16);
@@ -80,4 +87,19 @@ test("AFTERSPACE 4D Hypercube alignment & Dimensional Threshold completion", () 
   const fin = triggerExamineAction(s);
   assert.equal(fin.completed, true);
   assert.equal(s.screen, "complete");
+});
+
+test("Characters & Prizes unlock cleanly for both Tornado Surfers and AFTERSPACE", () => {
+  assert.equal(EXPLORER_CHARACTERS.length >= 3, true);
+  assert.equal(ARTIFACT_CATALOG.length >= 7, true);
+  assert.equal(RUNNER_CHARACTERS.length, 4);
+  assert.equal(PRIZE_CATALOG.length, 6);
+
+  const starter = evaluateSurferRewards({ bestScore: 0, totalCoins: 0, totalStunts: 0 });
+  assert.deepEqual(starter.unlockedCharacters, ["vanguard"]);
+  assert.deepEqual(starter.unlockedPrizes, []);
+
+  const veteran = evaluateSurferRewards({ bestScore: 5200, totalCoins: 320, totalStunts: 8 });
+  assert.equal(veteran.unlockedCharacters.length, 4);
+  assert.equal(veteran.unlockedPrizes.length, 6);
 });

@@ -2,7 +2,7 @@ import React, { useEffect, useRef } from "react";
 import PropTypes from "prop-types";
 import * as THREE from "three";
 import { createGlowHaloTexture } from "./vortexBastion/textures3D";
-import { BASE_SPEED, PLAYER_HIT_Z, TRAIN_ROOF_Y } from "./tornadoSurfersEngine";
+import { BASE_SPEED, PLAYER_HIT_Z, RUNNER_CHARACTERS, TRAIN_ROOF_Y } from "./tornadoSurfersEngine";
 
 const WORLD_DEPTH = 46;
 const LANE_WIDTH = 2.45;
@@ -356,6 +356,7 @@ function buildArticulatedRunner3D(glowTex) {
   const limbMat = new THREE.MeshStandardMaterial({ color: 0x064e3b, metalness: 0.45, roughness: 0.42 });
   const trimMat = new THREE.MeshBasicMaterial({ color: 0x6ee7b7 });
   const scarfMat = new THREE.MeshBasicMaterial({ color: 0xa7f3d0 });
+  const headMat = new THREE.MeshStandardMaterial({ color: 0xf0fdf4, roughness: 0.26, metalness: 0.08 });
 
   const pelvis = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.19, 0.2, 12), limbMat);
   pelvis.position.y = 0.78;
@@ -371,10 +372,7 @@ function buildArticulatedRunner3D(glowTex) {
   chestCore.position.set(0, 1.24, -0.17);
   bodyTilt.add(chestCore);
 
-  const head = new THREE.Mesh(
-    new THREE.SphereGeometry(0.24, 18, 16),
-    new THREE.MeshStandardMaterial({ color: 0xf0fdf4, roughness: 0.26, metalness: 0.08 })
-  );
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.24, 18, 16), headMat);
   head.position.y = 1.68;
   bodyTilt.add(head);
 
@@ -504,14 +502,28 @@ function buildArticulatedRunner3D(glowTex) {
     jetGroup,
     flames,
     dropHalo,
+    mats: { torsoMat, limbMat, trimMat, scarfMat, headMat },
   };
   return root;
 }
 
-const TornadoSurfers3DScene = ({ simRef, onStep, onSwipeMove, onSwipeJump, onSwipeSlide, onDoubleTap }) => {
+const TornadoSurfers3DScene = ({
+  simRef,
+  characterId = "vanguard",
+  onStep,
+  onSwipeMove,
+  onSwipeJump,
+  onSwipeSlide,
+  onDoubleTap,
+}) => {
   const mountRef = useRef(null);
   const pointerDragRef = useRef(null);
   const lastTapRef = useRef(0);
+  const characterIdRef = useRef(characterId);
+
+  useEffect(() => {
+    characterIdRef.current = characterId;
+  }, [characterId]);
 
   const callbacksRef = useRef({ onStep, onSwipeMove, onSwipeJump, onSwipeSlide, onDoubleTap });
   useEffect(() => {
@@ -707,11 +719,24 @@ const TornadoSurfers3DScene = ({ simRef, onStep, onSwipeMove, onSwipeJump, onSwi
     const clock = new THREE.Clock();
     let wasAirborne = false;
     let landSquash = 0;
+    let appliedCharId = null;
 
     const animate = (now) => {
       const dt = Math.min(0.05, Math.max(0.001, (now - lastTime) / 1000));
       lastTime = now;
       const elapsed = clock.getElapsedTime();
+
+      if (appliedCharId !== characterIdRef.current) {
+        appliedCharId = characterIdRef.current;
+        const spec = RUNNER_CHARACTERS.find((c) => c.id === appliedCharId) || RUNNER_CHARACTERS[0];
+        const { torsoMat, limbMat, trimMat, scarfMat, headMat } = runnerMesh.userData.mats;
+        torsoMat.color.setHex(spec.colors.torso);
+        torsoMat.emissive.setHex(spec.colors.emissive);
+        limbMat.color.setHex(spec.colors.limb);
+        trimMat.color.setHex(spec.colors.trim);
+        scarfMat.color.setHex(spec.colors.scarf);
+        headMat.color.setHex(spec.colors.head);
+      }
 
       callbacksRef.current.onStep?.(dt);
       const s = simRef.current;
@@ -983,6 +1008,11 @@ const TornadoSurfers3DScene = ({ simRef, onStep, onSwipeMove, onSwipeJump, onSwi
         while (s.burstQueue.length > 0) {
           const b = s.burstQueue.pop();
           for (let k = 0; k < b.count; k++) {
+            if (activeSparks.length >= 80) {
+              const evicted = activeSparks.shift();
+              sparksLayer.remove(evicted.mesh);
+              evicted.mesh.material.dispose();
+            }
             const sp = new THREE.Mesh(
               geos.spark,
               new THREE.MeshBasicMaterial({ color: b.color, transparent: true, opacity: 1 })
@@ -1082,7 +1112,29 @@ const TornadoSurfers3DScene = ({ simRef, onStep, onSwipeMove, onSwipeJump, onSwi
     return () => {
       cancelAnimationFrame(rafId);
       resizeObserver.disconnect();
-      renderer.dispose();
+
+      // Exhaustive Three.js heap & WebGL resource cleanup (/memory-leak-debugging)
+      const disposedGeos = new Set();
+      const disposedMats = new Set();
+      scene.traverse((obj) => {
+        if (obj.geometry && !disposedGeos.has(obj.geometry)) {
+          disposedGeos.add(obj.geometry);
+          obj.geometry.dispose();
+        }
+        if (obj.material) {
+          const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
+          mats.forEach((m) => {
+            if (m && !disposedMats.has(m)) {
+              disposedMats.add(m);
+              m.dispose();
+            }
+          });
+        }
+      });
+      entityMeshMap.clear();
+      exitingMeshes.length = 0;
+      activeSparks.length = 0;
+      popupSpriteMap.clear();
       glowTex.dispose();
       bTexEmerald.dispose();
       bTexMint.dispose();
@@ -1090,6 +1142,7 @@ const TornadoSurfers3DScene = ({ simRef, onStep, onSwipeMove, onSwipeJump, onSwi
       sleeperGeo.dispose();
       for (const tex of popupTexCache.values()) tex.dispose();
       popupTexCache.clear();
+      renderer.dispose();
       if (renderer.domElement.parentNode === container) {
         container.removeChild(renderer.domElement);
       }
@@ -1145,6 +1198,7 @@ const TornadoSurfers3DScene = ({ simRef, onStep, onSwipeMove, onSwipeJump, onSwi
 
 TornadoSurfers3DScene.propTypes = {
   simRef: PropTypes.shape({ current: PropTypes.object }).isRequired,
+  characterId: PropTypes.string,
   onStep: PropTypes.func,
   onSwipeMove: PropTypes.func,
   onSwipeJump: PropTypes.func,

@@ -18,7 +18,9 @@ import MissionScreen from "./ui/screens/MissionScreen";
 import SettingsScreen from "./ui/screens/SettingsScreen";
 import CompletionScreen from "./ui/screens/CompletionScreen";
 import {
+  ARTIFACT_CATALOG,
   DEFAULT_SETTINGS,
+  EXPLORER_CHARACTERS,
   REGIONS,
   TEMPORAL_STATES,
   computeHypercubeAlignment,
@@ -29,6 +31,12 @@ import {
   triggerExamineAction,
   updateHypercubeAngle,
 } from "./afterspaceEngine";
+import {
+  askPersonalizedCompanion,
+  loadArcadeAiProfile,
+  saveArcadeAiProfile,
+  speakCompanionLine,
+} from "../../../Services/arcadeAiService";
 
 const STORAGE_SETTINGS_KEY = "afterspace_settings_v1";
 const STORAGE_PROGRESS_KEY = "afterspace_expedition_v1";
@@ -100,6 +108,9 @@ const AfterspaceGame = ({ onBack, isMuted = false, onSaveScore }) => {
   const [savedAvailable, setSavedAvailable] = useState(() => hasSavedState());
   const [timelineOpen, setTimelineOpen] = useState(false);
   const [previewTemporalIdx, setPreviewTemporalIdx] = useState(null);
+  const [aiProfile, setAiProfile] = useState(loadArcadeAiProfile);
+  const [aiWhisper, setAiWhisper] = useState(null);
+  const interactionIdRef = useRef(null);
 
   const forceSync = useCallback(() => {
     setSnap(buildUiSnapshot(simRef.current));
@@ -282,6 +293,35 @@ const AfterspaceGame = ({ onBack, isMuted = false, onSaveScore }) => {
     [forceSync, persistProgress]
   );
 
+  const handleAskGuide = useCallback(async () => {
+    afterspaceSound.playClick();
+    const s = simRef.current;
+    const region = getRegionAtZ(s.player.z);
+    const explorer =
+      EXPLORER_CHARACTERS.find((c) => c.id === aiProfile.selectedAfterspaceRole) ||
+      EXPLORER_CHARACTERS[0];
+    const unlockedNames = ARTIFACT_CATALOG.filter((a) => s.ownedArtifacts[a.id]).map((a) => a.name);
+    const res = await askPersonalizedCompanion({
+      gameId: "afterspace",
+      prompt: `Offer one calm architectural observation or hint for ${region.name}.`,
+      playerContext: {
+        callsign: aiProfile.callsign,
+        playstyle: aiProfile.playstyle,
+        character: explorer.name,
+        region: region.name,
+        prizes: unlockedNames,
+        score: unlockedNames.length * 100,
+      },
+      previousInteractionId: interactionIdRef.current,
+    });
+    if (res.interaction_id) interactionIdRef.current = res.interaction_id;
+    setAiWhisper(res.reply);
+    if (aiProfile.voiceEnabled && !localMuted) {
+      speakCompanionLine(res.reply, true);
+    }
+    setTimeout(() => setAiWhisper(null), 7000);
+  }, [aiProfile, localMuted]);
+
   const handleOpenOverlay = useCallback(
     (overlayName) => {
       afterspaceSound.playJournalTurn();
@@ -361,6 +401,9 @@ const AfterspaceGame = ({ onBack, isMuted = false, onSaveScore }) => {
       } else if (k === "m") {
         e.preventDefault();
         handleOpenOverlay("map");
+      } else if (k === "g") {
+        e.preventDefault();
+        handleAskGuide();
       } else if (e.key === "Tab") {
         e.preventDefault();
         handleOpenOverlay("mission");
@@ -377,7 +420,7 @@ const AfterspaceGame = ({ onBack, isMuted = false, onSaveScore }) => {
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("keyup", onKeyUp);
     };
-  }, [forceSync, handleExamine, handleOpenOverlay, timelineOpen]);
+  }, [forceSync, handleAskGuide, handleExamine, handleOpenOverlay, timelineOpen]);
 
   const currentRegion = getRegionAtZ(snap.player.z);
   const currentTemporal = TEMPORAL_STATES[snap.temporalIndex];
@@ -423,6 +466,11 @@ const AfterspaceGame = ({ onBack, isMuted = false, onSaveScore }) => {
         <ExpeditionSetup
           expeditionMode={snap.expeditionMode}
           difficulty={snap.difficulty}
+          selectedCharacterId={aiProfile.selectedAfterspaceRole}
+          onChangeCharacter={(cid) => {
+            const next = saveArcadeAiProfile({ selectedAfterspaceRole: cid });
+            setAiProfile(next);
+          }}
           onChangeMode={(mode) => {
             simRef.current.expeditionMode = mode;
             forceSync();
@@ -455,8 +503,10 @@ const AfterspaceGame = ({ onBack, isMuted = false, onSaveScore }) => {
             regionBanner={snap.regionBanner}
             discoveryToast={snap.discoveryToast}
             coopNotice={snap.coopNotice}
+            aiWhisper={aiWhisper}
             timelineOpen={timelineOpen}
             onExamine={handleExamine}
+            onAskGuide={handleAskGuide}
             onToggleScanner={() => {
               simRef.current.scannerActive = !simRef.current.scannerActive;
               afterspaceSound.playClick();

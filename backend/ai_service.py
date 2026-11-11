@@ -1907,3 +1907,126 @@ Synthesize all relevant findings, empirical comparisons, mathematical models (if
     return full_report
 
 
+async def ai_arcade_companion(
+    user_id: int,
+    db: Session,
+    game_id: str,
+    prompt: str,
+    player_context: Optional[Dict[str, Any]] = None,
+    previous_interaction_id: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Personalized Gemini 3.8 Flash Interactions companion tailored to UserAIPersona + live game telemetry."""
+    persona = get_user_persona(user_id, db) or ""
+    user = db.query(User).filter(User.id == user_id).first()
+    display_name = (
+        (player_context or {}).get("callsign")
+        or (user.username if user else "Explorer")
+    )
+    playstyle = (player_context or {}).get("playstyle") or "Adaptive Strategist"
+    character_name = (player_context or {}).get("character") or "Vanguard"
+    prizes = (player_context or {}).get("prizes") or []
+    score = (player_context or {}).get("score", 0)
+    region = (player_context or {}).get("region", "")
+
+    sys_instr = (
+        f"You are the personalized AI companion inside ChatTornado Arcade for {display_name} "
+        f"(Playstyle: {playstyle}, Selected Character: {character_name}).\n"
+        f"Saved Personalization Profile:\n{persona or 'No prior profile saved; tailor warmly to playstyle.'}\n\n"
+        f"Current Game: {game_id} | Score: {score} | Region: {region or 'N/A'} | "
+        f"Prizes Unlocked ({len(prizes)}): {', '.join(prizes[:6]) or 'None yet'}.\n"
+        "Respond concisely (under 75 words) in-character matching the game's aesthetic: "
+        "restrained editorial observatory tone for AFTERSPACE, crisp high-tempo runner coach for Tornado Surfers."
+    )
+
+    api_key = os.getenv("GEMINI_API_KEY", "").strip()
+    if api_key:
+        try:
+            from google import genai
+            client = genai.Client(api_key=api_key)
+            kwargs: Dict[str, Any] = {
+                "model": "gemini-3.8-flash",
+                "system_instruction": sys_instr,
+                "input": prompt,
+                "generation_config": {"max_output_tokens": 220},
+            }
+            if previous_interaction_id:
+                kwargs["previous_interaction_id"] = previous_interaction_id
+            interaction = client.interactions.create(**kwargs)
+            reply = (getattr(interaction, "output_text", None) or "").strip()
+            if reply:
+                return {
+                    "reply": reply,
+                    "interaction_id": getattr(interaction, "id", None),
+                    "model": "gemini-3.8-flash",
+                    "personalized": True,
+                }
+        except Exception as exc:
+            logger.warning("Interactions API companion fallback: %s", exc)
+
+    # Fully personalized offline fallback driven by UserAIPersona + live player context
+    if game_id == "afterspace":
+        hint_line = (
+            "Shifting Temporal State to PAST (T - 100) or FUTURE (T + 100) restores the fractured span into Region 02."
+            if region == "The Forgotten Gateway"
+            else "Align Central Hypercube planes XW near 045° and YW near 035° to unlock the northern threshold."
+        )
+        reply = (
+            f"{display_name} ({character_name}) — as a {playstyle}, your instrument log holds "
+            f"{len(prizes)} specimens. Observation note: {hint_line}"
+        )
+    else:
+        next_goal = (
+            "Keep chaining rooftop trains and Hoverboard Shield blasts to raise your Coin & Score multiplier."
+            if playstyle == "Speedrunner"
+            else "Sweep rooftop coin lines with Magnet active to unlock Solar Flare, Glacier Phantom, and Singularity Chrono."
+        )
+        reply = (
+            f"Locked in with you, {display_name} ({character_name})! {len(prizes)} Vault Prizes secured "
+            f"(Best {score}). {next_goal}"
+        )
+
+    return {
+        "reply": reply,
+        "interaction_id": None,
+        "model": "personalized-local",
+        "personalized": True,
+    }
+
+
+def create_live_ephemeral_token(user_id: int, db: Session, game_id: str = "subwaysurfers") -> Dict[str, Any]:
+    """Mints a single-use Gemini 3.8 Live ephemeral auth token for low-latency client WebSocket voice."""
+    api_key = os.getenv("GEMINI_API_KEY", "").strip()
+    if not api_key:
+        return {"available": False, "reason": "GEMINI_API_KEY not configured", "model": "gemini-3.8-live"}
+
+    persona = get_user_persona(user_id, db) or ""
+    sys_text = (
+        f"You are a concise real-time voice companion inside ChatTornado's {game_id}. "
+        f"Personalization context: {persona[:300]}"
+    )
+    try:
+        from google import genai
+        client = genai.Client(api_key=api_key, http_options={"api_version": "v1alpha"})
+        token = client.auth_tokens.create(
+            config={
+                "uses": 1,
+                "live_connect_constraints": {
+                    "model": "gemini-3.8-live",
+                    "config": {
+                        "response_modalities": ["AUDIO"],
+                        "system_instruction": {"parts": [{"text": sys_text}]},
+                    },
+                },
+            }
+        )
+        return {
+            "available": True,
+            "token": getattr(token, "name", None),
+            "model": "gemini-3.8-live",
+        }
+    except Exception as exc:
+        logger.warning("Gemini Live ephemeral token unavailable: %s", exc)
+        return {"available": False, "reason": str(exc), "model": "gemini-3.8-live"}
+
+
+

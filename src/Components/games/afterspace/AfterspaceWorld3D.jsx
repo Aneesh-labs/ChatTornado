@@ -922,8 +922,31 @@ const AfterspaceWorld3D = ({
       window.removeEventListener("pointermove", onPointerMove);
       window.removeEventListener("pointerup", onPointerUp);
       window.removeEventListener("resize", onResize);
-      if (dom.parentNode === container) container.removeChild(dom);
+
+      // Complete WebGL / heap leak cleanup across all geometries, materials, and canvas textures
+      const disposedGeos = new Set();
+      const disposedMats = new Set();
+      scene.traverse((obj) => {
+        if (obj.geometry && !disposedGeos.has(obj.geometry)) {
+          disposedGeos.add(obj.geometry);
+          obj.geometry.dispose();
+        }
+        if (obj.material) {
+          const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
+          mats.forEach((m) => {
+            if (m && !disposedMats.has(m)) {
+              disposedMats.add(m);
+              m.dispose();
+            }
+          });
+        }
+      });
+      basaltTex.dispose();
+      slateTex.dispose();
+      travTex.dispose();
+      rippleTex.dispose();
       renderer.dispose();
+      if (dom.parentNode === container) container.removeChild(dom);
     };
   }, [inputRef, settingsRef, simRef]);
 

@@ -13,7 +13,9 @@ from ai_service import (
     ai_polish_text,
     ai_translate_text,
     ai_smart_replies,
-    fetch_openrouter_models
+    fetch_openrouter_models,
+    ai_arcade_companion,
+    create_live_ephemeral_token,
 )
 
 router = APIRouter(prefix="/api/ai", tags=["AI & Personalization"])
@@ -296,4 +298,38 @@ async def get_all_ai_models(refresh: bool = False):
             }
         }
     }
+
+
+class ArcadeCompanionRequest(BaseModel):
+    game_id: str
+    prompt: str
+    player_context: Optional[Dict[str, Any]] = None
+    previous_interaction_id: Optional[str] = None
+
+
+@router.post("/arcade-companion")
+async def arcade_companion_endpoint(
+    req: ArcadeCompanionRequest,
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(get_db),
+):
+    """Fully personalized Gemini 3.8 Flash Interactions companion for Arcade & AFTERSPACE."""
+    return await ai_arcade_companion(
+        user_id=user_id,
+        db=db,
+        game_id=req.game_id,
+        prompt=req.prompt,
+        player_context=req.player_context,
+        previous_interaction_id=req.previous_interaction_id,
+    )
+
+
+@router.post("/live-token")
+def live_ephemeral_token_endpoint(
+    game_id: str = Query("subwaysurfers"),
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(get_db),
+):
+    """Mints a single-use Gemini 3.8 Live ephemeral auth token without exposing server API keys."""
+    return create_live_ephemeral_token(user_id=user_id, db=db, game_id=game_id)
 

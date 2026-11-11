@@ -1,6 +1,6 @@
 import React from "react";
 import PropTypes from "prop-types";
-import { BookOpen, Compass, Layers, Package, Pause, Radio } from "lucide-react";
+import { BookOpen, Compass, Layers, Package, Pause, Radio, Sparkles } from "lucide-react";
 
 const GameHUD = ({
   region,
@@ -15,11 +15,13 @@ const GameHUD = ({
   regionBanner,
   discoveryToast,
   coopNotice,
+  aiWhisper,
   timelineOpen,
   onExamine,
   onToggleScanner,
   onToggleTimeline,
   onOpenOverlay,
+  onAskGuide,
   onPause,
   onTouchMove,
 }) => {
@@ -124,6 +126,12 @@ const GameHUD = ({
             <div className="as-tech-label uppercase text-[#B99A70]">{discoveryToast.kicker}</div>
             <div className="as-serif text-xl text-[#F5F3ED] mt-0.5">{discoveryToast.title}</div>
             <div className="as-secondary text-[#BEBDB2] mt-0.5">{discoveryToast.sub}</div>
+          </div>
+        )}
+        {aiWhisper && (
+          <div className="as-surface-atmospheric px-4 py-2.5 text-center max-w-md border-[#B99A70]/35">
+            <div className="as-tech-label uppercase text-[#B99A70]">Observatory Whisper</div>
+            <div className="as-secondary text-[#EDEAE1] mt-0.5">{aiWhisper}</div>
           </div>
         )}
         {coopNotice && (
@@ -236,6 +244,16 @@ const GameHUD = ({
               <span className="hidden md:inline">Map</span>
               <span className="as-mono text-[#8F938C]">M</span>
             </button>
+
+            <button
+              type="button"
+              onClick={onAskGuide}
+              className="h-8 px-2.5 rounded-[2px] border border-[#B99A70]/35 bg-[#151A19]/70 text-[#EDEAE1] hover:border-[#B99A70]/75 text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-[#B99A70]" />
+              <span className="hidden md:inline">Guide</span>
+              <span className="as-mono text-[#8F938C]">G</span>
+            </button>
           </div>
         </div>
 
@@ -273,11 +291,13 @@ GameHUD.propTypes = {
   regionBanner: PropTypes.object,
   discoveryToast: PropTypes.object,
   coopNotice: PropTypes.object,
+  aiWhisper: PropTypes.string,
   timelineOpen: PropTypes.bool.isRequired,
   onExamine: PropTypes.func.isRequired,
   onToggleScanner: PropTypes.func.isRequired,
   onToggleTimeline: PropTypes.func.isRequired,
   onOpenOverlay: PropTypes.func.isRequired,
+  onAskGuide: PropTypes.func,
   onPause: PropTypes.func.isRequired,
   onTouchMove: PropTypes.func.isRequired,
 };
