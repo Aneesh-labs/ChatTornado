@@ -444,6 +444,7 @@ const AfterspaceGame = ({ onBack, isMuted = false, onSaveScore }) => {
         <>
           <GameHUD
             region={currentRegion}
+            bearingDeg={Math.round((((-snap.player.yaw * 180) / Math.PI) % 360 + 360) % 360)}
             suitEnergy={snap.suitEnergy}
             stability={snap.stability}
             activeObjective={activeObjective}

@@ -252,10 +252,30 @@ const AfterspaceWorld3D = ({
       roughness: 0.72,
       metalness: 0.05,
     });
+    const rippleCanvas = document.createElement("canvas");
+    rippleCanvas.width = 128;
+    rippleCanvas.height = 128;
+    const rg = rippleCanvas.getContext("2d");
+    rg.fillStyle = "#808080";
+    rg.fillRect(0, 0, 128, 128);
+    for (let y = 0; y < 128; y += 2) {
+      for (let x = 0; x < 128; x += 2) {
+        const v = Math.round(128 + Math.sin(x * 0.19 + y * 0.08) * 18 + Math.cos(y * 0.24) * 16);
+        rg.fillStyle = `rgb(${v},${v},${v})`;
+        rg.fillRect(x, y, 2, 2);
+      }
+    }
+    const rippleTex = new THREE.CanvasTexture(rippleCanvas);
+    rippleTex.wrapS = THREE.RepeatWrapping;
+    rippleTex.wrapT = THREE.RepeatWrapping;
+    rippleTex.repeat.set(4, 4);
+
     const obsidianMirrorMat = new THREE.MeshStandardMaterial({
-      color: 0x151b1c,
-      roughness: 0.12,
-      metalness: 0.88,
+      color: 0x1a2224,
+      bumpMap: rippleTex,
+      bumpScale: 0.015,
+      roughness: 0.1,
+      metalness: 0.9,
     });
     const brassMat = new THREE.MeshStandardMaterial({
       color: 0xb99a70,
@@ -736,6 +756,8 @@ const AfterspaceWorld3D = ({
         residueCore.rotation.y += dt * 0.38;
         residueGroup.position.y = 1.65 + Math.sin(elapsed * 1.1) * 0.09;
         dustPoints.rotation.y = Math.sin(elapsed * 0.02) * 0.05;
+        rippleTex.offset.x = (rippleTex.offset.x + dt * 0.018) % 1;
+        rippleTex.offset.y = (rippleTex.offset.y + dt * 0.012) % 1;
       }
 
       artifactMeshes.forEach(({ group, gem }, id) => {

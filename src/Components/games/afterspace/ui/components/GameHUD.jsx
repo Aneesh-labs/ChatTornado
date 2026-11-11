@@ -4,6 +4,7 @@ import { BookOpen, Compass, Layers, Package, Pause, Radio } from "lucide-react";
 
 const GameHUD = ({
   region,
+  bearingDeg = 0,
   suitEnergy,
   stability,
   activeObjective,
@@ -33,7 +34,10 @@ const GameHUD = ({
             {region?.name || "The Forgotten Gateway"}
           </div>
           <div className="as-tech-label text-[#8F938C] mt-0.5">
-            {region?.code || "EXPEDITION 01 / REGION 01"}
+            {region?.code || "EXPEDITION 01 / REGION 01"} •{" "}
+            <span className="as-mono text-[#D5D2C8]">
+              {String(bearingDeg).padStart(3, "0")}°
+            </span>
           </div>
         </div>
 
@@ -258,6 +262,7 @@ const GameHUD = ({
 
 GameHUD.propTypes = {
   region: PropTypes.object,
+  bearingDeg: PropTypes.number,
   suitEnergy: PropTypes.number.isRequired,
   stability: PropTypes.number.isRequired,
   activeObjective: PropTypes.object,

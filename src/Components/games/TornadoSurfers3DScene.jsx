@@ -2,7 +2,7 @@ import React, { useEffect, useRef } from "react";
 import PropTypes from "prop-types";
 import * as THREE from "three";
 import { createGlowHaloTexture } from "./vortexBastion/textures3D";
-import { PLAYER_HIT_Z, TRAIN_ROOF_Y } from "./tornadoSurfersEngine";
+import { BASE_SPEED, PLAYER_HIT_Z, TRAIN_ROOF_Y } from "./tornadoSurfersEngine";
 
 const WORLD_DEPTH = 46;
 const LANE_WIDTH = 2.45;
@@ -108,9 +108,9 @@ function createSharedGeos() {
 
 function buildTrainMesh3D(variant = 0, moving = false, glowTex, lenZ = 0.28 * WORLD_DEPTH, geos) {
   const palettes = [
-    { body: 0x064e3b, roof: 0x10b981, accent: 0x6ee7b7 },
-    { body: 0x052e23, roof: 0x059669, accent: 0x4ade80 },
-    { body: 0x042f2e, roof: 0x14b8a6, accent: 0xfbbf24 },
+    { body: 0x064e3b, roof: 0x10b981, accent: 0x6ee7b7, glass: 0xa7f3d0 },
+    { body: 0x052e23, roof: 0x059669, accent: 0x4ade80, glass: 0x86efac },
+    { body: 0x042f2e, roof: 0x14b8a6, accent: 0xfbbf24, glass: 0xfde68a },
   ];
   const pal = palettes[variant % palettes.length];
   const group = new THREE.Group();
@@ -118,22 +118,42 @@ function buildTrainMesh3D(variant = 0, moving = false, glowTex, lenZ = 0.28 * WO
   const heightY = TRAIN_ROOF_Y * Y_SCALE;
   const widthX = 1.78;
 
+  // Sculpted chassis body + lower bogie undercarriage
   const body = new THREE.Mesh(
     geos.unitBox,
-    makeSolidMat({ color: pal.body, metalness: 0.55, roughness: 0.25, opacity: 1.0 })
+    makeSolidMat({ color: pal.body, metalness: 0.58, roughness: 0.24, opacity: 1.0 })
   );
-  body.scale.set(widthX, heightY, lenZ);
-  body.position.y = heightY * 0.5;
+  body.scale.set(widthX, heightY - 0.26, lenZ);
+  body.position.y = heightY * 0.5 + 0.13;
   group.add(body);
 
+  const bogie = new THREE.Mesh(
+    geos.unitBox,
+    makeSolidMat({ color: 0x022c22, metalness: 0.7, roughness: 0.4, opacity: 1.0 })
+  );
+  bogie.scale.set(widthX * 0.84, 0.28, lenZ * 0.88);
+  bogie.position.y = 0.14;
+  group.add(bogie);
+
+  // Sloped front bumper apron
+  const apron = new THREE.Mesh(
+    geos.unitBox,
+    makeSolidMat({ color: pal.roof, metalness: 0.5, roughness: 0.3, opacity: 1.0 })
+  );
+  apron.scale.set(widthX * 0.96, 0.38, 0.42);
+  apron.rotation.x = 0.32;
+  apron.position.set(0, 0.35, lenZ * 0.5 + 0.08);
+  group.add(apron);
+
+  // Rooftop ribbed deck & vents (runnable roof surface!)
   const roof = new THREE.Mesh(
     geos.unitBox,
     makeSolidMat({
       color: pal.roof,
       emissive: pal.roof,
-      emissiveIntensity: 0.25,
+      emissiveIntensity: 0.28,
       metalness: 0.45,
-      roughness: 0.3,
+      roughness: 0.28,
       opacity: 1.0,
     })
   );
@@ -145,22 +165,31 @@ function buildTrainMesh3D(variant = 0, moving = false, glowTex, lenZ = 0.28 * WO
     geos.unitBox,
     makeBasicMat({ color: moving ? 0xfbbf24 : pal.accent, opacity: 1.0 })
   );
-  stripe.scale.set(widthX + 0.03, 0.12, lenZ * 0.98);
-  stripe.position.y = heightY * 0.35;
+  stripe.scale.set(widthX + 0.04, 0.11, lenZ * 0.98);
+  stripe.position.y = heightY * 0.36;
   group.add(stripe);
+
+  // Illuminated cabin side window belt
+  const windowBelt = new THREE.Mesh(
+    geos.unitBox,
+    makeBasicMat({ color: pal.glass, opacity: 0.82 })
+  );
+  windowBelt.scale.set(widthX + 0.02, heightY * 0.2, lenZ * 0.84);
+  windowBelt.position.y = heightY * 0.66;
+  group.add(windowBelt);
 
   const wind = new THREE.Mesh(
     geos.unitPlane,
-    makeBasicMat({ color: 0x022c22, opacity: 0.9 })
+    makeBasicMat({ color: 0x022c22, opacity: 0.92 })
   );
-  wind.scale.set(widthX * 0.72, heightY * 0.34, 1);
-  wind.position.set(0, heightY * 0.68, lenZ * 0.5 + 0.01);
+  wind.scale.set(widthX * 0.74, heightY * 0.32, 1);
+  wind.position.set(0, heightY * 0.68, lenZ * 0.5 + 0.015);
   group.add(wind);
 
   const hlColor = moving ? 0xfef08a : pal.accent;
   for (const sx of [-0.46, 0.46]) {
     const lamp = new THREE.Mesh(geos.lamp, makeBasicMat({ color: hlColor, opacity: 1.0 }));
-    lamp.position.set(sx, heightY * 0.26, lenZ * 0.5 + 0.02);
+    lamp.position.set(sx, heightY * 0.28, lenZ * 0.5 + 0.04);
     group.add(lamp);
 
     if (moving && glowTex) {
@@ -175,8 +204,8 @@ function buildTrainMesh3D(variant = 0, moving = false, glowTex, lenZ = 0.28 * WO
         })
       );
       halo.material.userData.baseOpacity = 0.85;
-      halo.position.set(sx, heightY * 0.26, lenZ * 0.5 + 0.15);
-      halo.scale.set(1.6, 1.6, 1);
+      halo.position.set(sx, heightY * 0.28, lenZ * 0.5 + 0.16);
+      halo.scale.set(1.75, 1.75, 1);
       group.add(halo);
     }
   }
@@ -321,57 +350,104 @@ function buildArticulatedRunner3D(glowTex) {
     color: 0x10b981,
     emissive: 0x059669,
     emissiveIntensity: 0.55,
-    metalness: 0.3,
-    roughness: 0.35,
+    metalness: 0.35,
+    roughness: 0.32,
   });
-  const limbMat = new THREE.MeshStandardMaterial({ color: 0x064e3b, metalness: 0.45, roughness: 0.45 });
+  const limbMat = new THREE.MeshStandardMaterial({ color: 0x064e3b, metalness: 0.45, roughness: 0.42 });
+  const trimMat = new THREE.MeshBasicMaterial({ color: 0x6ee7b7 });
+  const scarfMat = new THREE.MeshBasicMaterial({ color: 0xa7f3d0 });
 
-  const torso = new THREE.Mesh(new THREE.BoxGeometry(0.54, 0.72, 0.32), torsoMat);
-  torso.position.y = 1.1;
+  const pelvis = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.18, 0.28), limbMat);
+  pelvis.position.y = 0.78;
+  bodyTilt.add(pelvis);
+
+  const torso = new THREE.Mesh(new THREE.BoxGeometry(0.54, 0.58, 0.32), torsoMat);
+  torso.position.y = 1.15;
   bodyTilt.add(torso);
 
+  const chestCore = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.18, 0.35), trimMat);
+  chestCore.position.y = 1.22;
+  bodyTilt.add(chestCore);
+
   const head = new THREE.Mesh(
-    new THREE.SphereGeometry(0.24, 14, 12),
-    new THREE.MeshStandardMaterial({ color: 0xf0fdf4, roughness: 0.3 })
+    new THREE.SphereGeometry(0.24, 16, 14),
+    new THREE.MeshStandardMaterial({ color: 0xf0fdf4, roughness: 0.28 })
   );
-  head.position.y = 1.66;
+  head.position.y = 1.68;
   bodyTilt.add(head);
 
-  const visor = new THREE.Mesh(
-    new THREE.BoxGeometry(0.36, 0.12, 0.14),
-    new THREE.MeshBasicMaterial({ color: 0x6ee7b7 })
-  );
-  visor.position.set(0, 1.67, -0.18);
+  const visor = new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.12, 0.16), trimMat);
+  visor.position.set(0, 1.69, -0.18);
   bodyTilt.add(visor);
 
-  const legL = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.65, 0.2), limbMat);
-  legL.position.set(-0.15, 0.42, 0);
-  const legR = legL.clone();
-  legR.position.x = 0.15;
-  bodyTilt.add(legL, legR);
+  // Flowing 3-link trailing surfer scarf
+  const scarfA = new THREE.Group();
+  scarfA.position.set(0, 1.44, 0.18);
+  const sMeshA = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.06, 0.34), scarfMat);
+  sMeshA.position.z = 0.16;
+  scarfA.add(sMeshA);
+  const scarfB = new THREE.Group();
+  scarfB.position.z = 0.32;
+  const sMeshB = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.05, 0.34), trimMat);
+  sMeshB.position.z = 0.16;
+  scarfB.add(sMeshB);
+  scarfA.add(scarfB);
+  bodyTilt.add(scarfA);
 
-  const armL = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.56, 0.16), torsoMat);
-  armL.position.set(-0.37, 1.05, 0);
-  const armR = armL.clone();
-  armR.position.x = 0.37;
-  bodyTilt.add(armL, armR);
+  // Articulated 2-joint Legs (Hip + Knee + Shin + Sneakers)
+  const buildLeg = (sx) => {
+    const hip = new THREE.Group();
+    hip.position.set(sx, 0.76, 0);
+    const thigh = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.36, 0.2), limbMat);
+    thigh.position.y = -0.18;
+    hip.add(thigh);
+    const knee = new THREE.Group();
+    knee.position.y = -0.36;
+    const calf = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.36, 0.18), torsoMat);
+    calf.position.y = -0.18;
+    knee.add(calf);
+    hip.add(knee);
+    return { hip, knee };
+  };
+  const legLeft = buildLeg(-0.15);
+  const legRight = buildLeg(0.15);
+  bodyTilt.add(legLeft.hip, legRight.hip);
+
+  // Articulated 2-joint Arms (Shoulder + Elbow + Forearm)
+  const buildArm = (sx) => {
+    const shoulder = new THREE.Group();
+    shoulder.position.set(sx, 1.38, 0);
+    const upper = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.3, 0.16), torsoMat);
+    upper.position.y = -0.14;
+    shoulder.add(upper);
+    const elbow = new THREE.Group();
+    elbow.position.y = -0.28;
+    const fore = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.28, 0.14), limbMat);
+    fore.position.y = -0.14;
+    elbow.add(fore);
+    shoulder.add(elbow);
+    return { shoulder, elbow };
+  };
+  const armLeft = buildArm(-0.36);
+  const armRight = buildArm(0.36);
+  bodyTilt.add(armLeft.shoulder, armRight.shoulder);
 
   const sneakerMat = new THREE.MeshBasicMaterial({ color: 0x86efac, visible: false });
-  const shoeL = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.16, 0.34), sneakerMat);
-  shoeL.position.set(0, -0.32, -0.04);
+  const shoeL = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.15, 0.36), sneakerMat);
+  shoeL.position.set(0, -0.34, -0.05);
   const shoeR = shoeL.clone();
-  legL.add(shoeL);
-  legR.add(shoeR);
+  legLeft.knee.add(shoeL);
+  legRight.knee.add(shoeR);
 
   const boardGroup = new THREE.Group();
   const deck = new THREE.Mesh(
-    new THREE.BoxGeometry(0.55, 0.08, 1.45),
+    new THREE.BoxGeometry(0.58, 0.09, 1.56),
     new THREE.MeshStandardMaterial({ color: 0x34d399, emissive: 0x10b981, emissiveIntensity: 1.4 })
   );
   deck.position.y = 0.12;
   boardGroup.add(deck);
   const shieldDome = new THREE.Mesh(
-    new THREE.SphereGeometry(1.15, 16, 12),
+    new THREE.SphereGeometry(1.18, 16, 12),
     new THREE.MeshBasicMaterial({ color: 0x6ee7b7, transparent: true, opacity: 0.22, wireframe: true })
   );
   shieldDome.position.y = 1.0;
@@ -380,15 +456,17 @@ function buildArticulatedRunner3D(glowTex) {
   bodyTilt.add(boardGroup);
 
   const jetGroup = new THREE.Group();
-  const tankMat = new THREE.MeshStandardMaterial({ color: 0x10b981, metalness: 0.7, roughness: 0.25 });
+  const tankMat = new THREE.MeshStandardMaterial({ color: 0x10b981, metalness: 0.72, roughness: 0.22 });
   const flameMat = new THREE.MeshBasicMaterial({ color: 0x6ee7b7 });
+  const flames = [];
   for (const sx of [-0.14, 0.14]) {
-    const tank = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 0.5, 8), tankMat);
-    tank.position.set(sx, 1.12, 0.24);
-    const flame = new THREE.Mesh(new THREE.ConeGeometry(0.11, 0.65, 8), flameMat);
+    const tank = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 0.52, 10), tankMat);
+    tank.position.set(sx, 1.15, 0.24);
+    const flame = new THREE.Mesh(new THREE.ConeGeometry(0.12, 0.72, 10), flameMat);
     flame.rotation.x = Math.PI;
-    flame.position.set(sx, 0.56, 0.24);
+    flame.position.set(sx, 0.54, 0.24);
     jetGroup.add(tank, flame);
+    flames.push(flame);
   }
   jetGroup.visible = false;
   bodyTilt.add(jetGroup);
@@ -398,24 +476,27 @@ function buildArticulatedRunner3D(glowTex) {
       map: glowTex,
       color: 0x34d399,
       transparent: true,
-      opacity: 0.6,
+      opacity: 0.62,
       blending: THREE.AdditiveBlending,
       depthWrite: false,
     })
   );
   dropHalo.position.set(0, 0.1, 0);
-  dropHalo.scale.set(1.8, 1.8, 1);
+  dropHalo.scale.set(1.9, 1.9, 1);
 
   root.userData = {
     bodyTilt,
-    legL,
-    legR,
-    armL,
-    armR,
+    legLeft,
+    legRight,
+    armLeft,
+    armRight,
+    scarfA,
+    scarfB,
     sneakerMat,
     boardGroup,
     shieldDome,
     jetGroup,
+    flames,
     dropHalo,
   };
   return root;
@@ -549,6 +630,21 @@ const TornadoSurfers3DScene = ({ simRef, onStep, onSwipeMove, onSwipeJump, onSwi
     }
     scene.add(sceneryGroup);
 
+    // High-speed emerald wind streaks streaming cleanly along track outer edges
+    const windStreaks = [];
+    const streakMat = new THREE.MeshBasicMaterial({
+      color: 0x6ee7b7,
+      transparent: true,
+      opacity: 0.42,
+    });
+    for (let i = 0; i < 16; i += 1) {
+      const ws = new THREE.Mesh(geos.unitBox, streakMat);
+      ws.scale.set(0.035, 0.035, 2.6 + (i % 3) * 1.4);
+      ws.position.set((i % 2 === 0 ? -1 : 1) * (4.4 + (i % 4) * 0.65), 1.0 + (i % 5) * 0.9, -i * 4.2);
+      scene.add(ws);
+      windStreaks.push(ws);
+    }
+
     const runnerMesh = buildArticulatedRunner3D(glowTex);
     scene.add(runnerMesh);
     scene.add(runnerMesh.userData.dropHalo);
@@ -594,6 +690,8 @@ const TornadoSurfers3DScene = ({ simRef, onStep, onSwipeMove, onSwipeJump, onSwi
     let rafId;
     let lastTime = performance.now();
     const clock = new THREE.Clock();
+    let wasAirborne = false;
+    let landSquash = 0;
 
     const animate = (now) => {
       const dt = Math.min(0.05, Math.max(0.001, (now - lastTime) / 1000));
@@ -616,47 +714,134 @@ const TornadoSurfers3DScene = ({ simRef, onStep, onSwipeMove, onSwipeJump, onSwi
         b.position.z += scrollStep;
         if (b.position.z > 8) b.position.z -= 6 * 9.5;
       }
+      for (const ws of windStreaks) {
+        ws.position.z += scrollStep * 1.45;
+        if (ws.position.z > 8) ws.position.z -= 16 * 4.2;
+      }
 
       const rx = s.laneX * LANE_WIDTH;
       const ry = s.y * Y_SCALE;
       const floorY = s.groundY * Y_SCALE;
 
-      runnerMesh.position.set(rx, ry, 0);
-      runnerLight.position.set(rx, ry + 1.4, 0.4);
-      runnerMesh.visible = s.invulnTimer <= 0 || Math.floor(elapsed * 18) % 2 === 0;
-
-      const { bodyTilt, legL, legR, armL, armR, sneakerMat, boardGroup, shieldDome, jetGroup, dropHalo } =
-        runnerMesh.userData;
+      const {
+        bodyTilt,
+        legLeft,
+        legRight,
+        armLeft,
+        armRight,
+        scarfA,
+        scarfB,
+        sneakerMat,
+        boardGroup,
+        shieldDome,
+        jetGroup,
+        flames,
+        dropHalo,
+      } = runnerMesh.userData;
 
       const sliding = s.slideTimer > 0;
       const jumping = s.y > s.groundY + 0.08 && s.jetpackTimer <= 0;
-      bodyTilt.rotation.z = s.leanAngle;
-      bodyTilt.rotation.x = sliding ? -0.95 : jumping ? 0.18 : 0;
-      bodyTilt.scale.y = sliding ? 0.65 : 1.0;
+      const jetting = s.jetpackTimer > 0;
+      const surfing = s.hoverboardTimer > 0;
+
+      if (wasAirborne && !jumping && !jetting) {
+        landSquash = 1.0;
+      }
+      wasAirborne = jumping || jetting;
+      landSquash = Math.max(0, landSquash - dt * 6.5);
 
       const stride = Math.sin(s.stridePhase);
-      if (sliding || jumping) {
-        legL.rotation.x = 0.45;
-        legR.rotation.x = -0.35;
-        armL.rotation.x = -0.5;
-        armR.rotation.x = 0.5;
+      const groundBob = !jumping && !sliding && !jetting && !surfing && s.phase === "playing" ? Math.abs(stride) * 0.1 : 0;
+
+      runnerMesh.position.set(rx, ry + groundBob, 0);
+      runnerLight.position.set(rx, ry + 1.4, 0.4);
+      runnerMesh.visible = s.invulnTimer <= 0 || Math.floor(elapsed * 18) % 2 === 0;
+
+      // Dynamic multi-stance body posture (Sprint, Slide, Jump, Hoverboard Carve, Jetpack Flight)
+      const squashScale = 1 - landSquash * 0.18;
+      bodyTilt.rotation.z = s.leanAngle;
+      bodyTilt.rotation.y = surfing ? 0.52 : !jumping && !sliding ? stride * 0.14 : 0;
+      bodyTilt.rotation.x = sliding ? -0.98 : jetting ? 0.34 : jumping ? 0.16 : 0.12;
+      bodyTilt.scale.y = (sliding ? 0.64 : 1.0) * squashScale;
+
+      if (sliding) {
+        legLeft.hip.rotation.x = 0.65;
+        legLeft.knee.rotation.x = -0.35;
+        legRight.hip.rotation.x = -0.25;
+        legRight.knee.rotation.x = -0.85;
+        armLeft.shoulder.rotation.x = -0.5;
+        armLeft.elbow.rotation.x = 0.7;
+        armRight.shoulder.rotation.x = -0.3;
+        armRight.elbow.rotation.x = 0.8;
+      } else if (jetting) {
+        legLeft.hip.rotation.x = -0.22;
+        legLeft.knee.rotation.x = -0.45;
+        legRight.hip.rotation.x = -0.1;
+        legRight.knee.rotation.x = -0.25;
+        armLeft.shoulder.rotation.x = 0.4;
+        armLeft.elbow.rotation.x = 0.35;
+        armRight.shoulder.rotation.x = 0.4;
+        armRight.elbow.rotation.x = 0.35;
+      } else if (surfing) {
+        legLeft.hip.rotation.x = 0.35;
+        legLeft.knee.rotation.x = -0.55;
+        legRight.hip.rotation.x = -0.35;
+        legRight.knee.rotation.x = -0.45;
+        armLeft.shoulder.rotation.x = 0.15;
+        armLeft.shoulder.rotation.z = -0.45;
+        armLeft.elbow.rotation.x = 0.35;
+        armRight.shoulder.rotation.x = -0.15;
+        armRight.shoulder.rotation.z = 0.45;
+        armRight.elbow.rotation.x = 0.35;
+      } else if (jumping) {
+        legLeft.hip.rotation.x = 0.75;
+        legLeft.knee.rotation.x = -1.15;
+        legRight.hip.rotation.x = -0.35;
+        legRight.knee.rotation.x = -0.55;
+        armLeft.shoulder.rotation.x = -0.65;
+        armLeft.shoulder.rotation.z = -0.35;
+        armLeft.elbow.rotation.x = 0.65;
+        armRight.shoulder.rotation.x = 0.55;
+        armRight.shoulder.rotation.z = 0.35;
+        armRight.elbow.rotation.x = 0.65;
       } else {
-        legL.rotation.x = stride * 0.75;
-        legR.rotation.x = -stride * 0.75;
-        armL.rotation.x = -stride * 0.65;
-        armR.rotation.x = stride * 0.65;
+        // Fluid 2-joint athletic sprint cycle
+        const lSwing = stride * 0.85;
+        const rSwing = -stride * 0.85;
+        legLeft.hip.rotation.x = lSwing;
+        legLeft.knee.rotation.x = -Math.max(0.08, -stride * 0.95);
+        legRight.hip.rotation.x = rSwing;
+        legRight.knee.rotation.x = -Math.max(0.08, stride * 0.95);
+        armLeft.shoulder.rotation.x = -stride * 0.78;
+        armLeft.shoulder.rotation.z = -0.08;
+        armLeft.elbow.rotation.x = 0.75 + stride * 0.18;
+        armRight.shoulder.rotation.x = stride * 0.78;
+        armRight.shoulder.rotation.z = 0.08;
+        armRight.elbow.rotation.x = 0.75 - stride * 0.18;
       }
 
+      // Fluttering wind scarf trail
+      const scarfSpeed = s.phase === "playing" ? 13 : 3.5;
+      scarfA.rotation.x = 0.25 + Math.sin(elapsed * scarfSpeed) * 0.18;
+      scarfA.rotation.y = -s.leanAngle * 0.7;
+      scarfB.rotation.x = Math.sin(elapsed * scarfSpeed - 1.1) * 0.24;
+
       sneakerMat.visible = s.sneakersTimer > 0;
-      boardGroup.visible = s.hoverboardTimer > 0;
-      if (s.hoverboardTimer > 0) {
-        shieldDome.rotation.y = elapsed * 1.8;
+      boardGroup.visible = surfing;
+      if (surfing) {
+        boardGroup.rotation.z = -s.leanAngle * 1.15;
+        shieldDome.rotation.y = elapsed * 2.0;
       }
-      jetGroup.visible = s.jetpackTimer > 0;
+      jetGroup.visible = jetting;
+      if (jetting) {
+        flames.forEach((f, idx) => {
+          f.scale.y = 0.85 + Math.sin(elapsed * 42 + idx * 1.7) * 0.32;
+        });
+      }
 
       dropHalo.position.set(rx, floorY + 0.08, 0);
       const shadowShrink = Math.max(0.4, 1 - Math.max(0, s.y - s.groundY) * 0.25);
-      dropHalo.scale.set(1.8 * shadowShrink, 1.8 * shadowShrink, 1);
+      dropHalo.scale.set(1.9 * shadowShrink, 1.9 * shadowShrink, 1);
 
       if (s.chaserTimer > 0 && s.phase === "playing") {
         chaserGroup.visible = true;
@@ -666,12 +851,19 @@ const TornadoSurfers3DScene = ({ simRef, onStep, onSwipeMove, onSwipeJump, onSwi
         chaserGroup.visible = false;
       }
 
-      // Frame-rate independent smooth camera follow
+      // Frame-rate independent smooth camera follow + speed-reactive FOV
       const camLerp = 1 - Math.exp(-12 * dt);
+      const baseFov = container.clientWidth / Math.max(1, container.clientHeight) < 0.75 ? 66 : 58;
+      const speedFovBoost = Math.min(6, (s.speed / BASE_SPEED - 1) * 4.5 + (jetting ? 3 : 0));
+      const desiredFov = baseFov + speedFovBoost;
+      if (Math.abs(camera.fov - desiredFov) > 0.05) {
+        camera.fov += (desiredFov - camera.fov) * camLerp;
+        camera.updateProjectionMatrix();
+      }
       const shakeMag = s.shakeTimer > 0 ? s.shakeIntensity * (s.shakeTimer / 0.45) : 0;
       const sx = shakeMag ? (Math.random() - 0.5) * shakeMag : 0;
       const sy = shakeMag ? (Math.random() - 0.5) * shakeMag : 0;
-      const targetCamZ = s.jetpackTimer > 0 ? 7.1 : 6.2;
+      const targetCamZ = jetting ? 7.1 : 6.2;
 
       camera.position.x += (rx * 0.55 - camera.position.x) * camLerp + sx;
       camera.position.y += (4.35 + ry * 0.78 - camera.position.y) * camLerp + sy;
