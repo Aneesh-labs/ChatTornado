@@ -1993,40 +1993,238 @@ async def ai_arcade_companion(
     }
 
 
-def create_live_ephemeral_token(user_id: int, db: Session, game_id: str = "subwaysurfers") -> Dict[str, Any]:
+def create_live_ephemeral_token(
+    user_id: int,
+    db: Session,
+    game_id: str = "subwaysurfers",
+    extended_thinking: bool = False,
+) -> Dict[str, Any]:
     """Mints a single-use Gemini 3.8 Live ephemeral auth token for low-latency client WebSocket voice."""
+    model_name = "gemini-3.8-live-extended-thinking" if extended_thinking else "gemini-3.8-live"
     api_key = os.getenv("GEMINI_API_KEY", "").strip()
     if not api_key:
-        return {"available": False, "reason": "GEMINI_API_KEY not configured", "model": "gemini-3.8-live"}
+        return {"available": False, "reason": "GEMINI_API_KEY not configured", "model": model_name}
 
     persona = get_user_persona(user_id, db) or ""
     sys_text = (
-        f"You are a concise real-time voice companion inside ChatTornado's {game_id}. "
-        f"Personalization context: {persona[:300]}"
+        f"You are a crisp, engaging real-time voice co-pilot inside ChatTornado Arcade ({game_id}). "
+        f"Give tactical callouts under 2 sentences matching player context: {persona[:300]}"
     )
     try:
         from google import genai
         client = genai.Client(api_key=api_key, http_options={"api_version": "v1alpha"})
+        live_config: Dict[str, Any] = {
+            "response_modalities": ["AUDIO"],
+            "input_audio_transcription": {},
+            "output_audio_transcription": {},
+            "system_instruction": {"parts": [{"text": sys_text}]},
+        }
+        if extended_thinking:
+            live_config["thinking_config"] = {"thinking_level": "low"}
         token = client.auth_tokens.create(
             config={
                 "uses": 1,
                 "live_connect_constraints": {
-                    "model": "gemini-3.8-live",
-                    "config": {
-                        "response_modalities": ["AUDIO"],
-                        "system_instruction": {"parts": [{"text": sys_text}]},
-                    },
+                    "model": model_name,
+                    "config": live_config,
                 },
             }
         )
         return {
             "available": True,
             "token": getattr(token, "name", None),
-            "model": "gemini-3.8-live",
+            "model": model_name,
         }
     except Exception as exc:
         logger.warning("Gemini Live ephemeral token unavailable: %s", exc)
-        return {"available": False, "reason": str(exc), "model": "gemini-3.8-live"}
+        return {"available": False, "reason": str(exc), "model": model_name}
+
+
+async def ai_arcade_mission(
+    user_id: int,
+    db: Session,
+    game_id: str = "auto",
+    high_scores: Optional[Dict[str, Any]] = None,
+    player_context: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    """Generates a personalized structured AI mission card via Gemini 3.8 Flash Interactions API."""
+    import json
+
+    persona = get_user_persona(user_id, db) or ""
+    user = db.query(User).filter(User.id == user_id).first()
+    callsign = (player_context or {}).get("callsign") or (user.username if user else "Explorer")
+    playstyle = (player_context or {}).get("playstyle") or "Adaptive Strategist"
+    scores = high_scores or {}
+
+    mission_schema = {
+        "type": "object",
+        "properties": {
+            "recommended_game": {"type": "string"},
+            "title": {"type": "string"},
+            "objective": {"type": "string"},
+            "target_score": {"type": "integer"},
+            "strategy_tip": {"type": "string"},
+            "live_callout": {"type": "string"},
+        },
+        "required": ["recommended_game", "title", "objective", "target_score", "strategy_tip", "live_callout"],
+    }
+
+    prompt = (
+        f"Create one personalized arcade challenge for {callsign} (Playstyle: {playstyle}). "
+        f"Requested game: {game_id}. High scores JSON: {json.dumps(scores)}. "
+        f"Saved persona: {persona[:240] or 'None'}. "
+        "Keep title under 6 words, objective crisp, strategy_tip genuinely tactical, live_callout speakable aloud."
+    )
+
+    api_key = os.getenv("GEMINI_API_KEY", "").strip()
+    if api_key:
+        try:
+            from google import genai
+
+            client = genai.Client(api_key=api_key)
+            interaction = client.interactions.create(
+                model="gemini-3.8-flash",
+                input=prompt,
+                response_format={
+                    "type": "text",
+                    "mime_type": "application/json",
+                    "schema": mission_schema,
+                },
+                generation_config={"max_output_tokens": 300},
+            )
+            raw_text = (getattr(interaction, "output_text", None) or "").strip()
+            if raw_text:
+                data = json.loads(raw_text)
+                return {**data, "model": "gemini-3.8-flash", "personalized": True}
+        except Exception as exc:
+            logger.warning("ai_arcade_mission structured output fallback: %s", exc)
+
+    chosen = "subwaysurfers" if game_id == "auto" else game_id
+    prev_best = int(scores.get(chosen, 0) or 0)
+    target = max(1200, int(prev_best * 1.2) + 400)
+    game_tips = {
+        "afterspace": ("Shift Timeline across PAST/FUTURE & align XW 45° / YW 35°", "Quiet focus across four axes, Explorer."),
+        "subwaysurfers": ("Chain ramp-to-train-roof runs & save Hoverboards for Express lanes", "Keep your momentum high on the train roofs!"),
+        "vortexbastion": ("Combine Cryo slow towers with Tesla shields & Mortar splash", "Freeze the vanguard before they breach!"),
+        "neonblade": ("Time releases through Razor Graze windows for Overdrive 2x", "Hold steady for the gold core window!"),
+        "snake": ("Sweep perimeter lanes cleanly before carving inward", "Wide sweeps first, tight spirals second!"),
+        "flappy": ("Collect Golden Wind Crystals inside gate centers for +3 streaks", "Feather your climb right through the crystal ring!"),
+        "2048": ("Anchor your highest tile cleanly in one corner", "Lock the corner anchor and feed along one wall."),
+        "memory": ("Reveal corners sequentially to lock fast streak multipliers", "Track your last three pairs carefully!"),
+        "zombie": ("Kite swarms wide and trigger EMP bombs only when surrounded", "Circle wide and save your EMP!"),
+        "neondodge": ("Skim laser wings close enough for +15 Graze combos with Shield up", "Ride the edge for graze points!"),
+        "nullnorth": ("Sync terminal codes early before corruption spikes", "Relay the sequence to your squadmate!"),
+    }
+    tip, callout = game_tips.get(chosen, ("Chain combos and manage cooldowns cleanly.", "Lock in your next personal best!"))
+    return {
+        "recommended_game": chosen,
+        "title": f"{callsign}'s {playstyle.split()[0]} Trial",
+        "objective": f"Reach {target:,} pts using {playstyle} tactics.",
+        "target_score": target,
+        "strategy_tip": tip,
+        "live_callout": f"{callsign}, {callout}",
+        "model": "personalized-local",
+        "personalized": True,
+    }
+
+
+async def ai_arcade_tts(
+    text: str,
+    style: str = "energetic yet concise",
+    voice: str = "Kore",
+) -> Dict[str, Any]:
+    """Converts an Arcade AI line into WAV audio using Gemini 3.8 Flash TTS."""
+    clean = (text or "").strip()[:360]
+    if not clean:
+        return {"available": False, "audio_base64": None, "mime_type": None}
+
+    api_key = os.getenv("GEMINI_API_KEY", "").strip()
+    if api_key:
+        try:
+            from google import genai
+
+            client = genai.Client(api_key=api_key)
+            interaction = client.interactions.create(
+                model="gemini-3.8-flash-tts",
+                input=[
+                    {
+                        "type": "user_input",
+                        "content": [
+                            {
+                                "type": "text",
+                                "text": clean,
+                                "annotations": [
+                                    {
+                                        "type": "speech_metadata",
+                                        "style": style,
+                                    }
+                                ],
+                            }
+                        ],
+                    }
+                ],
+                response_format={"type": "audio"},
+                generation_config={
+                    "speech_config": [{"voice": voice}],
+                },
+            )
+            out_audio = getattr(interaction, "output_audio", None)
+            if out_audio and getattr(out_audio, "data", None):
+                return {
+                    "available": True,
+                    "audio_base64": out_audio.data,
+                    "mime_type": getattr(out_audio, "mime_type", None) or "audio/wav",
+                    "model": "gemini-3.8-flash-tts",
+                }
+        except Exception as exc:
+            logger.warning("Gemini 3.8 TTS fallback: %s", exc)
+
+    return {"available": False, "audio_base64": None, "mime_type": None, "model": "browser-tts-fallback"}
+
+
+async def ai_arcade_emblem(
+    user_id: int,
+    db: Session,
+    game_id: str = "afterspace",
+    achievement: str = "Grandmaster Run",
+    callsign: str = "Explorer",
+) -> Dict[str, Any]:
+    """Generates a custom Arcade trophy/profile emblem via Gemini Nano Banana 2.1."""
+    api_key = os.getenv("GEMINI_API_KEY", "").strip()
+    aesthetic = (
+        "Quiet Cosmic Minimalism dark ink charcoal basalt brushed antique gold architectural crest, zero text"
+        if game_id == "afterspace"
+        else "Sleek geometric minimalist metallic arcade medallion emblem on deep emerald slate, zero text"
+    )
+    prompt = f"Create a clean square minimalist collector medallion icon for '{game_id}' ({achievement}) for {callsign}. Style: {aesthetic}."
+
+    if api_key:
+        try:
+            from google import genai
+
+            client = genai.Client(api_key=api_key)
+            interaction = client.interactions.create(
+                model="gemini-nano-banana-2.1",
+                input=prompt,
+                response_format={"type": "image"},
+            )
+            out_img = getattr(interaction, "output_image", None)
+            if out_img and getattr(out_img, "data", None):
+                return {
+                    "available": True,
+                    "image_base64": out_img.data,
+                    "mime_type": getattr(out_img, "mime_type", None) or "image/png",
+                    "model": "gemini-nano-banana-2.1",
+                }
+        except Exception as exc:
+            logger.warning("Nano Banana 2.1 emblem fallback: %s", exc)
+
+    return {
+        "available": False,
+        "image_base64": None,
+        "mime_type": None,
+        "model": "svg-local",
+    }
 
 
 

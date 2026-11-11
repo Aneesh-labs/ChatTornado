@@ -15,6 +15,9 @@ from ai_service import (
     ai_smart_replies,
     fetch_openrouter_models,
     ai_arcade_companion,
+    ai_arcade_mission,
+    ai_arcade_tts,
+    ai_arcade_emblem,
     create_live_ephemeral_token,
 )
 
@@ -327,9 +330,75 @@ async def arcade_companion_endpoint(
 @router.post("/live-token")
 def live_ephemeral_token_endpoint(
     game_id: str = Query("subwaysurfers"),
+    extended_thinking: bool = Query(False),
     user_id: int = Depends(get_current_user_id),
     db: Session = Depends(get_db),
 ):
     """Mints a single-use Gemini 3.8 Live ephemeral auth token without exposing server API keys."""
-    return create_live_ephemeral_token(user_id=user_id, db=db, game_id=game_id)
+    return create_live_ephemeral_token(
+        user_id=user_id,
+        db=db,
+        game_id=game_id,
+        extended_thinking=extended_thinking,
+    )
+
+
+class ArcadeMissionRequest(BaseModel):
+    game_id: str = "auto"
+    high_scores: Optional[Dict[str, Any]] = None
+    player_context: Optional[Dict[str, Any]] = None
+
+
+@router.post("/arcade-mission")
+async def arcade_mission_endpoint(
+    req: ArcadeMissionRequest,
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(get_db),
+):
+    """Structured Gemini 3.8 Flash mission card personalized to player history & high scores."""
+    return await ai_arcade_mission(
+        user_id=user_id,
+        db=db,
+        game_id=req.game_id,
+        high_scores=req.high_scores,
+        player_context=req.player_context,
+    )
+
+
+class ArcadeTtsRequest(BaseModel):
+    text: str
+    style: Optional[str] = "energetic yet concise"
+    voice: Optional[str] = "Kore"
+
+
+@router.post("/arcade-tts")
+async def arcade_tts_endpoint(
+    req: ArcadeTtsRequest,
+    user_id: int = Depends(get_current_user_id),
+):
+    """Expressive speech generation via Gemini 3.8 Flash TTS with WAV audio output."""
+    _ = user_id
+    return await ai_arcade_tts(text=req.text, style=req.style or "energetic yet concise", voice=req.voice or "Kore")
+
+
+class ArcadeEmblemRequest(BaseModel):
+    game_id: str = "afterspace"
+    achievement: str = "Master Run"
+    callsign: Optional[str] = "Explorer"
+
+
+@router.post("/arcade-emblem")
+async def arcade_emblem_endpoint(
+    req: ArcadeEmblemRequest,
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(get_db),
+):
+    """Generates a custom Arcade trophy/medallion icon via Gemini Nano Banana 2.1."""
+    return await ai_arcade_emblem(
+        user_id=user_id,
+        db=db,
+        game_id=req.game_id,
+        achievement=req.achievement,
+        callsign=req.callsign or "Explorer",
+    )
 

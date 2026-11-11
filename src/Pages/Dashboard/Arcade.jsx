@@ -15,9 +15,11 @@ import {
     Shield,
     Bomb,
     Compass,
+    Bot,
 } from "lucide-react";
 import { soundEngine } from "../../utils/soundEffects";
 import API from "../../Services/API";
+import ArcadeAiCopilotModal from "../../Components/games/ArcadeAiCopilotModal";
 import TornadoSurfersGame from "../../Components/games/TornadoSurfersGame";
 import VortexBastionGame from "../../Components/games/vortexBastion/VortexBastionGame";
 import NeonBladeGame from "../../Components/games/NeonBladeGame";
@@ -1575,6 +1577,7 @@ export default function Arcade() {
         initialNullNorth && initialNullNorth !== "HUB" ? initialNullNorth : ""
     );
     const [isMuted, setIsMuted] = useState(false);
+    const [aiHubOpen, setAiHubOpen] = useState(false);
     const handleBack = useCallback(() => {
         setSelectedGame(null);
         setNullNorthInviteCode("");
@@ -1711,7 +1714,15 @@ export default function Arcade() {
                         </p>
                     </div>
 
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-2.5 sm:gap-3">
+                        <button
+                            type="button"
+                            onClick={() => setAiHubOpen(true)}
+                            className="px-3.5 py-2.5 rounded-2xl bg-gradient-to-r from-violet-600/80 to-indigo-600/80 hover:from-violet-500 hover:to-indigo-500 border border-violet-300/35 text-white text-xs sm:text-sm font-black flex items-center gap-2 shadow-lg transition cursor-pointer"
+                        >
+                            <Bot className="h-4 w-4 text-amber-300" />
+                            <span>Gemini AI Hub</span>
+                        </button>
                         <button
                             type="button"
                             onClick={() => setIsMuted((m) => !m)}
@@ -1831,6 +1842,25 @@ export default function Arcade() {
                     </div>
                 )}
             </section>
+
+            {/* Discreet Universal In-Game Gemini AI Co-Pilot Button for non-fullscreen games */}
+            {selectedGame && !["subwaysurfers", "afterspace"].includes(selectedGame) && (
+                <button
+                    type="button"
+                    onClick={() => setAiHubOpen(true)}
+                    className="fixed bottom-4 right-4 z-[60] px-3.5 py-2.5 rounded-2xl bg-violet-600/90 hover:bg-violet-500 border border-violet-300/40 text-white text-xs font-black flex items-center gap-2 shadow-xl backdrop-blur-md cursor-pointer"
+                >
+                    <Bot className="w-4 h-4 text-amber-300" />
+                    <span>AI Co-Pilot</span>
+                </button>
+            )}
+
+            <ArcadeAiCopilotModal
+                isOpen={aiHubOpen}
+                activeGameId={selectedGame || "auto"}
+                onSelectGame={(gid) => setSelectedGame(gid)}
+                onClose={() => setAiHubOpen(false)}
+            />
         </main>
     );
 }
