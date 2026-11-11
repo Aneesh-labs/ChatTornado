@@ -357,53 +357,56 @@ function buildArticulatedRunner3D(glowTex) {
   const trimMat = new THREE.MeshBasicMaterial({ color: 0x6ee7b7 });
   const scarfMat = new THREE.MeshBasicMaterial({ color: 0xa7f3d0 });
 
-  const pelvis = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.18, 0.28), limbMat);
+  const pelvis = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.19, 0.2, 12), limbMat);
   pelvis.position.y = 0.78;
   bodyTilt.add(pelvis);
 
-  const torso = new THREE.Mesh(new THREE.BoxGeometry(0.54, 0.58, 0.32), torsoMat);
+  const torso = new THREE.Mesh(new THREE.CapsuleGeometry(0.24, 0.34, 8, 14), torsoMat);
   torso.position.y = 1.15;
+  torso.scale.set(1.12, 1.0, 0.72);
   bodyTilt.add(torso);
 
-  const chestCore = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.18, 0.35), trimMat);
-  chestCore.position.y = 1.22;
+  const chestCore = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.11, 0.06, 12), trimMat);
+  chestCore.rotation.x = Math.PI / 2;
+  chestCore.position.set(0, 1.24, -0.17);
   bodyTilt.add(chestCore);
 
   const head = new THREE.Mesh(
-    new THREE.SphereGeometry(0.24, 16, 14),
-    new THREE.MeshStandardMaterial({ color: 0xf0fdf4, roughness: 0.28 })
+    new THREE.SphereGeometry(0.24, 18, 16),
+    new THREE.MeshStandardMaterial({ color: 0xf0fdf4, roughness: 0.26, metalness: 0.08 })
   );
   head.position.y = 1.68;
   bodyTilt.add(head);
 
-  const visor = new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.12, 0.16), trimMat);
-  visor.position.set(0, 1.69, -0.18);
+  const visor = new THREE.Mesh(new THREE.CapsuleGeometry(0.065, 0.22, 6, 10), trimMat);
+  visor.rotation.z = Math.PI / 2;
+  visor.position.set(0, 1.69, -0.19);
   bodyTilt.add(visor);
 
   // Flowing 3-link trailing surfer scarf
   const scarfA = new THREE.Group();
   scarfA.position.set(0, 1.44, 0.18);
-  const sMeshA = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.06, 0.34), scarfMat);
+  const sMeshA = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.05, 0.34), scarfMat);
   sMeshA.position.z = 0.16;
   scarfA.add(sMeshA);
   const scarfB = new THREE.Group();
   scarfB.position.z = 0.32;
-  const sMeshB = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.05, 0.34), trimMat);
+  const sMeshB = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.04, 0.34), trimMat);
   sMeshB.position.z = 0.16;
   scarfB.add(sMeshB);
   scarfA.add(scarfB);
   bodyTilt.add(scarfA);
 
-  // Articulated 2-joint Legs (Hip + Knee + Shin + Sneakers)
+  // Articulated 2-joint Capsule Legs (Hip + Knee + Shin + Sneakers)
   const buildLeg = (sx) => {
     const hip = new THREE.Group();
     hip.position.set(sx, 0.76, 0);
-    const thigh = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.36, 0.2), limbMat);
+    const thigh = new THREE.Mesh(new THREE.CapsuleGeometry(0.095, 0.24, 6, 10), limbMat);
     thigh.position.y = -0.18;
     hip.add(thigh);
     const knee = new THREE.Group();
     knee.position.y = -0.36;
-    const calf = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.36, 0.18), torsoMat);
+    const calf = new THREE.Mesh(new THREE.CapsuleGeometry(0.08, 0.24, 6, 10), torsoMat);
     calf.position.y = -0.18;
     knee.add(calf);
     hip.add(knee);
@@ -413,16 +416,16 @@ function buildArticulatedRunner3D(glowTex) {
   const legRight = buildLeg(0.15);
   bodyTilt.add(legLeft.hip, legRight.hip);
 
-  // Articulated 2-joint Arms (Shoulder + Elbow + Forearm)
+  // Articulated 2-joint Capsule Arms (Shoulder + Elbow + Forearm)
   const buildArm = (sx) => {
     const shoulder = new THREE.Group();
     shoulder.position.set(sx, 1.38, 0);
-    const upper = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.3, 0.16), torsoMat);
+    const upper = new THREE.Mesh(new THREE.CapsuleGeometry(0.072, 0.2, 6, 10), torsoMat);
     upper.position.y = -0.14;
     shoulder.add(upper);
     const elbow = new THREE.Group();
     elbow.position.y = -0.28;
-    const fore = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.28, 0.14), limbMat);
+    const fore = new THREE.Mesh(new THREE.CapsuleGeometry(0.062, 0.2, 6, 10), limbMat);
     fore.position.y = -0.14;
     elbow.add(fore);
     shoulder.add(elbow);
@@ -433,17 +436,20 @@ function buildArticulatedRunner3D(glowTex) {
   bodyTilt.add(armLeft.shoulder, armRight.shoulder);
 
   const sneakerMat = new THREE.MeshBasicMaterial({ color: 0x86efac, visible: false });
-  const shoeL = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.15, 0.36), sneakerMat);
-  shoeL.position.set(0, -0.34, -0.05);
+  const shoeL = new THREE.Mesh(new THREE.CapsuleGeometry(0.08, 0.16, 6, 10), sneakerMat);
+  shoeL.rotation.x = Math.PI / 2;
+  shoeL.position.set(0, -0.34, -0.06);
   const shoeR = shoeL.clone();
   legLeft.knee.add(shoeL);
   legRight.knee.add(shoeR);
 
   const boardGroup = new THREE.Group();
   const deck = new THREE.Mesh(
-    new THREE.BoxGeometry(0.58, 0.09, 1.56),
-    new THREE.MeshStandardMaterial({ color: 0x34d399, emissive: 0x10b981, emissiveIntensity: 1.4 })
+    new THREE.CapsuleGeometry(0.28, 1.12, 8, 12),
+    new THREE.MeshStandardMaterial({ color: 0x34d399, emissive: 0x10b981, emissiveIntensity: 1.35 })
   );
+  deck.rotation.x = Math.PI / 2;
+  deck.scale.set(1.0, 1.0, 0.2);
   deck.position.y = 0.12;
   boardGroup.add(deck);
   const shieldDome = new THREE.Mesh(
@@ -554,6 +560,15 @@ const TornadoSurfers3DScene = ({ simRef, onStep, onSwipeMove, onSwipeJump, onSwi
     trackFloor.rotation.x = -Math.PI / 2;
     trackFloor.position.set(0, 0, -28);
     scene.add(trackFloor);
+
+    // Clean raised side embankments grounding the skyline towers
+    const bankMat = new THREE.MeshStandardMaterial({ color: 0x03221a, metalness: 0.3, roughness: 0.72 });
+    for (const bx of [-6.8, 6.8]) {
+      const bank = new THREE.Mesh(geos.unitBox, bankMat);
+      bank.scale.set(4.6, 0.6, 76);
+      bank.position.set(bx, 0.25, -28);
+      scene.add(bank);
+    }
 
     const railMat = new THREE.MeshBasicMaterial({ color: 0x34d399 });
     for (const laneIdx of [-1, 0, 1]) {
@@ -869,6 +884,7 @@ const TornadoSurfers3DScene = ({ simRef, onStep, onSwipeMove, onSwipeJump, onSwi
       camera.position.y += (4.35 + ry * 0.78 - camera.position.y) * camLerp + sy;
       camera.position.z += (targetCamZ - camera.position.z) * camLerp;
       camera.lookAt(rx * 0.35, ry * 0.55 + 1.35, -7.5);
+      camera.rotation.z += (-s.leanAngle * 0.12 - camera.rotation.z) * camLerp;
 
       if (s.waveIndex === 0 && s.distance < 0.05 && exitingMeshes.length > 0) {
         while (exitingMeshes.length > 0) {
