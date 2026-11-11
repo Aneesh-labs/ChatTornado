@@ -7,6 +7,7 @@ const GameHUD = ({
   bearingDeg = 0,
   suitEnergy,
   stability,
+  waypoint = null,
   activeObjective,
   nearestInteractable,
   atFracturedSpan = false,
@@ -39,11 +40,16 @@ const GameHUD = ({
             {region?.name || "The Forgotten Gateway"}
           </div>
           <div className="as-tech-label text-[#8F938C] mt-0.5">
-            {region?.code || "EXPEDITION 01 / REGION 01"} •{" "}
+            {region?.code || "SECTOR 01 / CENTRAL"} •{" "}
             <span className="as-mono text-[#D5D2C8]">
               {String(bearingDeg).padStart(3, "0")}°
             </span>
           </div>
+          {waypoint && (
+            <div className="as-tech-label text-[#B99A70] mt-1">
+              BEACON: {waypoint.label} • <span className="as-mono">{waypoint.dist}m</span>
+            </div>
+          )}
         </div>
 
         <div className={`flex items-start gap-6 transition-opacity duration-300 ${interactOpacity} as-direct-shadow`}>
@@ -248,15 +254,33 @@ const GameHUD = ({
               <span className="as-mono text-[#8F938C]">M</span>
             </button>
 
-            <button
-              type="button"
-              onClick={onAskGuide}
-              className="h-8 px-2.5 rounded-[2px] border border-[#B99A70]/35 bg-[#151A19]/70 text-[#EDEAE1] hover:border-[#B99A70]/75 text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
-            >
-              <Sparkles className="w-3.5 h-3.5 text-[#B99A70]" />
-              <span className="hidden md:inline">Guide</span>
-              <span className="as-mono text-[#8F938C]">G</span>
-            </button>
+            <div className="flex flex-wrap items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => onAskGuide()}
+                className="h-8 px-2.5 rounded-[2px] border border-[#B99A70]/35 bg-[#151A19]/70 text-[#EDEAE1] hover:border-[#B99A70]/75 text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-[#B99A70]" />
+                <span className="hidden md:inline">Guide</span>
+                <span className="as-mono text-[#8F938C]">G</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => onAskGuide("Guide me to the West Sundial")}
+                title="AI Waypoint: West Sundial Basin"
+                className="hidden sm:flex h-8 px-2 rounded-[2px] border border-[#E8E9E2]/12 bg-[#151A19]/65 text-[#BEBDB2] hover:text-[#B99A70] text-xs items-center cursor-pointer"
+              >
+                West
+              </button>
+              <button
+                type="button"
+                onClick={() => onAskGuide("Guide me to the East Pillars")}
+                title="AI Waypoint: East Echoing Pillars"
+                className="hidden sm:flex h-8 px-2 rounded-[2px] border border-[#E8E9E2]/12 bg-[#151A19]/65 text-[#BEBDB2] hover:text-[#B99A70] text-xs items-center cursor-pointer"
+              >
+                East
+              </button>
+            </div>
           </div>
         </div>
 
@@ -310,6 +334,7 @@ GameHUD.propTypes = {
   bearingDeg: PropTypes.number,
   suitEnergy: PropTypes.number.isRequired,
   stability: PropTypes.number.isRequired,
+  waypoint: PropTypes.object,
   activeObjective: PropTypes.object,
   nearestInteractable: PropTypes.object,
   atFracturedSpan: PropTypes.bool,

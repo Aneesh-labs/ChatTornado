@@ -5,7 +5,9 @@ import {
   ARTIFACT_CATALOG,
   INTERACTABLES,
   TESSERACT_TOPOLOGY,
+  UPDRAFTS,
   findNearestInteractable,
+  getWorldGroundY,
   project4Dto3D,
   stepAfterspaceState,
 } from "./afterspaceEngine";
@@ -37,6 +39,12 @@ void main() {
   vec3 col = mix(uHorizon, uMid, smoothstep(0.0, 0.28, h));
   col = mix(col, uZenith, smoothstep(0.28, 0.88, h));
 
+  // Simple-math directional horizon solar corona & twilight atmospheric scatter
+  vec3 sunDir = normalize(vec3(-0.22, 0.26, -0.94));
+  float sunAlign = max(0.0, dot(dir, sunDir));
+  col += vec3(0.45, 0.34, 0.21) * pow(sunAlign, 6.0) * 0.45;
+  col += vec3(0.92, 0.85, 0.72) * pow(sunAlign, 48.0) * 0.35;
+
   // Subtle observatory starfield high above horizon
   vec3 starGrid = floor(dir * 210.0);
   float starSeed = hash3(starGrid);
@@ -50,13 +58,7 @@ void main() {
 }
 `;
 
-function computeTargetElevation(x, z) {
-  if (z > 23.2) return 0.48;
-  if (z > 21.0) return 0.24;
-  if (z >= -4.2 && z <= 1.2 && Math.hypot(x, z + 1.5) < 6.4) return -0.22;
-  if (z <= -16.5 && z >= -22.2 && Math.hypot(x, z + 19.0) < 4.5) return 0.22;
-  return 0.0;
-}
+const computeTargetElevation = getWorldGroundY;
 
 const AfterspaceWorld3D = ({
   simRef,
@@ -314,31 +316,38 @@ const AfterspaceWorld3D = ({
       return m;
     };
 
-    // Sculpted Sandstone-Basalt Canyon Valley Terrain around the Sanctuary
-    const terrainSegs = lowPower ? 22 : 56;
-    const terrainGeo = new THREE.PlaneGeometry(240, 240, terrainSegs, terrainSegs);
+    // Simple-math Walkable Open-World Dune & Canyon Heightfield with Vertex Color Shading
+    const terrainSegs = lowPower ? 28 : 64;
+    const terrainGeo = new THREE.PlaneGeometry(175, 175, terrainSegs, terrainSegs);
     terrainGeo.rotateX(-Math.PI / 2);
     const tPos = terrainGeo.attributes.position;
+    const tColors = new Float32Array(tPos.count * 3);
     for (let i = 0; i < tPos.count; i += 1) {
       const tx = tPos.getX(i);
       const tz = tPos.getZ(i);
-      const canyonDist = Math.max(0, Math.abs(tx) - 14.5);
-      const ridge =
-        Math.pow(canyonDist * 0.11, 1.35) * 4.2 +
-        Math.sin(tx * 0.09) * Math.cos(tz * 0.08) * 2.4;
-      const chasmDip = tz > 1.5 && tz < 10.5 && Math.abs(tx) < 15 ? -3.5 : 0;
-      tPos.setY(i, -6.2 + ridge + chasmDip);
+      const inSpinePlaza = Math.abs(tx) <= 13.0 && tz >= -30 && tz <= 29;
+      const chasmDip = tz > 1.8 && tz < 10.2 && Math.abs(tx) < 13.0 ? -5.2 : 0;
+      const baseY = inSpinePlaza ? -0.35 + chasmDip : getWorldGroundY(tx, tz);
+      tPos.setY(i, baseY);
+
+      // Cheap analytical vertex palette: warm sandstone crests + cool basalt troughs
+      const elevMix = Math.max(0, Math.min(1, (baseY + 1.5) / 5.5));
+      const westWarmth = tx < -12 ? 0.06 : 0;
+      tColors[i * 3] = 0.14 + elevMix * 0.2 + westWarmth;
+      tColors[i * 3 + 1] = 0.14 + elevMix * 0.16;
+      tColors[i * 3 + 2] = 0.13 + elevMix * 0.11;
     }
+    terrainGeo.setAttribute("color", new THREE.BufferAttribute(tColors, 3));
     terrainGeo.computeVertexNormals();
     const canyonTerrain = new THREE.Mesh(
       terrainGeo,
       new THREE.MeshStandardMaterial({
-        color: 0x262422,
-        roughness: 0.94,
-        metalness: 0.04,
+        vertexColors: true,
+        roughness: 0.92,
+        metalness: 0.05,
       })
     );
-    canyonTerrain.receiveShadow = true;
+    canyonTerrain.receiveShadow = !lowPower;
     scene.add(canyonTerrain);
 
     // Subtle Volumetric Sunlight Shafts streaming through Ancient Gate Oculus & Observatory (desktop quality only)
@@ -600,13 +609,120 @@ const AfterspaceWorld3D = ({
       scene.add(m);
     });
 
+    // ─── REGION 04: THE SUNKEN SUNDIAL BASIN (x=-28, z=4) ──────────
+    const sundialGroup = new THREE.Group();
+    const dialGround = getWorldGroundY(-28, 4);
+    sundialGroup.position.set(-28, dialGround, 4);
+    scene.add(sundialGroup);
+    const dialDisc = new THREE.Mesh(new THREE.CylinderGeometry(6.8, 7.2, 0.24, 32), travertineMat);
+    dialDisc.receiveShadow = !lowPower;
+    sundialGroup.add(dialDisc);
+    const dialRing = new THREE.Mesh(new THREE.RingGeometry(5.9, 6.2, 40), brassMat);
+    dialRing.rotation.x = -Math.PI / 2;
+    dialRing.position.y = 0.14;
+    sundialGroup.add(dialRing);
+    for (let i = 0; i < 11; i += 1) {
+      const ang = i * (Math.PI * 2 / 11);
+      const rad = 5.4;
+      const h = 1.6 + (i % 4) * 0.65;
+      addShadowBox(
+        sundialGroup,
+        0.55,
+        h,
+        0.38,
+        Math.cos(ang) * rad,
+        h * 0.5,
+        Math.sin(ang) * rad,
+        i % 2 === 0 ? slateMat : travertineMat,
+        0,
+        -ang,
+        0
+      );
+    }
+    // Tilted Helical Solar Gnomon Needle
+    addShadowBox(sundialGroup, 0.45, 7.6, 0.55, 0, 3.4, 0, brassMat, -0.34, 0.22, 0.18);
+
+    // ─── REGION 05: THE ECHOING PILLARS (x=29, z=-6) ─────────────
+    const pillarsGroup = new THREE.Group();
+    pillarsGroup.position.set(29, getWorldGroundY(29, -6), -6);
+    scene.add(pillarsGroup);
+    const pillarDisc = new THREE.Mesh(new THREE.CylinderGeometry(8.5, 9.0, 0.28, 28), slateMat);
+    pillarsGroup.add(pillarDisc);
+    const goldenAngle = 2.39996;
+    const phylloCount = lowPower ? 12 : 18;
+    for (let i = 1; i <= phylloCount; i += 1) {
+      const r = 1.85 * Math.sqrt(i);
+      const th = i * goldenAngle;
+      const h = 2.4 + Math.sin(i * 0.72) * 1.9 + i * 0.12;
+      const px = Math.cos(th) * r;
+      const pz = Math.sin(th) * r;
+      const pMesh = addShadowBox(
+        pillarsGroup,
+        0.65,
+        h,
+        0.65,
+        px,
+        h * 0.5,
+        pz,
+        i % 3 === 0 ? ivoryAccentMat : basaltMat,
+        0,
+        th,
+        0
+      );
+      if (i % 4 === 0) {
+        const crown = new THREE.Mesh(new THREE.TorusGeometry(0.45, 0.04, 8, 20), brassMat);
+        crown.rotation.x = Math.PI / 2;
+        crown.position.set(px, h + 0.18, pz);
+        pillarsGroup.add(crown);
+      }
+      void pMesh;
+    }
+
+    // ─── REGION 06: SOUTHERN HORIZON BEACON (x=-18, z=32) ─────────
+    const beaconBaseY = getWorldGroundY(-18, 32);
+    addShadowBox(scene, 2.2, 0.35, 2.2, -18, beaconBaseY + 0.15, 32, travertineMat);
+    addShadowBox(scene, 0.65, 4.2, 0.65, -18, beaconBaseY + 2.2, 32, brassMat, 0, 0.6, 0.1);
+
+    // ─── THERMAL UPDRAFT RINGS (Glider Launch Vents) ─────────────
+    const updraftRings = [];
+    const updraftMat = new THREE.MeshBasicMaterial({
+      color: 0xb99a70,
+      transparent: true,
+      opacity: 0.45,
+      side: THREE.DoubleSide,
+    });
+    UPDRAFTS.forEach((up, idx) => {
+      const baseH = getWorldGroundY(up.x, up.z);
+      const ur = new THREE.Mesh(new THREE.TorusGeometry(1.65, 0.045, 8, 28), updraftMat);
+      ur.rotation.x = Math.PI / 2;
+      ur.position.set(up.x, baseH + 0.4, up.z);
+      scene.add(ur);
+      updraftRings.push({ mesh: ur, baseH, phase: idx * 1.4 });
+    });
+
+    // ─── ACTIVE AI WAYPOINT SKY BEACON BEAM ────────────────────────
+    const waypointBeamMat = new THREE.MeshBasicMaterial({
+      color: 0xb99a70,
+      transparent: true,
+      opacity: 0.24,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+    });
+    const waypointBeam = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.28, 0.72, 36, 16, 1, true),
+      waypointBeamMat
+    );
+    waypointBeam.visible = false;
+    scene.add(waypointBeam);
+
     // Collectible Artifacts resting on Travertine Stele Plinths
     const artifactMeshes = new Map();
     const artifactGeo = new THREE.OctahedronGeometry(0.36, 0);
     ARTIFACT_CATALOG.forEach((art) => {
       if (art.initiallyOwned) return;
       const g = new THREE.Group();
-      g.position.set(art.coords.x, 1.15, art.coords.z);
+      const artGround = getWorldGroundY(art.coords.x, art.coords.z);
+      g.position.set(art.coords.x, artGround + 1.15, art.coords.z);
       addShadowBox(g, 0.68, 1.05, 0.68, 0, -0.62, 0, slateMat);
       const gem = new THREE.Mesh(
         artifactGeo,
@@ -873,15 +989,31 @@ const AfterspaceWorld3D = ({
       coopGroup.visible = s.coopMate.active && s.screen === "playing";
       if (coopGroup.visible) coopGroup.position.set(s.coopMate.x, 0, s.coopMate.z);
 
-      // Active Interactable subtle ground halo
+      // Active Interactable subtle ground halo & AI Waypoint Sky Beacon
       const activeNear =
         s.screen === "playing" && !s.activeOverlay ? findNearestInteractable(s.player) : null;
       if (activeNear) {
         focusRing.visible = true;
-        focusRing.position.set(activeNear.x, 0.09, activeNear.z);
+        focusRing.position.set(activeNear.x, getWorldGroundY(activeNear.x, activeNear.z) + 0.09, activeNear.z);
         focusRingMat.opacity = 0.34 + Math.sin(elapsed * 2.2) * 0.12;
       } else {
         focusRing.visible = false;
+      }
+
+      if (s.waypoint) {
+        waypointBeam.visible = true;
+        const wy = getWorldGroundY(s.waypoint.x, s.waypoint.z);
+        waypointBeam.position.set(s.waypoint.x, wy + 18, s.waypoint.z);
+        waypointBeamMat.opacity = 0.18 + Math.sin(elapsed * 2.5) * 0.07;
+      } else {
+        waypointBeam.visible = false;
+      }
+
+      if (!reducedMotion) {
+        updraftRings.forEach((u) => {
+          u.mesh.position.y = u.baseH + 0.4 + ((elapsed * 1.4 + u.phase) % 3.2);
+          u.mesh.rotation.z += dt * 0.9;
+        });
       }
 
       // Smooth Optical Lens FOV shift during Scanner / Dash Observation Mode

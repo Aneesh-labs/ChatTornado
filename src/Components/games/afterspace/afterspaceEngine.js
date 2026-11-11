@@ -12,34 +12,97 @@ export const REGIONS = [
   {
     id: "gateway",
     indexLabel: "REGION 01",
-    code: "EXPEDITION 01 / REGION 01",
+    code: "SECTOR 01 / CENTRAL",
     name: "The Forgotten Gateway",
     subtitle: "An arrival ridge overlooking suspended basalt monoliths.",
     biome: "monolith",
-    bounds: { minZ: 9, maxZ: 30 },
+    bounds: { minX: -14, maxX: 14, minZ: 9, maxZ: 44 },
     center: { x: 0, z: 19 },
   },
   {
     id: "observatory",
     indexLabel: "REGION 02",
-    code: "EXPEDITION 01 / REGION 02",
+    code: "SECTOR 02 / CENTRAL",
     name: "The Fractured Observatory",
     subtitle: "A place where time ceased to advance.",
     biome: "observatory",
-    bounds: { minZ: -9, maxZ: 9 },
+    bounds: { minX: -14, maxX: 14, minZ: -9, maxZ: 9 },
     center: { x: 0, z: 0 },
   },
   {
     id: "singularity",
     indexLabel: "REGION 03",
-    code: "EXPEDITION 01 / REGION 03",
+    code: "SECTOR 03 / NORTH",
     name: "The Silent Singularity",
     subtitle: "Sixteen vertices suspended outside linear duration.",
     biome: "desert",
-    bounds: { minZ: -34, maxZ: -9 },
+    bounds: { minX: -16, maxX: 16, minZ: -54, maxZ: -9 },
     center: { x: 0, z: -20 },
   },
+  {
+    id: "sundial_basin",
+    indexLabel: "REGION 04",
+    code: "SECTOR 04 / WEST WILDS",
+    name: "The Sunken Sundial Basin",
+    subtitle: "Wind-carved dunes circling a helical solar gnomon.",
+    biome: "desert",
+    bounds: { minX: -58, maxX: -14, minZ: -54, maxZ: 24 },
+    center: { x: -29, z: 2 },
+  },
+  {
+    id: "echo_pillars",
+    indexLabel: "REGION 05",
+    code: "SECTOR 05 / EAST OVERLOOK",
+    name: "The Echoing Pillars",
+    subtitle: "Golden-ratio stone columns humming above the valley.",
+    biome: "monolith",
+    bounds: { minX: 14, maxX: 58, minZ: -54, maxZ: 24 },
+    center: { x: 29, z: -4 },
+  },
+  {
+    id: "horizon_ridge",
+    indexLabel: "REGION 06",
+    code: "SECTOR 06 / SOUTH RIM",
+    name: "The Outer Horizon Dunes",
+    subtitle: "Quiet sandstone ridges bordering an uncharted expanse.",
+    biome: "desert",
+    bounds: { minX: -58, maxX: 58, minZ: 24, maxZ: 48 },
+    center: { x: -16, z: 32 },
+  },
 ];
+
+export const UPDRAFTS = [
+  { id: "up_west", x: -15.5, z: 8.0, radius: 3.4, lift: 9.2 },
+  { id: "up_east", x: 16.5, z: -2.0, radius: 3.4, lift: 9.2 },
+  { id: "up_south", x: -14.0, z: 26.0, radius: 3.4, lift: 8.6 },
+];
+
+/**
+ * Simple-math open-world ground elevation function shared between simulation & Three.js terrain.
+ */
+export function getWorldGroundY(x, z) {
+  // Architectural terraces along the central sanctuary spine
+  if (Math.abs(x) <= 13.5 && z >= -32 && z <= 28) {
+    if (z > 23.2) return 0.48;
+    if (z > 21.0) return 0.24;
+    if (z >= -4.2 && z <= 1.2 && Math.hypot(x, z + 1.5) < 6.4) return -0.22;
+    if (z <= -16.5 && z >= -22.2 && Math.hypot(x, z + 19.0) < 4.5) return 0.22;
+    return 0.0;
+  }
+
+  // Smooth open-world dune & sandstone canyon harmonics (pure trig, zero mesh raycasts!)
+  const distFromSpine = Math.max(0, Math.abs(x) - 13.5);
+  const duneWave =
+    Math.sin(x * 0.095) * Math.cos(z * 0.085) * 1.45 +
+    Math.sin((x + z) * 0.05) * 0.75;
+  const eastPlateau = x > 22 && Math.abs(z + 4) < 16 ? 1.15 : 0;
+  const westBowl =
+    x < -20 && Math.abs(z - 2) < 15
+      ? -0.9 * Math.exp(-((x + 28) * (x + 28) + (z - 4) * (z - 4)) / 95)
+      : 0;
+  const outerRim = Math.max(0, Math.hypot(x * 0.72, z) - 44) * 0.18;
+  return Math.max(-2.2, Math.min(5.5, duneWave * Math.min(1, distFromSpine * 0.14 + 0.35) + eastPlateau + westBowl + outerRim));
+}
 
 export const INITIAL_OBJECTIVES = [
   {
@@ -196,6 +259,54 @@ export const JOURNAL_CATALOG = [
     initiallyDiscovered: false,
     body: "Every edge inside the inner chamber connects two parallel 3D cubes displaced along W. Rotating through W exchanges inner and outer enclosures effortlessly.",
   },
+  {
+    id: "entry_025",
+    code: "ENTRY 025",
+    category: "Locations",
+    title: "The Sunken Sundial Basin",
+    quote: "Eleven helical stones trace a shadow that bends at dusk.",
+    date: "Day 01 — 06:10",
+    location: "The Sunken Sundial Basin",
+    temporalState: "T - 100",
+    classification: "Solar Architecture",
+    coords: { x: -28.0, y: 1.2, z: 4.0 },
+    diagram: "horizon",
+    related: ["ENTRY 001", "ENTRY 018"],
+    initiallyDiscovered: false,
+    body: "West of the central promenade, wind-sculpted dunes sink around a polar spiral of stepped limestone spires casting azimuth bearings across the sand.",
+  },
+  {
+    id: "entry_030",
+    code: "ENTRY 030",
+    category: "Scientific records",
+    title: "Harmonics of the Echoing Pillars",
+    quote: "Golden-ratio spacing turns canyon gusts into sub-audible chords.",
+    date: "Day 01 — 06:35",
+    location: "The Echoing Pillars",
+    temporalState: "T + 100",
+    classification: "Acoustic Monograph",
+    coords: { x: 29.0, y: 2.2, z: -6.0 },
+    diagram: "arch",
+    related: ["ENTRY 014", "ENTRY 021"],
+    initiallyDiscovered: false,
+    body: "Twenty-four basalt monoliths arranged along a phyllotaxis spiral generate standing pressure harmonics that recharge suit energy along the eastern ridge.",
+  },
+  {
+    id: "entry_034",
+    code: "ENTRY 034",
+    category: "Overview",
+    title: "Outer Horizon Updrafts",
+    quote: "Thin thermal currents carry instruments effortlessly above fractured stone.",
+    date: "Day 01 — 07:05",
+    location: "The Outer Horizon Dunes",
+    temporalState: "T + 000",
+    classification: "Survey Telemetry",
+    coords: { x: -18.0, y: 1.6, z: 32.0 },
+    diagram: "horizon",
+    related: ["ENTRY 025", "ENTRY 030"],
+    initiallyDiscovered: false,
+    body: "Vertical thermal vents rising along the outer rim allow gentle atmospheric gliding when holding Jump in mid-air.",
+  },
 ];
 
 export const ARTIFACT_CATALOG = [
@@ -311,6 +422,54 @@ export const ARTIFACT_CATALOG = [
     coords: { x: -4.5, z: -22.5 },
     initiallyOwned: false,
   },
+  {
+    id: "art_prize_helical",
+    code: "PRIZE 044",
+    category: "Artifacts",
+    name: "Helical Gnomon Shard",
+    quantity: 1,
+    origin: "The Sunken Sundial Basin",
+    classification: "Solar Relic",
+    temporalSignature: "T - 048.0",
+    description: "Curved travertine wedge tuned to the western helical spire.",
+    hiddenNote: "Discovered amid the dunes west of the central chasm.",
+    shape: "octa",
+    color: "#B99A70",
+    coords: { x: -31.5, z: -9.5 },
+    initiallyOwned: false,
+  },
+  {
+    id: "art_prize_resonance",
+    code: "PRIZE 051",
+    category: "Energy cores",
+    name: "Fibonacci Chime",
+    quantity: 1,
+    origin: "The Echoing Pillars",
+    classification: "Harmonic Instrument",
+    temporalSignature: "T + 019.6",
+    description: "Brushed brass acoustic rod vibrating cleanly in zero wind.",
+    hiddenNote: "Restored along the eastern golden-ratio colonnade.",
+    shape: "prism",
+    color: "#89988A",
+    coords: { x: 33.0, z: 7.5 },
+    initiallyOwned: false,
+  },
+  {
+    id: "art_prize_zenith",
+    code: "PRIZE 062",
+    category: "Dimensional keys",
+    name: "Solstice Lens",
+    quantity: 1,
+    origin: "The Echoing Pillars",
+    classification: "Optical Disk",
+    temporalSignature: "T + 100.0",
+    description: "A smoky quartz lens focusing starlight from outside linear duration.",
+    hiddenNote: "Resting along the northern canyon ridge.",
+    shape: "cube",
+    color: "#8496A1",
+    coords: { x: 21.0, z: -29.0 },
+    initiallyOwned: false,
+  },
 ];
 
 export const EXPLORER_CHARACTERS = [
@@ -401,6 +560,39 @@ export const INTERACTABLES = [
     objectiveId: "obj_gate",
     completesExpedition: true,
   },
+  {
+    id: "int_sundial_obelisk",
+    label: "SUNDIAL GNOMON",
+    action: "Read Azimuth",
+    x: -28.0,
+    y: 1.5,
+    z: 4.0,
+    radius: 4.2,
+    region: "sundial_basin",
+    journalId: "entry_025",
+  },
+  {
+    id: "int_echo_pillars",
+    label: "HARMONIC PILLARS",
+    action: "Attune Resonance",
+    x: 29.0,
+    y: 2.2,
+    z: -6.0,
+    radius: 4.4,
+    region: "echo_pillars",
+    journalId: "entry_030",
+  },
+  {
+    id: "int_southern_beacon",
+    label: "HORIZON BEACON",
+    action: "Calibrate Survey",
+    x: -18.0,
+    y: 1.8,
+    z: 32.0,
+    radius: 4.2,
+    region: "horizon_ridge",
+    journalId: "entry_034",
+  },
 ];
 
 // Build exact 4D hypercube (16 vertices, 32 edges)
@@ -478,11 +670,18 @@ export function computeHypercubeAlignment(anglesDeg) {
   };
 }
 
-export function getRegionAtZ(z) {
+export function getRegionAtXZ(x, z) {
+  if (z > 24 && Math.abs(x) > 13.5) return REGIONS[5]; // horizon_ridge
+  if (x < -14) return REGIONS[3]; // sundial_basin
+  if (x > 14) return REGIONS[4]; // echo_pillars
   return (
-    REGIONS.find((r) => z <= r.bounds.maxZ && z >= r.bounds.minZ) ||
+    REGIONS.slice(0, 3).find((r) => z <= r.bounds.maxZ && z >= r.bounds.minZ) ||
     (z > 9 ? REGIONS[0] : z < -9 ? REGIONS[2] : REGIONS[1])
   );
+}
+
+export function getRegionAtZ(z, x = 0) {
+  return getRegionAtXZ(x, z);
 }
 
 export const DEFAULT_SETTINGS = {
@@ -555,6 +754,7 @@ export function createInitialAfterspaceState(options = {}) {
     },
     discoveryToast: null,
     coopNotice: null,
+    waypoint: null,
     journalDiscovered,
     ownedArtifacts,
     objectives: INITIAL_OBJECTIVES.map((o) => ({ ...o })),
@@ -578,20 +778,20 @@ export function createInitialAfterspaceState(options = {}) {
   };
 }
 
-// Check if bridge at Z between 3.5 and 8.5 (Gateway -> Observatory) or -6.5 and -11.5 (Observatory -> Singularity) is passable
+// Open-world bounds [-54..54] x [-50..44] with central Observatory bridge puzzle preserved at |x| <= 11.5
 export function isPathPassableAt(x, z, state) {
-  if (Math.abs(x) > 12) return false;
-  if (z > 28 || z < -28.5) return false;
+  if (Math.abs(x) > 54) return false;
+  if (z > 44 || z < -50) return false;
 
-  // Gateway <-> Observatory chasm (z between 3.2 and 8.8)
-  if (z >= 3.2 && z <= 8.8) {
+  // Gateway <-> Observatory chasm (|x| <= 11.5, z between 3.2 and 8.8)
+  if (Math.abs(x) <= 11.5 && z >= 3.2 && z <= 8.8) {
     if (Math.abs(x) > 2.2) return false;
     // Broken in PRESENT (index 1); reconstructed in PAST (0) and FUTURE (2)
     return state.temporalIndex !== 1;
   }
 
-  // Observatory <-> Singularity threshold (z between -11.8 and -6.2)
-  if (z >= -11.8 && z <= -6.2) {
+  // Observatory <-> Singularity threshold (|x| <= 11.5, z between -11.8 and -6.2)
+  if (Math.abs(x) <= 11.5 && z >= -11.8 && z <= -6.2) {
     if (Math.abs(x) > 2.2) return false;
     return true;
   }
@@ -634,12 +834,21 @@ export function stepAfterspaceState(state, input, dt) {
     state.player.yaw += turnDir * 1.9 * safeDt;
   }
 
-  // v2.0 Vertical vault & low-gravity temporal arc (T+100 slows descent gracefully)
+  // v2.0 -> v3.0 Vertical vault, thermal updrafts & atmospheric glide
   state.player.dashCooldown = Math.max(0, (state.player.dashCooldown || 0) - safeDt);
   state.player.dashTimer = Math.max(0, (state.player.dashTimer || 0) - safeDt);
+  for (const up of UPDRAFTS) {
+    if (Math.hypot(state.player.x - up.x, state.player.z - up.z) <= up.radius && (state.player.jumpY || 0) < 4.5) {
+      state.player.vy = Math.max(state.player.vy || 0, up.lift * 0.72);
+      state.player.jumpY = Math.max(0.05, state.player.jumpY || 0);
+    }
+  }
   if ((state.player.jumpY || 0) > 0 || (state.player.vy || 0) !== 0) {
     const grav = state.temporalIndex === 2 ? 12.6 : 17.5;
     state.player.vy -= grav * safeDt;
+    if (input.glide && state.player.vy < -1.8) {
+      state.player.vy = -1.8;
+    }
     state.player.jumpY = (state.player.jumpY || 0) + state.player.vy * safeDt;
     if (state.player.jumpY <= 0) {
       state.player.jumpY = 0;
@@ -651,7 +860,7 @@ export function stepAfterspaceState(state, input, dt) {
   const moveForward = (input.forward ? 1 : 0) - (input.backward ? 1 : 0);
   const moveRight = (input.right ? 1 : 0) - (input.left ? 1 : 0);
   const dashBoost = state.player.dashTimer > 0 ? 15.2 : 0;
-  const speed = dashBoost || (input.sprint ? 8.6 : 6.2);
+  const speed = dashBoost || (input.sprint ? 9.2 : 6.4);
 
   if (moveForward !== 0 || moveRight !== 0 || dashBoost > 0) {
     const len = Math.hypot(moveForward, moveRight);
@@ -673,6 +882,11 @@ export function stepAfterspaceState(state, input, dt) {
     }
   }
 
+  // Track waypoint completion proximity
+  if (state.waypoint && Math.hypot(state.waypoint.x - state.player.x, state.waypoint.z - state.player.z) < 4.0) {
+    state.waypoint = null;
+  }
+
   state.atFracturedSpan =
     state.temporalIndex === 1 &&
     state.player.z >= 8.2 &&
@@ -683,7 +897,7 @@ export function stepAfterspaceState(state, input, dt) {
   for (const art of ARTIFACT_CATALOG) {
     if (state.ownedArtifacts[art.id]) continue;
     const d = Math.hypot(art.coords.x - state.player.x, art.coords.z - state.player.z);
-    if (d <= 2.2) {
+    if (d <= 2.4) {
       state.ownedArtifacts[art.id] = true;
       events.recoveredArtifact = art;
       state.discoveryToast = {
@@ -696,7 +910,7 @@ export function stepAfterspaceState(state, input, dt) {
   }
 
   // Update Region tracking & cinematic banner
-  const currentRegion = getRegionAtZ(state.player.z);
+  const currentRegion = getRegionAtXZ(state.player.x, state.player.z);
   if (currentRegion.id !== state.regionId) {
     state.regionId = currentRegion.id;
     if (!state.discoveredRegions.includes(currentRegion.id)) {
@@ -831,6 +1045,20 @@ export function triggerExamineAction(state) {
   }
 
   return { handled: true, entry };
+}
+
+export function setWaypointTarget(state, targetId, label = null) {
+  const inter = INTERACTABLES.find((i) => i.id === targetId);
+  if (inter) {
+    state.waypoint = { targetId: inter.id, x: inter.x, z: inter.z, label: label || inter.label };
+    return state.waypoint;
+  }
+  const reg = REGIONS.find((r) => r.id === targetId);
+  if (reg) {
+    state.waypoint = { targetId: reg.id, x: reg.center.x, z: reg.center.z, label: label || reg.name };
+    return state.waypoint;
+  }
+  return null;
 }
 
 export function triggerAfterspaceJump(state) {

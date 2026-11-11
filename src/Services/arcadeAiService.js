@@ -87,6 +87,38 @@ export async function saveBackendPersonaPreference(profile) {
   }
 }
 
+export function inferLocalToolActions(gameId, prompt = "") {
+  const low = (prompt || "").toLowerCase();
+  const actions = [];
+  if (gameId === "afterspace") {
+    if (low.includes("past")) actions.push({ name: "set_temporal_state", arguments: { state_id: "PAST" } });
+    else if (low.includes("future")) actions.push({ name: "set_temporal_state", arguments: { state_id: "FUTURE" } });
+    else if (low.includes("present")) actions.push({ name: "set_temporal_state", arguments: { state_id: "PRESENT" } });
+
+    if (low.includes("sundial") || low.includes("west")) {
+      actions.push({ name: "set_waypoint_beacon", arguments: { target_id: "int_sundial_obelisk", label: "Sundial Gnomon" } });
+    } else if (low.includes("pillar") || low.includes("east")) {
+      actions.push({ name: "set_waypoint_beacon", arguments: { target_id: "int_echo_pillars", label: "Harmonic Pillars" } });
+    } else if (low.includes("beacon") || low.includes("south")) {
+      actions.push({ name: "set_waypoint_beacon", arguments: { target_id: "int_southern_beacon", label: "Horizon Beacon" } });
+    } else if (low.includes("hypercube") || low.includes("tesseract")) {
+      actions.push({ name: "set_waypoint_beacon", arguments: { target_id: "int_tesseract", label: "Central Hypercube" } });
+    }
+    if (low.includes("scan")) {
+      actions.push({ name: "toggle_scanner", arguments: { active: true } });
+    }
+  } else {
+    const mapGames = ["afterspace", "subwaysurfers", "nullnorth", "vortexbastion", "neonblade", "snake", "flappy", "2048", "memory", "zombie", "neondodge"];
+    for (const gid of mapGames) {
+      if (low.includes(`launch ${gid}`) || low.includes(`open ${gid}`) || low.includes(`play ${gid}`)) {
+        actions.push({ name: "launch_arcade_game", arguments: { game_id: gid } });
+        break;
+      }
+    }
+  }
+  return actions;
+}
+
 export async function askPersonalizedCompanion({
   gameId,
   prompt,
@@ -137,6 +169,7 @@ export async function askPersonalizedCompanion({
       interaction_id: null,
       model: "personalized-local",
       personalized: true,
+      tool_actions: inferLocalToolActions(gameId, prompt),
     };
   }
 
@@ -165,6 +198,7 @@ export async function askPersonalizedCompanion({
     interaction_id: null,
     model: "personalized-local",
     personalized: true,
+    tool_actions: inferLocalToolActions(gameId, prompt),
   };
 }
 
@@ -274,10 +308,11 @@ export async function speakCompanionLine(text, enabled = true, style = "calm yet
  * with ephemeral server tokens, 16kHz mic PCM uplink, 24kHz PCM playback, and Hybrid VAD.
  */
 export class ArcadeLiveClient {
-  constructor({ onStatus, onInputTranscript, onOutputTranscript, onError } = {}) {
+  constructor({ onStatus, onInputTranscript, onOutputTranscript, onToolCall, onError } = {}) {
     this.onStatus = onStatus;
     this.onInputTranscript = onInputTranscript;
     this.onOutputTranscript = onOutputTranscript;
+    this.onToolCall = onToolCall;
     this.onError = onError;
     this.session = null;
     this.micStream = null;
@@ -314,6 +349,19 @@ export class ArcadeLiveClient {
             this.onStatus?.("connected");
           },
           onmessage: (msg) => {
+            if (msg?.toolCall?.functionCalls?.length && this.onToolCall) {
+              const responses = msg.toolCall.functionCalls.map((fc) => {
+                const outcome = this.onToolCall(fc.name, fc.args || {});
+                return {
+                  id: fc.id,
+                  name: fc.name,
+                  response: { result: outcome || "executed" },
+                };
+              });
+              try {
+                this.session?.sendToolResponse?.({ functionResponses: responses });
+              } catch (_) {}
+            }
             const content = msg?.serverContent;
             if (!content) return;
             if (content.interrupted) {

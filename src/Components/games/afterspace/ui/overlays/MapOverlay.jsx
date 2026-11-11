@@ -7,6 +7,8 @@ const MapOverlay = ({
   regionId,
   discoveredRegions,
   journalDiscovered,
+  waypoint = null,
+  onSetWaypoint,
   onClose,
 }) => {
   const [selectedRegion, setSelectedRegion] = useState(
@@ -14,8 +16,8 @@ const MapOverlay = ({
   );
   const [zoom, setZoom] = useState(1);
 
-  const mapYFromZ = (z) => 200 + z * 4.8; // maps Z [-30..30] into SVG space
-  const mapXFromX = (x) => 220 + x * 9;
+  const mapYFromZ = (z) => 195 + z * 3.6; // maps Z [-54..48] across open world into SVG space
+  const mapXFromX = (x) => 220 + x * 3.3; // maps X [-58..58] across West Sundial Basin .. East Pillars
 
   return (
     <div className="fixed inset-0 z-30 bg-[#151A19]/92 flex flex-col p-6 md:p-12">
@@ -135,19 +137,23 @@ const MapOverlay = ({
               );
             })}
 
-            {/* Discovered landmarks */}
+            {/* Discovered landmarks (click to set 3D sky waypoint) */}
             {INTERACTABLES.map((item) => {
               const known = discoveredRegions.includes(item.region);
-              if (!known) return null;
               const recorded = item.journalId ? journalDiscovered[item.journalId] : false;
               const ix = mapXFromX(item.x);
               const iy = mapYFromZ(item.z);
               return (
-                <g key={item.id}>
+                <g
+                  key={item.id}
+                  onClick={() => onSetWaypoint?.(item.id, item.label)}
+                  style={{ cursor: "pointer" }}
+                  opacity={known ? 1 : 0.45}
+                >
                   <circle
                     cx={ix}
                     cy={iy}
-                    r="3.2"
+                    r="4.2"
                     fill={recorded ? "#89988A" : "none"}
                     stroke={recorded ? "#89988A" : "#B99A70"}
                     strokeWidth="1.2"
@@ -164,6 +170,20 @@ const MapOverlay = ({
                 </g>
               );
             })}
+
+            {waypoint && (
+              <g>
+                <circle
+                  cx={mapXFromX(waypoint.x)}
+                  cy={mapYFromZ(waypoint.z)}
+                  r="8"
+                  fill="none"
+                  stroke="#B99A70"
+                  strokeWidth="1.2"
+                  strokeDasharray="2 2"
+                />
+              </g>
+            )}
 
             {/* Current explorer position (restrained circular marker) */}
             <circle
@@ -213,6 +233,8 @@ MapOverlay.propTypes = {
   regionId: PropTypes.string.isRequired,
   discoveredRegions: PropTypes.array.isRequired,
   journalDiscovered: PropTypes.object.isRequired,
+  waypoint: PropTypes.object,
+  onSetWaypoint: PropTypes.func,
   onClose: PropTypes.func.isRequired,
 };
 

@@ -1939,6 +1939,85 @@ async def ai_arcade_companion(
     )
 
     api_key = os.getenv("GEMINI_API_KEY", "").strip()
+    tool_actions: List[Dict[str, Any]] = []
+
+    arcade_tools = [
+        {
+            "type": "function",
+            "name": "set_temporal_state",
+            "description": "Shifts the AFTERSPACE observatory world timeline between PAST, PRESENT, or FUTURE.",
+            "parameters": {
+                "type": "object",
+                "properties": {"state_id": {"type": "string", "enum": ["PAST", "PRESENT", "FUTURE"]}},
+                "required": ["state_id"],
+            },
+        },
+        {
+            "type": "function",
+            "name": "set_waypoint_beacon",
+            "description": "Sets a 3D sky waypoint beacon at an AFTERSPACE landmark or open-world region.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "target_id": {
+                        "type": "string",
+                        "enum": [
+                            "int_ancient_structure",
+                            "int_temporal_residue",
+                            "int_coordinate_slab",
+                            "int_tesseract",
+                            "int_dimensional_gate",
+                            "int_sundial_obelisk",
+                            "int_echo_pillars",
+                            "int_southern_beacon",
+                            "sundial_basin",
+                            "echo_pillars",
+                        ],
+                    },
+                    "label": {"type": "string"},
+                },
+                "required": ["target_id"],
+            },
+        },
+        {
+            "type": "function",
+            "name": "toggle_scanner",
+            "description": "Toggles the optical temporal residue scanner in AFTERSPACE.",
+            "parameters": {
+                "type": "object",
+                "properties": {"active": {"type": "boolean"}},
+                "required": ["active"],
+            },
+        },
+        {
+            "type": "function",
+            "name": "launch_arcade_game",
+            "description": "Switches or launches a recommended game in ChatTornado Arcade.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "game_id": {
+                        "type": "string",
+                        "enum": [
+                            "snake",
+                            "flappy",
+                            "2048",
+                            "memory",
+                            "zombie",
+                            "neondodge",
+                            "neonblade",
+                            "subwaysurfers",
+                            "vortexbastion",
+                            "nullnorth",
+                            "afterspace",
+                        ],
+                    }
+                },
+                "required": ["game_id"],
+            },
+        },
+    ]
+
     if api_key:
         try:
             from google import genai
@@ -1947,18 +2026,44 @@ async def ai_arcade_companion(
                 "model": "gemini-3.8-flash",
                 "system_instruction": sys_instr,
                 "input": prompt,
-                "generation_config": {"max_output_tokens": 220},
+                "tools": arcade_tools,
+                "generation_config": {"max_output_tokens": 240},
             }
             if previous_interaction_id:
                 kwargs["previous_interaction_id"] = previous_interaction_id
             interaction = client.interactions.create(**kwargs)
+
+            fn_results = []
+            for step in getattr(interaction, "steps", []) or []:
+                if getattr(step, "type", None) == "function_call":
+                    fname = getattr(step, "name", None)
+                    fargs = getattr(step, "arguments", {}) or {}
+                    tool_actions.append({"name": fname, "arguments": fargs})
+                    fn_results.append({
+                        "type": "function_result",
+                        "call_id": getattr(step, "id", ""),
+                        "name": fname,
+                        "result": f"Executed {fname} in game client cleanly.",
+                    })
+
+            if fn_results:
+                interaction = client.interactions.create(
+                    model="gemini-3.8-flash",
+                    system_instruction=sys_instr,
+                    previous_interaction_id=getattr(interaction, "id", None),
+                    input=fn_results,
+                    tools=arcade_tools,
+                    generation_config={"max_output_tokens": 180},
+                )
+
             reply = (getattr(interaction, "output_text", None) or "").strip()
-            if reply:
+            if reply or tool_actions:
                 return {
-                    "reply": reply,
+                    "reply": reply or f"Instrument command ready: {tool_actions[0]['name']}.",
                     "interaction_id": getattr(interaction, "id", None),
                     "model": "gemini-3.8-flash",
                     "personalized": True,
+                    "tool_actions": tool_actions,
                 }
         except Exception as exc:
             logger.warning("Interactions API companion fallback: %s", exc)
@@ -1990,6 +2095,7 @@ async def ai_arcade_companion(
         "interaction_id": None,
         "model": "personalized-local",
         "personalized": True,
+        "tool_actions": tool_actions,
     }
 
 
@@ -2018,6 +2124,42 @@ def create_live_ephemeral_token(
             "input_audio_transcription": {},
             "output_audio_transcription": {},
             "system_instruction": {"parts": [{"text": sys_text}]},
+            "tools": [
+                {
+                    "function_declarations": [
+                        {
+                            "name": "set_temporal_state",
+                            "description": "Shifts AFTERSPACE timeline between PAST, PRESENT, or FUTURE.",
+                            "behavior": "NON_BLOCKING",
+                            "parameters": {
+                                "type": "object",
+                                "properties": {"state_id": {"type": "string"}},
+                                "required": ["state_id"],
+                            },
+                        },
+                        {
+                            "name": "set_waypoint_beacon",
+                            "description": "Lights a 3D sky waypoint beacon in AFTERSPACE.",
+                            "behavior": "NON_BLOCKING",
+                            "parameters": {
+                                "type": "object",
+                                "properties": {"target_id": {"type": "string"}, "label": {"type": "string"}},
+                                "required": ["target_id"],
+                            },
+                        },
+                        {
+                            "name": "launch_arcade_game",
+                            "description": "Switches or launches a ChatTornado Arcade game.",
+                            "behavior": "NON_BLOCKING",
+                            "parameters": {
+                                "type": "object",
+                                "properties": {"game_id": {"type": "string"}},
+                                "required": ["game_id"],
+                            },
+                        },
+                    ]
+                }
+            ],
         }
         if extended_thinking:
             live_config["thinking_config"] = {"thinking_level": "low"}

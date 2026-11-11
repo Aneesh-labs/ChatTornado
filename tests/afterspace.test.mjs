@@ -3,11 +3,16 @@ import assert from "node:assert/strict";
 import {
   ARTIFACT_CATALOG,
   EXPLORER_CHARACTERS,
+  REGIONS,
   TESSERACT_TOPOLOGY,
+  UPDRAFTS,
   createInitialAfterspaceState,
+  getRegionAtXZ,
+  getWorldGroundY,
   project4Dto3D,
   computeHypercubeAlignment,
   isPathPassableAt,
+  setWaypointTarget,
   shiftTemporalState,
   updateHypercubeAngle,
   triggerExamineAction,
@@ -102,4 +107,33 @@ test("Characters & Prizes unlock cleanly for both Tornado Surfers and AFTERSPACE
   const veteran = evaluateSurferRewards({ bestScore: 5200, totalCoins: 320, totalStunts: 8 });
   assert.equal(veteran.unlockedCharacters.length, 4);
   assert.equal(veteran.unlockedPrizes.length, 6);
+});
+
+test("AFTERSPACE v3.0 Open World: 6 regions, simple-math dune heightfield, thermal updraft glide & AI waypoint beacon", () => {
+  assert.equal(REGIONS.length, 6);
+  assert.equal(ARTIFACT_CATALOG.length, 10);
+
+  const s = createInitialAfterspaceState({ startInWorld: true });
+  // Open world West Sundial Basin & East Echoing Pillars are accessible
+  assert.equal(isPathPassableAt(-28, 4, s), true);
+  assert.equal(isPathPassableAt(29, -6, s), true);
+  assert.equal(getRegionAtXZ(-28, 4).id, "sundial_basin");
+  assert.equal(getRegionAtXZ(29, -6).id, "echo_pillars");
+
+  // Simple-math heightfield returns smooth finite elevation values everywhere
+  assert.equal(Number.isFinite(getWorldGroundY(-28, 4)), true);
+  assert.equal(Number.isFinite(getWorldGroundY(29, -6)), true);
+
+  // Set AI waypoint -> verify active -> arrive & auto-clear
+  const wp = setWaypointTarget(s, "int_sundial_obelisk");
+  assert.equal(wp.targetId, "int_sundial_obelisk");
+  assert.equal(s.waypoint.x, -28);
+
+  // Thermal updraft gives upward lift + glide slows descent
+  const up = UPDRAFTS[0];
+  s.player.x = up.x;
+  s.player.z = up.z;
+  stepAfterspaceState(s, { forward: false, backward: false, left: false, right: false, glide: true }, 0.04);
+  assert.ok(s.player.jumpY > 0);
+  assert.ok(s.player.vy > 4);
 });

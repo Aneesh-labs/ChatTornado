@@ -26,7 +26,8 @@ import {
   computeHypercubeAlignment,
   createInitialAfterspaceState,
   findNearestInteractable,
-  getRegionAtZ,
+  getRegionAtXZ,
+  setWaypointTarget,
   shiftTemporalState,
   triggerAfterspaceDash,
   triggerAfterspaceJump,
@@ -76,6 +77,7 @@ const buildUiSnapshot = (s) => ({
   regionBanner: s.regionBanner ? { ...s.regionBanner } : null,
   discoveryToast: s.discoveryToast ? { ...s.discoveryToast } : null,
   coopNotice: s.coopNotice ? { ...s.coopNotice } : null,
+  waypoint: s.waypoint ? { ...s.waypoint } : null,
   journalDiscovered: { ...s.journalDiscovered },
   ownedArtifacts: { ...s.ownedArtifacts },
   objectives: s.objectives.map((o) => ({ ...o })),
@@ -97,6 +99,7 @@ const AfterspaceGame = ({ onBack, isMuted = false, onSaveScore }) => {
     turnLeft: false,
     turnRight: false,
     sprint: false,
+    glide: false,
   });
   const settingsRef = useRef(loadSettings());
 
@@ -295,34 +298,65 @@ const AfterspaceGame = ({ onBack, isMuted = false, onSaveScore }) => {
     [forceSync, persistProgress]
   );
 
-  const handleAskGuide = useCallback(async () => {
-    afterspaceSound.playClick();
-    const s = simRef.current;
-    const region = getRegionAtZ(s.player.z);
-    const explorer =
-      EXPLORER_CHARACTERS.find((c) => c.id === aiProfile.selectedAfterspaceRole) ||
-      EXPLORER_CHARACTERS[0];
-    const unlockedNames = ARTIFACT_CATALOG.filter((a) => s.ownedArtifacts[a.id]).map((a) => a.name);
-    const res = await askPersonalizedCompanion({
-      gameId: "afterspace",
-      prompt: `Offer one calm architectural observation or hint for ${region.name}.`,
-      playerContext: {
-        callsign: aiProfile.callsign,
-        playstyle: aiProfile.playstyle,
-        character: explorer.name,
-        region: region.name,
-        prizes: unlockedNames,
-        score: unlockedNames.length * 100,
-      },
-      previousInteractionId: interactionIdRef.current,
-    });
-    if (res.interaction_id) interactionIdRef.current = res.interaction_id;
-    setAiWhisper(res.reply);
-    if (aiProfile.voiceEnabled && !localMuted) {
-      speakCompanionLine(res.reply, true);
-    }
-    setTimeout(() => setAiWhisper(null), 7000);
-  }, [aiProfile, localMuted]);
+  const executeAiTools = useCallback(
+    (actions) => {
+      if (!Array.isArray(actions) || actions.length === 0) return;
+      const s = simRef.current;
+      actions.forEach(({ name, arguments: args }) => {
+        if (name === "set_temporal_state" && args?.state_id) {
+          const idx = TEMPORAL_STATES.findIndex((t) => t.id === args.state_id);
+          if (idx >= 0 && shiftTemporalState(s, idx)) {
+            afterspaceSound.playTemporalShift(idx);
+          }
+        } else if (name === "set_waypoint_beacon" && args?.target_id) {
+          setWaypointTarget(s, args.target_id, args.label);
+        } else if (name === "toggle_scanner") {
+          s.scannerActive = Boolean(args?.active);
+        }
+      });
+      persistProgress();
+      forceSync();
+    },
+    [forceSync, persistProgress]
+  );
+
+  const handleAskGuide = useCallback(
+    async (customQuestion = null) => {
+      afterspaceSound.playClick();
+      const s = simRef.current;
+      const region = getRegionAtXZ(s.player.x, s.player.z);
+      const explorer =
+        EXPLORER_CHARACTERS.find((c) => c.id === aiProfile.selectedAfterspaceRole) ||
+        EXPLORER_CHARACTERS[0];
+      const unlockedNames = ARTIFACT_CATALOG.filter((a) => s.ownedArtifacts[a.id]).map((a) => a.name);
+      const promptText =
+        typeof customQuestion === "string" && customQuestion.trim()
+          ? customQuestion.trim()
+          : `Offer one calm architectural observation or hint for ${region.name}.`;
+
+      const res = await askPersonalizedCompanion({
+        gameId: "afterspace",
+        prompt: promptText,
+        playerContext: {
+          callsign: aiProfile.callsign,
+          playstyle: aiProfile.playstyle,
+          character: explorer.name,
+          region: region.name,
+          prizes: unlockedNames,
+          score: unlockedNames.length * 100,
+        },
+        previousInteractionId: interactionIdRef.current,
+      });
+      if (res.interaction_id) interactionIdRef.current = res.interaction_id;
+      if (res.tool_actions?.length) executeAiTools(res.tool_actions);
+      setAiWhisper(res.reply);
+      if (aiProfile.voiceEnabled && !localMuted) {
+        speakCompanionLine(res.reply, true);
+      }
+      setTimeout(() => setAiWhisper(null), 7000);
+    },
+    [aiProfile, executeAiTools, localMuted]
+  );
 
   const handleOpenOverlay = useCallback(
     (overlayName) => {
@@ -346,6 +380,7 @@ const AfterspaceGame = ({ onBack, isMuted = false, onSaveScore }) => {
       if (key === "arrowleft") inputRef.current.turnLeft = down;
       if (key === "arrowright") inputRef.current.turnRight = down;
       if (key === "shift") inputRef.current.sprint = down;
+      if (key === " ") inputRef.current.glide = down;
     };
 
     const onKeyDown = (e) => {
@@ -429,7 +464,7 @@ const AfterspaceGame = ({ onBack, isMuted = false, onSaveScore }) => {
     };
   }, [forceSync, handleAskGuide, handleExamine, handleOpenOverlay, timelineOpen]);
 
-  const currentRegion = getRegionAtZ(snap.player.z);
+  const currentRegion = getRegionAtXZ(snap.player.x, snap.player.z);
   const currentTemporal = TEMPORAL_STATES[snap.temporalIndex];
   const activeObjective = snap.objectives.find((o) => !o.completed) || null;
   const nearest =
@@ -503,6 +538,16 @@ const AfterspaceGame = ({ onBack, isMuted = false, onSaveScore }) => {
             bearingDeg={Math.round((((-snap.player.yaw * 180) / Math.PI) % 360 + 360) % 360)}
             suitEnergy={snap.suitEnergy}
             stability={snap.stability}
+            waypoint={
+              snap.waypoint
+                ? {
+                    ...snap.waypoint,
+                    dist: Math.round(
+                      Math.hypot(snap.waypoint.x - snap.player.x, snap.waypoint.z - snap.player.z)
+                    ),
+                  }
+                : null
+            }
             activeObjective={activeObjective}
             nearestInteractable={nearest}
             atFracturedSpan={snap.atFracturedSpan}
@@ -648,6 +693,12 @@ const AfterspaceGame = ({ onBack, isMuted = false, onSaveScore }) => {
           regionId={currentRegion.id}
           discoveredRegions={snap.discoveredRegions}
           journalDiscovered={snap.journalDiscovered}
+          waypoint={snap.waypoint}
+          onSetWaypoint={(targetId, label) => {
+            setWaypointTarget(simRef.current, targetId, label);
+            afterspaceSound.playClick();
+            forceSync();
+          }}
           onClose={() => {
             simRef.current.activeOverlay = null;
             forceSync();

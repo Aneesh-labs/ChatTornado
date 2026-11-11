@@ -1682,11 +1682,11 @@ export default function Arcade() {
         },
         {
             id: "afterspace",
-            title: "AFTERSPACE v2.0",
+            title: "AFTERSPACE v3.0",
             emoji: "◈",
-            tag: "v2.0 • 4D Observatory",
+            tag: "v3.0 • Open World 4D",
             color: "from-stone-500 to-neutral-800",
-            desc: "Version 2.0: Mobile-fast 3D renderer, vault/dash mechanics, AI guide, and 4D tesseract."
+            desc: "Open-world 6-sector 3D exploration with simple-math dunes, thermal updrafts & AI tool control."
         }
     ];
 

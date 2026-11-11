@@ -87,7 +87,19 @@ const ArcadeAiCopilotModal = ({ isOpen, activeGameId = "auto", onSelectGame, onC
       previousInteractionId: interactionIdRef.current,
     });
     if (res.interaction_id) interactionIdRef.current = res.interaction_id;
-    setMessages((m) => [...m, { role: "ai", text: res.reply, model: res.model }]);
+    const launchedAction = res.tool_actions?.find((a) => a.name === "launch_arcade_game");
+    if (launchedAction?.arguments?.game_id && onSelectGame) {
+      onSelectGame(launchedAction.arguments.game_id);
+    }
+    setMessages((m) => [
+      ...m,
+      {
+        role: "ai",
+        text: res.reply,
+        model: res.model,
+        tools: res.tool_actions?.map((t) => t.name) || [],
+      },
+    ]);
     setLoadingChat(false);
 
     if (profile.voiceEnabled) {
@@ -135,6 +147,13 @@ const ArcadeAiCopilotModal = ({ isOpen, activeGameId = "auto", onSelectGame, onC
         setTranscripts((t) => [...t.slice(-8), { who: profile.callsign, text: txt }]),
       onOutputTranscript: (txt) =>
         setTranscripts((t) => [...t.slice(-8), { who: "Gemini Live", text: txt }]),
+      onToolCall: (name, args) => {
+        if (name === "launch_arcade_game" && args?.game_id && onSelectGame) {
+          onSelectGame(args.game_id);
+          return `Launched ${args.game_id}`;
+        }
+        return "Acknowledged";
+      },
       onError: (err) => setLiveError(err),
     });
     liveClientRef.current = client;
@@ -259,6 +278,18 @@ const ArcadeAiCopilotModal = ({ isOpen, activeGameId = "auto", onSelectGame, onC
                       {m.role === "user" ? profile.callsign : `Gemini Companion (${m.model || "3.8-flash"})`}
                     </div>
                     {m.text}
+                    {m.tools?.length > 0 && (
+                      <div className="mt-1.5 flex flex-wrap gap-1">
+                        {m.tools.map((tName, tIdx) => (
+                          <span
+                            key={tIdx}
+                            className="text-[11px] font-mono px-1.5 py-0.5 rounded bg-violet-500/25 border border-violet-400/35 text-violet-200"
+                          >
+                            fn:{tName}()
+                          </span>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 ))}
                 {loadingChat && <div className="text-xs text-violet-300">Thinking...</div>}
