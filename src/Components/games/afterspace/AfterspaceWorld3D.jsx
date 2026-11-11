@@ -5,6 +5,7 @@ import {
   ARTIFACT_CATALOG,
   INTERACTABLES,
   TESSERACT_TOPOLOGY,
+  findNearestInteractable,
   project4Dto3D,
   stepAfterspaceState,
 } from "./afterspaceEngine";
@@ -23,11 +24,28 @@ uniform vec3 uZenith;
 uniform vec3 uMid;
 uniform vec3 uHorizon;
 varying vec3 vWorldPos;
+
+float hash3(vec3 p) {
+  p = fract(p * 0.3183099 + 0.1);
+  p *= 17.0;
+  return fract(p.x * p.y * p.z * (p.x + p.y + p.z));
+}
+
 void main() {
   vec3 dir = normalize(vWorldPos - vec3(0.0, 0.0, 10.0));
   float h = clamp(dir.y * 1.15 + 0.14, 0.0, 1.0);
   vec3 col = mix(uHorizon, uMid, smoothstep(0.0, 0.28, h));
   col = mix(col, uZenith, smoothstep(0.28, 0.88, h));
+
+  // Subtle observatory starfield high above horizon
+  vec3 starGrid = floor(dir * 210.0);
+  float starSeed = hash3(starGrid);
+  if (starSeed > 0.9962) {
+    float twinkle = (starSeed - 0.9962) / 0.0038;
+    float skyMask = smoothstep(0.32, 0.82, h);
+    col += vec3(0.92, 0.90, 0.84) * twinkle * skyMask * 0.55;
+  }
+
   gl_FragColor = vec4(col, 1.0);
 }
 `;
@@ -342,9 +360,53 @@ const AfterspaceWorld3D = ({
       }
     }
 
-    // Architrave beams atop colonnade
+    // Architrave beams atop colonnade + Stepped 5-riser Arrival Staircase
     addShadowBox(gatewayGroup, 0.85, 0.45, 11.4, -5.0, 6.58, 17.2, travertineMat);
     addShadowBox(gatewayGroup, 0.85, 0.45, 11.4, 5.0, 6.58, 17.2, travertineMat);
+
+    for (let step = 0; step < 5; step += 1) {
+      addShadowBox(
+        gatewayGroup,
+        12.4,
+        0.09,
+        0.55,
+        0,
+        0.045 + step * 0.09,
+        21.6 + step * 0.52,
+        step % 2 === 0 ? travertineMat : slateMat
+      );
+    }
+
+    // Museum-style low travertine plinth lanterns along promenade edge
+    const lanternCapMat = new THREE.MeshBasicMaterial({ color: 0xebd7b8 });
+    [21.4, 15.8].forEach((lz) => {
+      for (const lx of [-3.6, 3.6]) {
+        addShadowBox(gatewayGroup, 0.42, 0.85, 0.42, lx, 0.42, lz, slateMat);
+        const cap = new THREE.Mesh(boxGeo, lanternCapMat);
+        cap.scale.set(0.32, 0.12, 0.32);
+        cap.position.set(lx, 0.9, lz);
+        gatewayGroup.add(cap);
+      }
+    });
+    const promenadeGlow = new THREE.PointLight(0xe5c99f, 1.35, 18, 1.5);
+    promenadeGlow.position.set(0, 2.8, 18.5);
+    gatewayGroup.add(promenadeGlow);
+
+    const chamberGlow = new THREE.PointLight(0xdcc29a, 1.8, 22, 1.4);
+    chamberGlow.position.set(0, 5.2, -19.0);
+    scene.add(chamberGlow);
+
+    // Subtle ground highlight ring indicating current active interactable
+    const focusRingMat = new THREE.MeshBasicMaterial({
+      color: 0xb99a70,
+      transparent: true,
+      opacity: 0.42,
+      side: THREE.DoubleSide,
+    });
+    const focusRing = new THREE.Mesh(new THREE.RingGeometry(1.15, 1.24, 48), focusRingMat);
+    focusRing.rotation.x = -Math.PI / 2;
+    focusRing.visible = false;
+    scene.add(focusRing);
 
     // Ancient Structure Gate at z = 12.5 with carved Circular Oculus
     const ancientArch = new THREE.Group();
@@ -772,7 +834,25 @@ const AfterspaceWorld3D = ({
       coopGroup.visible = s.coopMate.active && s.screen === "playing";
       if (coopGroup.visible) coopGroup.position.set(s.coopMate.x, 0, s.coopMate.z);
 
-      // Camera Framing per screen
+      // Active Interactable subtle ground halo
+      const activeNear =
+        s.screen === "playing" && !s.activeOverlay ? findNearestInteractable(s.player) : null;
+      if (activeNear) {
+        focusRing.visible = true;
+        focusRing.position.set(activeNear.x, 0.09, activeNear.z);
+        focusRingMat.opacity = 0.34 + Math.sin(elapsed * 2.2) * 0.12;
+      } else {
+        focusRing.visible = false;
+      }
+
+      // Smooth Optical Lens FOV shift during Scanner Observation Mode
+      const targetFov = s.scannerActive ? 60.5 : 56;
+      if (Math.abs(camera.fov - targetFov) > 0.05) {
+        camera.fov += (targetFov - camera.fov) * Math.min(1, dt * 6);
+        camera.updateProjectionMatrix();
+      }
+
+      // Camera Framing per screen (smooth cross-threshold glide)
       if (s.screen === "menu" || s.screen === "setup") {
         const driftX = Math.sin(elapsed * 0.08) * 3.8 - 2.4;
         const targetZ = s.screen === "setup" ? 18.5 : 27.5 - Math.sin(elapsed * 0.04) * 1.2;
@@ -794,7 +874,8 @@ const AfterspaceWorld3D = ({
         }
         const bobOffset = isWalking && !reducedMotion ? Math.sin(walkBob) * 0.032 : 0;
         const eyeY = 1.72 + s.player.y + bobOffset;
-        camera.position.set(s.player.x, eyeY, s.player.z);
+        camTarget.set(s.player.x, eyeY, s.player.z);
+        camera.position.lerp(camTarget, Math.min(1, dt * 10));
         camera.rotation.order = "YXZ";
         camera.rotation.y = s.player.yaw;
         camera.rotation.x = s.player.pitch;

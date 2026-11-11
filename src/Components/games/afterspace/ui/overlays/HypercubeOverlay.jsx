@@ -255,8 +255,16 @@ const HypercubeOverlay = ({
 
       {/* Bottom Angular Bar & Reset */}
       <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-4 border-t border-[#E8E9E2]/12">
-        <div className="flex items-center gap-4 w-full sm:w-auto flex-1 max-w-lg">
+        <div className="flex items-center gap-3 w-full sm:w-auto flex-1 max-w-lg">
           <span className="as-mono text-xs text-[#B99A70] w-8">{selectedPlane}</span>
+          <button
+            type="button"
+            onClick={() => onChangeAngle(selectedPlane, Math.round(activeAngle) - 1)}
+            aria-label="Decrease angle 1 degree"
+            className="w-7 h-7 rounded-[2px] border border-[#E8E9E2]/15 text-xs text-[#BEBDB2] hover:text-[#F5F3ED] cursor-pointer"
+          >
+            −
+          </button>
           <input
             type="range"
             min="0"
@@ -266,6 +274,14 @@ const HypercubeOverlay = ({
             onChange={(e) => onChangeAngle(selectedPlane, parseFloat(e.target.value))}
             className="flex-1 accent-[#B99A70] cursor-pointer"
           />
+          <button
+            type="button"
+            onClick={() => onChangeAngle(selectedPlane, Math.round(activeAngle) + 1)}
+            aria-label="Increase angle 1 degree"
+            className="w-7 h-7 rounded-[2px] border border-[#E8E9E2]/15 text-xs text-[#BEBDB2] hover:text-[#F5F3ED] cursor-pointer"
+          >
+            +
+          </button>
           <span className="as-mono text-xs text-[#E8E9E2] w-12 text-right">
             {Math.round(activeAngle)}°
           </span>
