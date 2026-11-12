@@ -15,10 +15,21 @@ import {
     UserRound,
     Zap,
     HelpCircle,
+    Search,
+    WifiOff,
+    Palette,
 } from "lucide-react";
 import { clearAdminSession } from "../../utils/adminSession";
 import PortfolioOnboardingModal from "../../Components/PortfolioOnboardingModal";
 import AndroidAppDownloadModal from "../../Components/AndroidAppDownloadModal";
+import CommandPaletteModal from "../../Components/CommandPaletteModal";
+
+const ACCENT_THEMES = [
+    { id: "sky", label: "Sky Cyan", orb1: "bg-sky-500/12", orb2: "bg-indigo-600/12" },
+    { id: "violet", label: "Violet Pulse", orb1: "bg-violet-500/14", orb2: "bg-fuchsia-600/12" },
+    { id: "emerald", label: "Emerald Matrix", orb1: "bg-emerald-500/12", orb2: "bg-teal-600/12" },
+    { id: "amber", label: "Amber Solar", orb1: "bg-amber-500/12", orb2: "bg-rose-600/10" },
+];
 
 const navItems = [
     { to: "/home", label: "Home", icon: Home, badge: null },
@@ -50,6 +61,41 @@ export default function DashboardLayout() {
     });
     const [isMobileChatActive, setIsMobileChatActive] = useState(false);
     const [showAndroidModal, setShowAndroidModal] = useState(false);
+    const [cmdOpen, setCmdOpen] = useState(false);
+    const [isOnline, setIsOnline] = useState(() => (typeof navigator !== "undefined" ? navigator.onLine : true));
+    const [accentId, setAccentId] = useState(() => {
+        try { return localStorage.getItem("chattornado_accent") || "sky"; } catch (_) { return "sky"; }
+    });
+
+    const cycleAccent = () => {
+        const idx = ACCENT_THEMES.findIndex((t) => t.id === accentId);
+        const next = ACCENT_THEMES[(idx + 1) % ACCENT_THEMES.length];
+        setAccentId(next.id);
+        try { localStorage.setItem("chattornado_accent", next.id); } catch (_) {}
+    };
+    const activeAccent = ACCENT_THEMES.find((t) => t.id === accentId) || ACCENT_THEMES[0];
+
+    useEffect(() => {
+        const onOnline = () => setIsOnline(true);
+        const onOffline = () => setIsOnline(false);
+        const onKey = (e) => {
+            if ((e.ctrlKey || e.metaKey) && e.key?.toLowerCase() === "k") {
+                e.preventDefault();
+                setCmdOpen((v) => !v);
+            }
+        };
+        const onOpenCmd = () => setCmdOpen(true);
+        window.addEventListener("online", onOnline);
+        window.addEventListener("offline", onOffline);
+        window.addEventListener("keydown", onKey);
+        window.addEventListener("chattornado:open-command-palette", onOpenCmd);
+        return () => {
+            window.removeEventListener("online", onOnline);
+            window.removeEventListener("offline", onOffline);
+            window.removeEventListener("keydown", onKey);
+            window.removeEventListener("chattornado:open-command-palette", onOpenCmd);
+        };
+    }, []);
 
     const isAdmin = Boolean(
         role === "SUPER_ADMIN" ||
@@ -123,10 +169,22 @@ export default function DashboardLayout() {
                 onClose={() => setShowOnboarding(false)}
                 onComplete={() => setShowOnboarding(false)}
             />
+            <AndroidAppDownloadModal
+                isOpen={showAndroidModal}
+                onClose={() => setShowAndroidModal(false)}
+            />
+            <CommandPaletteModal
+                isOpen={cmdOpen}
+                onClose={() => setCmdOpen(false)}
+                isAdmin={isAdmin}
+                onCycleAccent={cycleAccent}
+                onOpenAndroid={() => setShowAndroidModal(true)}
+                onOpenTour={() => setShowOnboarding(true)}
+            />
 
             {/* Ambient Multi-Layer Background Mesh */}
-            <div className="pointer-events-none absolute -top-40 -left-40 h-[500px] w-[500px] rounded-full bg-sky-500/10 blur-[120px]" />
-            <div className="pointer-events-none absolute top-1/3 -right-40 h-[600px] w-[600px] rounded-full bg-violet-600/10 blur-[140px]" />
+            <div className={`pointer-events-none absolute -top-40 -left-40 h-[500px] w-[500px] rounded-full ${activeAccent.orb1} blur-[120px] transition-colors duration-700`} />
+            <div className={`pointer-events-none absolute top-1/3 -right-40 h-[600px] w-[600px] rounded-full ${activeAccent.orb2} blur-[140px] transition-colors duration-700`} />
             <div className="pointer-events-none absolute -bottom-40 left-1/3 h-[500px] w-[500px] rounded-full bg-amber-500/8 blur-[130px]" />
             <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.02)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.02)_1px,transparent_1px)] bg-[size:48px_48px]" />
 
@@ -154,16 +212,29 @@ export default function DashboardLayout() {
                     </div>
                 </div>
 
-                {/* System Telemetry Micro-Pill */}
-                <div className="mt-3 flex items-center justify-between rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5 text-[11px] font-medium text-emerald-300 shadow-[0_0_15px_rgba(16,185,129,0.15)] relative overflow-hidden">
-                    <div className="pointer-events-none absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-emerald-400/50 to-transparent" />
-                    <div className="flex items-center gap-1.5">
-                        <span className="h-2 w-2 rounded-full bg-emerald-400 animate-ping" />
-                        <span className="font-mono text-[10.5px] font-bold uppercase tracking-wider">Mesh Lattice</span>
-                    </div>
-                    <span className="font-mono text-[10px] text-emerald-400/90 bg-emerald-950/60 border border-emerald-500/30 px-1.5 py-0.2 rounded font-bold shadow-sm">
-                        QUANTUM 256
-                    </span>
+                {/* System Telemetry Micro-Pill + Quick Jump */}
+                <div className="mt-3 flex items-center gap-1.5">
+                    <button
+                        type="button"
+                        onClick={() => setCmdOpen(true)}
+                        className="flex-1 flex items-center justify-between rounded-xl border border-white/12 bg-white/[0.04] hover:bg-white/[0.08] px-3 py-2 text-xs font-bold text-white/75 transition cursor-pointer"
+                        title="Open Global Command Palette (Ctrl+K)"
+                    >
+                        <span className="flex items-center gap-1.5">
+                            <Search className="h-3.5 w-3.5 text-sky-300" />
+                            <span>Quick Jump</span>
+                        </span>
+                        <span className="rounded bg-white/10 px-1.5 py-0.5 font-mono text-[10px] text-white/60">⌘K</span>
+                    </button>
+                    <button
+                        type="button"
+                        onClick={cycleAccent}
+                        title={`Theme Accent: ${activeAccent.label}`}
+                        aria-label="Cycle ambient accent theme"
+                        className="p-2 rounded-xl border border-white/12 bg-white/[0.04] hover:bg-white/[0.08] text-sky-300 transition cursor-pointer"
+                    >
+                        <Palette className="h-4 w-4" />
+                    </button>
                 </div>
 
                 {/* Navigation Items */}
@@ -271,7 +342,16 @@ export default function DashboardLayout() {
                                 <p className="text-[10px] font-semibold text-sky-300/80">VORTEX AI World</p>
                             </div>
                         </div>
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-1.5">
+                            <button
+                                type="button"
+                                onClick={() => setCmdOpen(true)}
+                                className="grid h-9 w-9 place-items-center rounded-xl border border-sky-400/30 bg-sky-500/15 text-sky-300 active:scale-95 transition-all"
+                                aria-label="Quick Jump Command Palette"
+                                title="Quick Jump (⌘K)"
+                            >
+                                <Search className="h-4 w-4" />
+                            </button>
                             <button
                                 type="button"
                                 onClick={() => setShowAndroidModal(true)}
@@ -300,6 +380,13 @@ export default function DashboardLayout() {
                                 <LogOut className="h-4 w-4" />
                             </button>
                         </div>
+                    </div>
+                )}
+
+                {!isOnline && (
+                    <div className="mx-3 mt-2 rounded-xl border border-rose-500/40 bg-rose-500/15 px-3 py-2 text-xs font-bold text-rose-200 flex items-center justify-center gap-2">
+                        <WifiOff className="h-4 w-4 shrink-0" />
+                        <span>You are offline — messages &amp; scores will sync when reconnected.</span>
                     </div>
                 )}
 

@@ -1755,7 +1755,14 @@ const NeonDodge = ({ onBack, isMuted }) => {
 export default function Arcade() {
     const [searchParams, setSearchParams] = useSearchParams();
     const initialNullNorth = searchParams.get("nullnorth") || "";
-    const [selectedGame, setSelectedGame] = useState(() => (initialNullNorth ? "nullnorth" : null));
+    const initialGameParam = searchParams.get("game") || "";
+    const [selectedGame, setSelectedGame] = useState(() =>
+        initialNullNorth ? "nullnorth" : initialGameParam || null
+    );
+    useEffect(() => {
+        const g = searchParams.get("game");
+        if (g) setSelectedGame(g);
+    }, [searchParams]);
     const [nullNorthInviteCode, setNullNorthInviteCode] = useState(() =>
         initialNullNorth && initialNullNorth !== "HUB" ? initialNullNorth : ""
     );
@@ -1894,7 +1901,7 @@ export default function Arcade() {
     const handleBack = useCallback(() => {
         setSelectedGame(null);
         setNullNorthInviteCode("");
-        if (searchParams.has("nullnorth")) {
+        if (searchParams.has("nullnorth") || searchParams.has("game")) {
             setSearchParams({}, { replace: true });
         }
     }, [searchParams, setSearchParams]);

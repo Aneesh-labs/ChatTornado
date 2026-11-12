@@ -9,11 +9,15 @@ import {
     Lock,
     MessageSquareText,
     Radio,
+    Search,
     ShieldCheck,
     Sparkles,
     Zap,
+    Flame,
 } from "lucide-react";
 import { motion } from "framer-motion";
+import { computeLevelFromXp, getTodayKey, getSpotlightGameId } from "../../Components/games/arcadeProgression";
+import { MEGA_GAMES_CATALOG } from "../../Components/games/megaSuite/megaRegistry";
 
 const statCards = [
     {
@@ -81,6 +85,19 @@ export default function Home() {
     }, []);
 
     const greeting = useMemo(() => getTimeOfDayGreeting(), []);
+    const arcadeMeta = useMemo(() => {
+        let xp = 0, streak = 1, recent = [];
+        try {
+            xp = Number(localStorage.getItem("arcade_xp") || 0);
+            streak = Math.max(1, Number(localStorage.getItem("arcade_streak") || 1));
+            const raw = JSON.parse(localStorage.getItem("arcade_recent") || "[]");
+            if (Array.isArray(raw)) recent = raw;
+        } catch (_) {}
+        const lv = computeLevelFromXp(xp);
+        const allIds = ["crownchess", "subwaysurfers", "vortexbastion", "afterspace", "neonblade", "snake", ...MEGA_GAMES_CATALOG.map((g) => g.id)];
+        const spotlightId = getSpotlightGameId(getTodayKey(), allIds);
+        return { lv, streak, recent, spotlightId };
+    }, []);
 
     const cards = useMemo(
         () =>
@@ -141,7 +158,33 @@ export default function Home() {
                                     className="flex items-center gap-2 rounded-xl border border-white/12 bg-white/[0.06] px-4 py-3 text-sm font-bold text-white transition-all hover:border-white/20 hover:bg-white/[0.1] active:scale-[0.98] cursor-pointer"
                                 >
                                     <Gamepad2 className="h-4 w-4 text-amber-300" />
-                                    <span>Arcade Hub</span>
+                                    <span>Arcade (53 Games)</span>
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => window.dispatchEvent(new CustomEvent("chattornado:open-command-palette"))}
+                                    className="flex items-center gap-2 rounded-xl border border-sky-400/25 bg-sky-500/10 px-4 py-3 text-sm font-bold text-sky-200 transition-all hover:bg-sky-500/20 active:scale-[0.98] cursor-pointer"
+                                >
+                                    <Search className="h-4 w-4 text-sky-300" />
+                                    <span>Quick Jump</span>
+                                    <span className="rounded bg-white/10 px-1.5 py-0.5 font-mono text-[10px]">⌘K</span>
+                                </button>
+                            </div>
+
+                            {/* Live Arcade Rank & Spotlight Strip */}
+                            <div className="mt-5 flex flex-wrap items-center gap-2 text-xs font-bold">
+                                <span className={`px-2.5 py-1 rounded-lg bg-violet-500/15 border border-violet-400/30 ${arcadeMeta.lv.rankColor}`}>
+                                    Lv.{arcadeMeta.lv.level} {arcadeMeta.lv.rankTitle}
+                                </span>
+                                <span className="px-2.5 py-1 rounded-lg bg-orange-500/15 border border-orange-400/30 text-orange-300 flex items-center gap-1">
+                                    <Flame className="h-3.5 w-3.5" /> {arcadeMeta.streak}d Streak
+                                </span>
+                                <button
+                                    type="button"
+                                    onClick={() => navigate(`/arcade?game=${encodeURIComponent(arcadeMeta.spotlightId)}`)}
+                                    className="px-2.5 py-1 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 border border-amber-400/35 text-amber-200 transition cursor-pointer"
+                                >
+                                    ⚡ Play 2x XP Spotlight →
                                 </button>
                             </div>
                         </div>
