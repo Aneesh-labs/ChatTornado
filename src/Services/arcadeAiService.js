@@ -26,6 +26,18 @@ const GAME_SCORE_KEYS = {
   nullnorth: "nullnorth_highscore",
   afterspace: "afterspace_highscore",
   crownchess: "crownchess_highscore",
+  photonpong: "photonpong_highscore",
+  cybertetris: "cybertetris_highscore",
+  crowncheckers: "crowncheckers_highscore",
+  prismbreakout: "prismbreakout_highscore",
+  asteroidsnova: "asteroidsnova_highscore",
+  connect4: "connect4_highscore",
+  reversi: "reversi_highscore",
+  navalsonar: "navalsonar_highscore",
+  cybermines: "cybermines_highscore",
+  sudokuzen: "sudokuzen_highscore",
+  synthrhythm: "synthrhythm_highscore",
+  gravitydrop: "gravitydrop_highscore",
 };
 
 export function collectArcadeHighScores() {
@@ -109,7 +121,7 @@ export function inferLocalToolActions(gameId, prompt = "") {
       actions.push({ name: "toggle_scanner", arguments: { active: true } });
     }
   } else {
-    const mapGames = ["crownchess", "afterspace", "subwaysurfers", "nullnorth", "vortexbastion", "neonblade", "snake", "flappy", "2048", "memory", "zombie", "neondodge"];
+    const mapGames = ["crownchess", "afterspace", "subwaysurfers", "nullnorth", "vortexbastion", "neonblade", "snake", "flappy", "2048", "memory", "zombie", "neondodge", "photonpong", "cybertetris", "crowncheckers", "prismbreakout", "asteroidsnova", "connect4", "reversi", "navalsonar", "cybermines", "sudokuzen", "synthrhythm", "gravitydrop"];
     for (const gid of mapGames) {
       if (low.includes(`launch ${gid}`) || low.includes(`open ${gid}`) || low.includes(`play ${gid}`)) {
         actions.push({ name: "launch_arcade_game", arguments: { game_id: gid } });

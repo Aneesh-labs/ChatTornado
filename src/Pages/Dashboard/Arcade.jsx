@@ -27,6 +27,10 @@ import NeonBladeGame from "../../Components/games/NeonBladeGame";
 import NullNorthGame from "../../Components/games/nullNorth/NullNorthGame";
 import AfterspaceGame from "../../Components/games/afterspace/AfterspaceGame";
 import CrownChessGame from "../../Components/games/CrownChessGame";
+import { PhotonPongGame, PrismBreakoutGame, AsteroidsNovaGame } from "../../Components/games/hiFiSuite/ActionClassicsSuite";
+import { CheckersV2Game, ConnectFourGame, ReversiEclipseGame, NavalSonarGame } from "../../Components/games/hiFiSuite/BoardStrategySuite";
+import { TetrisV2Game, MinesweeperTacticalGame, SudokuZenGame } from "../../Components/games/hiFiSuite/PuzzleLogicSuite";
+import { SynthRhythmGame, GravityMergeDropGame } from "../../Components/games/hiFiSuite/RhythmPhysicsSuite";
 import {
     SNAKE_GRID,
     queueSnakeDirection,
@@ -1878,11 +1882,138 @@ export default function Arcade() {
             controls: "Drag / Left-Right / A-D",
             color: "from-purple-500 to-fuchsia-700",
             desc: "Pilot the cyber jet, grab S-shields, and stack +15 near-miss graze combos!"
+        },
+        {
+            id: "photonpong",
+            title: "Hyper Photon Pong",
+            emoji: "🏓⚡",
+            tag: "v2.0 UPDATED",
+            isV2: true,
+            category: "action",
+            controls: "Drag / W-S • AI (3 Tiers) + 2P",
+            color: "from-cyan-500 to-sky-700",
+            desc: "v2.0 Remaster: spin curveball strikes, rally speed multiplier & 2P local duel."
+        },
+        {
+            id: "cybertetris",
+            title: "Polyomino Tetris",
+            emoji: "🧱💠",
+            tag: "v2.0 UPDATED",
+            isV2: true,
+            category: "strategy",
+            controls: "Arrows / Space Hard Drop • C Hold",
+            color: "from-indigo-500 to-blue-800",
+            desc: "v2.0 Remaster: 7-bag randomizer, Ghost outline, Hold queue & Hard Drop combos."
+        },
+        {
+            id: "crowncheckers",
+            title: "Crown Checkers",
+            emoji: "🔴👑",
+            tag: "v2.0 UPDATED",
+            isV2: true,
+            category: "strategy",
+            controls: "Tap Moves • Depth-4 AI + 2P",
+            color: "from-emerald-500 to-green-800",
+            desc: "v2.0 Remaster: forced capture rule, automatic multi-jump chains & King crowning."
+        },
+        {
+            id: "prismbreakout",
+            title: "Prism Breakout",
+            emoji: "💎🎇",
+            tag: "v2.0 UPDATED",
+            isV2: true,
+            category: "action",
+            controls: "Drag Paddle / ← → • Power Drops",
+            color: "from-fuchsia-500 to-purple-800",
+            desc: "v2.0 Remaster: shattering prism bricks, Multi-ball splitters & Wide Paddle drops."
+        },
+        {
+            id: "asteroidsnova",
+            title: "Voidbreaker Asteroids",
+            emoji: "☄️🚀",
+            tag: "v2.0 UPDATED",
+            isV2: true,
+            category: "action",
+            controls: "A/D Rotate • W Thrust • Space Fire • Shift Blink",
+            color: "from-orange-500 to-red-800",
+            desc: "v2.0 Remaster: 360° inertia thrust, splitting boulders & hyperspace Blink warp."
+        },
+        {
+            id: "connect4",
+            title: "Quantum Connect 4",
+            emoji: "🟡🔴",
+            tag: "NEW • ALPHA-BETA",
+            category: "strategy",
+            controls: "Tap Column • Depth-5 AI + 2P",
+            color: "from-sky-500 to-cyan-800",
+            desc: "Drop neon discs into the 7×6 matrix against an Alpha-Beta tactical solver or 2P."
+        },
+        {
+            id: "reversi",
+            title: "Eclipse Reversi",
+            emoji: "⚫⚪",
+            tag: "NEW • OTHELLO",
+            category: "strategy",
+            controls: "Tap Flip Hints • Corner AI + 2P",
+            color: "from-teal-500 to-emerald-800",
+            desc: "Flank & flip discs across 8×8 grid with live flip counters and corner-smart AI."
+        },
+        {
+            id: "navalsonar",
+            title: "Aegis Naval Sonar",
+            emoji: "🚢📡",
+            tag: "NEW • RADAR DUEL",
+            category: "strategy",
+            controls: "Tap Sonar Sector to Fire",
+            color: "from-lime-500 to-emerald-800",
+            desc: "Hunt & sink the 5-ship enemy armada against a probability Hunt-and-Target AI."
+        },
+        {
+            id: "cybermines",
+            title: "Tactical Minesweeper",
+            emoji: "💣🚩",
+            tag: "NEW • LOGIC GRID",
+            category: "strategy",
+            controls: "Tap Reveal / Right-Click Flag / Chord",
+            color: "from-amber-500 to-orange-800",
+            desc: "Guaranteed safe first click, Chording, Flag Mode & 9×9 / 12×12 / 14×14 grids."
+        },
+        {
+            id: "sudokuzen",
+            title: "Chrono Sudoku",
+            emoji: "🔢🧩",
+            tag: "NEW • 9×9 PUZZLE",
+            category: "strategy",
+            controls: "Tap Cell + 1–9 • Notes & Smart Hint",
+            color: "from-violet-500 to-indigo-800",
+            desc: "3 difficulty tiers with Pencil candidate notes, live conflicts & Smart Hint."
+        },
+        {
+            id: "synthrhythm",
+            title: "Synth Pulse Rhythm",
+            emoji: "🎵⚡",
+            tag: "NEW • BPM HIGHWAY",
+            category: "action",
+            controls: "Tap Pads / D-F-J-K Keys",
+            color: "from-pink-500 to-rose-800",
+            desc: "4-lane neon rhythm sprint with PERFECT timing judgements & 8× streak multiplier."
+        },
+        {
+            id: "gravitydrop",
+            title: "Gravity Merge Drop",
+            emoji: "🫧🌟",
+            tag: "NEW • PHYSICS MERGE",
+            category: "action",
+            controls: "Tap / Drag Aim to Drop Orbs",
+            color: "from-sky-400 to-indigo-700",
+            desc: "Drop & collide equal numbered energy orbs to fuse chains all the way up to 2048!"
         }
     ];
 
     const filteredGames = categoryFilter === "all"
         ? GAMES
+        : categoryFilter === "v2"
+        ? GAMES.filter((g) => g.isV2)
         : GAMES.filter((g) => g.category === categoryFilter);
 
     const getBestForGame = (gid) => {
@@ -1913,7 +2044,7 @@ export default function Arcade() {
                             Mini Games Zone <Sparkles className="h-6 w-6 text-amber-300" />
                         </h1>
                         <p className="mt-1.5 text-xs sm:text-sm text-white/60 max-w-xl">
-                            11 upgraded 60fps, strategy, &amp; 3D WebGL arcade games including Crownfall Chess and live Co-Op!
+                            23 hi-fi 60fps, strategy, rhythm, physics &amp; 3D WebGL arcade games including 5 v2.0 Updated Classics!
                         </p>
                     </div>
 
@@ -1972,6 +2103,30 @@ export default function Arcade() {
                     <AfterspaceGame onBack={handleBack} isMuted={isMuted} onSaveScore={saveBackendGameScore} />
                 ) : selectedGame === "crownchess" ? (
                     <CrownChessGame onBack={handleBack} isMuted={isMuted} onSaveScore={saveBackendGameScore} />
+                ) : selectedGame === "photonpong" ? (
+                    <PhotonPongGame onBack={handleBack} isMuted={isMuted} onSaveScore={saveBackendGameScore} />
+                ) : selectedGame === "cybertetris" ? (
+                    <TetrisV2Game onBack={handleBack} isMuted={isMuted} onSaveScore={saveBackendGameScore} />
+                ) : selectedGame === "crowncheckers" ? (
+                    <CheckersV2Game onBack={handleBack} isMuted={isMuted} onSaveScore={saveBackendGameScore} />
+                ) : selectedGame === "prismbreakout" ? (
+                    <PrismBreakoutGame onBack={handleBack} isMuted={isMuted} onSaveScore={saveBackendGameScore} />
+                ) : selectedGame === "asteroidsnova" ? (
+                    <AsteroidsNovaGame onBack={handleBack} isMuted={isMuted} onSaveScore={saveBackendGameScore} />
+                ) : selectedGame === "connect4" ? (
+                    <ConnectFourGame onBack={handleBack} isMuted={isMuted} onSaveScore={saveBackendGameScore} />
+                ) : selectedGame === "reversi" ? (
+                    <ReversiEclipseGame onBack={handleBack} isMuted={isMuted} onSaveScore={saveBackendGameScore} />
+                ) : selectedGame === "navalsonar" ? (
+                    <NavalSonarGame onBack={handleBack} isMuted={isMuted} onSaveScore={saveBackendGameScore} />
+                ) : selectedGame === "cybermines" ? (
+                    <MinesweeperTacticalGame onBack={handleBack} isMuted={isMuted} onSaveScore={saveBackendGameScore} />
+                ) : selectedGame === "sudokuzen" ? (
+                    <SudokuZenGame onBack={handleBack} isMuted={isMuted} onSaveScore={saveBackendGameScore} />
+                ) : selectedGame === "synthrhythm" ? (
+                    <SynthRhythmGame onBack={handleBack} isMuted={isMuted} onSaveScore={saveBackendGameScore} />
+                ) : selectedGame === "gravitydrop" ? (
+                    <GravityMergeDropGame onBack={handleBack} isMuted={isMuted} onSaveScore={saveBackendGameScore} />
                 ) : (
                     <div className="space-y-5">
                         {/* Featured Multiplayer Flagship: NULL//NORTH */}
@@ -2007,6 +2162,7 @@ export default function Arcade() {
                         <div className="flex flex-wrap items-center gap-2">
                             {[
                                 { id: "all", label: `All Games (${GAMES.length})` },
+                                { id: "v2", label: "v2.0 Updated (5)" },
                                 { id: "3d", label: "3D & Worlds" },
                                 { id: "strategy", label: "Strategy & Classics" },
                                 { id: "action", label: "Action & Reflex" },
