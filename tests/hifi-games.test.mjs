@@ -104,8 +104,16 @@ test("Tactical Minesweeper: guarantees safe first click, flood-fill reveal, and 
   assert.equal(s.board[4][4].mine, false);
   assert.ok(s.revealedCount >= 1);
 
-  const flagged = toggleMineFlag(s, 0, 0);
-  assert.equal(flagged.board[0][0].flagged, true);
+  const target = (() => {
+    for (let r = 0; r < s.rows; r++) {
+      for (let c = 0; c < s.cols; c++) {
+        if (!s.board[r][c].revealed) return [r, c];
+      }
+    }
+    return [0, 0];
+  })();
+  const flagged = toggleMineFlag(s, target[0], target[1]);
+  assert.equal(flagged.board[target[0]][target[1]].flagged, true);
   assert.equal(typeof chordMineCell(flagged, 4, 4).revealedCount, "number");
 });
 

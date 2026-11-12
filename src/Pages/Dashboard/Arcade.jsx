@@ -17,6 +17,11 @@ import {
     Compass,
     Bot,
     Crown,
+    Search,
+    Star,
+    Shuffle,
+    Clock,
+    X,
 } from "lucide-react";
 import { soundEngine } from "../../utils/soundEffects";
 import API from "../../Services/API";
@@ -1744,6 +1749,54 @@ export default function Arcade() {
     const [isMuted, setIsMuted] = useState(false);
     const [aiHubOpen, setAiHubOpen] = useState(false);
     const [categoryFilter, setCategoryFilter] = useState("all");
+    const [searchQuery, setSearchQuery] = useState("");
+    const [favorites, setFavorites] = useState(() => {
+        try {
+            const raw = JSON.parse(localStorage.getItem("arcade_favorites") || "[]");
+            return Array.isArray(raw) ? raw : [];
+        } catch (_) {
+            return [];
+        }
+    });
+    const [recentIds, setRecentIds] = useState(() => {
+        try {
+            const raw = JSON.parse(localStorage.getItem("arcade_recent") || "[]");
+            return Array.isArray(raw) ? raw : [];
+        } catch (_) {
+            return [];
+        }
+    });
+
+    useEffect(() => {
+        window.__arcadeMuted = isMuted;
+        window.dispatchEvent(new CustomEvent("arcade:mute-changed", { detail: { isMuted } }));
+    }, [isMuted]);
+
+    useEffect(() => {
+        const onToggleMute = () => setIsMuted((m) => !m);
+        window.addEventListener("arcade:toggle-mute", onToggleMute);
+        return () => window.removeEventListener("arcade:toggle-mute", onToggleMute);
+    }, []);
+
+    const launchGame = useCallback((gid) => {
+        if (!isMuted) soundEngine.play("coin");
+        setSelectedGame(gid);
+        setRecentIds((prev) => {
+            const next = [gid, ...prev.filter((id) => id !== gid)].slice(0, 4);
+            try { localStorage.setItem("arcade_recent", JSON.stringify(next)); } catch (_) {}
+            return next;
+        });
+    }, [isMuted]);
+
+    const toggleFavorite = useCallback((e, gid) => {
+        e.stopPropagation();
+        setFavorites((prev) => {
+            const next = prev.includes(gid) ? prev.filter((id) => id !== gid) : [...prev, gid];
+            try { localStorage.setItem("arcade_favorites", JSON.stringify(next)); } catch (_) {}
+            return next;
+        });
+    }, []);
+
     const handleBack = useCallback(() => {
         setSelectedGame(null);
         setNullNorthInviteCode("");
@@ -2012,18 +2065,50 @@ export default function Arcade() {
         ...MEGA_GAMES_CATALOG
     ];
 
-    const filteredGames = categoryFilter === "all"
-        ? GAMES
-        : categoryFilter === "v2"
-        ? GAMES.filter((g) => g.isV2)
-        : GAMES.filter((g) => g.category === categoryFilter);
-
     const getBestForGame = (gid) => {
         try {
             return Number(localStorage.getItem(`${gid}_highscore`) || 0);
         } catch (_) {
             return 0;
         }
+    };
+
+    const q = searchQuery.trim().toLowerCase();
+    const filteredGames = GAMES.filter((g) => {
+        if (categoryFilter === "v2" && !g.isV2) return false;
+        if (categoryFilter === "fav" && !favorites.includes(g.id)) return false;
+        if (categoryFilter !== "all" && categoryFilter !== "v2" && categoryFilter !== "fav" && g.category !== categoryFilter) {
+            return false;
+        }
+        if (!q) return true;
+        return (
+            g.title.toLowerCase().includes(q) ||
+            g.desc.toLowerCase().includes(q) ||
+            (g.controls || "").toLowerCase().includes(q) ||
+            (g.tag || "").toLowerCase().includes(q)
+        );
+    });
+
+    const arcadeStats = GAMES.reduce(
+        (acc, g) => {
+            const b = getBestForGame(g.id);
+            if (b > 0) {
+                acc.played += 1;
+                acc.totalScore += b;
+            }
+            return acc;
+        },
+        { played: 0, totalScore: 0 }
+    );
+
+    const recentGames = recentIds
+        .map((id) => GAMES.find((g) => g.id === id))
+        .filter(Boolean);
+
+    const launchRandomGame = () => {
+        const pool = filteredGames.length > 0 ? filteredGames : GAMES;
+        const pick = pool[Math.floor(Math.random() * pool.length)];
+        if (pick) launchGame(pick.id);
     };
 
     return (
@@ -2046,11 +2131,31 @@ export default function Arcade() {
                             Mini Games Zone <Sparkles className="h-6 w-6 text-amber-300" />
                         </h1>
                         <p className="mt-1.5 text-xs sm:text-sm text-white/60 max-w-xl">
-                            53 hi-fi 60fps, strategy, rhythm, physics &amp; 3D WebGL arcade games — including 35 v2.0 Updated Editions!
+                            {GAMES.length} hi-fi 60fps, strategy, rhythm, physics &amp; 3D WebGL arcade games — now with Theater Mode, P/R/F shortcuts, Favorites &amp; live Search!
                         </p>
+                        <div className="mt-2.5 flex flex-wrap items-center gap-2 text-xs font-bold">
+                            <span className="px-2.5 py-1 rounded-lg bg-white/5 border border-white/10 text-cyan-300">
+                                {GAMES.length} Games
+                            </span>
+                            <span className="px-2.5 py-1 rounded-lg bg-white/5 border border-white/10 text-emerald-300">
+                                {arcadeStats.played} Played
+                            </span>
+                            <span className="px-2.5 py-1 rounded-lg bg-white/5 border border-white/10 text-amber-300 flex items-center gap-1">
+                                <Trophy className="h-3.5 w-3.5" /> {arcadeStats.totalScore.toLocaleString()} Total Pts
+                            </span>
+                        </div>
                     </div>
 
-                    <div className="flex items-center gap-2.5 sm:gap-3">
+                    <div className="flex items-center gap-2 sm:gap-3 flex-wrap justify-end">
+                        <button
+                            type="button"
+                            onClick={launchRandomGame}
+                            title="Launch a random game"
+                            className="px-3 py-2.5 rounded-2xl bg-white/10 hover:bg-white/20 border border-white/15 text-white text-xs sm:text-sm font-black flex items-center gap-1.5 shadow-lg transition cursor-pointer"
+                        >
+                            <Shuffle className="h-4 w-4 text-cyan-300" />
+                            <span className="hidden sm:inline">Surprise Me</span>
+                        </button>
                         <button
                             type="button"
                             onClick={() => setAiHubOpen(true)}
@@ -2166,43 +2271,98 @@ export default function Arcade() {
                             </div>
                         </motion.div>
 
-                        {/* Crisp Category Filter Bar */}
-                        <div className="flex flex-wrap items-center gap-2">
-                            {[
-                                { id: "all", label: `All Games (${GAMES.length})` },
-                                { id: "v2", label: `v2.0 Updated (${GAMES.filter((g) => g.isV2).length})` },
-                                { id: "3d", label: "3D & Worlds" },
-                                { id: "strategy", label: "Strategy & Classics" },
-                                { id: "action", label: "Action & Reflex" },
-                            ].map((tab) => (
-                                <button
-                                    key={tab.id}
-                                    type="button"
-                                    onClick={() => setCategoryFilter(tab.id)}
-                                    className={`px-3.5 py-2 rounded-xl text-xs font-extrabold border transition-colors cursor-pointer ${
-                                        categoryFilter === tab.id
-                                            ? "bg-violet-500 text-white border-violet-300 shadow-md"
-                                            : "bg-white/[0.04] text-white/70 border-white/10 hover:bg-white/[0.08]"
-                                    }`}
-                                >
-                                    {tab.label}
-                                </button>
-                            ))}
+                        {/* Recently Played Quick-Launch Strip */}
+                        {recentGames.length > 0 && (
+                            <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.03] px-3.5 py-2.5">
+                                <span className="text-xs font-extrabold text-white/60 flex items-center gap-1.5 mr-1">
+                                    <Clock className="h-3.5 w-3.5 text-cyan-300" /> Recent:
+                                </span>
+                                {recentGames.map((rg) => (
+                                    <button
+                                        key={rg.id}
+                                        type="button"
+                                        onClick={() => launchGame(rg.id)}
+                                        className="px-2.5 py-1 rounded-xl bg-white/10 hover:bg-violet-500/30 border border-white/10 text-xs font-bold text-white flex items-center gap-1.5 transition cursor-pointer"
+                                    >
+                                        <span>{rg.emoji}</span>
+                                        <span>{rg.title}</span>
+                                    </button>
+                                ))}
+                            </div>
+                        )}
+
+                        {/* Search + Crisp Category Filter Bar */}
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                            <div className="flex flex-wrap items-center gap-2">
+                                {[
+                                    { id: "all", label: `All Games (${GAMES.length})` },
+                                    { id: "v2", label: `v2.0 Updated (${GAMES.filter((g) => g.isV2).length})` },
+                                    { id: "fav", label: `Favorites (${favorites.length})` },
+                                    { id: "3d", label: "3D & Worlds" },
+                                    { id: "strategy", label: "Strategy & Classics" },
+                                    { id: "action", label: "Action & Reflex" },
+                                ].map((tab) => (
+                                    <button
+                                        key={tab.id}
+                                        type="button"
+                                        onClick={() => setCategoryFilter(tab.id)}
+                                        className={`px-3.5 py-2 rounded-xl text-xs font-extrabold border transition-colors cursor-pointer ${
+                                            categoryFilter === tab.id
+                                                ? "bg-violet-500 text-white border-violet-300 shadow-md"
+                                                : "bg-white/[0.04] text-white/70 border-white/10 hover:bg-white/[0.08]"
+                                        }`}
+                                    >
+                                        {tab.label}
+                                    </button>
+                                ))}
+                            </div>
+
+                            <div className="relative w-full sm:w-64 shrink-0">
+                                <Search className="h-4 w-4 text-white/45 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                                <input
+                                    type="text"
+                                    value={searchQuery}
+                                    onChange={(e) => setSearchQuery(e.target.value)}
+                                    placeholder="Search 53 games..."
+                                    aria-label="Search games"
+                                    className="w-full pl-9 pr-8 py-2 rounded-xl bg-white/[0.05] border border-white/15 text-xs font-semibold text-white placeholder:text-white/40 focus:outline-none focus:border-violet-400"
+                                />
+                                {searchQuery && (
+                                    <button
+                                        type="button"
+                                        onClick={() => setSearchQuery("")}
+                                        aria-label="Clear search"
+                                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-white/50 hover:text-white cursor-pointer"
+                                    >
+                                        <X className="h-3.5 w-3.5" />
+                                    </button>
+                                )}
+                            </div>
                         </div>
 
                         {/* Spacious 3-Column Games Grid */}
+                        {filteredGames.length === 0 ? (
+                            <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-10 text-center space-y-2">
+                                <p className="text-sm font-bold text-white/80">No games match your filter.</p>
+                                <button
+                                    type="button"
+                                    onClick={() => { setSearchQuery(""); setCategoryFilter("all"); }}
+                                    className="px-4 py-2 rounded-xl bg-violet-600 hover:bg-violet-500 text-xs font-bold text-white cursor-pointer"
+                                >
+                                    Reset Filters
+                                </button>
+                            </div>
+                        ) : (
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
                         {filteredGames.map((game) => {
                             const bestScore = getBestForGame(game.id);
+                            const isFav = favorites.includes(game.id);
                             return (
                             <motion.div
                                 key={game.id}
                                 whileHover={{ scale: 1.03, y: -4 }}
                                 whileTap={{ scale: 0.97 }}
-                                onClick={() => {
-                                    if (!isMuted) soundEngine.play("coin");
-                                    setSelectedGame(game.id);
-                                }}
+                                onClick={() => launchGame(game.id)}
                                 className="group relative flex flex-col justify-between rounded-3xl border border-white/10 bg-gradient-to-b from-white/[0.06] to-white/[0.02] p-6 shadow-xl cursor-pointer hover:border-white/25 hover:bg-white/[0.09] transition-all overflow-hidden"
                             >
                                 <div className={`absolute top-0 right-0 w-32 h-32 bg-gradient-to-bl ${game.color} opacity-20 rounded-bl-full pointer-events-none group-hover:opacity-40 transition-opacity`} />
@@ -2210,9 +2370,23 @@ export default function Arcade() {
                                 <div>
                                     <div className="flex items-center justify-between mb-4">
                                         <div className="text-4xl">{game.emoji}</div>
-                                        <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-white/10 text-white/80 border border-white/10">
-                                            {game.tag}
-                                        </span>
+                                        <div className="flex items-center gap-1.5">
+                                            <button
+                                                type="button"
+                                                onClick={(e) => toggleFavorite(e, game.id)}
+                                                aria-label={isFav ? `Remove ${game.title} from favorites` : `Favorite ${game.title}`}
+                                                className={`p-1.5 rounded-full border transition cursor-pointer ${
+                                                    isFav
+                                                        ? "bg-amber-400/20 border-amber-300/50 text-amber-300"
+                                                        : "bg-white/5 border-white/10 text-white/45 hover:text-amber-300"
+                                                }`}
+                                            >
+                                                <Star className={`h-3.5 w-3.5 ${isFav ? "fill-current" : ""}`} />
+                                            </button>
+                                            <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-white/10 text-white/80 border border-white/10">
+                                                {game.tag}
+                                            </span>
+                                        </div>
                                     </div>
                                     <h3 className="text-xl font-black text-white group-hover:text-amber-200 transition-colors">
                                         {game.title}
@@ -2246,6 +2420,7 @@ export default function Arcade() {
                             );
                         })}
                         </div>
+                        )}
                     </div>
                 )}
             </section>

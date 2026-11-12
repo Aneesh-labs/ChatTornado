@@ -150,13 +150,44 @@ export const OrbitalSlingshotGame = ({ onBack, isMuted, onSaveScore }) => {
       ctx.fillStyle = "#38bdf8";
       ctx.beginPath(); ctx.arc(s.launch.x, s.launch.y, 9, 0, Math.PI * 2); ctx.fill();
       if (s.drag) {
+        const dx0 = s.launch.x - s.drag.x;
+        const dy0 = s.launch.y - s.drag.y;
         ctx.strokeStyle = "#fde047";
         ctx.setLineDash([4, 4]);
         ctx.beginPath();
         ctx.moveTo(s.launch.x, s.launch.y);
-        ctx.lineTo(s.launch.x + (s.launch.x - s.drag.x), s.launch.y + (s.launch.y - s.drag.y));
+        ctx.lineTo(s.launch.x + dx0, s.launch.y + dy0);
         ctx.stroke();
         ctx.setLineDash([]);
+
+        // Gravity-curved trajectory prediction arc
+        if (Math.hypot(dx0, dy0) >= 10) {
+          let sx = s.launch.x;
+          let sy = s.launch.y;
+          let svx = dx0 * 3.8;
+          let svy = dy0 * 3.8;
+          const stepDt = 0.028;
+          for (let step = 0; step < 24; step++) {
+            let hitWell = false;
+            for (const w of s.wells) {
+              const wx = w.x - sx;
+              const wy = w.y - sy;
+              const wd2 = Math.max(400, wx * wx + wy * wy);
+              const wd = Math.sqrt(wd2);
+              const wf = (w.mass * 12) / wd2;
+              svx += (wx / wd) * wf * stepDt;
+              svy += (wy / wd) * wf * stepDt;
+              if (wd < w.r + 4) { hitWell = true; break; }
+            }
+            if (hitWell) break;
+            sx += svx * stepDt;
+            sy += svy * stepDt;
+            ctx.fillStyle = `rgba(253,224,71,${Math.max(0.15, 0.85 - step * 0.03)})`;
+            ctx.beginPath();
+            ctx.arc(sx, sy, 2.2, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        }
       }
 
       for (let i = 0; i < s.trail.length; i++) {
