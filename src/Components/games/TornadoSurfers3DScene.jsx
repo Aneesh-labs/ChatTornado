@@ -63,30 +63,236 @@ function disposeGroupMaterials(group) {
   });
 }
 
-function createSkyscraperTexture(hueHex) {
-  const canvas = document.createElement("canvas");
-  canvas.width = 128;
-  canvas.height = 256;
-  const ctx = canvas.getContext("2d");
+function createTrackBedTexture() {
+  const c = document.createElement("canvas");
+  c.width = 512;
+  c.height = 512;
+  const ctx = c.getContext("2d");
 
-  ctx.fillStyle = "#041612";
+  // Dark slate gravel bed
+  ctx.fillStyle = "#031612";
+  ctx.fillRect(0, 0, 512, 512);
+
+  // Subtle ballast speckle texture
+  for (let i = 0; i < 450; i++) {
+    ctx.fillStyle = i % 3 === 0 ? "rgba(16, 185, 129, 0.08)" : "rgba(255, 255, 255, 0.035)";
+    const x = (i * 97) % 512;
+    const y = (i * 53) % 512;
+    ctx.fillRect(x, y, 4 + (i % 5), 3 + (i % 4));
+  }
+
+  // Cross railway sleepers per tile (8 per tile)
+  for (let row = 0; row < 8; row++) {
+    const ry = row * 64 + 18;
+    ctx.fillStyle = "#07261f";
+    ctx.fillRect(28, ry, 456, 20);
+    ctx.fillStyle = "#0b382d";
+    ctx.fillRect(28, ry + 2, 456, 4);
+
+    // Rail clip bolts for 3 tracks
+    for (const laneCenter of [92, 256, 420]) {
+      for (const ro of [-36, 36]) {
+        ctx.fillStyle = "#34d399";
+        ctx.fillRect(laneCenter + ro - 5, ry + 5, 10, 10);
+      }
+    }
+  }
+
+  // Polished steel rails + neon side channel strips
+  for (const laneCenter of [92, 256, 420]) {
+    for (const ro of [-36, 36]) {
+      const rx = laneCenter + ro;
+      ctx.fillStyle = "#042f2e";
+      ctx.fillRect(rx - 7, 0, 14, 512);
+      ctx.fillStyle = "#34d399";
+      ctx.fillRect(rx - 2, 0, 4, 512);
+      ctx.fillStyle = "#d1fae5";
+      ctx.fillRect(rx - 1, 0, 2, 512);
+    }
+    // Subtle center energy guide ticks
+    ctx.fillStyle = "rgba(16, 185, 129, 0.18)";
+    for (let y = 0; y < 512; y += 64) {
+      ctx.fillRect(laneCenter - 2, y + 6, 4, 24);
+    }
+  }
+
+  // Outer glowing curb rails
+  ctx.fillStyle = "#6ee7b7";
+  ctx.fillRect(6, 0, 6, 512);
+  ctx.fillRect(500, 0, 6, 512);
+
+  const tex = new THREE.CanvasTexture(c);
+  tex.wrapS = THREE.RepeatWrapping;
+  tex.wrapT = THREE.RepeatWrapping;
+  tex.repeat.set(1, 7.5);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
+function createSkyscraperTexture(hueHex, accentHex = "#a7f3d0") {
+  const c = document.createElement("canvas");
+  c.width = 128;
+  c.height = 256;
+  const ctx = c.getContext("2d");
+
+  const grad = ctx.createLinearGradient(0, 0, 0, 256);
+  grad.addColorStop(0, "#05221c");
+  grad.addColorStop(1, "#020e0b");
+  ctx.fillStyle = grad;
   ctx.fillRect(0, 0, 128, 256);
 
-  ctx.fillStyle = hueHex;
-  for (let y = 12; y < 240; y += 16) {
-    for (let x = 12; x < 112; x += 22) {
-      if ((x * y) % 5 !== 0) {
-        ctx.globalAlpha = 0.28 + ((x + y) % 4) * 0.16;
-        ctx.fillRect(x, y, 12, 8);
+  // Horizontal floor ledges + curtain windows
+  for (let y = 14; y < 244; y += 14) {
+    ctx.fillStyle = "rgba(16, 185, 129, 0.14)";
+    ctx.fillRect(6, y + 10, 116, 2);
+
+    for (let x = 12; x < 112; x += 20) {
+      const seed = (x * 7 + y * 13) % 11;
+      if (seed !== 0 && seed !== 4) {
+        ctx.fillStyle = seed % 5 === 0 ? accentHex : hueHex;
+        ctx.globalAlpha = 0.28 + (seed % 5) * 0.14;
+        ctx.fillRect(x, y, 13, 8);
       }
     }
   }
   ctx.globalAlpha = 1;
-  ctx.strokeStyle = hueHex;
-  ctx.lineWidth = 3;
-  ctx.strokeRect(2, 2, 124, 252);
+  // Side neon pinstripe mullions
+  ctx.fillStyle = hueHex;
+  ctx.fillRect(2, 0, 3, 256);
+  ctx.fillRect(123, 0, 3, 256);
+  // Roof crown neon collar
+  ctx.fillStyle = accentHex;
+  ctx.fillRect(0, 2, 128, 5);
 
-  const tex = new THREE.CanvasTexture(canvas);
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
+function createSunDiscTexture() {
+  const c = document.createElement("canvas");
+  c.width = 256;
+  c.height = 256;
+  const ctx = c.getContext("2d");
+  const grad = ctx.createRadialGradient(128, 128, 18, 128, 128, 126);
+  grad.addColorStop(0, "rgba(236, 253, 245, 0.95)");
+  grad.addColorStop(0.28, "rgba(110, 231, 183, 0.78)");
+  grad.addColorStop(0.62, "rgba(16, 185, 129, 0.35)");
+  grad.addColorStop(1, "rgba(4, 47, 46, 0.0)");
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, 256, 256);
+
+  // Retro scanline cuts in lower half
+  ctx.globalCompositeOperation = "destination-out";
+  for (let y = 136; y < 245; y += 16) {
+    ctx.fillStyle = "rgba(0,0,0,0.45)";
+    ctx.fillRect(0, y, 256, 4 + (y - 136) * 0.04);
+  }
+
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
+function createTrainSideTexture(pal, moving) {
+  const c = document.createElement("canvas");
+  c.width = 256;
+  c.height = 128;
+  const ctx = c.getContext("2d");
+
+  ctx.fillStyle = pal.bodyCss;
+  ctx.fillRect(0, 0, 256, 128);
+
+  // Metallic lower skirt & upper trim
+  ctx.fillStyle = "#021611";
+  ctx.fillRect(0, 96, 256, 32);
+  ctx.fillStyle = pal.roofCss;
+  ctx.fillRect(0, 0, 256, 12);
+
+  // Horizontal livery stripe
+  ctx.fillStyle = moving ? "#fbbf24" : pal.accentCss;
+  ctx.fillRect(0, 72, 256, 8);
+  ctx.fillStyle = "#ffffff";
+  ctx.globalAlpha = 0.35;
+  ctx.fillRect(0, 82, 256, 2);
+  ctx.globalAlpha = 1;
+
+  // Subway passenger doors & cabin glowing windows
+  for (let bay = 0; bay < 4; bay++) {
+    const bx = 10 + bay * 62;
+    // Door frame
+    ctx.strokeStyle = "rgba(255,255,255,0.22)";
+    ctx.lineWidth = 2;
+    ctx.strokeRect(bx, 18, 22, 86);
+    // Door window
+    ctx.fillStyle = pal.glassCss;
+    ctx.fillRect(bx + 4, 24, 14, 28);
+    // Passenger bay wide window
+    ctx.fillStyle = "#04261f";
+    ctx.fillRect(bx + 27, 22, 28, 30);
+    ctx.fillStyle = pal.glassCss;
+    ctx.globalAlpha = 0.85;
+    ctx.fillRect(bx + 29, 24, 24, 26);
+    ctx.globalAlpha = 1;
+    // Diaphragm diagonal shine
+    ctx.fillStyle = "rgba(255,255,255,0.22)";
+    ctx.fillRect(bx + 32, 26, 6, 22);
+  }
+
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
+function createTrainFrontTexture(pal, moving) {
+  const c = document.createElement("canvas");
+  c.width = 128;
+  c.height = 192;
+  const ctx = c.getContext("2d");
+
+  ctx.fillStyle = pal.bodyCss;
+  ctx.fillRect(0, 0, 128, 192);
+
+  // Destination LED board
+  ctx.fillStyle = "#020b09";
+  ctx.fillRect(22, 14, 84, 18);
+  ctx.fillStyle = moving ? "#fbbf24" : "#34d399";
+  ctx.font = "900 11px monospace";
+  ctx.textAlign = "center";
+  ctx.fillText(moving ? "EXPRESS 09" : "METROLINE", 64, 27);
+
+  // Aerodynamic wrap windshield
+  ctx.fillStyle = "#021814";
+  ctx.fillRect(14, 38, 100, 56);
+  ctx.fillStyle = "rgba(167, 243, 208, 0.25)";
+  ctx.beginPath();
+  ctx.moveTo(22, 42);
+  ctx.lineTo(54, 42);
+  ctx.lineTo(34, 90);
+  ctx.lineTo(18, 90);
+  ctx.closePath();
+  ctx.fill();
+
+  // Hazard warning chevron stripe on lower nose (especially dramatic on Express trains)
+  ctx.fillStyle = "#031612";
+  ctx.fillRect(8, 126, 112, 48);
+  if (moving) {
+    ctx.fillStyle = "#fbbf24";
+    for (let x = -20; x < 140; x += 22) {
+      ctx.beginPath();
+      ctx.moveTo(x, 174);
+      ctx.lineTo(x + 11, 174);
+      ctx.lineTo(x + 25, 146);
+      ctx.lineTo(x + 14, 146);
+      ctx.closePath();
+      ctx.fill();
+    }
+  } else {
+    ctx.fillStyle = pal.accentCss;
+    ctx.fillRect(14, 152, 100, 8);
+  }
+
+  const tex = new THREE.CanvasTexture(c);
   tex.colorSpace = THREE.SRGBColorSpace;
   return tex;
 }
@@ -95,128 +301,182 @@ function createSharedGeos() {
   return {
     unitBox: new THREE.BoxGeometry(1, 1, 1),
     unitPlane: new THREE.PlaneGeometry(1, 1),
-    lamp: new THREE.SphereGeometry(0.14, 8, 8),
-    coin: new THREE.CylinderGeometry(0.32, 0.32, 0.1, 16),
+    lamp: new THREE.SphereGeometry(0.16, 10, 10),
+    beamCone: new THREE.ConeGeometry(1.15, 7.2, 14, 1, true),
+    coin: new THREE.CylinderGeometry(0.35, 0.35, 0.1, 20),
+    coinCore: new THREE.CylinderGeometry(0.22, 0.22, 0.125, 14),
     power: new THREE.OctahedronGeometry(0.42, 0),
-    spark: new THREE.BoxGeometry(0.14, 0.14, 0.14),
-    barrierBar: new THREE.BoxGeometry(1.74, 0.6, 0.22),
-    barrierLeg: new THREE.BoxGeometry(0.14, 0.75, 0.24),
-    gatePost: new THREE.BoxGeometry(0.16, 3.2, 0.24),
-    gateSign: new THREE.BoxGeometry(1.82, 1.35, 0.24),
+    powerRing: new THREE.TorusGeometry(0.62, 0.045, 8, 24),
+    spark: new THREE.BoxGeometry(0.15, 0.15, 0.15),
+    trailOrb: new THREE.SphereGeometry(0.16, 8, 8),
+    shockRing: new THREE.RingGeometry(0.75, 1.05, 28),
+    barrierBar: new THREE.BoxGeometry(1.82, 0.62, 0.24),
+    barrierLeg: new THREE.BoxGeometry(0.15, 0.78, 0.26),
+    gatePost: new THREE.BoxGeometry(0.18, 3.25, 0.26),
+    gateSign: new THREE.BoxGeometry(1.88, 1.38, 0.26),
   };
 }
 
-function buildTrainMesh3D(variant = 0, moving = false, glowTex, lenZ = 0.28 * WORLD_DEPTH, geos) {
-  const palettes = [
-    { body: 0x064e3b, roof: 0x10b981, accent: 0x6ee7b7, glass: 0xa7f3d0 },
-    { body: 0x052e23, roof: 0x059669, accent: 0x4ade80, glass: 0x86efac },
-    { body: 0x042f2e, roof: 0x14b8a6, accent: 0xfbbf24, glass: 0xfde68a },
-  ];
-  const pal = palettes[variant % palettes.length];
+const TRAIN_PALETTES = [
+  { body: 0x064e3b, roof: 0x10b981, accent: 0x6ee7b7, glass: 0xa7f3d0, bodyCss: "#064e3b", roofCss: "#10b981", accentCss: "#6ee7b7", glassCss: "#a7f3d0" },
+  { body: 0x052e23, roof: 0x059669, accent: 0x4ade80, glass: 0x86efac, bodyCss: "#052e23", roofCss: "#059669", accentCss: "#4ade80", glassCss: "#86efac" },
+  { body: 0x042f2e, roof: 0x14b8a6, accent: 0xfbbf24, glass: 0xfde68a, bodyCss: "#042f2e", roofCss: "#14b8a6", accentCss: "#fbbf24", glassCss: "#fde68a" },
+];
+
+function createTrainTextures() {
+  return TRAIN_PALETTES.map((pal) => ({
+    staticSide: createTrainSideTexture(pal, false),
+    staticFront: createTrainFrontTexture(pal, false),
+    movingSide: createTrainSideTexture(pal, true),
+    movingFront: createTrainFrontTexture(pal, true),
+  }));
+}
+
+function buildTrainMesh3D(variant = 0, moving = false, glowTex, lenZ = 0.28 * WORLD_DEPTH, geos, trainTextures) {
+  const pal = TRAIN_PALETTES[variant % TRAIN_PALETTES.length];
+  const texPair = trainTextures[variant % trainTextures.length];
+  const sideTex = moving ? texPair.movingSide : texPair.staticSide;
+  const frontTex = moving ? texPair.movingFront : texPair.staticFront;
+
   const group = new THREE.Group();
-
   const heightY = TRAIN_ROOF_Y * Y_SCALE;
-  const widthX = 1.78;
+  const widthX = 1.82;
 
-  // Sculpted chassis body + lower bogie undercarriage
+  // Sculpted chassis core
   const body = new THREE.Mesh(
     geos.unitBox,
-    makeSolidMat({ color: pal.body, metalness: 0.58, roughness: 0.24, opacity: 1.0 })
+    makeSolidMat({ color: pal.body, metalness: 0.62, roughness: 0.24, opacity: 1.0 })
   );
-  body.scale.set(widthX, heightY - 0.26, lenZ);
-  body.position.y = heightY * 0.5 + 0.13;
+  body.scale.set(widthX, heightY - 0.24, lenZ);
+  body.position.y = heightY * 0.5 + 0.12;
   group.add(body);
 
+  // Detailed cabin livery panels on left & right sides
+  for (const sx of [-1, 1]) {
+    const sidePanel = new THREE.Mesh(
+      geos.unitPlane,
+      makeBasicMat({ map: sideTex, opacity: 0.96 })
+    );
+    sidePanel.scale.set(lenZ * 0.98, heightY - 0.28, 1);
+    sidePanel.rotation.y = sx * (Math.PI / 2);
+    sidePanel.position.set(sx * (widthX * 0.5 + 0.012), heightY * 0.5 + 0.12, 0);
+    group.add(sidePanel);
+  }
+
+  // Detailed front face livery + destination LED display
+  const frontPanel = new THREE.Mesh(
+    geos.unitPlane,
+    makeBasicMat({ map: frontTex, opacity: 0.98 })
+  );
+  frontPanel.scale.set(widthX * 0.94, heightY - 0.26, 1);
+  frontPanel.position.set(0, heightY * 0.5 + 0.12, lenZ * 0.5 + 0.014);
+  group.add(frontPanel);
+
+  // Lower bogie undercarriage & rail wheels silhouette
   const bogie = new THREE.Mesh(
     geos.unitBox,
-    makeSolidMat({ color: 0x022c22, metalness: 0.7, roughness: 0.4, opacity: 1.0 })
+    makeSolidMat({ color: 0x022c22, metalness: 0.78, roughness: 0.36, opacity: 1.0 })
   );
   bogie.scale.set(widthX * 0.84, 0.28, lenZ * 0.88);
   bogie.position.y = 0.14;
   group.add(bogie);
 
-  // Sloped front bumper apron
+  // Sloped front aerodynamic cowling / apron
   const apron = new THREE.Mesh(
     geos.unitBox,
-    makeSolidMat({ color: pal.roof, metalness: 0.5, roughness: 0.3, opacity: 1.0 })
+    makeSolidMat({ color: moving ? 0xf59e0b : pal.roof, metalness: 0.55, roughness: 0.28, opacity: 1.0 })
   );
-  apron.scale.set(widthX * 0.96, 0.38, 0.42);
-  apron.rotation.x = 0.32;
-  apron.position.set(0, 0.35, lenZ * 0.5 + 0.08);
+  apron.scale.set(widthX * 0.96, 0.36, 0.44);
+  apron.rotation.x = 0.34;
+  apron.position.set(0, 0.34, lenZ * 0.5 + 0.1);
   group.add(apron);
 
-  // Rooftop ribbed deck & vents (runnable roof surface!)
+  // Runnable rooftop deck with glowing safety trim + raised AC units
   const roof = new THREE.Mesh(
     geos.unitBox,
     makeSolidMat({
       color: pal.roof,
       emissive: pal.roof,
-      emissiveIntensity: 0.28,
-      metalness: 0.45,
-      roughness: 0.28,
+      emissiveIntensity: 0.34,
+      metalness: 0.5,
+      roughness: 0.26,
       opacity: 1.0,
     })
   );
-  roof.scale.set(widthX * 0.94, 0.14, lenZ * 0.96);
+  roof.scale.set(widthX * 0.95, 0.14, lenZ * 0.96);
   roof.position.y = heightY + 0.05;
   group.add(roof);
 
-  const stripe = new THREE.Mesh(
-    geos.unitBox,
-    makeBasicMat({ color: moving ? 0xfbbf24 : pal.accent, opacity: 1.0 })
-  );
-  stripe.scale.set(widthX + 0.04, 0.11, lenZ * 0.98);
-  stripe.position.y = heightY * 0.36;
-  group.add(stripe);
+  // Raised roof HVAC units for rooftop depth (low enough to never confuse player)
+  const hvacCount = lenZ > 11 ? 3 : 2;
+  for (let i = 0; i < hvacCount; i++) {
+    const hvac = new THREE.Mesh(
+      geos.unitBox,
+      makeSolidMat({ color: 0x022c22, metalness: 0.65, roughness: 0.3, opacity: 1.0 })
+    );
+    hvac.scale.set(0.88, 0.1, 1.35);
+    const offsetZ = ((i + 0.5) / hvacCount - 0.5) * (lenZ * 0.72);
+    hvac.position.set(0, heightY + 0.14, offsetZ);
+    group.add(hvac);
+  }
 
-  // Illuminated cabin side window belt
-  const windowBelt = new THREE.Mesh(
-    geos.unitBox,
-    makeBasicMat({ color: pal.glass, opacity: 0.82 })
-  );
-  windowBelt.scale.set(widthX + 0.02, heightY * 0.2, lenZ * 0.84);
-  windowBelt.position.y = heightY * 0.66;
-  group.add(windowBelt);
-
-  const wind = new THREE.Mesh(
-    geos.unitPlane,
-    makeBasicMat({ color: 0x022c22, opacity: 0.92 })
-  );
-  wind.scale.set(widthX * 0.74, heightY * 0.32, 1);
-  wind.position.set(0, heightY * 0.68, lenZ * 0.5 + 0.015);
-  group.add(wind);
-
+  // Twin headlights + Express oncoming volumetric beam cones
   const hlColor = moving ? 0xfef08a : pal.accent;
-  for (const sx of [-0.46, 0.46]) {
+  for (const sx of [-0.48, 0.48]) {
     const lamp = new THREE.Mesh(geos.lamp, makeBasicMat({ color: hlColor, opacity: 1.0 }));
-    lamp.position.set(sx, heightY * 0.28, lenZ * 0.5 + 0.04);
+    lamp.position.set(sx, heightY * 0.36, lenZ * 0.5 + 0.04);
     group.add(lamp);
 
-    if (moving && glowTex) {
-      const halo = new THREE.Sprite(
-        new THREE.SpriteMaterial({
-          map: glowTex,
-          color: 0xfef08a,
-          transparent: true,
-          opacity: 0.85,
+    if (moving) {
+      // Dramatic forward sweeping headlight cone on moving Express trains
+      const cone = new THREE.Mesh(
+        geos.beamCone,
+        makeBasicMat({
+          color: 0xfde047,
+          opacity: 0.16,
           blending: THREE.AdditiveBlending,
           depthWrite: false,
+          side: THREE.DoubleSide,
         })
       );
-      halo.material.userData.baseOpacity = 0.85;
-      halo.position.set(sx, heightY * 0.28, lenZ * 0.5 + 0.16);
-      halo.scale.set(1.75, 1.75, 1);
-      group.add(halo);
+      cone.rotation.x = Math.PI / 2;
+      cone.position.set(sx, heightY * 0.32, lenZ * 0.5 + 3.6);
+      group.add(cone);
+
+      if (glowTex) {
+        const halo = new THREE.Sprite(
+          new THREE.SpriteMaterial({
+            map: glowTex,
+            color: 0xfef08a,
+            transparent: true,
+            opacity: 0.9,
+            blending: THREE.AdditiveBlending,
+            depthWrite: false,
+          })
+        );
+        halo.material.userData.baseOpacity = 0.9;
+        halo.position.set(sx, heightY * 0.36, lenZ * 0.5 + 0.18);
+        halo.scale.set(2.1, 2.1, 1);
+        group.add(halo);
+      }
     }
+  }
+
+  // Twin crimson rear tail lamps
+  for (const sx of [-0.52, 0.52]) {
+    const tail = new THREE.Mesh(geos.lamp, makeBasicMat({ color: 0xf43f5e, opacity: 0.95 }));
+    tail.scale.setScalar(0.75);
+    tail.position.set(sx, heightY * 0.42, -lenZ * 0.5 - 0.03);
+    group.add(tail);
   }
 
   return group;
 }
 
-function buildEntityMesh3D(ent, glowTex, geos) {
+function buildEntityMesh3D(ent, glowTex, geos, trainTextures) {
   if (ent.kind === "train") {
     const exactLenZ = Math.max(0.18, (ent.zEnd ?? ent.z + 0.28) - ent.z) * WORLD_DEPTH;
-    return buildTrainMesh3D(ent.colorVariant || 0, Boolean(ent.moving), glowTex, exactLenZ, geos);
+    return buildTrainMesh3D(ent.colorVariant || 0, Boolean(ent.moving), glowTex, exactLenZ, geos, trainTextures);
   }
 
   if (ent.kind === "ramp") {
@@ -231,16 +491,28 @@ function buildEntityMesh3D(ent, glowTex, geos) {
       makeSolidMat({
         color: 0x34d399,
         emissive: 0x10b981,
-        emissiveIntensity: 0.5,
-        metalness: 0.4,
-        roughness: 0.25,
+        emissiveIntensity: 0.65,
+        metalness: 0.5,
+        roughness: 0.22,
         opacity: 1.0,
       })
     );
-    plank.scale.set(1.7, 0.16, hyp);
+    plank.scale.set(1.74, 0.16, hyp);
     plank.rotation.x = angle;
     plank.position.set(0, hY * 0.5, 0);
     group.add(plank);
+
+    // Side boost arrow rails on ramp
+    for (const sx of [-0.88, 0.88]) {
+      const rail = new THREE.Mesh(
+        geos.unitBox,
+        makeBasicMat({ color: 0xa7f3d0, opacity: 0.95 })
+      );
+      rail.scale.set(0.08, 0.24, hyp);
+      rail.rotation.x = angle;
+      rail.position.set(sx, hY * 0.5 + 0.06, 0);
+      group.add(rail);
+    }
     return group;
   }
 
@@ -251,17 +523,24 @@ function buildEntityMesh3D(ent, glowTex, geos) {
       makeSolidMat({
         color: 0x4ade80,
         emissive: 0x16a34a,
-        emissiveIntensity: 0.72,
+        emissiveIntensity: 0.85,
+        metalness: 0.35,
         roughness: 0.2,
         opacity: 1.0,
       })
     );
-    bar.position.y = 0.75;
+    bar.position.y = 0.78;
     group.add(bar);
 
-    for (const sx of [-0.65, 0.65]) {
+    // Top bright caution strip
+    const rim = new THREE.Mesh(geos.unitBox, makeBasicMat({ color: 0xfef08a, opacity: 0.95 }));
+    rim.scale.set(1.8, 0.09, 0.26);
+    rim.position.y = 1.1;
+    group.add(rim);
+
+    for (const sx of [-0.68, 0.68]) {
       const leg = new THREE.Mesh(geos.barrierLeg, makeSolidMat({ color: 0x065f46, opacity: 1.0 }));
-      leg.position.set(sx, 0.38, 0);
+      leg.position.set(sx, 0.39, 0);
       group.add(leg);
     }
     return group;
@@ -269,13 +548,13 @@ function buildEntityMesh3D(ent, glowTex, geos) {
 
   if (ent.kind === "high_gate") {
     const group = new THREE.Group();
-    const beamY = 2.45;
-    for (const sx of [-0.82, 0.82]) {
+    const beamY = 2.48;
+    for (const sx of [-0.85, 0.85]) {
       const post = new THREE.Mesh(
         geos.gatePost,
-        makeSolidMat({ color: 0x064e3b, metalness: 0.6, roughness: 0.3, opacity: 1.0 })
+        makeSolidMat({ color: 0x064e3b, metalness: 0.65, roughness: 0.28, opacity: 1.0 })
       );
-      post.position.set(sx, 1.6, 0);
+      post.position.set(sx, 1.62, 0);
       group.add(post);
     }
     const sign = new THREE.Mesh(
@@ -283,29 +562,42 @@ function buildEntityMesh3D(ent, glowTex, geos) {
       makeSolidMat({
         color: 0x10b981,
         emissive: 0x34d399,
-        emissiveIntensity: 0.85,
-        opacity: 0.88,
+        emissiveIntensity: 0.95,
+        opacity: 0.9,
       })
     );
     sign.position.y = beamY;
     group.add(sign);
+
+    // Glowing slide-under bar edge
+    const bottomEdge = new THREE.Mesh(geos.unitBox, makeBasicMat({ color: 0xfbbf24, opacity: 0.95 }));
+    bottomEdge.scale.set(1.9, 0.1, 0.28);
+    bottomEdge.position.y = beamY - 0.68;
+    group.add(bottomEdge);
     return group;
   }
 
   if (ent.kind === "coin") {
-    const coin = new THREE.Mesh(
+    const coinGrp = new THREE.Group();
+    const rim = new THREE.Mesh(
       geos.coin,
       makeSolidMat({
         color: 0xfbbf24,
-        emissive: 0xf59e0b,
-        emissiveIntensity: 0.95,
-        metalness: 0.8,
-        roughness: 0.2,
+        emissive: 0xd97706,
+        emissiveIntensity: 0.85,
+        metalness: 0.88,
+        roughness: 0.16,
         opacity: 1.0,
       })
     );
-    coin.rotation.x = Math.PI / 2;
-    return coin;
+    rim.rotation.x = Math.PI / 2;
+    const core = new THREE.Mesh(
+      geos.coinCore,
+      makeBasicMat({ color: 0xfef08a, opacity: 0.95 })
+    );
+    core.rotation.x = Math.PI / 2;
+    coinGrp.add(rim, core);
+    return coinGrp;
   }
 
   const pCols = {
@@ -319,9 +611,14 @@ function buildEntityMesh3D(ent, glowTex, geos) {
   const pGroup = new THREE.Group();
   const cube = new THREE.Mesh(
     geos.power,
-    makeSolidMat({ color: col, emissive: col, emissiveIntensity: 1.35, opacity: 1.0 })
+    makeSolidMat({ color: col, emissive: col, emissiveIntensity: 1.45, opacity: 1.0 })
   );
-  pGroup.add(cube);
+  const orbitRing = new THREE.Mesh(
+    geos.powerRing,
+    makeBasicMat({ color: 0xffffff, opacity: 0.85 })
+  );
+  orbitRing.rotation.x = 0.65;
+  pGroup.add(cube, orbitRing);
 
   if (glowTex) {
     const halo = new THREE.Sprite(
@@ -329,179 +626,253 @@ function buildEntityMesh3D(ent, glowTex, geos) {
         map: glowTex,
         color: col,
         transparent: true,
-        opacity: 0.8,
+        opacity: 0.85,
         blending: THREE.AdditiveBlending,
         depthWrite: false,
       })
     );
-    halo.material.userData.baseOpacity = 0.8;
-    halo.scale.setScalar(1.65);
+    halo.material.userData.baseOpacity = 0.85;
+    halo.scale.setScalar(1.9);
     pGroup.add(halo);
   }
+  pGroup.userData.orbitRing = orbitRing;
   return pGroup;
 }
 
 function buildArticulatedRunner3D(glowTex) {
   const root = new THREE.Group();
   const bodyTilt = new THREE.Group();
+  const spinPivot = new THREE.Group();
+  spinPivot.position.y = 1.05;
+  bodyTilt.add(spinPivot);
   root.add(bodyTilt);
+
+  const rig = new THREE.Group();
+  rig.position.y = -1.05;
+  spinPivot.add(rig);
 
   const torsoMat = new THREE.MeshStandardMaterial({
     color: 0x10b981,
     emissive: 0x059669,
-    emissiveIntensity: 0.55,
-    metalness: 0.35,
-    roughness: 0.32,
+    emissiveIntensity: 0.62,
+    metalness: 0.42,
+    roughness: 0.28,
   });
-  const limbMat = new THREE.MeshStandardMaterial({ color: 0x064e3b, metalness: 0.45, roughness: 0.42 });
+  const limbMat = new THREE.MeshStandardMaterial({ color: 0x064e3b, metalness: 0.48, roughness: 0.38 });
   const trimMat = new THREE.MeshBasicMaterial({ color: 0x6ee7b7 });
   const scarfMat = new THREE.MeshBasicMaterial({ color: 0xa7f3d0 });
-  const headMat = new THREE.MeshStandardMaterial({ color: 0xf0fdf4, roughness: 0.26, metalness: 0.08 });
+  const headMat = new THREE.MeshStandardMaterial({ color: 0xf0fdf4, roughness: 0.22, metalness: 0.14 });
 
-  const pelvis = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.19, 0.2, 12), limbMat);
+  // Articulated Pelvis + Spine (supports twist counter-rotation)
+  const pelvis = new THREE.Group();
   pelvis.position.y = 0.78;
-  bodyTilt.add(pelvis);
+  const pelvisMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.18, 0.22, 12), limbMat);
+  const belt = new THREE.Mesh(new THREE.TorusGeometry(0.21, 0.032, 6, 16), trimMat);
+  belt.rotation.x = Math.PI / 2;
+  belt.position.y = 0.06;
+  pelvis.add(pelvisMesh, belt);
+  rig.add(pelvis);
 
-  const torso = new THREE.Mesh(new THREE.CapsuleGeometry(0.24, 0.34, 8, 14), torsoMat);
-  torso.position.y = 1.15;
-  torso.scale.set(1.12, 1.0, 0.72);
-  bodyTilt.add(torso);
+  const upperBody = new THREE.Group();
+  upperBody.position.y = 0.86;
+  rig.add(upperBody);
 
-  const chestCore = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.11, 0.06, 12), trimMat);
+  const torso = new THREE.Mesh(new THREE.CapsuleGeometry(0.24, 0.36, 8, 14), torsoMat);
+  torso.position.y = 0.3;
+  torso.scale.set(1.16, 1.02, 0.72);
+  upperBody.add(torso);
+
+  // Cyber Jacket Collar & Reactor Core
+  const collar = new THREE.Mesh(new THREE.TorusGeometry(0.22, 0.045, 6, 16), limbMat);
+  collar.rotation.x = Math.PI / 2 - 0.18;
+  collar.position.set(0, 0.55, 0.02);
+  const chestCore = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.11, 0.07, 12), trimMat);
   chestCore.rotation.x = Math.PI / 2;
-  chestCore.position.set(0, 1.24, -0.17);
-  bodyTilt.add(chestCore);
+  chestCore.position.set(0, 0.38, -0.17);
+  upperBody.add(collar, chestCore);
 
+  // Articulated Head + Aero Crest + Wrap Visor
+  const headGroup = new THREE.Group();
+  headGroup.position.y = 0.82;
   const head = new THREE.Mesh(new THREE.SphereGeometry(0.24, 18, 16), headMat);
-  head.position.y = 1.68;
-  bodyTilt.add(head);
-
-  const visor = new THREE.Mesh(new THREE.CapsuleGeometry(0.065, 0.22, 6, 10), trimMat);
+  const visor = new THREE.Mesh(new THREE.CapsuleGeometry(0.068, 0.24, 6, 12), trimMat);
   visor.rotation.z = Math.PI / 2;
-  visor.position.set(0, 1.69, -0.19);
-  bodyTilt.add(visor);
+  visor.position.set(0, 0.01, -0.19);
+  const crest = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.12, 0.32), torsoMat);
+  crest.position.set(0, 0.22, 0.04);
+  crest.rotation.x = 0.22;
+  headGroup.add(head, visor, crest);
+  upperBody.add(headGroup);
 
-  // Flowing 3-link trailing surfer scarf
+  // Flowing 3-link trailing surfer scarf / cyber-cape
   const scarfA = new THREE.Group();
-  scarfA.position.set(0, 1.44, 0.18);
-  const sMeshA = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.05, 0.34), scarfMat);
-  sMeshA.position.z = 0.16;
+  scarfA.position.set(0, 0.56, 0.18);
+  const sMeshA = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.055, 0.36), scarfMat);
+  sMeshA.position.z = 0.18;
   scarfA.add(sMeshA);
   const scarfB = new THREE.Group();
-  scarfB.position.z = 0.32;
-  const sMeshB = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.04, 0.34), trimMat);
-  sMeshB.position.z = 0.16;
+  scarfB.position.z = 0.34;
+  const sMeshB = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.045, 0.38), trimMat);
+  sMeshB.position.z = 0.19;
   scarfB.add(sMeshB);
+  const scarfC = new THREE.Group();
+  scarfC.position.z = 0.36;
+  const sMeshC = new THREE.Mesh(new THREE.BoxGeometry(0.11, 0.035, 0.34), scarfMat);
+  sMeshC.position.z = 0.17;
+  scarfC.add(sMeshC);
+  scarfB.add(scarfC);
   scarfA.add(scarfB);
-  bodyTilt.add(scarfA);
+  upperBody.add(scarfA);
 
-  // Articulated 2-joint Capsule Legs (Hip + Knee + Shin + Sneakers)
+  // Articulated 2-joint Capsule Legs (Hip + Knee + KneePad + Shin + Glow Sneakers)
+  const sneakerMat = new THREE.MeshBasicMaterial({ color: 0x86efac, visible: false });
+  const soleMat = new THREE.MeshBasicMaterial({ color: 0x6ee7b7 });
   const buildLeg = (sx) => {
     const hip = new THREE.Group();
     hip.position.set(sx, 0.76, 0);
-    const thigh = new THREE.Mesh(new THREE.CapsuleGeometry(0.095, 0.24, 6, 10), limbMat);
+    const thigh = new THREE.Mesh(new THREE.CapsuleGeometry(0.098, 0.24, 6, 10), limbMat);
     thigh.position.y = -0.18;
     hip.add(thigh);
     const knee = new THREE.Group();
     knee.position.y = -0.36;
-    const calf = new THREE.Mesh(new THREE.CapsuleGeometry(0.08, 0.24, 6, 10), torsoMat);
+    const kneePad = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.12, 0.16), torsoMat);
+    kneePad.position.set(0, 0, -0.04);
+    const calf = new THREE.Mesh(new THREE.CapsuleGeometry(0.082, 0.24, 6, 10), torsoMat);
     calf.position.y = -0.18;
-    knee.add(calf);
+    const footSole = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.07, 0.28), soleMat);
+    footSole.position.set(0, -0.35, -0.05);
+    const turboShoe = new THREE.Mesh(new THREE.CapsuleGeometry(0.085, 0.18, 6, 10), sneakerMat);
+    turboShoe.rotation.x = Math.PI / 2;
+    turboShoe.position.set(0, -0.34, -0.06);
+    knee.add(kneePad, calf, footSole, turboShoe);
     hip.add(knee);
     return { hip, knee };
   };
   const legLeft = buildLeg(-0.15);
   const legRight = buildLeg(0.15);
-  bodyTilt.add(legLeft.hip, legRight.hip);
+  rig.add(legLeft.hip, legRight.hip);
 
-  // Articulated 2-joint Capsule Arms (Shoulder + Elbow + Forearm)
+  // Articulated 2-joint Capsule Arms (Shoulder Pauldron + Elbow + Forearm + Gauntlet)
   const buildArm = (sx) => {
     const shoulder = new THREE.Group();
-    shoulder.position.set(sx, 1.38, 0);
-    const upper = new THREE.Mesh(new THREE.CapsuleGeometry(0.072, 0.2, 6, 10), torsoMat);
+    shoulder.position.set(sx, 0.52, 0);
+    const pauldron = new THREE.Mesh(new THREE.SphereGeometry(0.105, 10, 8), torsoMat);
+    pauldron.scale.set(1.1, 0.85, 1.1);
+    const upper = new THREE.Mesh(new THREE.CapsuleGeometry(0.074, 0.2, 6, 10), torsoMat);
     upper.position.y = -0.14;
-    shoulder.add(upper);
+    shoulder.add(pauldron, upper);
     const elbow = new THREE.Group();
     elbow.position.y = -0.28;
-    const fore = new THREE.Mesh(new THREE.CapsuleGeometry(0.062, 0.2, 6, 10), limbMat);
+    const fore = new THREE.Mesh(new THREE.CapsuleGeometry(0.064, 0.2, 6, 10), limbMat);
     fore.position.y = -0.14;
-    elbow.add(fore);
+    const cuff = new THREE.Mesh(new THREE.CylinderGeometry(0.072, 0.068, 0.08, 10), trimMat);
+    cuff.position.y = -0.22;
+    elbow.add(fore, cuff);
     shoulder.add(elbow);
     return { shoulder, elbow };
   };
-  const armLeft = buildArm(-0.36);
-  const armRight = buildArm(0.36);
-  bodyTilt.add(armLeft.shoulder, armRight.shoulder);
+  const armLeft = buildArm(-0.37);
+  const armRight = buildArm(0.37);
+  upperBody.add(armLeft.shoulder, armRight.shoulder);
 
-  const sneakerMat = new THREE.MeshBasicMaterial({ color: 0x86efac, visible: false });
-  const shoeL = new THREE.Mesh(new THREE.CapsuleGeometry(0.08, 0.16, 6, 10), sneakerMat);
-  shoeL.rotation.x = Math.PI / 2;
-  shoeL.position.set(0, -0.34, -0.06);
-  const shoeR = shoeL.clone();
-  legLeft.knee.add(shoeL);
-  legRight.knee.add(shoeR);
-
+  // Antigrav Hoverboard + Thruster Fins + Energy Shield Dome
   const boardGroup = new THREE.Group();
   const deck = new THREE.Mesh(
-    new THREE.CapsuleGeometry(0.28, 1.12, 8, 12),
-    new THREE.MeshStandardMaterial({ color: 0x34d399, emissive: 0x10b981, emissiveIntensity: 1.35 })
+    new THREE.CapsuleGeometry(0.3, 1.24, 8, 14),
+    new THREE.MeshStandardMaterial({ color: 0x34d399, emissive: 0x10b981, emissiveIntensity: 1.45, metalness: 0.55 })
   );
   deck.rotation.x = Math.PI / 2;
-  deck.scale.set(1.0, 1.0, 0.2);
-  deck.position.y = 0.12;
+  deck.scale.set(1.05, 1.0, 0.18);
+  deck.position.y = 0.11;
   boardGroup.add(deck);
-  const shieldDome = new THREE.Mesh(
-    new THREE.SphereGeometry(1.18, 16, 12),
-    new THREE.MeshBasicMaterial({ color: 0x6ee7b7, transparent: true, opacity: 0.22, wireframe: true })
+  const boardGlowRim = new THREE.Mesh(
+    new THREE.TorusGeometry(0.45, 0.03, 6, 20),
+    new THREE.MeshBasicMaterial({ color: 0x6ee7b7, transparent: true, opacity: 0.7 })
   );
-  shieldDome.position.y = 1.0;
+  boardGlowRim.rotation.x = Math.PI / 2;
+  boardGlowRim.scale.set(0.75, 1.5, 1);
+  boardGlowRim.position.y = 0.09;
+  boardGroup.add(boardGlowRim);
+  const shieldDome = new THREE.Mesh(
+    new THREE.SphereGeometry(1.24, 18, 12),
+    new THREE.MeshBasicMaterial({ color: 0x6ee7b7, transparent: true, opacity: 0.24, wireframe: true })
+  );
+  shieldDome.position.y = 1.02;
   boardGroup.add(shieldDome);
   boardGroup.visible = false;
-  bodyTilt.add(boardGroup);
+  rig.add(boardGroup);
 
+  // Dual-Nozzle Turbo Jetpack
   const jetGroup = new THREE.Group();
-  const tankMat = new THREE.MeshStandardMaterial({ color: 0x10b981, metalness: 0.72, roughness: 0.22 });
-  const flameMat = new THREE.MeshBasicMaterial({ color: 0x6ee7b7 });
+  const tankMat = new THREE.MeshStandardMaterial({ color: 0x0f766e, metalness: 0.78, roughness: 0.2 });
+  const flameOuterMat = new THREE.MeshBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.85 });
+  const flameInnerMat = new THREE.MeshBasicMaterial({ color: 0xfef08a });
   const flames = [];
   for (const sx of [-0.14, 0.14]) {
-    const tank = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 0.52, 10), tankMat);
-    tank.position.set(sx, 1.15, 0.24);
-    const flame = new THREE.Mesh(new THREE.ConeGeometry(0.12, 0.72, 10), flameMat);
-    flame.rotation.x = Math.PI;
-    flame.position.set(sx, 0.54, 0.24);
-    jetGroup.add(tank, flame);
-    flames.push(flame);
+    const tank = new THREE.Mesh(new THREE.CylinderGeometry(0.095, 0.095, 0.54, 12), tankMat);
+    tank.position.set(sx, 0.28, 0.25);
+    const flameOuter = new THREE.Mesh(new THREE.ConeGeometry(0.14, 0.85, 10), flameOuterMat);
+    flameOuter.rotation.x = Math.PI;
+    flameOuter.position.set(sx, -0.35, 0.25);
+    const flameInner = new THREE.Mesh(new THREE.ConeGeometry(0.075, 0.52, 10), flameInnerMat);
+    flameInner.rotation.x = Math.PI;
+    flameInner.position.set(sx, -0.22, 0.25);
+    jetGroup.add(tank, flameOuter, flameInner);
+    flames.push(flameOuter, flameInner);
   }
   jetGroup.visible = false;
-  bodyTilt.add(jetGroup);
+  upperBody.add(jetGroup);
 
   const dropHalo = new THREE.Sprite(
     new THREE.SpriteMaterial({
       map: glowTex,
       color: 0x34d399,
       transparent: true,
-      opacity: 0.62,
+      opacity: 0.68,
       blending: THREE.AdditiveBlending,
       depthWrite: false,
     })
   );
   dropHalo.position.set(0, 0.1, 0);
-  dropHalo.scale.set(1.9, 1.9, 1);
+  dropHalo.scale.set(2.0, 2.0, 1);
+
+  // Aura ring at surfer feet for Fever / Active Powerup feedback
+  const auraMat = new THREE.MeshBasicMaterial({
+    color: 0xfbbf24,
+    transparent: true,
+    opacity: 0,
+    blending: THREE.AdditiveBlending,
+    side: THREE.DoubleSide,
+    depthWrite: false,
+  });
+  const feverAura = new THREE.Mesh(new THREE.RingGeometry(0.7, 1.15, 24), auraMat);
+  feverAura.rotation.x = -Math.PI / 2;
+  feverAura.position.y = 0.08;
+  root.add(feverAura);
 
   root.userData = {
     bodyTilt,
+    spinPivot,
+    rig,
+    pelvis,
+    upperBody,
+    headGroup,
     legLeft,
     legRight,
     armLeft,
     armRight,
     scarfA,
     scarfB,
+    scarfC,
     sneakerMat,
+    soleMat,
     boardGroup,
     shieldDome,
     jetGroup,
     flames,
     dropHalo,
+    feverAura,
+    auraMat,
     mats: { torsoMat, limbMat, trimMat, scarfMat, headMat },
   };
   return root;
@@ -535,8 +906,10 @@ const TornadoSurfers3DScene = ({
     if (!container) return;
 
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x031712);
-    scene.fog = new THREE.FogExp2(0x04241b, 0.011);
+    const baseBg = new THREE.Color(0x031712);
+    const feverBg = new THREE.Color(0x161204);
+    scene.background = baseBg.clone();
+    scene.fog = new THREE.FogExp2(0x04241b, 0.0105);
 
     const width = container.clientWidth || 640;
     const height = container.clientHeight || 560;
@@ -545,142 +918,177 @@ const TornadoSurfers3DScene = ({
       (typeof navigator !== "undefined" && navigator.hardwareConcurrency > 0 && navigator.hardwareConcurrency <= 4);
 
     const aspect = width / Math.max(1, height);
-    const camera = new THREE.PerspectiveCamera(aspect < 0.75 ? 66 : 58, aspect, 0.1, isLowEnd ? 78 : 95);
+    const camera = new THREE.PerspectiveCamera(aspect < 0.75 ? 66 : 58, aspect, 0.1, isLowEnd ? 84 : 105);
     camera.position.set(0, 4.3, 6.2);
 
     const renderer = new THREE.WebGLRenderer({
       antialias: !isLowEnd,
       powerPreference: isLowEnd ? "default" : "high-performance",
     });
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, isLowEnd ? 1.15 : 1.5));
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, isLowEnd ? 1.2 : 1.65));
     renderer.setSize(width, height);
     renderer.shadowMap.enabled = false;
     renderer.toneMapping = isLowEnd ? THREE.NoToneMapping : THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.25;
+    renderer.toneMappingExposure = 1.28;
     container.appendChild(renderer.domElement);
 
-    scene.add(new THREE.HemisphereLight(0x6ee7b7, 0x052e23, 1.25));
-    const dirLight = new THREE.DirectionalLight(0xecfdf5, 1.65);
-    dirLight.position.set(6, 16, 10);
+    const hemiLight = new THREE.HemisphereLight(0x86efac, 0x052e23, 1.35);
+    scene.add(hemiLight);
+    const dirLight = new THREE.DirectionalLight(0xecfdf5, 1.75);
+    dirLight.position.set(7, 17, 11);
     scene.add(dirLight);
+    const rimLight = new THREE.DirectionalLight(0x34d399, 0.9);
+    rimLight.position.set(-8, 8, -14);
+    scene.add(rimLight);
 
-    const runnerLight = new THREE.PointLight(0x34d399, 2.2, 9);
+    const runnerLight = new THREE.PointLight(0x34d399, 2.5, 11);
     scene.add(runnerLight);
 
     const glowTex = createGlowHaloTexture();
-    const bTexEmerald = createSkyscraperTexture("#10b981");
-    const bTexMint = createSkyscraperTexture("#6ee7b7");
+    const trackTex = createTrackBedTexture();
+    const bTexEmerald = createSkyscraperTexture("#10b981", "#6ee7b7");
+    const bTexMint = createSkyscraperTexture("#38bdf8", "#a7f3d0");
+    const bTexGold = createSkyscraperTexture("#f59e0b", "#fef08a");
+    const sunTex = createSunDiscTexture();
+    const trainTextures = createTrainTextures();
     const geos = createSharedGeos();
 
+    const disposableTextures = [
+      glowTex,
+      trackTex,
+      bTexEmerald,
+      bTexMint,
+      bTexGold,
+      sunTex,
+    ];
+    trainTextures.forEach((tt) => {
+      disposableTextures.push(tt.staticSide, tt.staticFront, tt.movingSide, tt.movingFront);
+    });
+
+    // High-res GPU-scrolling track bed
+    const TRACK_LENGTH = 76;
     const trackFloor = new THREE.Mesh(
-      new THREE.PlaneGeometry(10.5, 76),
-      new THREE.MeshStandardMaterial({ color: 0x041d17, metalness: 0.4, roughness: 0.65 })
+      new THREE.PlaneGeometry(10.5, TRACK_LENGTH),
+      new THREE.MeshStandardMaterial({
+        map: trackTex,
+        metalness: 0.48,
+        roughness: 0.42,
+      })
     );
     trackFloor.rotation.x = -Math.PI / 2;
     trackFloor.position.set(0, 0, -28);
     scene.add(trackFloor);
 
-    // Clean raised side embankments grounding the skyline towers
-    const bankMat = new THREE.MeshStandardMaterial({ color: 0x03221a, metalness: 0.3, roughness: 0.72 });
+    // Side concrete embankments & raised cable ducts
+    const bankMat = new THREE.MeshStandardMaterial({ color: 0x03221a, metalness: 0.35, roughness: 0.65 });
     for (const bx of [-6.8, 6.8]) {
       const bank = new THREE.Mesh(geos.unitBox, bankMat);
-      bank.scale.set(4.6, 0.6, 76);
+      bank.scale.set(4.6, 0.65, TRACK_LENGTH);
       bank.position.set(bx, 0.25, -28);
       scene.add(bank);
     }
 
-    const railMat = new THREE.MeshBasicMaterial({ color: 0x34d399 });
-    for (const laneIdx of [-1, 0, 1]) {
-      for (const offset of [-0.55, 0.55]) {
-        const rail = new THREE.Mesh(geos.unitBox, railMat);
-        rail.scale.set(0.08, 0.06, 76);
-        rail.position.set(laneIdx * LANE_WIDTH + offset, 0.03, -28);
-        scene.add(rail);
-      }
-    }
     const stripMatCenter = new THREE.MeshBasicMaterial({ color: 0x10b981 });
     const stripMatEdge = new THREE.MeshBasicMaterial({ color: 0x6ee7b7 });
     for (const edgeX of [-3.7, -1.22, 1.22, 3.7]) {
       const strip = new THREE.Mesh(geos.unitBox, Math.abs(edgeX) > 3 ? stripMatEdge : stripMatCenter);
-      strip.scale.set(0.06, 0.04, 76);
+      strip.scale.set(0.06, 0.045, TRACK_LENGTH);
       strip.position.set(edgeX, 0.04, -28);
       scene.add(strip);
     }
 
-    const sunOrb = new THREE.Mesh(
-      new THREE.CircleGeometry(7.8, 32),
-      new THREE.MeshBasicMaterial({ color: 0x10b981, transparent: true, opacity: 0.42 })
+    // Layered Horizon Cyber-Sun + Distant Atmospheric Halo
+    const sunOrb = new THREE.Sprite(
+      new THREE.SpriteMaterial({
+        map: sunTex,
+        transparent: true,
+        opacity: 0.85,
+        depthWrite: false,
+      })
     );
-    sunOrb.position.set(0, 8.2, -55);
+    sunOrb.position.set(0, 9.6, -62);
+    sunOrb.scale.set(24, 24, 1);
     scene.add(sunOrb);
-
-    const sleeperCount = isLowEnd ? 12 : 20;
-    const sleeperStep = isLowEnd ? 4.2 : 2.8;
-    const sleeperGroup = new THREE.Group();
-    const sleeperMeshes = [];
-    const sleeperGeo = new THREE.BoxGeometry(8.2, 0.04, 0.28);
-    const sleeperMat = new THREE.MeshBasicMaterial({ color: 0x064e3b });
-    for (let i = 0; i < sleeperCount; i++) {
-      const m = new THREE.Mesh(sleeperGeo, sleeperMat);
-      m.position.set(0, 0.015, -i * sleeperStep + 4);
-      sleeperGroup.add(m);
-      sleeperMeshes.push(m);
-    }
-    scene.add(sleeperGroup);
 
     const sceneryGroup = new THREE.Group();
     const gantryArches = [];
+    const signalPods = [];
     const buildings = [];
-    const archCount = isLowEnd ? 4 : 6;
-    const archSpacing = isLowEnd ? 13.5 : 9.5;
-    const archPostMat = new THREE.MeshStandardMaterial({ color: 0x064e3b, metalness: 0.6 });
-    const bMatEmerald = new THREE.MeshBasicMaterial({ map: bTexEmerald });
-    const bMatMint = new THREE.MeshBasicMaterial({ map: bTexMint });
+    const archCount = isLowEnd ? 5 : 7;
+    const archSpacing = isLowEnd ? 11.5 : 8.5;
+    const archPostMat = new THREE.MeshStandardMaterial({ color: 0x064e3b, metalness: 0.65, roughness: 0.3 });
+    const bMats = [
+      new THREE.MeshBasicMaterial({ map: bTexEmerald }),
+      new THREE.MeshBasicMaterial({ map: bTexMint }),
+      new THREE.MeshBasicMaterial({ map: bTexGold }),
+    ];
+
     for (let i = 0; i < archCount; i++) {
       const gz = -i * archSpacing;
       const arch = new THREE.Group();
       const beamMat = new THREE.MeshBasicMaterial({ color: i % 2 === 0 ? 0x34d399 : 0x6ee7b7 });
-      for (const sx of [-4.1, 4.1]) {
+      for (const sx of [-4.15, 4.15]) {
         const post = new THREE.Mesh(geos.unitBox, archPostMat);
-        post.scale.set(0.24, 6.2, 0.3);
-        post.position.set(sx, 3.1, 0);
+        post.scale.set(0.24, 6.4, 0.3);
+        post.position.set(sx, 3.2, 0);
         arch.add(post);
       }
       const top = new THREE.Mesh(geos.unitBox, beamMat);
-      top.scale.set(8.4, 0.24, 0.35);
-      top.position.set(0, 6.2, 0);
+      top.scale.set(8.5, 0.24, 0.35);
+      top.position.set(0, 6.3, 0);
       arch.add(top);
+
+      // Signal light pod on each gantry arch
+      const podMat = new THREE.MeshBasicMaterial({ color: 0x34d399 });
+      const pod = new THREE.Mesh(geos.lamp, podMat);
+      pod.position.set(i % 2 === 0 ? -3.4 : 3.4, 5.95, 0.22);
+      arch.add(pod);
+      signalPods.push(podMat);
+
       arch.position.z = gz;
       sceneryGroup.add(arch);
       gantryArches.push(arch);
 
       for (const side of [-1, 1]) {
-        const h = 9 + ((i * 7 + (side > 0 ? 3 : 1)) % 8);
+        const h = 10 + ((i * 7 + (side > 0 ? 3 : 1)) % 11);
         const b = new THREE.Mesh(
           geos.unitBox,
-          (i + (side > 0 ? 1 : 0)) % 2 === 0 ? bMatEmerald : bMatMint
+          bMats[(i + (side > 0 ? 1 : 0)) % bMats.length]
         );
-        b.scale.set(3.2, h, 4.0);
-        b.position.set(side * 6.8, h * 0.5 - 0.5, gz - 2);
+        b.scale.set(3.4, h, 4.2);
+        b.position.set(side * 6.9, h * 0.5 - 0.5, gz - 2);
         sceneryGroup.add(b);
         buildings.push(b);
+
+        if (!isLowEnd) {
+          // Outer deep-skyline silhouette tier for parallax richness
+          const hFar = h + 6 + ((i * 3) % 7);
+          const bFar = new THREE.Mesh(
+            geos.unitBox,
+            bMats[(i + 2) % bMats.length]
+          );
+          bFar.scale.set(4.2, hFar, 5.2);
+          bFar.position.set(side * 12.2, hFar * 0.5 - 0.5, gz - 4.5);
+          sceneryGroup.add(bFar);
+          buildings.push(bFar);
+        }
       }
     }
     scene.add(sceneryGroup);
 
-    // High-speed emerald wind streaks streaming cleanly along track outer edges
+    // High-speed cyber wind streaks
     const windStreaks = [];
-    const streakCount = isLowEnd ? 6 : 16;
-    const streakSpacing = isLowEnd ? 8.0 : 4.2;
+    const streakCount = isLowEnd ? 8 : 20;
+    const streakSpacing = isLowEnd ? 7.2 : 3.8;
     const streakMat = new THREE.MeshBasicMaterial({
       color: 0x6ee7b7,
       transparent: true,
-      opacity: 0.42,
+      opacity: 0.45,
     });
     for (let i = 0; i < streakCount; i += 1) {
       const ws = new THREE.Mesh(geos.unitBox, streakMat);
-      ws.scale.set(0.035, 0.035, 2.6 + (i % 3) * 1.4);
-      ws.position.set((i % 2 === 0 ? -1 : 1) * (4.4 + (i % 4) * 0.65), 1.0 + (i % 5) * 0.9, -i * streakSpacing);
+      ws.scale.set(0.04, 0.04, 2.8 + (i % 3) * 1.5);
+      ws.position.set((i % 2 === 0 ? -1 : 1) * (4.3 + (i % 4) * 0.7), 0.9 + (i % 5) * 0.95, -i * streakSpacing);
       scene.add(ws);
       windStreaks.push(ws);
     }
@@ -689,16 +1097,30 @@ const TornadoSurfers3DScene = ({
     scene.add(runnerMesh);
     scene.add(runnerMesh.userData.dropHalo);
 
+    // Articulated Enforcer Chaser Drone with crimson searchlight cone
     const chaserGroup = new THREE.Group();
     const droneBody = new THREE.Mesh(
       new THREE.OctahedronGeometry(0.42, 0),
-      new THREE.MeshStandardMaterial({ color: 0xf43f5e, emissive: 0xe11d48, emissiveIntensity: 1.5 })
+      new THREE.MeshStandardMaterial({ color: 0xf43f5e, emissive: 0xe11d48, emissiveIntensity: 1.65 })
     );
     const droneRing = new THREE.Mesh(
-      new THREE.TorusGeometry(0.58, 0.05, 8, 24),
+      new THREE.TorusGeometry(0.6, 0.055, 8, 24),
       new THREE.MeshBasicMaterial({ color: 0xfb7185 })
     );
-    chaserGroup.add(droneBody, droneRing);
+    const scanCone = new THREE.Mesh(
+      geos.beamCone,
+      makeBasicMat({
+        color: 0xf43f5e,
+        opacity: 0.18,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+        side: THREE.DoubleSide,
+      })
+    );
+    scanCone.scale.set(0.75, 0.55, 0.75);
+    scanCone.rotation.x = -Math.PI / 2 + 0.15;
+    scanCone.position.set(0, -0.25, -2.0);
+    chaserGroup.add(droneBody, droneRing, scanCone);
     chaserGroup.visible = false;
     scene.add(chaserGroup);
 
@@ -710,6 +1132,58 @@ const TornadoSurfers3DScene = ({
     const sparksLayer = new THREE.Group();
     scene.add(sparksLayer);
     const activeSparks = [];
+
+    // Pre-allocated Pooled Trail Orbs (zero per-frame alloc!)
+    const trailLayer = new THREE.Group();
+    scene.add(trailLayer);
+    const trailPoolSize = isLowEnd ? 14 : 28;
+    const trailPool = [];
+    for (let i = 0; i < trailPoolSize; i++) {
+      const tMat = new THREE.MeshBasicMaterial({
+        color: 0x34d399,
+        transparent: true,
+        opacity: 0,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+      });
+      const tMesh = new THREE.Mesh(geos.trailOrb, tMat);
+      tMesh.visible = false;
+      trailLayer.add(tMesh);
+      trailPool.push({ mesh: tMesh, mat: tMat, life: 0, maxLife: 0.35, vx: 0, vy: 0, vz: 0 });
+    }
+    let trailCursor = 0;
+    let trailSpawnAccum = 0;
+
+    // Pre-allocated Shockwave Ring Pool
+    const shockwavePool = [];
+    for (let i = 0; i < 4; i++) {
+      const sMat = new THREE.MeshBasicMaterial({
+        color: 0x6ee7b7,
+        transparent: true,
+        opacity: 0,
+        blending: THREE.AdditiveBlending,
+        side: THREE.DoubleSide,
+        depthWrite: false,
+      });
+      const sMesh = new THREE.Mesh(geos.shockRing, sMat);
+      sMesh.rotation.x = -Math.PI / 2;
+      sMesh.visible = false;
+      scene.add(sMesh);
+      shockwavePool.push({ mesh: sMesh, mat: sMat, life: 0, maxLife: 0.42 });
+    }
+    let shockCursor = 0;
+    const triggerShockwave = (x, y, colHex, maxScale = 4.2) => {
+      const sw = shockwavePool[shockCursor];
+      shockCursor = (shockCursor + 1) % shockwavePool.length;
+      sw.mesh.position.set(x, y + 0.14, 0);
+      sw.mesh.scale.setScalar(0.45);
+      sw.mat.color.setHex(colHex);
+      sw.mat.opacity = 0.9;
+      sw.life = 0.42;
+      sw.maxLife = 0.42;
+      sw.maxScale = maxScale;
+      sw.mesh.visible = true;
+    };
 
     const popupsLayer = new THREE.Group();
     scene.add(popupsLayer);
@@ -731,7 +1205,11 @@ const TornadoSurfers3DScene = ({
     let lastTime = performance.now();
     const clock = new THREE.Clock();
     let wasAirborne = false;
+    let wasFever = false;
+    let wasHover = false;
     let landSquash = 0;
+    let flipAngle = 0;
+    let flipActive = false;
     let appliedCharId = null;
 
     const animate = (now) => {
@@ -754,11 +1232,14 @@ const TornadoSurfers3DScene = ({
       callbacksRef.current.onStep?.(dt);
       const s = simRef.current;
 
-      const scrollStep = s.phase === "playing" ? s.speed * WORLD_DEPTH * dt : 0;
-      for (const m of sleeperMeshes) {
-        m.position.z += scrollStep;
-        if (m.position.z > 6) m.position.z -= sleeperCount * sleeperStep;
+      const playing = s.phase === "playing";
+      const scrollStep = playing ? s.speed * WORLD_DEPTH * dt : 0;
+
+      // Silky-smooth GPU UV track bed scrolling (matched to WORLD_DEPTH & 7.5 repeats per TRACK_LENGTH)
+      if (playing) {
+        trackTex.offset.y -= (scrollStep * 7.5) / TRACK_LENGTH;
       }
+
       for (const a of gantryArches) {
         a.position.z += scrollStep;
         if (a.position.z > 8) a.position.z -= archCount * archSpacing;
@@ -768,7 +1249,7 @@ const TornadoSurfers3DScene = ({
         if (b.position.z > 8) b.position.z -= archCount * archSpacing;
       }
       for (const ws of windStreaks) {
-        ws.position.z += scrollStep * 1.45;
+        ws.position.z += scrollStep * 1.65;
         if (ws.position.z > 8) ws.position.z -= streakCount * streakSpacing;
       }
 
@@ -778,136 +1259,307 @@ const TornadoSurfers3DScene = ({
 
       const {
         bodyTilt,
+        spinPivot,
+        pelvis,
+        upperBody,
+        headGroup,
         legLeft,
         legRight,
         armLeft,
         armRight,
         scarfA,
         scarfB,
+        scarfC,
         sneakerMat,
+        soleMat,
         boardGroup,
         shieldDome,
         jetGroup,
         flames,
         dropHalo,
+        feverAura,
+        auraMat,
       } = runnerMesh.userData;
 
       const sliding = s.slideTimer > 0;
       const jumping = s.y > s.groundY + 0.08 && s.jetpackTimer <= 0;
       const jetting = s.jetpackTimer > 0;
       const surfing = s.hoverboardTimer > 0;
+      const fever = (s.feverTimer || 0) > 0;
+      const boots = s.sneakersTimer > 0;
 
+      // Dynamic environment shifts for Fever Overdrive
+      scene.background.lerpColors(baseBg, feverBg, fever ? 0.85 : 0.0);
+      streakMat.color.setHex(fever ? 0xfbbf24 : jetting ? 0x38bdf8 : 0x6ee7b7);
+      runnerLight.color.setHex(fever ? 0xfbbf24 : jetting ? 0x38bdf8 : 0x34d399);
+      runnerLight.intensity = fever ? 4.0 : jetting ? 3.4 : 2.4;
+
+      // Animate gantry signal pods
+      const expressIncoming = s.entities?.some((e) => e.kind === "train" && e.moving && e.z < 0.7);
+      for (let i = 0; i < signalPods.length; i++) {
+        if (expressIncoming && Math.floor(elapsed * 8 + i) % 2 === 0) {
+          signalPods[i].setHex(0xf43f5e);
+        } else if (fever) {
+          signalPods[i].setHex(0xfbbf24);
+        } else {
+          signalPods[i].setHex(i % 2 === 0 ? 0x34d399 : 0x6ee7b7);
+        }
+      }
+
+      // Detect takeoff / flip / landing moments for fluid motion choreography
+      if (!wasAirborne && jumping && !jetting) {
+        if (boots || s.groundY > 0.45 || s.vy > 13.5) {
+          flipActive = true;
+          flipAngle = 0;
+        }
+      }
       if (wasAirborne && !jumping && !jetting) {
         landSquash = 1.0;
+        flipActive = false;
+        flipAngle = 0;
+        if (s.slamPending || s.groundY > 0.5) {
+          triggerShockwave(rx, floorY, fever ? 0xfbbf24 : 0x6ee7b7, 3.4);
+        }
+      }
+      if (!wasFever && fever) {
+        triggerShockwave(rx, ry, 0xfbbf24, 6.0);
+      }
+      if (!wasHover && surfing) {
+        triggerShockwave(rx, ry, 0x34d399, 4.4);
       }
       wasAirborne = jumping || jetting;
-      landSquash = Math.max(0, landSquash - dt * 6.5);
+      wasFever = fever;
+      wasHover = surfing;
+      landSquash = Math.max(0, landSquash - dt * 7.2);
 
-      const stride = Math.sin(s.stridePhase);
-      const groundBob = !jumping && !sliding && !jetting && !surfing && s.phase === "playing" ? Math.abs(stride) * 0.1 : 0;
-
-      runnerMesh.position.set(rx, ry + groundBob, 0);
-      runnerLight.position.set(rx, ry + 1.4, 0.4);
-      runnerMesh.visible = s.invulnTimer <= 0 || Math.floor(elapsed * 18) % 2 === 0;
-
-      // Dynamic multi-stance body posture (Sprint, Slide, Jump, Hoverboard Carve, Jetpack Flight)
-      const squashScale = 1 - landSquash * 0.18;
-      bodyTilt.rotation.z = s.leanAngle;
-      bodyTilt.rotation.y = surfing ? 0.52 : !jumping && !sliding ? stride * 0.14 : 0;
-      bodyTilt.rotation.x = sliding ? -0.98 : jetting ? 0.34 : jumping ? 0.16 : 0.12;
-      bodyTilt.scale.y = (sliding ? 0.64 : 1.0) * squashScale;
-
-      if (sliding) {
-        legLeft.hip.rotation.x = 0.65;
-        legLeft.knee.rotation.x = -0.35;
-        legRight.hip.rotation.x = -0.25;
-        legRight.knee.rotation.x = -0.85;
-        armLeft.shoulder.rotation.x = -0.5;
-        armLeft.elbow.rotation.x = 0.7;
-        armRight.shoulder.rotation.x = -0.3;
-        armRight.elbow.rotation.x = 0.8;
-      } else if (jetting) {
-        legLeft.hip.rotation.x = -0.22;
-        legLeft.knee.rotation.x = -0.45;
-        legRight.hip.rotation.x = -0.1;
-        legRight.knee.rotation.x = -0.25;
-        armLeft.shoulder.rotation.x = 0.4;
-        armLeft.elbow.rotation.x = 0.35;
-        armRight.shoulder.rotation.x = 0.4;
-        armRight.elbow.rotation.x = 0.35;
-      } else if (surfing) {
-        legLeft.hip.rotation.x = 0.35;
-        legLeft.knee.rotation.x = -0.55;
-        legRight.hip.rotation.x = -0.35;
-        legRight.knee.rotation.x = -0.45;
-        armLeft.shoulder.rotation.x = 0.15;
-        armLeft.shoulder.rotation.z = -0.45;
-        armLeft.elbow.rotation.x = 0.35;
-        armRight.shoulder.rotation.x = -0.15;
-        armRight.shoulder.rotation.z = 0.45;
-        armRight.elbow.rotation.x = 0.35;
-      } else if (jumping) {
-        legLeft.hip.rotation.x = 0.75;
-        legLeft.knee.rotation.x = -1.15;
-        legRight.hip.rotation.x = -0.35;
-        legRight.knee.rotation.x = -0.55;
-        armLeft.shoulder.rotation.x = -0.65;
-        armLeft.shoulder.rotation.z = -0.35;
-        armLeft.elbow.rotation.x = 0.65;
-        armRight.shoulder.rotation.x = 0.55;
-        armRight.shoulder.rotation.z = 0.35;
-        armRight.elbow.rotation.x = 0.65;
-      } else {
-        // Fluid 2-joint athletic sprint cycle
-        const lSwing = stride * 0.85;
-        const rSwing = -stride * 0.85;
-        legLeft.hip.rotation.x = lSwing;
-        legLeft.knee.rotation.x = -Math.max(0.08, -stride * 0.95);
-        legRight.hip.rotation.x = rSwing;
-        legRight.knee.rotation.x = -Math.max(0.08, stride * 0.95);
-        armLeft.shoulder.rotation.x = -stride * 0.78;
-        armLeft.shoulder.rotation.z = -0.08;
-        armLeft.elbow.rotation.x = 0.75 + stride * 0.18;
-        armRight.shoulder.rotation.x = stride * 0.78;
-        armRight.shoulder.rotation.z = 0.08;
-        armRight.elbow.rotation.x = 0.75 - stride * 0.18;
+      if (flipActive && jumping) {
+        flipAngle += dt * 11.2;
+        if (flipAngle >= Math.PI * 2) {
+          flipAngle = 0;
+          flipActive = false;
+        }
       }
 
-      // Fluttering wind scarf trail
-      const scarfSpeed = s.phase === "playing" ? 13 : 3.5;
-      scarfA.rotation.x = 0.25 + Math.sin(elapsed * scarfSpeed) * 0.18;
-      scarfA.rotation.y = -s.leanAngle * 0.7;
-      scarfB.rotation.x = Math.sin(elapsed * scarfSpeed - 1.1) * 0.24;
+      const stride = Math.sin(s.stridePhase);
+      const doubleStride = Math.cos(s.stridePhase * 2);
+      const speedNorm = Math.max(0, (s.speed - BASE_SPEED) / BASE_SPEED);
+      const groundBob = !jumping && !sliding && !jetting && !surfing && playing ? Math.abs(stride) * 0.13 : (!playing ? Math.sin(elapsed * 3) * 0.03 : 0);
 
-      sneakerMat.visible = s.sneakersTimer > 0;
+      runnerMesh.position.set(rx, ry + groundBob, 0);
+      runnerLight.position.set(rx, ry + 1.5, 0.45);
+      runnerMesh.visible = s.invulnTimer <= 0 || Math.floor(elapsed * 20) % 2 === 0;
+
+      // Panic stumble wobble if Chaser locked closely
+      const stumbleRoll = s.stumbleTimer > 0 ? Math.sin(elapsed * 34) * 0.16 * (s.stumbleTimer / 0.45) : 0;
+
+      const squashY = 1 - landSquash * 0.22;
+      const stretchX = 1 + landSquash * 0.12;
+      bodyTilt.rotation.z = s.leanAngle + stumbleRoll;
+      bodyTilt.rotation.y = surfing ? 0.72 : !jumping && !sliding && playing ? stride * 0.08 : 0;
+      bodyTilt.rotation.x = sliding ? -1.14 : jetting ? 0.58 : jumping ? 0.14 : playing ? 0.16 + speedNorm * 0.06 : 0.02;
+      bodyTilt.position.y = sliding ? -0.34 : 0;
+      bodyTilt.scale.set(stretchX, (sliding ? 0.72 : 1.0) * squashY, stretchX);
+
+      // 360 Parkour Frontflip during super/rooftop jumps
+      spinPivot.rotation.x = flipActive ? -flipAngle : 0;
+
+      // Pelvis & Spine counter-twist + Head turn-lead
+      if (playing && !sliding && !jetting && !surfing) {
+        pelvis.rotation.y = stride * 0.16;
+        upperBody.rotation.y = -stride * 0.24;
+        upperBody.position.y = 0.86 + doubleStride * 0.015;
+        headGroup.rotation.y = -s.leanAngle * 0.45 + stride * 0.06;
+        headGroup.rotation.x = -0.12;
+      } else {
+        pelvis.rotation.y = 0;
+        upperBody.rotation.y = surfing ? -0.52 : 0;
+        headGroup.rotation.y = surfing ? -0.22 : -s.leanAngle * 0.4;
+        headGroup.rotation.x = jetting ? -0.45 : sliding ? 0.72 : 0;
+      }
+
+      if (sliding) {
+        // Pro baseball / cyber knee slide
+        legLeft.hip.rotation.x = 1.05;
+        legLeft.knee.rotation.x = -0.15;
+        legRight.hip.rotation.x = -0.15;
+        legRight.knee.rotation.x = -1.35;
+        armLeft.shoulder.rotation.x = -0.65;
+        armLeft.elbow.rotation.x = 0.85;
+        armRight.shoulder.rotation.x = 0.9;
+        armRight.elbow.rotation.x = 0.3;
+      } else if (jetting) {
+        // Aero jetpack flight dive
+        legLeft.hip.rotation.x = -0.18 + Math.sin(elapsed * 9) * 0.06;
+        legLeft.knee.rotation.x = -0.32;
+        legRight.hip.rotation.x = -0.06 - Math.sin(elapsed * 9) * 0.06;
+        legRight.knee.rotation.x = -0.22;
+        armLeft.shoulder.rotation.x = -2.25;
+        armLeft.shoulder.rotation.z = -0.28;
+        armLeft.elbow.rotation.x = 0.25;
+        armRight.shoulder.rotation.x = -2.25;
+        armRight.shoulder.rotation.z = 0.28;
+        armRight.elbow.rotation.x = 0.25;
+      } else if (surfing) {
+        // Balanced lateral hoverboard carve
+        const carve = Math.sin(elapsed * 6) * 0.08;
+        legLeft.hip.rotation.x = 0.42 + carve;
+        legLeft.knee.rotation.x = -0.65;
+        legRight.hip.rotation.x = -0.42 - carve;
+        legRight.knee.rotation.x = -0.55;
+        armLeft.shoulder.rotation.x = 0.2;
+        armLeft.shoulder.rotation.z = -0.55;
+        armLeft.elbow.rotation.x = 0.45;
+        armRight.shoulder.rotation.x = -0.2;
+        armRight.shoulder.rotation.z = 0.55;
+        armRight.elbow.rotation.x = 0.45;
+      } else if (jumping) {
+        // Expressive parkour tuck
+        legLeft.hip.rotation.x = flipActive ? 1.15 : 0.85;
+        legLeft.knee.rotation.x = flipActive ? -1.65 : -1.25;
+        legRight.hip.rotation.x = flipActive ? 0.85 : -0.38;
+        legRight.knee.rotation.x = flipActive ? -1.45 : -0.65;
+        armLeft.shoulder.rotation.x = -0.85;
+        armLeft.shoulder.rotation.z = -0.42;
+        armLeft.elbow.rotation.x = 0.78;
+        armRight.shoulder.rotation.x = 0.65;
+        armRight.shoulder.rotation.z = 0.42;
+        armRight.elbow.rotation.x = 0.72;
+      } else if (!playing) {
+        // Ready / Hero idle stance
+        legLeft.hip.rotation.x = 0.08;
+        legLeft.knee.rotation.x = -0.12;
+        legRight.hip.rotation.x = -0.08;
+        legRight.knee.rotation.x = -0.12;
+        armLeft.shoulder.rotation.x = 0.1;
+        armLeft.shoulder.rotation.z = -0.14;
+        armLeft.elbow.rotation.x = 0.45;
+        armRight.shoulder.rotation.x = -0.1;
+        armRight.shoulder.rotation.z = 0.14;
+        armRight.elbow.rotation.x = 0.45;
+      } else {
+        // High-energy athletic sprint cycle
+        const lSwing = stride * 0.92;
+        const rSwing = -stride * 0.92;
+        legLeft.hip.rotation.x = lSwing;
+        legLeft.knee.rotation.x = -Math.max(0.06, -stride * 1.05);
+        legRight.hip.rotation.x = rSwing;
+        legRight.knee.rotation.x = -Math.max(0.06, stride * 1.05);
+        armLeft.shoulder.rotation.x = -stride * 0.88;
+        armLeft.shoulder.rotation.z = -0.1;
+        armLeft.elbow.rotation.x = 0.88 + stride * 0.22;
+        armRight.shoulder.rotation.x = stride * 0.88;
+        armRight.shoulder.rotation.z = 0.1;
+        armRight.elbow.rotation.x = 0.88 - stride * 0.22;
+      }
+
+      // 3-link fluttering whip scarf reacting to lane carves & airspeed
+      const scarfSpeed = playing ? 15 + speedNorm * 6 : 3.8;
+      scarfA.rotation.x = 0.28 + Math.sin(elapsed * scarfSpeed) * 0.2;
+      scarfA.rotation.y = -s.leanAngle * 0.95;
+      scarfB.rotation.x = Math.sin(elapsed * scarfSpeed - 1.1) * 0.28;
+      scarfB.rotation.y = -s.leanAngle * 0.55;
+      scarfC.rotation.x = Math.sin(elapsed * scarfSpeed - 2.2) * 0.34;
+
+      sneakerMat.visible = boots;
+      soleMat.color.setHex(fever ? 0xfbbf24 : boots ? 0x4ade80 : 0x6ee7b7);
+
       boardGroup.visible = surfing;
       if (surfing) {
-        boardGroup.rotation.z = -s.leanAngle * 1.15;
-        shieldDome.rotation.y = elapsed * 2.0;
+        boardGroup.rotation.z = -s.leanAngle * 1.2;
+        shieldDome.rotation.y = elapsed * 2.4;
       }
       jetGroup.visible = jetting;
       if (jetting) {
         flames.forEach((f, idx) => {
-          f.scale.y = 0.85 + Math.sin(elapsed * 42 + idx * 1.7) * 0.32;
+          f.scale.y = 0.85 + Math.sin(elapsed * 46 + idx * 1.9) * 0.35;
         });
       }
 
-      dropHalo.position.set(rx, floorY + 0.08, 0);
-      const shadowShrink = Math.max(0.4, 1 - Math.max(0, s.y - s.groundY) * 0.25);
-      dropHalo.scale.set(1.9 * shadowShrink, 1.9 * shadowShrink, 1);
+      // Fever ground aura ring
+      if (fever || boots) {
+        auraMat.color.setHex(fever ? 0xfbbf24 : 0x4ade80);
+        auraMat.opacity = 0.42 + Math.sin(elapsed * 10) * 0.18;
+        feverAura.scale.setScalar(1.0 + Math.sin(elapsed * 8) * 0.12);
+        feverAura.position.y = Math.max(0.06, floorY - ry + 0.08);
+      } else {
+        auraMat.opacity = 0;
+      }
 
-      if (s.chaserTimer > 0 && s.phase === "playing") {
+      dropHalo.position.set(rx, floorY + 0.08, 0);
+      dropHalo.material.color.setHex(fever ? 0xfbbf24 : 0x34d399);
+      const shadowShrink = Math.max(0.4, 1 - Math.max(0, s.y - s.groundY) * 0.25);
+      dropHalo.scale.set(2.0 * shadowShrink, 2.0 * shadowShrink, 1);
+
+      if (s.chaserTimer > 0 && playing) {
         chaserGroup.visible = true;
-        chaserGroup.position.set(rx, ry + 1.6 + Math.sin(elapsed * 8) * 0.15, 2.3);
-        droneRing.rotation.z = elapsed * 6;
+        chaserGroup.position.set(
+          rx * 0.85 + Math.sin(elapsed * 5) * 0.25,
+          ry + 1.65 + Math.sin(elapsed * 9) * 0.16,
+          2.25
+        );
+        chaserGroup.rotation.y = Math.sin(elapsed * 4) * 0.22;
+        droneRing.rotation.z = elapsed * 6.5;
       } else {
         chaserGroup.visible = false;
       }
 
-      // Frame-rate independent smooth camera follow + speed-reactive FOV
+      // Continuous pooled trail emission behind boots / hoverboard / jetpack / scarf
+      if (playing) {
+        trailSpawnAccum += dt * (fever || jetting || surfing ? 52 : 24);
+        while (trailSpawnAccum >= 1) {
+          trailSpawnAccum -= 1;
+          const node = trailPool[trailCursor];
+          trailCursor = (trailCursor + 1) % trailPool.length;
+          const originY = jetting ? ry + 1.05 : surfing ? ry + 0.25 : ry + 0.25;
+          node.mesh.position.set(
+            rx + (Math.random() - 0.5) * 0.36,
+            originY + (Math.random() - 0.5) * 0.18,
+            0.35
+          );
+          node.mat.color.setHex(
+            fever ? 0xfbbf24 : jetting ? 0x38bdf8 : surfing ? 0x22d3ee : boots ? 0x4ade80 : 0x34d399
+          );
+          node.maxLife = jetting || fever ? 0.34 : 0.24;
+          node.life = node.maxLife;
+          node.vx = (Math.random() - 0.5) * 0.9;
+          node.vy = (jetting ? -1.4 : 0.8) + Math.random() * 0.6;
+          node.vz = scrollStep / Math.max(0.008, dt) * 0.55;
+          node.mesh.scale.setScalar(fever || jetting ? 1.35 : 0.85);
+          node.mesh.visible = true;
+        }
+      }
+      for (const node of trailPool) {
+        if (!node.mesh.visible) continue;
+        node.life -= dt;
+        if (node.life <= 0) {
+          node.mesh.visible = false;
+          continue;
+        }
+        const frac = node.life / node.maxLife;
+        node.mesh.position.x += node.vx * dt;
+        node.mesh.position.y += node.vy * dt;
+        node.mesh.position.z += node.vz * dt;
+        node.mesh.scale.setScalar(0.35 + frac * (fever || jetting ? 1.25 : 0.85));
+        node.mat.opacity = frac * 0.65;
+      }
+
+      // Shockwave rings animation
+      for (const sw of shockwavePool) {
+        if (!sw.mesh.visible) continue;
+        sw.life -= dt;
+        if (sw.life <= 0) {
+          sw.mesh.visible = false;
+          continue;
+        }
+        const prog = 1 - sw.life / sw.maxLife;
+        sw.mesh.scale.setScalar(0.45 + prog * (sw.maxScale || 4.0));
+        sw.mat.opacity = (1 - prog) * 0.85;
+      }
+
+      // Dynamic Camera Choreography (speed FOV, turn banking, rooftop pull-back, shake)
       const camLerp = 1 - Math.exp(-12 * dt);
       const baseFov = container.clientWidth / Math.max(1, container.clientHeight) < 0.75 ? 66 : 58;
-      const speedFovBoost = Math.min(6, (s.speed / BASE_SPEED - 1) * 4.5 + (jetting ? 3 : 0));
+      const speedFovBoost = Math.min(9, (s.speed / BASE_SPEED - 1) * 5.2 + (jetting ? 4 : 0) + (fever ? 3.5 : 0));
       const desiredFov = baseFov + speedFovBoost;
       if (Math.abs(camera.fov - desiredFov) > 0.05) {
         camera.fov += (desiredFov - camera.fov) * camLerp;
@@ -916,13 +1568,14 @@ const TornadoSurfers3DScene = ({
       const shakeMag = s.shakeTimer > 0 ? s.shakeIntensity * (s.shakeTimer / 0.45) : 0;
       const sx = shakeMag ? (Math.random() - 0.5) * shakeMag : 0;
       const sy = shakeMag ? (Math.random() - 0.5) * shakeMag : 0;
-      const targetCamZ = jetting ? 7.1 : 6.2;
+      const targetCamZ = jetting ? 7.35 : s.groundY > 0.45 ? 6.75 : sliding ? 5.85 : 6.2;
+      const targetCamY = (sliding ? 3.85 : 4.38) + ry * 0.78;
 
-      camera.position.x += (rx * 0.55 - camera.position.x) * camLerp + sx;
-      camera.position.y += (4.35 + ry * 0.78 - camera.position.y) * camLerp + sy;
+      camera.position.x += (rx * 0.58 - camera.position.x) * camLerp + sx;
+      camera.position.y += (targetCamY - camera.position.y) * camLerp + sy;
       camera.position.z += (targetCamZ - camera.position.z) * camLerp;
-      camera.lookAt(rx * 0.35, ry * 0.55 + 1.35, -7.5);
-      camera.rotation.z += (-s.leanAngle * 0.12 - camera.rotation.z) * camLerp;
+      camera.lookAt(rx * 0.36, ry * 0.58 + 1.38, -8.5);
+      camera.rotation.z += (-s.leanAngle * 0.14 - camera.rotation.z) * camLerp;
 
       if (s.waveIndex === 0 && s.distance < 0.05 && exitingMeshes.length > 0) {
         while (exitingMeshes.length > 0) {
@@ -932,7 +1585,7 @@ const TornadoSurfers3DScene = ({
         }
       }
 
-      // Track Entity Removal cleanly: only animate pickup/blasted exits; passed obstacles already faded out
+      // Sync Entity Meshes + Smooth Horizon Fade-In / Exit Animations
       const activeIds = new Set(s.entities.map((e) => e.id));
       for (const [id, entry] of entityMeshMap.entries()) {
         if (!activeIds.has(id)) {
@@ -944,7 +1597,7 @@ const TornadoSurfers3DScene = ({
             entry.kind === "jetpack" ||
             entry.kind === "board_pickup" ||
             entry.kind === "sneakers" ||
-            entry.lastEz < 3.5; // only if removed mid-track (Shield Blast), NOT passed behind camera!
+            entry.lastEz < 3.5;
           if (shouldFloatExit) {
             exitingMeshes.push({
               mesh: entry.mesh,
@@ -962,7 +1615,7 @@ const TornadoSurfers3DScene = ({
       for (const ent of s.entities) {
         let entry = entityMeshMap.get(ent.id);
         if (!entry) {
-          const mesh = buildEntityMesh3D(ent, isLowEnd ? null : glowTex, geos);
+          const mesh = buildEntityMesh3D(ent, isLowEnd ? null : glowTex, geos, trainTextures);
           entityLayer.add(mesh);
           entry = { mesh, kind: ent.kind, lastEz: -40 };
           entityMeshMap.set(ent.id, entry);
@@ -976,7 +1629,6 @@ const TornadoSurfers3DScene = ({
 
         mesh.position.set(ex, ey, ez);
 
-        // Smooth far horizon fade-in + near pass-away dissolve once behind camera threshold
         const zTailWorld = toWorldZ(ent.zEnd ?? ent.z);
         const fadeIn = Math.max(0, Math.min(1, (ez + 48) / 14));
         const fadeOutStart = ent.kind === "train" ? 1.0 : 2.2;
@@ -989,7 +1641,8 @@ const TornadoSurfers3DScene = ({
         applyMeshAlpha(mesh, fadeIn * fadeOut);
 
         if (ent.kind === "coin") {
-          mesh.rotation.y = elapsed * 5.2 + ent.z * 4;
+          mesh.rotation.y = elapsed * 5.6 + ent.z * 6;
+          mesh.position.y += Math.sin(elapsed * 6 + ent.z * 12) * 0.08;
         } else if (
           ent.kind === "magnet" ||
           ent.kind === "multiplier" ||
@@ -997,8 +1650,12 @@ const TornadoSurfers3DScene = ({
           ent.kind === "board_pickup" ||
           ent.kind === "sneakers"
         ) {
-          mesh.rotation.y = elapsed * 3.2;
+          mesh.rotation.y = elapsed * 3.4;
           mesh.position.y += Math.sin(elapsed * 5 + ent.lane) * 0.16;
+          if (mesh.userData.orbitRing) {
+            mesh.userData.orbitRing.rotation.z = elapsed * 4.5;
+            mesh.userData.orbitRing.rotation.x = 0.65 + Math.sin(elapsed * 2.5) * 0.4;
+          }
         }
       }
 
@@ -1012,16 +1669,16 @@ const TornadoSurfers3DScene = ({
           continue;
         }
         const frac = exItem.life / exItem.maxLife;
-        exItem.mesh.position.y += dt * 3.2;
-        exItem.mesh.scale.setScalar(0.5 + 0.5 * frac);
+        exItem.mesh.position.y += dt * 3.8;
+        exItem.mesh.scale.setScalar(0.5 + 0.55 * frac);
         applyMeshAlpha(exItem.mesh, frac);
       }
 
       if (s.burstQueue?.length) {
-        const sparkCap = isLowEnd ? 24 : 80;
+        const sparkCap = isLowEnd ? 28 : 96;
         while (s.burstQueue.length > 0) {
           const b = s.burstQueue.pop();
-          const spawnCount = isLowEnd ? Math.min(4, b.count) : b.count;
+          const spawnCount = isLowEnd ? Math.min(5, b.count) : b.count;
           for (let k = 0; k < spawnCount; k++) {
             if (activeSparks.length >= sparkCap) {
               const evicted = activeSparks.shift();
@@ -1036,9 +1693,9 @@ const TornadoSurfers3DScene = ({
             sparksLayer.add(sp);
             activeSparks.push({
               mesh: sp,
-              vx: (Math.random() - 0.5) * 7,
-              vy: 2 + Math.random() * 5,
-              vz: (Math.random() - 0.5) * 6,
+              vx: (Math.random() - 0.5) * 7.5,
+              vy: 2.2 + Math.random() * 5.2,
+              vz: (Math.random() - 0.5) * 6.5,
               life: 0.48,
               maxLife: 0.48,
             });
@@ -1062,11 +1719,11 @@ const TornadoSurfers3DScene = ({
           sp.mesh.position.y = 0.08;
           sp.vy *= -0.45;
         }
-        sp.mesh.rotation.x += dt * 10;
+        sp.mesh.rotation.x += dt * 11;
         sp.mesh.material.opacity = Math.max(0, sp.life / sp.maxLife);
       }
 
-      // Pooled Sprites for Popups (zero per-frame allocations!)
+      // Pooled Sprites for 3D Floating Score/Stunt Popups
       const activePopupIds = new Set(s.popups.map((p) => p.id));
       for (const [pid, sprite] of popupSpriteMap.entries()) {
         if (!activePopupIds.has(pid)) {
@@ -1128,7 +1785,6 @@ const TornadoSurfers3DScene = ({
       cancelAnimationFrame(rafId);
       resizeObserver.disconnect();
 
-      // Exhaustive Three.js heap & WebGL resource cleanup (/memory-leak-debugging)
       const disposedGeos = new Set();
       const disposedMats = new Set();
       scene.traverse((obj) => {
@@ -1150,11 +1806,8 @@ const TornadoSurfers3DScene = ({
       exitingMeshes.length = 0;
       activeSparks.length = 0;
       popupSpriteMap.clear();
-      glowTex.dispose();
-      bTexEmerald.dispose();
-      bTexMint.dispose();
+      disposableTextures.forEach((t) => t.dispose());
       Object.values(geos).forEach((g) => g.dispose());
-      sleeperGeo.dispose();
       for (const tex of popupTexCache.values()) tex.dispose();
       popupTexCache.clear();
       renderer.dispose();

@@ -121,6 +121,7 @@ const TornadoSurfersGame = ({ onBack, isMuted = false, onSaveScore }) => {
     jetpackTimer: 0,
     sneakersTimer: 0,
     feverTimer: 0,
+    feverCharge: 0,
     chaserTimer: 0,
     speedMult: 1.0,
     combo: 0,
@@ -140,6 +141,7 @@ const TornadoSurfersGame = ({ onBack, isMuted = false, onSaveScore }) => {
       jetpackTimer: s.jetpackTimer,
       sneakersTimer: s.sneakersTimer,
       feverTimer: s.feverTimer || 0,
+      feverCharge: s.feverCharge || 0,
       chaserTimer: s.chaserTimer,
       speedMult: +(s.speed / BASE_SPEED).toFixed(1),
       combo: s.combo,
@@ -491,6 +493,24 @@ const TornadoSurfersGame = ({ onBack, isMuted = false, onSaveScore }) => {
             {hud.combo > 1 && (
               <div className="px-3 py-1.5 rounded-xl bg-emerald-950/85 border border-emerald-400/40 text-xs sm:text-sm font-black text-lime-300">
                 {hud.combo}x STREAK
+              </div>
+            )}
+            {hud.feverTimer <= 0 && (
+              <div className="px-3 py-1.5 rounded-xl bg-emerald-950/85 border border-emerald-400/25 shadow-md">
+                <div className="flex items-center justify-between gap-3 mb-1">
+                  <span className="text-[11px] font-black tracking-wider text-yellow-200 uppercase">
+                    Fever
+                  </span>
+                  <span className="text-[11px] font-bold tabular-nums text-yellow-100">
+                    {Math.min(100, Math.round(hud.feverCharge || 0))}%
+                  </span>
+                </div>
+                <div className="w-24 h-1.5 rounded-full bg-emerald-950 overflow-hidden">
+                  <div
+                    className="h-full w-full rounded-full origin-left bg-gradient-to-r from-emerald-400 to-yellow-300 transition-transform duration-100 will-change-transform"
+                    style={{ transform: `scaleX(${Math.max(0.04, Math.min(1, (hud.feverCharge || 0) / 100))})` }}
+                  />
+                </div>
               </div>
             )}
           </div>
