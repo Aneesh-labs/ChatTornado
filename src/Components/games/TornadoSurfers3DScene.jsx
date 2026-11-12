@@ -1297,12 +1297,13 @@ const TornadoSurfers3DScene = ({
       // Animate gantry signal pods
       const expressIncoming = s.entities?.some((e) => e.kind === "train" && e.moving && e.z < 0.7);
       for (let i = 0; i < signalPods.length; i++) {
+        if (!signalPods[i]?.color) continue;
         if (expressIncoming && Math.floor(elapsed * 8 + i) % 2 === 0) {
-          signalPods[i].setHex(0xf43f5e);
+          signalPods[i].color.setHex(0xf43f5e);
         } else if (fever) {
-          signalPods[i].setHex(0xfbbf24);
+          signalPods[i].color.setHex(0xfbbf24);
         } else {
-          signalPods[i].setHex(i % 2 === 0 ? 0x34d399 : 0x6ee7b7);
+          signalPods[i].color.setHex(i % 2 === 0 ? 0x34d399 : 0x6ee7b7);
         }
       }
 
