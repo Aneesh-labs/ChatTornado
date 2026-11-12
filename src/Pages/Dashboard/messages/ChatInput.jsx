@@ -545,8 +545,10 @@ const ChatInput = React.memo(({ onSend, replyTo, onCancelReply, selectedUser, so
         }
 
         try {
-            const storedGoogleModel = typeof window !== "undefined" ? localStorage.getItem("vortex_selected_google_model") : null;
-            const activeAiModel = (storedGoogleModel && storedGoogleModel !== "gemini-2.5-flash") ? storedGoogleModel : "gemini-3.8-flash";
+            const rawModel = typeof window !== "undefined" ? localStorage.getItem("vortex_selected_google_model") : null;
+            const lowerModel = (rawModel || "").toLowerCase();
+            const isLegacyModel = !rawModel || lowerModel.startsWith("gemini-2.5-") || lowerModel.startsWith("gemini-2.0-") || lowerModel.startsWith("gemini-1.5-");
+            const activeAiModel = isLegacyModel ? "gemini-3.8-flash" : rawModel;
             const burnOptions = isBurnMode ? { is_burn: true, burn_seconds: 10 } : {};
             const sent = onSend(trimmed, { ...(shieldOptions || {}), ...burnOptions, ai_mode: activeInputMode, ai_model: activeAiModel });
             if (isBurnMode) setIsBurnMode(false);

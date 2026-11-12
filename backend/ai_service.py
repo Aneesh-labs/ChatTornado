@@ -3,6 +3,7 @@ import re
 import json
 import uuid
 import time
+import asyncio
 import base64
 import logging
 import mimetypes
@@ -94,14 +95,27 @@ def generate_offline_smart_reply(prompt: str, mode: str = "DEFAULT") -> str:
 # Active high-performance Gemini models with robust fallback
 RECOMMENDED_GEMINI_MODELS = [
     "gemini-3.8-flash",
-    "gemini-3.5-flash",
     "gemini-3.5-flash-lite",
-    "gemini-2.5-flash",
-    "gemini-2.0-flash",
+    "gemini-3.1-flash-lite",
 ]
 
 _LAST_WORKING_GEMINI_MODEL: Optional[str] = None
 _UNAVAILABLE_GEMINI_MODELS: set = set()
+
+
+def normalize_gemini_model(model_name: Optional[str]) -> Optional[str]:
+    """Upgrades legacy or deprecated Gemini model names to current flagship equivalents."""
+    if not model_name or not isinstance(model_name, str):
+        return model_name
+    raw = model_name.strip()
+    if not raw or "/" in raw:
+        return raw  # Preserve OpenRouter provider/model slugs
+    lower = raw.lower()
+    if lower in ("gemini-3.1-flash-live-preview", "gemini-2.5-flash-live", "gemini-live-2.5-flash-preview"):
+        return "gemini-3.8-live"
+    if any(lower.startswith(prefix) for prefix in ("gemini-2.5-", "gemini-2.0-", "gemini-1.5-", "gemini-1.0-")):
+        return "gemini-3.8-flash"
+    return raw
 
 
 def extract_chunk_text(chunk: Any) -> str:
@@ -811,20 +825,19 @@ async def generate_ai_text(
             ),
         ]
 
-        models_to_try = list(RECOMMENDED_GEMINI_MODELS)
-        if preferred_model:
+        preferred_model = normalize_gemini_model(preferred_model)
+        global _LAST_WORKING_GEMINI_MODEL
+        models_to_try = []
+        if _LAST_WORKING_GEMINI_MODEL and _LAST_WORKING_GEMINI_MODEL not in _UNAVAILABLE_GEMINI_MODELS:
+            models_to_try.append(_LAST_WORKING_GEMINI_MODEL)
+        for m in RECOMMENDED_GEMINI_MODELS:
+            if m not in _UNAVAILABLE_GEMINI_MODELS and m not in models_to_try:
+                models_to_try.append(m)
+        if not models_to_try:
+            _UNAVAILABLE_GEMINI_MODELS.clear()
+            models_to_try = list(RECOMMENDED_GEMINI_MODELS)
+        if preferred_model and preferred_model not in _UNAVAILABLE_GEMINI_MODELS:
             models_to_try = [preferred_model] + [m for m in models_to_try if m != preferred_model]
-
-        # Dynamic model discovery to guarantee availability
-        try:
-            for m in client.models.list():
-                m_name = getattr(m, "name", "")
-                if m_name.startswith("models/"):
-                    m_name = m_name[7:]
-                if m_name and m_name not in models_to_try:
-                    models_to_try.append(m_name)
-        except Exception as list_e:
-            print(f"[AI_SERVICE] Dynamic models.list() note: {list_e}", flush=True)
 
         search_needed = bool(
             not image_parts and (
@@ -839,7 +852,7 @@ async def generate_ai_text(
 
             for use_search in tool_options:
                 try:
-                    print(f"[AI_SERVICE] Calling Gemini SDK {model_name} (search={use_search})...", flush=True)
+                    print(f"[AI_SERVICE] Calling Gemini async SDK {model_name} (search={use_search})...", flush=True)
                     gen_config = types.GenerateContentConfig(
                         system_instruction=system_prompt,
                         temperature=0.75,
@@ -849,12 +862,16 @@ async def generate_ai_text(
                     if use_search:
                         gen_config.tools = [{"google_search": {}}]
 
-                    response = client.models.generate_content(
-                        model=model_name,
-                        contents=contents,
-                        config=gen_config
+                    response = await asyncio.wait_for(
+                        client.aio.models.generate_content(
+                            model=model_name,
+                            contents=contents,
+                            config=gen_config
+                        ),
+                        timeout=28.0
                     )
                     if response and response.text:
+                        _LAST_WORKING_GEMINI_MODEL = model_name
                         result_text = response.text.strip()
                         # Check for Google Search grounding metadata
                         try:
@@ -917,10 +934,8 @@ async def generate_ai_text(
         for model_name in [
             "gemini-3.8-flash",
             "gemini-3.5-flash-lite",
-            "gemini-3.5-flash",
+            "gemini-3.1-flash-lite",
             "gemini-3.1-pro-preview",
-            "gemini-2.5-flash",
-            "gemini-2.0-flash",
         ]:
             for use_search in [True, False]:
                 try:
@@ -1250,7 +1265,7 @@ async def ai_clean_text(text: str) -> str:
 
     try:
         import httpx
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key={api_key}"
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key={api_key}"
         payload = {
             "system_instruction": {"parts": [{"text": PROMPT_CLEANUP}]},
             "contents": [{"role": "user", "parts": [{"text": text}]}]
@@ -1273,7 +1288,7 @@ async def ai_summarize_chat(messages_text: str) -> str:
 
     try:
         import httpx
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key={api_key}"
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key={api_key}"
         payload = {
             "system_instruction": {"parts": [{"text": PROMPT_SUMMARIZE}]},
             "contents": [{"role": "user", "parts": [{"text": messages_text}]}]
@@ -1546,6 +1561,7 @@ async def generate_ai_text_stream(
         types.SafetySetting(category=types.HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold=types.HarmBlockThreshold.BLOCK_NONE),
     ]
 
+    preferred_model = normalize_gemini_model(preferred_model)
     global _LAST_WORKING_GEMINI_MODEL
     ordered = []
     if _LAST_WORKING_GEMINI_MODEL and _LAST_WORKING_GEMINI_MODEL not in _UNAVAILABLE_GEMINI_MODELS:
@@ -1586,10 +1602,13 @@ async def generate_ai_text_stream(
                     gen_config.tools = [{"google_search": {}}]
 
                 full_accumulated_text = ""
-                response_stream = await client.aio.models.generate_content_stream(
-                    model=model_name,
-                    contents=contents,
-                    config=gen_config
+                response_stream = await asyncio.wait_for(
+                    client.aio.models.generate_content_stream(
+                        model=model_name,
+                        contents=contents,
+                        config=gen_config
+                    ),
+                    timeout=25.0
                 )
                 async for chunk in response_stream:
                     chunk_text = extract_chunk_text(chunk)
@@ -1673,9 +1692,12 @@ async def ai_polish_text(text: str, tone: str = "professional") -> str:
         try:
             from google import genai
             client = genai.Client(api_key=api_key)
-            res = client.models.generate_content(
-                model=model_name,
-                contents=prompt
+            res = await asyncio.wait_for(
+                client.aio.models.generate_content(
+                    model=model_name,
+                    contents=prompt
+                ),
+                timeout=18.0
             )
             if res and res.text:
                 return res.text.strip().strip('"').strip("'")
@@ -1697,9 +1719,12 @@ async def ai_translate_text(text: str, target_language: str = "English") -> str:
         try:
             from google import genai
             client = genai.Client(api_key=api_key)
-            res = client.models.generate_content(
-                model=model_name,
-                contents=prompt
+            res = await asyncio.wait_for(
+                client.aio.models.generate_content(
+                    model=model_name,
+                    contents=prompt
+                ),
+                timeout=18.0
             )
             if res and res.text:
                 return res.text.strip().strip('"').strip("'")
@@ -1727,9 +1752,12 @@ Format as JSON array of 3 strings: ["Reply 1", "Reply 2", "Reply 3"]. Output JSO
             import json
             from google import genai
             client = genai.Client(api_key=api_key)
-            res = client.models.generate_content(
-                model=model_name,
-                contents=prompt
+            res = await asyncio.wait_for(
+                client.aio.models.generate_content(
+                    model=model_name,
+                    contents=prompt
+                ),
+                timeout=15.0
             )
             if res and res.text:
                 cleaned = res.text.strip()

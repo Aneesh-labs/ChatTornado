@@ -88,6 +88,7 @@ class SendMessageRequest(BaseModel):
     unlock_at: Optional[str] = None
     ai_mode: Optional[str] = "DEFAULT"
     ai_model: Optional[str] = None
+    ai_sync: bool = False
 
 
 class MessageResponse(BaseModel):

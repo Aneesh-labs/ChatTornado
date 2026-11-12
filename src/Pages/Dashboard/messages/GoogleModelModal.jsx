@@ -92,18 +92,18 @@ export const GOOGLE_MODELS = [
         pricing: { is_free: true, prompt: "0", completion: "0" }
     },
     {
-        id: "gemini-2.5-flash",
-        name: "Gemini 2.5 Flash",
+        id: "gemini-3.1-flash-lite",
+        name: "Gemini 3.1 Flash Lite",
         provider: "Google",
-        version: "v2.5",
-        tag: "Legacy • May Be Deprecated",
-        badge: "Legacy",
-        badgeStyle: "bg-zinc-500/20 text-zinc-400 border-zinc-500/40",
+        version: "v3.1 Lite",
+        tag: "Ultra-Light • Sub-150ms Replies",
+        badge: "Fast Backup",
+        badgeStyle: "bg-sky-500/20 text-sky-300 border-sky-500/40",
         icon: Shield,
-        iconColor: "text-zinc-400",
-        iconBg: "bg-zinc-500/10 border-zinc-500/30",
-        description: "Older generation model — may not work for new users. Kept for existing setups. Prefer Gemini 3.8 Flash instead.",
-        speed: "0.4s (Very Fast)",
+        iconColor: "text-sky-400",
+        iconBg: "bg-sky-500/10 border-sky-500/30",
+        description: "High-throughput lightweight Gemini fallback built for rapid, low-latency everyday chat turns.",
+        speed: "0.18s (Ultra-Fast)",
         intelligence: "High",
         context_length: 1000000,
         pricing: { is_free: true, prompt: "0", completion: "0" }
@@ -186,11 +186,29 @@ export const ALL_MODELS = [...GOOGLE_MODELS, ...OPENROUTER_MODELS];
 
 export const STORAGE_KEY_GOOGLE_MODEL = "vortex_selected_google_model";
 
+export const normalizeGoogleModel = (modelId) => {
+    if (!modelId || typeof modelId !== "string") return "gemini-3.8-flash";
+    const trimmed = modelId.trim();
+    if (!trimmed) return "gemini-3.8-flash";
+    const lower = trimmed.toLowerCase();
+    if (lower.startsWith("gemini-2.5-") || lower.startsWith("gemini-2.0-") || lower.startsWith("gemini-1.5-") || lower.startsWith("gemini-1.0-")) {
+        return "gemini-3.8-flash";
+    }
+    return trimmed;
+};
+
 export const getSelectedGoogleModel = () => {
     if (typeof window === "undefined") return "gemini-3.8-flash";
     const saved = localStorage.getItem(STORAGE_KEY_GOOGLE_MODEL);
-    if (saved && saved !== "gemini-2.5-flash") return saved;
-    return "gemini-3.8-flash";
+    const normalized = normalizeGoogleModel(saved);
+    if (saved && saved !== normalized) {
+        try {
+            localStorage.setItem(STORAGE_KEY_GOOGLE_MODEL, normalized);
+        } catch {
+            // ignore storage errors
+        }
+    }
+    return normalized;
 };
 
 // Helper: Format raw context length integers into human-readable token strings

@@ -31,6 +31,14 @@ class ConnectionManager:
         self.online_users: set[int] = set()
         self.broadcasted_capsules: set[int] = set()
         self.user_statuses: dict[int, dict] = {}
+        self._send_locks: dict = {}
+
+    def _get_send_lock(self, uid) -> asyncio.Lock:
+        lock = self._send_locks.get(uid)
+        if lock is None:
+            lock = asyncio.Lock()
+            self._send_locks[uid] = lock
+        return lock
 
     async def connect(
         self,
@@ -112,6 +120,8 @@ class ConnectionManager:
         self.online_users.discard(uid)
         self.online_users.discard(str(uid))
         self.user_statuses.pop(uid, None)
+        self._send_locks.pop(uid, None)
+        self._send_locks.pop(str(uid), None)
 
         # Update offline in DB so user doesn't remain falsely marked online
         db = None
@@ -148,24 +158,33 @@ class ConnectionManager:
         if websocket is None and isinstance(rid, int):
             websocket = self.active_connections.get(str(rid))
 
-        # Forward to Go Realtime Engine asynchronously (zero-fallback reliability)
-        try:
-            asyncio.create_task(_relay_to_go_engine(receiver_id=rid, payload=message))
-        except Exception:
-            pass
+        # Forward to Go Realtime Engine asynchronously (skip ephemeral high-frequency stream/typing frames)
+        pkt_type = message.get("type") if isinstance(message, dict) else None
+        if pkt_type not in ("ai_stream_chunk", "typing", "typing_start", "typing_stop", "pong"):
+            try:
+                asyncio.create_task(_relay_to_go_engine(receiver_id=rid, payload=message))
+            except Exception:
+                pass
 
         if websocket is None:
             return False
 
         try:
-            await websocket.send_json(message)
+            async with self._get_send_lock(rid):
+                # Re-verify current socket wasn't replaced while waiting for lock
+                current_ws = self.active_connections.get(rid) or (
+                    self.active_connections.get(str(rid)) if isinstance(rid, int) else None
+                )
+                if current_ws is not websocket:
+                    return False
+                await websocket.send_json(message)
             return True
 
         except (WebSocketDisconnect, RuntimeError):
             self.disconnect(rid)
             return False
 
-        except Exception as e:
+        except Exception:
             self.disconnect(rid)
             return False
 
@@ -216,13 +235,14 @@ class ConnectionManager:
                 recipient_online_list.append(other_id)
 
             try:
-                await websocket.send_json(
-                    {
-                        "type": "online_users",
-                        "users": recipient_online_list,
-                        "statuses": self.user_statuses
-                    }
-                )
+                async with self._get_send_lock(uid):
+                    await websocket.send_json(
+                        {
+                            "type": "online_users",
+                            "users": recipient_online_list,
+                            "statuses": self.user_statuses
+                        }
+                    )
             except (WebSocketDisconnect, RuntimeError):
                 dead_connections.append(user_id)
             except Exception:

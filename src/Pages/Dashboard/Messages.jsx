@@ -60,6 +60,7 @@ import { VOICE_FILTERS, applyVoiceFilter } from "../../Services/audioVoiceFilter
 import { cacheOfflineMessages, getOfflineMessages, queueOfflineMessage, flushOfflineQueue } from "../../Services/db";
 
 import { selectRelevantVaultContext } from "../../Services/vortex/vaultService";
+import { getSelectedGoogleModel } from "./messages/GoogleModelModal";
 
 /* ==========================================================================
    SECURITY & UTILITY FUNCTIONS
@@ -503,7 +504,7 @@ const Messages = () => {
             }
 
             const showAvatar = !prev || !areIdsEqual(prev.sender_id, msg.sender_id);
-            result.push({ type: "message", msg, showAvatar, key: msg.id || msg.temp_id || `msg-${i}` });
+            result.push({ type: "message", msg, showAvatar, key: msg.stream_id || msg.id || msg.temp_id || `msg-${i}` });
         });
         return result;
     }, [messages]);
@@ -1551,6 +1552,11 @@ const Messages = () => {
                             return next;
                         });
                         if (typingTimeouts.current[sid]) clearTimeout(typingTimeouts.current[sid]);
+                        const isBotTyping = Boolean(
+                            selectedUserRef.current &&
+                            (selectedUserRef.current.is_bot || selectedUserRef.current.username === "VORTEX-9") &&
+                            areIdsEqual(selectedUserRef.current.id, packet.sender_id)
+                        );
                         typingTimeouts.current[sid] = setTimeout(() => {
                             setTypingUsers((prev) => {
                                 const next = new Set(prev);
@@ -1558,7 +1564,7 @@ const Messages = () => {
                                 next.delete(strId);
                                 return next;
                             });
-                        }, 3500);
+                        }, isBotTyping ? 15000 : 3500);
                         return;
                     }
                     if (packet.type === "typing_stop" || packet.type === "stop_typing") {
@@ -1668,16 +1674,22 @@ const Messages = () => {
                         }
                         const currentChat = selectedUserRef.current;
                         const isAiChat = Boolean(currentChat && (currentChat.is_bot || currentChat.username === "VORTEX-9" || currentChat.username?.toUpperCase?.().includes("VORTEX") || areIdsEqual(currentChat.id, packet.sender_id)));
-                        if (isAiChat) {
+                        const streamKey = packet.stream_id || packet.message_id;
+                        if (isAiChat && streamKey) {
                             setMessages((prev) => {
-                                const exists = prev.some((m) => areIdsEqual(m.id, packet.message_id));
+                                const exists = prev.some((m) => areIdsEqual(m.id, streamKey) || (m.stream_id && areIdsEqual(m.stream_id, streamKey)));
                                 if (exists) {
-                                    return prev.map((m) => areIdsEqual(m.id, packet.message_id) ? { ...m, is_streaming: true } : m);
+                                    return prev.map((m) =>
+                                        (areIdsEqual(m.id, streamKey) || (m.stream_id && areIdsEqual(m.stream_id, streamKey)))
+                                            ? { ...m, stream_id: streamKey, is_streaming: true }
+                                            : m
+                                    );
                                 }
                                 return [
                                     ...prev,
                                     {
-                                        id: packet.message_id,
+                                        id: streamKey,
+                                        stream_id: streamKey,
                                         sender_id: packet.sender_id,
                                         receiver_id: myUserId.current,
                                         branch_id: packet.branch_id ?? null,
@@ -1697,16 +1709,19 @@ const Messages = () => {
                     if (packet.type === "ai_stream_chunk") {
                         const currentChat = selectedUserRef.current;
                         const isAiChat = Boolean(currentChat && (currentChat.is_bot || currentChat.username === "VORTEX-9" || currentChat.username?.toUpperCase?.().includes("VORTEX") || (packet.sender_id != null && areIdsEqual(currentChat.id, packet.sender_id))));
-                        if (isAiChat) {
+                        const streamKey = packet.stream_id || packet.message_id;
+                        if (isAiChat && streamKey) {
                             setMessages((prev) => {
-                                const exists = prev.some((m) => areIdsEqual(m.id, packet.message_id));
+                                const exists = prev.some((m) => areIdsEqual(m.id, streamKey) || (m.stream_id && areIdsEqual(m.stream_id, streamKey)));
                                 if (!exists) {
                                     return [
                                         ...prev,
                                         {
-                                            id: packet.message_id,
+                                            id: streamKey,
+                                            stream_id: streamKey,
                                             sender_id: packet.sender_id || currentChat.id,
                                             receiver_id: myUserId.current,
+                                            branch_id: packet.branch_id ?? null,
                                             message: packet.chunk || "",
                                             created_at: new Date().toISOString(),
                                             is_shielded: false,
@@ -1718,9 +1733,10 @@ const Messages = () => {
                                     ];
                                 }
                                 return prev.map((m) => {
-                                    if (areIdsEqual(m.id, packet.message_id)) {
+                                    if (areIdsEqual(m.id, streamKey) || (m.stream_id && areIdsEqual(m.stream_id, streamKey))) {
                                         return {
                                             ...m,
+                                            stream_id: m.stream_id || streamKey,
                                             message: (m.message || "") + (packet.chunk || ""),
                                             is_streaming: true
                                         };
@@ -1743,15 +1759,17 @@ const Messages = () => {
                         }
                         const currentChat = selectedUserRef.current;
                         const isAiChat = Boolean(currentChat && (currentChat.is_bot || currentChat.username === "VORTEX-9" || currentChat.username?.toUpperCase?.().includes("VORTEX") || areIdsEqual(currentChat.id, packet.sender_id)));
+                        const streamKey = packet.stream_id || packet.message_id;
                         if (isAiChat) {
                             setMessages((prev) => {
                                 const targetIds = [packet.message_id, packet.stream_id].filter(Boolean);
-                                const exists = prev.some((m) => targetIds.some((tid) => areIdsEqual(m.id, tid)));
+                                const exists = prev.some((m) => targetIds.some((tid) => areIdsEqual(m.id, tid) || (m.stream_id && areIdsEqual(m.stream_id, tid))));
                                 if (!exists && packet.full_text) {
                                     return [
                                         ...prev,
                                         {
                                             id: packet.message_id,
+                                            stream_id: streamKey,
                                             sender_id: packet.sender_id || currentChat.id,
                                             receiver_id: packet.receiver_id || myUserId.current,
                                             branch_id: packet.branch_id ?? null,
@@ -1766,13 +1784,14 @@ const Messages = () => {
                                     ];
                                 }
                                 return prev.map((m) => {
-                                    if (targetIds.some((tid) => areIdsEqual(m.id, tid))) {
+                                    if (targetIds.some((tid) => areIdsEqual(m.id, tid) || (m.stream_id && areIdsEqual(m.stream_id, tid)))) {
                                         const resolvedMsg = (packet.full_text && String(packet.full_text).trim())
                                             ? packet.full_text
                                             : m.message;
                                         return {
                                             ...m,
                                             id: packet.message_id ?? m.id,
+                                            stream_id: m.stream_id || streamKey,
                                             message: resolvedMsg,
                                             is_streaming: false
                                         };
@@ -1802,7 +1821,10 @@ const Messages = () => {
 
                         if (isCurrentDirectChat) {
                             setMessages((prev) => {
-                                const existingIndex = prev.findIndex((m) => areIdsEqual(m.id, packet.id));
+                                const existingIndex = prev.findIndex((m) =>
+                                    areIdsEqual(m.id, packet.id) ||
+                                    (packet.stream_id && (areIdsEqual(m.id, packet.stream_id) || (m.stream_id && areIdsEqual(m.stream_id, packet.stream_id))))
+                                );
                                 const tempIndex = prev.findIndex((m) => {
                                     if (packet.temp_id && areIdsEqual(m.temp_id, packet.temp_id)) return true;
                                     if (
@@ -1832,7 +1854,13 @@ const Messages = () => {
 
                                 if (existingIndex !== -1) {
                                     const updated = [...prev];
-                                    updated[existingIndex] = { ...updated[existingIndex], ...packet, is_streaming: false };
+                                    const existing = updated[existingIndex];
+                                    updated[existingIndex] = {
+                                        ...existing,
+                                        ...packet,
+                                        stream_id: existing?.stream_id || packet.stream_id,
+                                        is_streaming: false
+                                    };
                                     return updated;
                                 }
 
@@ -1880,6 +1908,10 @@ const Messages = () => {
                 setSocketReady(false);
                 setOnlineUserIds(new Set());
                 setTypingUsers(new Set());
+                setMessages((prev) => prev.some((m) => m.is_streaming)
+                    ? prev.map((m) => (m.is_streaming ? { ...m, is_streaming: false } : m))
+                    : prev
+                );
                 if (heartbeatTimer) clearInterval(heartbeatTimer);
                 if (!disposed) {
                     reconnectAttempts += 1;
@@ -1967,8 +1999,96 @@ const Messages = () => {
             return false;
         }
         const temp_id = options.temp_id || generateSecureId();
+        const isBotTarget = Boolean(
+            currentTarget?.is_bot ||
+            currentTarget?.username?.toUpperCase?.() === "VORTEX-9" ||
+            currentTarget?.username?.toUpperCase?.() === "VORTEX9"
+        );
+
+        let activeAiMode = options.ai_mode || aiMode;
+        if (isAdminUnlocked()) {
+            activeAiMode = "ADMIN";
+            touchAdminSession();
+        } else if (activeAiMode === "ADMIN") {
+            activeAiMode = "DEFAULT";
+        }
+        const activeAiModel = options.ai_model || getSelectedGoogleModel();
+
+        const sendAiViaRestFallback = async () => {
+            const botId = currentTarget?.id || targetReceiverId;
+            setMessages((prev) => {
+                if (prev.some((m) => areIdsEqual(m.temp_id, temp_id))) return prev;
+                return [...prev, {
+                    temp_id,
+                    sender_id: myUserId.current,
+                    receiver_id: targetReceiverId,
+                    branch_id: activeBranch?.id || null,
+                    message: validation.text,
+                    created_at: new Date().toISOString(),
+                    status: "sending",
+                    ...options,
+                }];
+            });
+            setTypingUsers((prev) => {
+                const next = new Set(prev);
+                if (botId != null) {
+                    if (!isNaN(Number(botId))) next.add(Number(botId));
+                    next.add(String(botId));
+                }
+                return next;
+            });
+            try {
+                const token = sessionStorage.getItem("token");
+                const res = await API.post("/messages/send", {
+                    receiver_id: Number(targetReceiverId),
+                    message: validation.text,
+                    temp_id,
+                    is_shielded: options.is_shielded || false,
+                    shield_mode: options.shield_mode,
+                    unlock_at: options.unlock_at,
+                    ai_mode: activeAiMode,
+                    ai_model: activeAiModel,
+                    ai_sync: true,
+                }, { params: { token }, timeout: 35000 });
+
+                setMessages((prev) => {
+                    let next = prev.map((m) =>
+                        areIdsEqual(m.temp_id, temp_id)
+                            ? { ...m, ...res.data, status: "sent", temp_id: undefined }
+                            : m
+                    );
+                    const botMsg = res.data?.bot_message;
+                    if (botMsg && botMsg.id && !next.some((m) => areIdsEqual(m.id, botMsg.id))) {
+                        next = [...next, botMsg];
+                    }
+                    return next;
+                });
+            } catch (restErr) {
+                console.error("[AI REST FALLBACK ERROR]", restErr);
+                setMessages((prev) => prev.map((m) =>
+                    areIdsEqual(m.temp_id, temp_id)
+                        ? { ...m, status: "failed", errorMessage: restErr.response?.data?.detail || "AI transmission failed. Tap retry." }
+                        : m
+                ));
+                setCallNotice("AI transmission interrupted. Tap retry.");
+            } finally {
+                setTypingUsers((prev) => {
+                    const next = new Set(prev);
+                    if (botId != null) {
+                        next.delete(Number(botId));
+                        next.delete(String(botId));
+                    }
+                    return next;
+                });
+            }
+        };
 
         if (!socketRef.current || socketRef.current.readyState !== WebSocket.OPEN) {
+            if (isBotTarget && !options._fromOfflineFlush) {
+                sendAiViaRestFallback();
+                setReplyingTo(null);
+                return true;
+            }
             if (options._fromOfflineFlush) return false;
             queueOfflineMessage({
                 temp_id,
@@ -2052,20 +2172,8 @@ const Messages = () => {
             recordMessageSent(currentTarget.id);
         }
 
-        let activeAiMode = options.ai_mode || aiMode;
-        if (isAdminUnlocked()) {
-            activeAiMode = "ADMIN";
-            touchAdminSession();
-        } else if (activeAiMode === "ADMIN") {
-            activeAiMode = "DEFAULT";
-        }
-
-        const storedGoogleModel = typeof window !== "undefined" ? localStorage.getItem("vortex_selected_google_model") : null;
-        const normalizedModel = (storedGoogleModel && storedGoogleModel !== "gemini-2.5-flash") ? storedGoogleModel : "gemini-3.8-flash";
-        const activeAiModel = options.ai_model || normalizedModel;
-
         let vaultContext = null;
-        if (currentTarget?.is_bot || currentTarget?.username?.toUpperCase() === "VORTEX-9") {
+        if (isBotTarget) {
             try {
                 vaultContext = selectRelevantVaultContext(validation.text);
             } catch (err) {
@@ -2124,6 +2232,10 @@ const Messages = () => {
             } catch (err) {
                 console.error("[WS SEND ERROR]", err);
                 pendingTempIds.current.delete(temp_id);
+                if (isBotTarget) {
+                    sendAiViaRestFallback();
+                    return;
+                }
                 setMessages((prev) => prev.map((m) =>
                     areIdsEqual(m.temp_id, temp_id)
                         ? { ...m, status: "failed", errorMessage: "Network error sending message" }
@@ -2177,6 +2289,11 @@ const Messages = () => {
         }
 
         // REST fallback
+        const isBotRetry = Boolean(
+            currentTarget?.is_bot ||
+            currentTarget?.username?.toUpperCase?.() === "VORTEX-9" ||
+            currentTarget?.username?.toUpperCase?.() === "VORTEX9"
+        );
         try {
             const token = sessionStorage.getItem("token");
             const res = await API.post("/messages/send", {
@@ -2187,15 +2304,23 @@ const Messages = () => {
                 shield_mode: failedMsg.shield_mode,
                 unlock_at: failedMsg.unlock_at,
                 ai_mode: failedMsg.ai_mode || aiMode,
-                ai_model: failedMsg.ai_model
-            }, { params: { token } });
+                ai_model: failedMsg.ai_model || getSelectedGoogleModel(),
+                ai_sync: isBotRetry
+            }, { params: { token }, timeout: isBotRetry ? 35000 : 12000 });
 
             if (res.data?.id) {
-                setMessages((prev) => prev.map((m) =>
-                    areIdsEqual(m.temp_id, temp_id)
-                        ? { ...m, ...res.data, status: "sent", temp_id: undefined }
-                        : m
-                ));
+                setMessages((prev) => {
+                    let next = prev.map((m) =>
+                        areIdsEqual(m.temp_id, temp_id)
+                            ? { ...m, ...res.data, status: "sent", temp_id: undefined }
+                            : m
+                    );
+                    const botMsg = res.data?.bot_message;
+                    if (botMsg && botMsg.id && !next.some((m) => areIdsEqual(m.id, botMsg.id))) {
+                        next = [...next, botMsg];
+                    }
+                    return next;
+                });
                 pendingTempIds.current.delete(temp_id);
                 return true;
             }

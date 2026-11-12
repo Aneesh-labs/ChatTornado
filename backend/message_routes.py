@@ -766,10 +766,12 @@ async def send_message_rest(
         is_bot = True
         bot = target_u
 
+    bot_reply_payload = None
     if is_bot and bot:
         from ai_service import process_user_message_to_bot
-        async def trigger_bot():
-            bot_db = SessionLocal()
+
+        async def _generate_and_persist_bot_reply(use_fresh_db: bool = True):
+            bot_db = SessionLocal() if use_fresh_db else db
             try:
                 reply_text = await process_user_message_to_bot(
                     user_id,
@@ -794,26 +796,33 @@ async def send_message_rest(
                 ])
                 bot_db.commit()
 
-                await manager.send_personal_message(user_id, {
+                bot_packet = {
                     "type": "message",
                     "id": bot_msg.id,
                     "sender_id": bot.id,
                     "receiver_id": user_id,
                     "message": reply_text,
-                    "created_at": str(bot_msg.created_at),
+                    "created_at": bot_msg.created_at.isoformat() if bot_msg.created_at else str(now),
                     "is_shielded": False,
                     "is_locked": False,
                     "read_state": "sent",
                     "reactions": []
-                })
+                }
+                await manager.send_personal_message(user_id, bot_packet)
+                return bot_packet
             except Exception as bot_err:
                 logger.error("REST bot reply error: %s", bot_err)
+                return None
             finally:
-                bot_db.close()
+                if use_fresh_db:
+                    bot_db.close()
 
-        asyncio.create_task(trigger_bot())
+        if getattr(data, "ai_sync", False):
+            bot_reply_payload = await _generate_and_persist_bot_reply(use_fresh_db=False)
+        else:
+            asyncio.create_task(_generate_and_persist_bot_reply(use_fresh_db=True))
 
-    return {
+    resp_body = {
         "status": "success",
         "id": new_message.id,
         "temp_id": temp_id,
@@ -827,6 +836,9 @@ async def send_message_rest(
         "is_locked": is_locked,
         "correlation_id": correlation_id
     }
+    if bot_reply_payload is not None:
+        resp_body["bot_message"] = bot_reply_payload
+    return resp_body
 
 
 

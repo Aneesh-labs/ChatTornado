@@ -712,8 +712,6 @@ const MessageBubble = React.memo(({
     const [isSpeaking, setIsSpeaking] = useState(() => speechService.isSpeaking(msg.id));
     const longPressTimer = useRef(null);
 
-    // ── ChatGPT-style typewriter ──────────────────────────────────────────────
-    // Only fires for bot messages (VORTEX-9). Historical messages show instantly.
     const isBotMsg = !isMe && Boolean(
         user?.is_bot ||
         user?.username?.toLowerCase?.() === "vortex-9" ||
@@ -722,49 +720,6 @@ const MessageBubble = React.memo(({
         msg.sender?.username?.toLowerCase?.() === "vortex9" ||
         msg.sender?.username?.toLowerCase?.() === "vortex-9"
     );
-    const [typedText, setTypedText] = useState(() => {
-        // Historical (already arrived, not streaming) → show immediately
-        if (isBotMsg && msg.message && !msg.is_streaming) return msg.message;
-        return null;
-    });
-    const typewriterRef = useRef(null);
-    const prevStreamingRef = useRef(msg.is_streaming);
-
-    useEffect(() => {
-        if (!isBotMsg) return;
-        const wasStreaming = prevStreamingRef.current;
-        const justFinished = wasStreaming && !msg.is_streaming;
-        prevStreamingRef.current = msg.is_streaming;
-        if (!justFinished) return;
-
-        const fullText = msg.message || "";
-        if (!fullText) return;
-        if (typewriterRef.current) clearInterval(typewriterRef.current);
-        setTypedText("");
-
-        let idx = 0;
-        const CHAR_DELAY = 18; // ms — slow & steady
-        typewriterRef.current = setInterval(() => {
-            idx++;
-            setTypedText(fullText.slice(0, idx));
-            if (idx >= fullText.length) {
-                clearInterval(typewriterRef.current);
-                typewriterRef.current = null;
-            }
-        }, CHAR_DELAY);
-
-        return () => { if (typewriterRef.current) clearInterval(typewriterRef.current); };
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [msg.is_streaming]);
-
-    // Sync if message changes after typing finished (edits / page reload)
-    useEffect(() => {
-        if (!isBotMsg) return;
-        if (!msg.is_streaming && typedText !== null && typewriterRef.current === null && typedText !== msg.message) {
-            setTypedText(msg.message || "");
-        }
-    }, [msg.message, msg.is_streaming, isBotMsg, typedText]);
-    // ─────────────────────────────────────────────────────────────────────────
 
     useEffect(() => {
         const unsubscribe = speechService.subscribe((activeId) => {

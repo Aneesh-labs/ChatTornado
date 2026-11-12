@@ -378,7 +378,8 @@ async def websocket_endpoint(websocket: WebSocket):
                         finally:
                             grp_db.close()
 
-                    asyncio.create_task(handle_group_ai_reply(group_id, sender.username if sender else "Member", msg_text, branch_id))
+                    grp_task = asyncio.create_task(handle_group_ai_reply(group_id, sender.username if sender else "Member", msg_text, branch_id))
+                    grp_task.add_done_callback(lambda t: t.exception() and logger.error("Group AI reply task failed: %s", t.exception()))
                 continue
 
             # ---------- Ghost Chat ----------
@@ -1450,7 +1451,10 @@ async def websocket_endpoint(websocket: WebSocket):
                         stream_msg_id = None
                         accumulated_streamed_chunks = []
                         if not direct_dispatched:
+                            import time as _time_mod
                             import uuid as _uuid_mod
+                            from ai_service import normalize_gemini_model
+                            req_ai_model = normalize_gemini_model(req_ai_model)
                             stream_msg_id = f"ai_stream_{_uuid_mod.uuid4().hex[:12]}"
 
                             # Signal streaming start to client using ephemeral stream_msg_id (NEVER write empty row to Postgres!)
@@ -1467,17 +1471,34 @@ async def websocket_endpoint(websocket: WebSocket):
                                 "created_at": datetime.now(timezone.utc).isoformat()
                             })
 
-                            async def on_stream_chunk(chunk_text: str):
-                                if not chunk_text:
+                            pending_chunk_buf: list[str] = []
+                            last_flush_ts = _time_mod.monotonic()
+
+                            async def flush_stream_buffer(force: bool = False):
+                                nonlocal last_flush_ts
+                                if not pending_chunk_buf:
                                     return
-                                accumulated_streamed_chunks.append(chunk_text)
+                                merged = "".join(pending_chunk_buf)
+                                now_ts = _time_mod.monotonic()
+                                if not force and len(merged) < 24 and (now_ts - last_flush_ts) < 0.045:
+                                    return
+                                pending_chunk_buf.clear()
+                                last_flush_ts = now_ts
                                 await manager.send_personal_message(u_id, {
                                     "type": "ai_stream_chunk",
                                     "message_id": stream_msg_id,
                                     "stream_id": stream_msg_id,
                                     "sender_id": b_id,
-                                    "chunk": chunk_text
+                                    "branch_id": req_branch_id,
+                                    "chunk": merged
                                 })
+
+                            async def on_stream_chunk(chunk_text: str):
+                                if not chunk_text:
+                                    return
+                                accumulated_streamed_chunks.append(chunk_text)
+                                pending_chunk_buf.append(chunk_text)
+                                await flush_stream_buffer(force=False)
 
                             is_research = (
                                 str(req_ai_mode).upper() == "RESEARCH" or
@@ -1501,7 +1522,9 @@ async def websocket_endpoint(websocket: WebSocket):
                                 if accumulated_streamed_chunks:
                                     reply_text = "".join(accumulated_streamed_chunks)
                                 else:
-                                    reply_text = f"⚠️ Neural synthesis encountered a connection interruption. Please try resending."
+                                    reply_text = "⚠️ Neural synthesis encountered a connection interruption. Please try resending."
+                            finally:
+                                await flush_stream_buffer(force=True)
                             print(f"[BOT_HANDLER] Stream reply generated successfully ({len(reply_text or '')} chars)", flush=True)
 
 
@@ -1745,7 +1768,8 @@ async def websocket_endpoint(websocket: WebSocket):
                         reply_db.close()
 
                 vault_ctx = data.get("vault_context")
-                asyncio.create_task(handle_bot_reply(user_id, bot.id, message_text, ai_mode, ai_model, vault_ctx, branch_id))
+                bot_task = asyncio.create_task(handle_bot_reply(user_id, bot.id, message_text, ai_mode, ai_model, vault_ctx, branch_id))
+                bot_task.add_done_callback(lambda t: t.exception() and logger.error("Bot reply task failed: %s", t.exception()))
 
     except (WebSocketDisconnect, RuntimeError):
 
@@ -1789,13 +1813,27 @@ async def ai_live_websocket(websocket: WebSocket, user_id: int):
     )
 
     try:
-        async with client.aio.live.connect(model="gemini-3.1-flash-live-preview", config=config) as session:
+        async with client.aio.live.connect(model="gemini-3.8-live", config=config) as session:
             
             async def receive_from_frontend():
                 try:
                     while True:
-                        data = await websocket.receive_bytes()
-                        await session.send_realtime_input(audio=types.Blob(data=data, mime_type="audio/pcm;rate=16000"))
+                        msg = await websocket.receive()
+                        if msg.get("type") == "websocket.disconnect":
+                            break
+                        if msg.get("bytes") is not None:
+                            await session.send_realtime_input(
+                                audio=types.Blob(data=msg["bytes"], mime_type="audio/pcm;rate=16000")
+                            )
+                        elif msg.get("text"):
+                            raw_text = msg["text"]
+                            try:
+                                parsed = json.loads(raw_text)
+                                txt = parsed.get("text") or parsed.get("prompt") or ""
+                            except Exception:
+                                txt = raw_text
+                            if txt.strip():
+                                await session.send_realtime_input(text=txt.strip())
                 except Exception:
                     pass
 
@@ -1803,10 +1841,16 @@ async def ai_live_websocket(websocket: WebSocket, user_id: int):
                 try:
                     async for response in session.receive():
                         content = response.server_content
-                        if content and content.model_turn:
+                        if not content:
+                            continue
+                        if getattr(content, "interrupted", False):
+                            await websocket.send_json({"type": "interrupted"})
+                        if content.model_turn:
                             for part in content.model_turn.parts:
                                 if part.inline_data:
                                     await websocket.send_bytes(part.inline_data.data)
+                                elif getattr(part, "text", None):
+                                    await websocket.send_json({"type": "text", "text": part.text})
                 except Exception:
                     pass
 
