@@ -31,6 +31,7 @@ import { PhotonPongGame, PrismBreakoutGame, AsteroidsNovaGame } from "../../Comp
 import { CheckersV2Game, ConnectFourGame, ReversiEclipseGame, NavalSonarGame } from "../../Components/games/hiFiSuite/BoardStrategySuite";
 import { TetrisV2Game, MinesweeperTacticalGame, SudokuZenGame } from "../../Components/games/hiFiSuite/PuzzleLogicSuite";
 import { SynthRhythmGame, GravityMergeDropGame } from "../../Components/games/hiFiSuite/RhythmPhysicsSuite";
+import { MEGA_GAMES_CATALOG, MEGA_GAME_COMPONENTS } from "../../Components/games/megaSuite/megaRegistry";
 import {
     SNAKE_GRID,
     queueSnakeDirection,
@@ -2007,7 +2008,8 @@ export default function Arcade() {
             controls: "Tap / Drag Aim to Drop Orbs",
             color: "from-sky-400 to-indigo-700",
             desc: "Drop & collide equal numbered energy orbs to fuse chains all the way up to 2048!"
-        }
+        },
+        ...MEGA_GAMES_CATALOG
     ];
 
     const filteredGames = categoryFilter === "all"
@@ -2044,7 +2046,7 @@ export default function Arcade() {
                             Mini Games Zone <Sparkles className="h-6 w-6 text-amber-300" />
                         </h1>
                         <p className="mt-1.5 text-xs sm:text-sm text-white/60 max-w-xl">
-                            23 hi-fi 60fps, strategy, rhythm, physics &amp; 3D WebGL arcade games including 5 v2.0 Updated Classics!
+                            53 hi-fi 60fps, strategy, rhythm, physics &amp; 3D WebGL arcade games — including 35 v2.0 Updated Editions!
                         </p>
                     </div>
 
@@ -2127,6 +2129,12 @@ export default function Arcade() {
                     <SynthRhythmGame onBack={handleBack} isMuted={isMuted} onSaveScore={saveBackendGameScore} />
                 ) : selectedGame === "gravitydrop" ? (
                     <GravityMergeDropGame onBack={handleBack} isMuted={isMuted} onSaveScore={saveBackendGameScore} />
+                ) : MEGA_GAME_COMPONENTS[selectedGame] ? (
+                    React.createElement(MEGA_GAME_COMPONENTS[selectedGame], {
+                        onBack: handleBack,
+                        isMuted,
+                        onSaveScore: saveBackendGameScore,
+                    })
                 ) : (
                     <div className="space-y-5">
                         {/* Featured Multiplayer Flagship: NULL//NORTH */}
@@ -2162,7 +2170,7 @@ export default function Arcade() {
                         <div className="flex flex-wrap items-center gap-2">
                             {[
                                 { id: "all", label: `All Games (${GAMES.length})` },
-                                { id: "v2", label: "v2.0 Updated (5)" },
+                                { id: "v2", label: `v2.0 Updated (${GAMES.filter((g) => g.isV2).length})` },
                                 { id: "3d", label: "3D & Worlds" },
                                 { id: "strategy", label: "Strategy & Classics" },
                                 { id: "action", label: "Action & Reflex" },

@@ -38,6 +38,36 @@ const GAME_SCORE_KEYS = {
   sudokuzen: "sudokuzen_highscore",
   synthrhythm: "synthrhythm_highscore",
   gravitydrop: "gravitydrop_highscore",
+  orbitalslingshot: "orbitalslingshot_highscore",
+  hypertunnel: "hypertunnel_highscore",
+  laserbastion: "laserbastion_highscore",
+  polardefender: "polardefender_highscore",
+  astrominer: "astrominer_highscore",
+  ricochetarena: "ricochetarena_highscore",
+  railswitcher: "railswitcher_highscore",
+  wavesurfer: "wavesurfer_highscore",
+  mirrordash: "mirrordash_highscore",
+  chronosniper: "chronosniper_highscore",
+  circuitflow: "circuitflow_highscore",
+  nonogram: "nonogram_highscore",
+  lightsprism: "lightsprism_highscore",
+  knighttour: "knighttour_highscore",
+  slidingcipher: "slidingcipher_highscore",
+  target24: "target24_highscore",
+  simonaurora: "simonaurora_highscore",
+  binarylock: "binarylock_highscore",
+  primesieve: "primesieve_highscore",
+  anagramforge: "anagramforge_highscore",
+  mancalanexus: "mancalanexus_highscore",
+  nimcyber: "nimcyber_highscore",
+  hextactics: "hextactics_highscore",
+  blackjack21: "blackjack21_highscore",
+  gomoku: "gomoku_highscore",
+  pinballvortex: "pinballvortex_highscore",
+  towerstack: "towerstack_highscore",
+  golfsynth: "golfsynth_highscore",
+  helixbounce: "helixbounce_highscore",
+  swarmcommander: "swarmcommander_highscore",
 };
 
 export function collectArcadeHighScores() {
@@ -121,7 +151,7 @@ export function inferLocalToolActions(gameId, prompt = "") {
       actions.push({ name: "toggle_scanner", arguments: { active: true } });
     }
   } else {
-    const mapGames = ["crownchess", "afterspace", "subwaysurfers", "nullnorth", "vortexbastion", "neonblade", "snake", "flappy", "2048", "memory", "zombie", "neondodge", "photonpong", "cybertetris", "crowncheckers", "prismbreakout", "asteroidsnova", "connect4", "reversi", "navalsonar", "cybermines", "sudokuzen", "synthrhythm", "gravitydrop"];
+    const mapGames = Object.keys(GAME_SCORE_KEYS);
     for (const gid of mapGames) {
       if (low.includes(`launch ${gid}`) || low.includes(`open ${gid}`) || low.includes(`play ${gid}`)) {
         actions.push({ name: "launch_arcade_game", arguments: { game_id: gid } });
