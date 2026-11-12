@@ -18,6 +18,8 @@ import {
     Search,
     WifiOff,
     Palette,
+    Maximize2,
+    Minimize2,
 } from "lucide-react";
 import { clearAdminSession } from "../../utils/adminSession";
 import PortfolioOnboardingModal from "../../Components/PortfolioOnboardingModal";
@@ -62,7 +64,24 @@ export default function DashboardLayout() {
     const [isMobileChatActive, setIsMobileChatActive] = useState(false);
     const [showAndroidModal, setShowAndroidModal] = useState(false);
     const [cmdOpen, setCmdOpen] = useState(false);
+    const [appFullscreen, setAppFullscreen] = useState(false);
     const [isOnline, setIsOnline] = useState(() => (typeof navigator !== "undefined" ? navigator.onLine : true));
+
+    const toggleAppFullscreen = async () => {
+        try {
+            if (document.fullscreenElement) {
+                await document.exitFullscreen();
+            } else if (document.documentElement?.requestFullscreen) {
+                await document.documentElement.requestFullscreen();
+            }
+        } catch (_) {}
+    };
+
+    useEffect(() => {
+        const onFs = () => setAppFullscreen(Boolean(document.fullscreenElement));
+        document.addEventListener("fullscreenchange", onFs);
+        return () => document.removeEventListener("fullscreenchange", onFs);
+    }, []);
     const [accentId, setAccentId] = useState(() => {
         try { return localStorage.getItem("chattornado_accent") || "sky"; } catch (_) { return "sky"; }
     });
@@ -235,6 +254,15 @@ export default function DashboardLayout() {
                     >
                         <Palette className="h-4 w-4" />
                     </button>
+                    <button
+                        type="button"
+                        onClick={toggleAppFullscreen}
+                        title={appFullscreen ? "Exit Fullscreen" : "Fullscreen App"}
+                        aria-label={appFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
+                        className="p-2 rounded-xl border border-white/12 bg-white/[0.04] hover:bg-white/[0.08] text-white/80 hover:text-white transition cursor-pointer"
+                    >
+                        {appFullscreen ? <Minimize2 className="h-4 w-4 text-cyan-300" /> : <Maximize2 className="h-4 w-4" />}
+                    </button>
                 </div>
 
                 {/* Navigation Items */}
@@ -343,6 +371,15 @@ export default function DashboardLayout() {
                             </div>
                         </div>
                         <div className="flex items-center gap-1.5">
+                            <button
+                                type="button"
+                                onClick={toggleAppFullscreen}
+                                className="grid h-9 w-9 place-items-center rounded-xl border border-white/15 bg-white/[0.06] text-white/80 active:scale-95 transition-all"
+                                aria-label={appFullscreen ? "Exit fullscreen" : "Fullscreen app"}
+                                title={appFullscreen ? "Exit Fullscreen" : "Fullscreen App"}
+                            >
+                                {appFullscreen ? <Minimize2 className="h-4 w-4 text-cyan-300" /> : <Maximize2 className="h-4 w-4" />}
+                            </button>
                             <button
                                 type="button"
                                 onClick={() => setCmdOpen(true)}

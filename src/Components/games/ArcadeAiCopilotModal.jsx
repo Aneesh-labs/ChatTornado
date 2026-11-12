@@ -23,6 +23,7 @@ import {
   saveBackendPersonaPreference,
   speakCompanionLine,
 } from "../../Services/arcadeAiService";
+import { BOT_TIERS, getActiveBotTierId, getBotTier, setActiveBotTierId } from "./botPersonas";
 
 const PLAYSTYLES = [
   "Adaptive Strategist",
@@ -34,6 +35,7 @@ const PLAYSTYLES = [
 
 const ArcadeAiCopilotModal = ({ isOpen, activeGameId = "auto", onSelectGame, onClose }) => {
   const [profile, setProfile] = useState(loadArcadeAiProfile);
+  const [botTierId, setBotTierId] = useState(getActiveBotTierId);
   const [highScores] = useState(collectArcadeHighScores);
   const [tab, setTab] = useState("copilot"); // copilot | mission | live | emblem
   const [promptInput, setPromptInput] = useState("");
@@ -74,13 +76,14 @@ const ArcadeAiCopilotModal = ({ isOpen, activeGameId = "auto", onSelectGame, onC
     setLoadingChat(true);
     setMessages((m) => [...m, { role: "user", text: q }]);
 
+    const activeBot = getBotTier(botTierId);
     const targetGame = activeGameId && activeGameId !== "auto" ? activeGameId : "arcade";
     const res = await askPersonalizedCompanion({
       gameId: targetGame,
-      prompt: q,
+      prompt: `[${activeBot.promptPrefix}] ${q}`,
       playerContext: {
         callsign: profile.callsign,
-        playstyle: profile.playstyle,
+        playstyle: `${profile.playstyle} • Bot: ${activeBot.name} (${activeBot.label})`,
         score: highScores[targetGame] || Object.values(highScores).reduce((a, b) => Math.max(a, b), 0),
         prizes: Object.keys(highScores),
       },
@@ -234,6 +237,28 @@ const ArcadeAiCopilotModal = ({ isOpen, activeGameId = "auto", onSelectGame, onC
             >
               <Icon className="w-3.5 h-3.5" />
               {label}
+            </button>
+          ))}
+        </div>
+
+        {/* 4-Bot Intelligence Selector */}
+        <div className="px-5 py-2.5 border-b border-white/10 bg-white/[0.02] flex flex-wrap items-center gap-1.5">
+          <span className="text-xs font-bold text-white/55 mr-1">Bot IQ:</span>
+          {BOT_TIERS.map((b) => (
+            <button
+              key={b.id}
+              type="button"
+              onClick={() => setBotTierId(setActiveBotTierId(b.id))}
+              title={b.desc}
+              className={`px-2.5 py-1 rounded-lg border text-xs font-extrabold flex items-center gap-1 cursor-pointer transition ${
+                botTierId === b.id
+                  ? b.tone
+                  : "bg-white/[0.04] border-white/10 text-white/60 hover:text-white"
+              }`}
+            >
+              <span>{b.emoji}</span>
+              <span>{b.name}</span>
+              <span className="opacity-70">({b.iq})</span>
             </button>
           ))}
         </div>

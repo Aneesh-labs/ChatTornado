@@ -16,6 +16,7 @@ import {
   VolumeX,
 } from "lucide-react";
 import { getMasteryMedal } from "../arcadeProgression";
+import { BOT_TIERS, getActiveBotTierId, getBotTier, setActiveBotTierId } from "../botPersonas";
 
 const dispatchSyntheticKey = (type, codes) => {
   codes.forEach((code) => {
@@ -62,6 +63,7 @@ const HiFiGameShell = ({
       ? window.__arcadeLevelInfo
       : null
   );
+  const [botTierId, setBotTierId] = useState(getActiveBotTierId);
 
   const toggleFullscreen = useCallback(async () => {
     const el = shellRef.current;
@@ -91,13 +93,18 @@ const HiFiGameShell = ({
     const onXpSync = (e) => {
       if (e?.detail) setRankInfo(e.detail);
     };
+    const onBotSync = (e) => {
+      if (e?.detail?.tier) setBotTierId(e.detail.tier);
+    };
     document.addEventListener("fullscreenchange", onFsChange);
     window.addEventListener("arcade:mute-changed", onMuteSync);
     window.addEventListener("arcade:xp-updated", onXpSync);
+    window.addEventListener("arcade:bot-tier-changed", onBotSync);
     return () => {
       document.removeEventListener("fullscreenchange", onFsChange);
       window.removeEventListener("arcade:mute-changed", onMuteSync);
       window.removeEventListener("arcade:xp-updated", onXpSync);
+      window.removeEventListener("arcade:bot-tier-changed", onBotSync);
     };
   }, []);
 
@@ -237,6 +244,19 @@ const HiFiGameShell = ({
               )}
             </span>
           )}
+          <button
+            type="button"
+            onClick={() => {
+              const idx = BOT_TIERS.findIndex((b) => b.id === botTierId);
+              const next = BOT_TIERS[(idx + 1) % BOT_TIERS.length];
+              setBotTierId(setActiveBotTierId(next.id));
+            }}
+            title={`Bot Intelligence: ${getBotTier(botTierId).name} (${getBotTier(botTierId).label}) — Click to cycle`}
+            className={`px-2.5 py-1.5 min-h-[38px] rounded-xl border text-xs font-extrabold flex items-center gap-1 cursor-pointer transition ${getBotTier(botTierId).tone}`}
+          >
+            <span>{getBotTier(botTierId).emoji}</span>
+            <span className="hidden sm:inline">{getBotTier(botTierId).name}</span>
+          </button>
           <button
             type="button"
             onClick={() => setShowTouchPad((v) => !v)}

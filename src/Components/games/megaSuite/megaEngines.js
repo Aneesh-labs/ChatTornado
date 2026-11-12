@@ -65,10 +65,14 @@ export function sowMancalaPit(state, idx) {
   };
 }
 
-export function chooseMancalaAiMove(state) {
+export function chooseMancalaAiMove(state, tier = "apex") {
   const valid = [];
   for (let i = 7; i <= 12; i++) if (state.pits[i] > 0) valid.push(i);
   if (valid.length === 0) return -1;
+
+  if (tier === "rookie") {
+    return valid[Math.floor(Math.random() * valid.length)];
+  }
 
   let best = valid[0];
   let bestScore = -Infinity;
@@ -77,13 +81,40 @@ export function chooseMancalaAiMove(state) {
     let sc = (next.pits[13] - state.pits[13]) * 12;
     if (next.extraTurn) sc += 18;
     if (next.lastCaptured) sc += 14;
+    if (tier === "tactician") sc += (Math.random() - 0.5) * 14;
+    if (tier === "apex" && next.winner === null) {
+      // 2-ply lookahead: penalize opponent's best reply
+      const oppValid = [];
+      for (let p = 0; p <= 5; p++) if (next.pits[p] > 0) oppValid.push(p);
+      let worstReply = 0;
+      for (const oppIdx of oppValid) {
+        const reply = sowMancalaPit({ ...next, turn: 0 }, oppIdx);
+        if (reply) {
+          const oppGain = (reply.pits[6] - next.pits[6]) * 10 + (reply.extraTurn ? 12 : 0);
+          if (oppGain > worstReply) worstReply = oppGain;
+        }
+      }
+      sc -= worstReply * 0.65;
+    }
     if (sc > bestScore) { bestScore = sc; best = idx; }
   }
   return best;
 }
 
-/* 2. NIM PILE DUEL v2.0 (Optimal XOR Nim-Sum AI) */
-export function chooseNimAiMove(piles) {
+/* 2. NIM PILE DUEL v2.0 (4-Tier AI up to Optimal XOR Nim-Sum) */
+export function chooseNimAiMove(piles, tier = "apex") {
+  const nonEmpty = piles.map((v, i) => ({ v, i })).filter((x) => x.v > 0);
+  if (nonEmpty.length === 0) return null;
+
+  if (tier === "rookie") {
+    const pick = nonEmpty[Math.floor(Math.random() * nonEmpty.length)];
+    return { pile: pick.i, remove: 1 };
+  }
+  if (tier === "tactician" && Math.random() < 0.4) {
+    const pick = nonEmpty[0];
+    return { pile: pick.i, remove: Math.max(1, Math.min(pick.v, Math.ceil(pick.v / 2))) };
+  }
+
   const xorSum = piles.reduce((a, b) => a ^ b, 0);
   if (xorSum !== 0) {
     for (let i = 0; i < piles.length; i++) {
@@ -93,10 +124,7 @@ export function chooseNimAiMove(piles) {
       }
     }
   }
-  for (let i = 0; i < piles.length; i++) {
-    if (piles[i] > 0) return { pile: i, remove: 1 };
-  }
-  return null;
+  return { pile: nonEmpty[0].i, remove: 1 };
 }
 
 /* 3. FIVE-IN-A-ROW GOMOKU v2.0 (11x11 Win Checker + Threat AI) */
@@ -121,10 +149,18 @@ export function checkGomokuWin(grid, size = 11) {
   return null;
 }
 
-export function chooseGomokuAiMove(grid, aiId = 2) {
+export function chooseGomokuAiMove(grid, aiId = 2, tier = "apex") {
   const size = grid.length;
   const oppId = aiId === 1 ? 2 : 1;
   const dirs = [[0, 1], [1, 0], [1, 1], [1, -1]];
+
+  if (tier === "rookie") {
+    const empty = [];
+    for (let r = 0; r < size; r++) {
+      for (let c = 0; c < size; c++) if (grid[r][c] === 0) empty.push([r, c]);
+    }
+    return empty.length ? empty[Math.floor(Math.random() * empty.length)] : [5, 5];
+  }
 
   const scoreCell = (r, c, player) => {
     let total = 0;

@@ -10,6 +10,8 @@ import {
   updatePlayStreak,
   evaluateAchievements,
 } from "../src/Components/games/arcadeProgression.js";
+import { BOT_TIERS, getBotTier } from "../src/Components/games/botPersonas.js";
+import { chooseNimAiMove } from "../src/Components/games/megaSuite/megaEngines.js";
 
 test("XP & Level curve scales cleanly and assigns Arcade Ranks", () => {
   const lv1 = computeLevelFromXp(0);
@@ -77,4 +79,20 @@ test("Achievements evaluate unlocked badges from player stats", () => {
   assert.ok(unlockedIds.includes("streak_3"));
   assert.ok(unlockedIds.includes("level_5"));
   assert.equal(unlockedIds.includes("prism_god"), false);
+});
+
+test("4 Bot Intelligence Tiers scale IQ and Nim AI behavior", () => {
+  assert.equal(BOT_TIERS.length, 4);
+  assert.ok(getBotTier("rookie").iq < getBotTier("tactician").iq);
+  assert.ok(getBotTier("tactician").iq < getBotTier("mastermind").iq);
+  assert.ok(getBotTier("mastermind").iq < getBotTier("apex").iq);
+
+  const piles = [3, 4, 5];
+  const apexMove = chooseNimAiMove(piles, "apex");
+  const after = [...piles];
+  after[apexMove.pile] -= apexMove.remove;
+  assert.equal(after.reduce((a, b) => a ^ b, 0), 0);
+
+  const rookieMove = chooseNimAiMove(piles, "rookie");
+  assert.equal(rookieMove.remove, 1);
 });

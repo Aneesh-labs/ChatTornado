@@ -3,6 +3,7 @@ import PropTypes from "prop-types";
 import { soundEngine } from "../../../utils/soundEffects";
 import HiFiGameShell from "../hiFiSuite/HiFiGameShell";
 import { createMancalaState, sowMancalaPit, chooseMancalaAiMove, chooseNimAiMove, checkGomokuWin, chooseGomokuAiMove } from "./megaEngines";
+import { getActiveBotTierId } from "../botPersonas";
 
 /* ═══════════════════════════════════════════════════════════════════════════
    21. MANCALA NEXUS v2.0 (Ancient Gem Sowing + Free Extra Turn & Captures)
@@ -31,7 +32,7 @@ export const MancalaNexusGame = ({ onBack, isMuted, onSaveScore }) => {
   useEffect(() => {
     if (game.turn !== 1 || game.winner !== null) return;
     const t = setTimeout(() => {
-      const mv = chooseMancalaAiMove(game);
+      const mv = chooseMancalaAiMove(game, getActiveBotTierId());
       if (mv >= 0) playPit(mv);
     }, 420);
     return () => clearTimeout(t);
@@ -111,7 +112,7 @@ export const NimCyberGame = ({ onBack, isMuted, onSaveScore }) => {
   useEffect(() => {
     if (turn !== 1 || winner !== null) return;
     const t = setTimeout(() => {
-      const mv = chooseNimAiMove(piles);
+      const mv = chooseNimAiMove(piles, getActiveBotTierId());
       if (mv) takeTokens(mv.pile, mv.remove);
     }, 350);
     return () => clearTimeout(t);
@@ -330,7 +331,7 @@ export const GomokuFiveGame = ({ onBack, isMuted, onSaveScore }) => {
       const sc = wins + 200; setWins(sc); localStorage.setItem("gomoku_highscore", String(sc)); onSaveScore?.("gomoku", sc);
       return;
     }
-    const [ar, ac] = chooseGomokuAiMove(g, 2);
+    const [ar, ac] = chooseGomokuAiMove(g, 2, getActiveBotTierId());
     g[ar][ac] = 2;
     const w2 = checkGomokuWin(g, N);
     if (w2) { setGrid(g); setWinner(2); playFx("boom"); return; }

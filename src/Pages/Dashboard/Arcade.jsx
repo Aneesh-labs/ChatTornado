@@ -26,6 +26,8 @@ import {
     Zap,
     CheckCircle2,
     Award,
+    Maximize2,
+    Minimize2,
 } from "lucide-react";
 import {
     computeLevelFromXp,
@@ -1769,6 +1771,32 @@ export default function Arcade() {
     const [isMuted, setIsMuted] = useState(false);
     const [aiHubOpen, setAiHubOpen] = useState(false);
     const [achievementsOpen, setAchievementsOpen] = useState(false);
+    const [stageFullscreen, setStageFullscreen] = useState(false);
+    const gameStageRef = useRef(null);
+
+    const toggleStageFullscreen = useCallback(async () => {
+        const el = gameStageRef.current;
+        if (!el) return;
+        try {
+            if (document.fullscreenElement) {
+                await document.exitFullscreen();
+                setStageFullscreen(false);
+            } else if (el.requestFullscreen) {
+                await el.requestFullscreen();
+                setStageFullscreen(true);
+            } else {
+                setStageFullscreen((v) => !v);
+            }
+        } catch (_) {
+            setStageFullscreen((v) => !v);
+        }
+    }, []);
+
+    useEffect(() => {
+        const onFs = () => setStageFullscreen(Boolean(document.fullscreenElement));
+        document.addEventListener("fullscreenchange", onFs);
+        return () => document.removeEventListener("fullscreenchange", onFs);
+    }, []);
     const [categoryFilter, setCategoryFilter] = useState("all");
     const [searchQuery, setSearchQuery] = useState("");
     const [favorites, setFavorites] = useState(() => {
@@ -2240,7 +2268,14 @@ export default function Arcade() {
                     : "p-3 sm:p-6 md:p-8 pb-28 lg:pb-8"
             }`}
         >
-            <section className="mx-auto flex w-full max-w-5xl flex-col gap-4 sm:gap-6 [&_canvas]:max-w-full [&_canvas]:h-auto">
+            <section
+                ref={gameStageRef}
+                className={`mx-auto flex w-full flex-col gap-4 sm:gap-6 [&_canvas]:max-w-full [&_canvas]:h-auto ${
+                    stageFullscreen
+                        ? "fixed inset-0 z-[95] bg-[#050814] p-3 sm:p-6 overflow-y-auto max-w-none"
+                        : "max-w-5xl"
+                }`}
+            >
                 {!selectedGame && (
                 <header className="rounded-3xl border border-white/10 bg-gradient-to-r from-violet-950/40 via-black/50 to-indigo-950/40 p-4 sm:p-6 md:p-8 backdrop-blur-2xl shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-4">
                     <div>
@@ -2634,16 +2669,27 @@ export default function Arcade() {
                 )}
             </section>
 
-            {/* Discreet Universal In-Game Gemini AI Co-Pilot Button for non-fullscreen games */}
+            {/* Discreet Universal In-Game Controls (Fullscreen + Gemini AI Co-Pilot) */}
             {selectedGame && !["subwaysurfers", "afterspace"].includes(selectedGame) && (
-                <button
-                    type="button"
-                    onClick={() => setAiHubOpen(true)}
-                    className="fixed bottom-4 right-4 z-[60] px-3.5 py-2.5 rounded-2xl bg-violet-600/90 hover:bg-violet-500 border border-violet-300/40 text-white text-xs font-black flex items-center gap-2 shadow-xl backdrop-blur-md cursor-pointer"
-                >
-                    <Bot className="w-4 h-4 text-amber-300" />
-                    <span>AI Co-Pilot</span>
-                </button>
+                <div className="fixed bottom-4 right-4 z-[96] flex items-center gap-2">
+                    <button
+                        type="button"
+                        onClick={toggleStageFullscreen}
+                        aria-label={stageFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
+                        title={stageFullscreen ? "Exit Fullscreen" : "Fullscreen Game"}
+                        className="p-2.5 rounded-2xl bg-white/10 hover:bg-white/20 border border-white/20 text-white shadow-xl backdrop-blur-md cursor-pointer"
+                    >
+                        {stageFullscreen ? <Minimize2 className="w-4 h-4 text-cyan-300" /> : <Maximize2 className="w-4 h-4" />}
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => setAiHubOpen(true)}
+                        className="px-3.5 py-2.5 rounded-2xl bg-violet-600/90 hover:bg-violet-500 border border-violet-300/40 text-white text-xs font-black flex items-center gap-2 shadow-xl backdrop-blur-md cursor-pointer"
+                    >
+                        <Bot className="w-4 h-4 text-amber-300" />
+                        <span>AI Co-Pilot</span>
+                    </button>
+                </div>
             )}
 
             <ArcadeAiCopilotModal
