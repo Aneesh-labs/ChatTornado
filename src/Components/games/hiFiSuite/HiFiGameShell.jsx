@@ -2,16 +2,19 @@ import React, { useState, useEffect, useRef, useCallback } from "react";
 import PropTypes from "prop-types";
 import {
   ArrowLeft,
+  Flame,
   Maximize2,
   Minimize2,
   Pause,
   Play,
   RotateCcw,
+  Shuffle,
   Sparkles,
   Trophy,
   Volume2,
   VolumeX,
 } from "lucide-react";
+import { getMasteryMedal } from "../arcadeProgression";
 
 const HiFiGameShell = ({
   title,
@@ -28,9 +31,16 @@ const HiFiGameShell = ({
   children,
 }) => {
   const shellRef = useRef(null);
+  const prevScoreRef = useRef(Number(score) || 0);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [paceStreak, setPaceStreak] = useState(0);
   const [localMuted, setLocalMuted] = useState(() =>
     typeof window !== "undefined" ? Boolean(window.__arcadeMuted) : false
+  );
+  const [rankInfo, setRankInfo] = useState(() =>
+    typeof window !== "undefined" && window.__arcadeLevelInfo
+      ? window.__arcadeLevelInfo
+      : null
   );
 
   const toggleFullscreen = useCallback(async () => {
@@ -58,13 +68,38 @@ const HiFiGameShell = ({
         setLocalMuted(e.detail.isMuted);
       }
     };
+    const onXpSync = (e) => {
+      if (e?.detail) setRankInfo(e.detail);
+    };
     document.addEventListener("fullscreenchange", onFsChange);
     window.addEventListener("arcade:mute-changed", onMuteSync);
+    window.addEventListener("arcade:xp-updated", onXpSync);
     return () => {
       document.removeEventListener("fullscreenchange", onFsChange);
       window.removeEventListener("arcade:mute-changed", onMuteSync);
+      window.removeEventListener("arcade:xp-updated", onXpSync);
     };
   }, []);
+
+  useEffect(() => {
+    const curr = Number(score) || 0;
+    const prev = prevScoreRef.current;
+    if (curr > prev) {
+      const delta = curr - prev;
+      prevScoreRef.current = curr;
+      setPaceStreak((p) => Math.min(99, p + 1));
+      window.dispatchEvent(new CustomEvent("arcade:score-delta", { detail: { delta } }));
+    } else if (curr < prev) {
+      prevScoreRef.current = curr;
+      setPaceStreak(0);
+    }
+  }, [score]);
+
+  useEffect(() => {
+    if (paceStreak <= 0) return undefined;
+    const t = setTimeout(() => setPaceStreak(0), 4500);
+    return () => clearTimeout(t);
+  }, [paceStreak]);
 
   useEffect(() => {
     const onKeyDown = (e) => {
@@ -86,6 +121,8 @@ const HiFiGameShell = ({
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [onReset, onTogglePause, toggleFullscreen]);
 
+  const bestSeen = Math.max(Number(highScore) || 0, Number(score) || 0);
+  const medal = getMasteryMedal(bestSeen);
   const isNewBest =
     score !== undefined &&
     highScore !== undefined &&
@@ -94,6 +131,10 @@ const HiFiGameShell = ({
 
   const handleToggleMute = () => {
     window.dispatchEvent(new CustomEvent("arcade:toggle-mute"));
+  };
+
+  const handleNextRandom = () => {
+    window.dispatchEvent(new CustomEvent("arcade:next-random"));
   };
 
   return (
@@ -122,10 +163,26 @@ const HiFiGameShell = ({
               {badge}
             </span>
           )}
+          {medal && (
+            <span className={`px-2 py-0.5 rounded-full border text-xs font-extrabold ${medal.tone}`}>
+              {medal.emoji} {medal.label}
+            </span>
+          )}
+          {rankInfo && (
+            <span className="hidden md:inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-violet-500/15 border border-violet-400/30 text-xs font-bold text-violet-200">
+              Lv.{rankInfo.level} {rankInfo.rankTitle}
+            </span>
+          )}
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
           {extraHeader}
+          {paceStreak >= 2 && (
+            <span className="px-2.5 py-1 rounded-xl bg-gradient-to-r from-orange-500/25 to-rose-500/25 border border-orange-400/45 text-xs font-black text-orange-200 flex items-center gap-1 animate-pulse">
+              <Flame className="h-3.5 w-3.5 text-orange-400" />
+              {paceStreak >= 5 ? "ON FIRE!" : `${paceStreak}x PACE`}
+            </span>
+          )}
           {score !== undefined && (
             <span className="px-2.5 py-1 rounded-xl bg-white/5 border border-white/10 text-xs font-bold text-white/80">
               Score: <strong className="text-cyan-300 tabular-nums">{Number(score).toLocaleString()}</strong>
@@ -140,14 +197,23 @@ const HiFiGameShell = ({
               }`}
             >
               <Trophy className="h-3.5 w-3.5" />
-              <span className="tabular-nums">{Number(Math.max(highScore, score || 0)).toLocaleString()}</span>
+              <span className="tabular-nums">{bestSeen.toLocaleString()}</span>
               {isNewBest && (
-                <span className="ml-1 inline-flex items-center gap-0.5 text-[11px] font-black text-amber-200">
+                <span className="ml-1 inline-flex items-center gap-0.5 text-xs font-black text-amber-200">
                   <Sparkles className="h-3 w-3" /> NEW
                 </span>
               )}
             </span>
           )}
+          <button
+            type="button"
+            onClick={handleNextRandom}
+            aria-label="Play next random game"
+            title="Next Random Game"
+            className="p-1.5 rounded-xl bg-violet-500/20 hover:bg-violet-500/35 border border-violet-400/30 text-violet-200 cursor-pointer transition"
+          >
+            <Shuffle className="h-4 w-4" />
+          </button>
           <button
             type="button"
             onClick={handleToggleMute}

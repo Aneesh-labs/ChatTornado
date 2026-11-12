@@ -22,7 +22,18 @@ import {
     Shuffle,
     Clock,
     X,
+    Flame,
+    Zap,
+    CheckCircle2,
 } from "lucide-react";
+import {
+    computeLevelFromXp,
+    getMasteryMedal,
+    getTodayKey,
+    createDailyProgressState,
+    getDailyQuests,
+    updatePlayStreak,
+} from "../../Components/games/arcadeProgression";
 import { soundEngine } from "../../utils/soundEffects";
 import API from "../../Services/API";
 import ArcadeAiCopilotModal from "../../Components/games/ArcadeAiCopilotModal";
@@ -1766,6 +1777,40 @@ export default function Arcade() {
             return [];
         }
     });
+    const [arcadeXp, setArcadeXp] = useState(() => {
+        try { return Number(localStorage.getItem("arcade_xp") || 0); } catch (_) { return 0; }
+    });
+    const [streakData, setStreakData] = useState(() => {
+        try {
+            return {
+                streak: Number(localStorage.getItem("arcade_streak") || 0),
+                lastDateKey: localStorage.getItem("arcade_last_date") || "",
+            };
+        } catch (_) {
+            return { streak: 0, lastDateKey: "" };
+        }
+    });
+    const [dailyState, setDailyState] = useState(() => {
+        const today = getTodayKey();
+        const allIds = ["crownchess", "subwaysurfers", "vortexbastion", "afterspace", "neonblade", "snake", "flappy", "2048", "memory", "zombie", "neondodge", "photonpong", "cybertetris", "crowncheckers", "prismbreakout", "asteroidsnova", "connect4", "reversi", "navalsonar", "cybermines", "sudokuzen", "synthrhythm", "gravitydrop", ...MEGA_GAMES_CATALOG.map((g) => g.id)];
+        try {
+            const saved = JSON.parse(localStorage.getItem("arcade_daily_v3") || "null");
+            if (saved && saved.dateKey === today) return saved;
+        } catch (_) {}
+        return createDailyProgressState(today, allIds);
+    });
+
+    const levelInfo = computeLevelFromXp(arcadeXp);
+
+    useEffect(() => {
+        window.__arcadeLevelInfo = levelInfo;
+        window.dispatchEvent(new CustomEvent("arcade:xp-updated", { detail: levelInfo }));
+        try { localStorage.setItem("arcade_xp", String(arcadeXp)); } catch (_) {}
+    }, [arcadeXp, levelInfo]);
+
+    useEffect(() => {
+        try { localStorage.setItem("arcade_daily_v3", JSON.stringify(dailyState)); } catch (_) {}
+    }, [dailyState]);
 
     useEffect(() => {
         window.__arcadeMuted = isMuted;
@@ -1778,6 +1823,43 @@ export default function Arcade() {
         return () => window.removeEventListener("arcade:toggle-mute", onToggleMute);
     }, []);
 
+    const awardXpAndProgress = useCallback((gameId, deltaPts = 0) => {
+        const today = getTodayKey();
+        const isSpotlight = gameId && dailyState.spotlightId === gameId;
+        const mult = isSpotlight ? 2 : 1;
+        const baseXp = deltaPts > 0 ? Math.max(2, Math.min(80, Math.round(deltaPts / 12))) : 15;
+        let bonusXp = 0;
+
+        setDailyState((prev) => {
+            const base = prev.dateKey === today ? prev : createDailyProgressState(today, [gameId || "snake"]);
+            const played = gameId && !base.gamesPlayedToday.includes(gameId)
+                ? [...base.gamesPlayedToday, gameId]
+                : base.gamesPlayedToday;
+            const pts = base.pointsToday + Math.max(0, deltaPts);
+            const nextDraft = { ...base, gamesPlayedToday: played, pointsToday: pts };
+            const quests = getDailyQuests(nextDraft, []);
+            const newlyClaimed = [...(base.claimedQuests || [])];
+            quests.forEach((q) => {
+                if (q.done && !newlyClaimed.includes(q.id)) {
+                    newlyClaimed.push(q.id);
+                    bonusXp += q.xpReward;
+                }
+            });
+            return { ...nextDraft, claimedQuests: newlyClaimed };
+        });
+
+        setArcadeXp((x) => x + baseXp * mult + bonusXp);
+    }, [dailyState.spotlightId]);
+
+    useEffect(() => {
+        const onScoreDelta = (e) => {
+            const d = Number(e?.detail?.delta || 0);
+            if (d > 0) awardXpAndProgress(selectedGame, d);
+        };
+        window.addEventListener("arcade:score-delta", onScoreDelta);
+        return () => window.removeEventListener("arcade:score-delta", onScoreDelta);
+    }, [awardXpAndProgress, selectedGame]);
+
     const launchGame = useCallback((gid) => {
         if (!isMuted) soundEngine.play("coin");
         setSelectedGame(gid);
@@ -1786,7 +1868,16 @@ export default function Arcade() {
             try { localStorage.setItem("arcade_recent", JSON.stringify(next)); } catch (_) {}
             return next;
         });
-    }, [isMuted]);
+        const nextStreak = updatePlayStreak(streakData.streak, streakData.lastDateKey, getTodayKey());
+        if (nextStreak.incremented || nextStreak.streak !== streakData.streak) {
+            setStreakData({ streak: nextStreak.streak, lastDateKey: nextStreak.lastDateKey });
+            try {
+                localStorage.setItem("arcade_streak", String(nextStreak.streak));
+                localStorage.setItem("arcade_last_date", nextStreak.lastDateKey);
+            } catch (_) {}
+        }
+        awardXpAndProgress(gid, 0);
+    }, [awardXpAndProgress, isMuted, streakData.lastDateKey, streakData.streak]);
 
     const toggleFavorite = useCallback((e, gid) => {
         e.stopPropagation();
@@ -2105,11 +2196,21 @@ export default function Arcade() {
         .map((id) => GAMES.find((g) => g.id === id))
         .filter(Boolean);
 
-    const launchRandomGame = () => {
-        const pool = filteredGames.length > 0 ? filteredGames : GAMES;
-        const pick = pool[Math.floor(Math.random() * pool.length)];
+    const launchRandomGame = useCallback(() => {
+        const pool = (filteredGames.length > 0 ? filteredGames : GAMES).filter((g) => g.id !== selectedGame);
+        const finalPool = pool.length > 0 ? pool : GAMES;
+        const pick = finalPool[Math.floor(Math.random() * finalPool.length)];
         if (pick) launchGame(pick.id);
-    };
+    }, [GAMES, filteredGames, launchGame, selectedGame]);
+
+    useEffect(() => {
+        const onNextRandom = () => launchRandomGame();
+        window.addEventListener("arcade:next-random", onNextRandom);
+        return () => window.removeEventListener("arcade:next-random", onNextRandom);
+    }, [launchRandomGame]);
+
+    const dailyQuests = getDailyQuests(dailyState, GAMES);
+    const spotlightGame = GAMES.find((g) => g.id === dailyState.spotlightId) || GAMES[0];
 
     return (
         <main
@@ -2134,15 +2235,30 @@ export default function Arcade() {
                             {GAMES.length} hi-fi 60fps, strategy, rhythm, physics &amp; 3D WebGL arcade games — now with Theater Mode, P/R/F shortcuts, Favorites &amp; live Search!
                         </p>
                         <div className="mt-2.5 flex flex-wrap items-center gap-2 text-xs font-bold">
-                            <span className="px-2.5 py-1 rounded-lg bg-white/5 border border-white/10 text-cyan-300">
-                                {GAMES.length} Games
+                            <span className={`px-2.5 py-1 rounded-lg bg-violet-500/15 border border-violet-400/30 ${levelInfo.rankColor}`}>
+                                Lv.{levelInfo.level} {levelInfo.rankTitle}
+                            </span>
+                            <span className="px-2.5 py-1 rounded-lg bg-orange-500/15 border border-orange-400/30 text-orange-300 flex items-center gap-1">
+                                <Flame className="h-3.5 w-3.5" /> {Math.max(1, streakData.streak)}d Streak
                             </span>
                             <span className="px-2.5 py-1 rounded-lg bg-white/5 border border-white/10 text-emerald-300">
-                                {arcadeStats.played} Played
+                                {arcadeStats.played}/{GAMES.length} Played
                             </span>
                             <span className="px-2.5 py-1 rounded-lg bg-white/5 border border-white/10 text-amber-300 flex items-center gap-1">
-                                <Trophy className="h-3.5 w-3.5" /> {arcadeStats.totalScore.toLocaleString()} Total Pts
+                                <Trophy className="h-3.5 w-3.5" /> {arcadeStats.totalScore.toLocaleString()} Pts
                             </span>
+                        </div>
+                        <div className="mt-2.5 max-w-md space-y-1">
+                            <div className="flex justify-between text-xs font-semibold text-white/60">
+                                <span>XP Progress</span>
+                                <span className="tabular-nums">{levelInfo.currentXp} / {levelInfo.neededXp} XP</span>
+                            </div>
+                            <div className="h-2 rounded-full bg-white/10 overflow-hidden">
+                                <div
+                                    className="h-full rounded-full bg-gradient-to-r from-cyan-400 via-violet-400 to-fuchsia-400 transition-all duration-300"
+                                    style={{ width: `${levelInfo.progressPct}%` }}
+                                />
+                            </div>
                         </div>
                     </div>
 
@@ -2271,6 +2387,56 @@ export default function Arcade() {
                             </div>
                         </motion.div>
 
+                        {/* Daily Quests & 2x XP Spotlight Strip */}
+                        <div className="rounded-3xl border border-amber-400/25 bg-gradient-to-r from-amber-950/25 via-black/40 to-violet-950/25 p-4 sm:p-5 space-y-3">
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                                <div className="flex items-center gap-2">
+                                    <Zap className="h-4 w-4 text-amber-300" />
+                                    <span className="text-sm font-black text-white">Daily Quests &amp; 2x XP Spotlight</span>
+                                </div>
+                                {spotlightGame && (
+                                    <button
+                                        type="button"
+                                        onClick={() => launchGame(spotlightGame.id)}
+                                        className="px-3 py-1.5 rounded-xl bg-amber-400/20 hover:bg-amber-400/30 border border-amber-300/40 text-xs font-black text-amber-200 flex items-center gap-1.5 transition cursor-pointer"
+                                    >
+                                        <span>{spotlightGame.emoji}</span>
+                                        <span>Play 2x Spotlight: {spotlightGame.title}</span>
+                                    </button>
+                                )}
+                            </div>
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                                {dailyQuests.map((quest) => {
+                                    const pct = Math.min(100, Math.round((quest.progress / quest.target) * 100));
+                                    return (
+                                        <div
+                                            key={quest.id}
+                                            className={`rounded-2xl border p-3 space-y-1.5 ${
+                                                quest.done
+                                                    ? "border-emerald-400/40 bg-emerald-500/10"
+                                                    : "border-white/10 bg-white/[0.03]"
+                                            }`}
+                                        >
+                                            <div className="flex items-center justify-between gap-2">
+                                                <span className="text-xs font-extrabold text-white flex items-center gap-1">
+                                                    {quest.done && <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400 shrink-0" />}
+                                                    {quest.title}
+                                                </span>
+                                                <span className="text-xs font-black text-amber-300 shrink-0">+{quest.xpReward} XP</span>
+                                            </div>
+                                            <p className="text-xs text-white/60">{quest.desc}</p>
+                                            <div className="h-1.5 rounded-full bg-white/10 overflow-hidden">
+                                                <div
+                                                    className={`h-full rounded-full transition-all ${quest.done ? "bg-emerald-400" : "bg-amber-400"}`}
+                                                    style={{ width: `${pct}%` }}
+                                                />
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+
                         {/* Recently Played Quick-Launch Strip */}
                         {recentGames.length > 0 && (
                             <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.03] px-3.5 py-2.5">
@@ -2357,20 +2523,34 @@ export default function Arcade() {
                         {filteredGames.map((game) => {
                             const bestScore = getBestForGame(game.id);
                             const isFav = favorites.includes(game.id);
+                            const medal = getMasteryMedal(bestScore);
+                            const isSpotlight = dailyState.spotlightId === game.id;
                             return (
                             <motion.div
                                 key={game.id}
                                 whileHover={{ scale: 1.03, y: -4 }}
                                 whileTap={{ scale: 0.97 }}
                                 onClick={() => launchGame(game.id)}
-                                className="group relative flex flex-col justify-between rounded-3xl border border-white/10 bg-gradient-to-b from-white/[0.06] to-white/[0.02] p-6 shadow-xl cursor-pointer hover:border-white/25 hover:bg-white/[0.09] transition-all overflow-hidden"
+                                className={`group relative flex flex-col justify-between rounded-3xl border bg-gradient-to-b from-white/[0.06] to-white/[0.02] p-6 shadow-xl cursor-pointer hover:border-white/25 hover:bg-white/[0.09] transition-all overflow-hidden ${
+                                    isSpotlight ? "border-amber-400/45" : "border-white/10"
+                                }`}
                             >
                                 <div className={`absolute top-0 right-0 w-32 h-32 bg-gradient-to-bl ${game.color} opacity-20 rounded-bl-full pointer-events-none group-hover:opacity-40 transition-opacity`} />
 
                                 <div>
                                     <div className="flex items-center justify-between mb-4">
                                         <div className="text-4xl">{game.emoji}</div>
-                                        <div className="flex items-center gap-1.5">
+                                        <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                                            {isSpotlight && (
+                                                <span className="text-xs font-black px-2 py-0.5 rounded-full bg-amber-400/20 text-amber-200 border border-amber-300/40">
+                                                    2x XP
+                                                </span>
+                                            )}
+                                            {medal && (
+                                                <span className={`text-xs font-bold px-2 py-0.5 rounded-full border ${medal.tone}`}>
+                                                    {medal.emoji}
+                                                </span>
+                                            )}
                                             <button
                                                 type="button"
                                                 onClick={(e) => toggleFavorite(e, game.id)}
