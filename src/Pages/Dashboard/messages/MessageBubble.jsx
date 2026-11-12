@@ -1020,7 +1020,7 @@ const MessageBubble = React.memo(({
                     rawMessage={actualMessage}
                     senderId={msg.sender_id}
                     isMe={isMe}
-                    myUserId={myUserId}
+                    myUserId={myId}
                     socket={socket}
                     onOpenLightbox={setLightboxImage}
                 />

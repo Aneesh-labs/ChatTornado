@@ -1019,13 +1019,17 @@ async def generate_ai_image(prompt: str) -> str:
             for imagen_model in ("imagen-3.0-generate-002", "imagen-3.0-generate-001", "imagen-4.0-generate-001"):
                 try:
                     logger.info("Attempting image generation with %s: %s", imagen_model, clean_prompt)
-                    result = client.models.generate_images(
-                        model=imagen_model,
-                        prompt=clean_prompt,
-                        config=types.GenerateImagesConfig(
-                            number_of_images=1,
-                            output_mime_type="image/png",
-                        )
+                    result = await asyncio.wait_for(
+                        asyncio.to_thread(
+                            client.models.generate_images,
+                            model=imagen_model,
+                            prompt=clean_prompt,
+                            config=types.GenerateImagesConfig(
+                                number_of_images=1,
+                                output_mime_type="image/png",
+                            )
+                        ),
+                        timeout=35.0
                     )
                     if result and result.generated_images:
                         image_bytes = result.generated_images[0].image.image_bytes
@@ -1391,9 +1395,12 @@ Format ONLY as clean bullet points starting with '• '. Keep it concise, observ
         client = genai.Client(api_key=api_key)
         for m_name in RECOMMENDED_GEMINI_MODELS:
             try:
-                response = client.models.generate_content(
-                    model=m_name,
-                    contents=profiler_prompt
+                response = await asyncio.wait_for(
+                    client.aio.models.generate_content(
+                        model=m_name,
+                        contents=profiler_prompt
+                    ),
+                    timeout=20.0
                 )
                 if response and response.text:
                     persona_summary = response.text.strip()
@@ -1825,9 +1832,12 @@ Given this research topic: "{clean_query}"
 Generate exactly 3 specific, diverse, highly targeted web search queries to gather comprehensive data, benchmarks, and latest findings across different dimensions.
 Output strictly a JSON array of 3 strings: ["query1", "query2", "query3"]. Output JSON only."""
 
-        decomp_res = client.models.generate_content(
-            model="gemini-3.5-flash",
-            contents=decomp_prompt
+        decomp_res = await asyncio.wait_for(
+            client.aio.models.generate_content(
+                model="gemini-3.8-flash",
+                contents=decomp_prompt
+            ),
+            timeout=20.0
         )
         if decomp_res and decomp_res.text:
             cleaned_json = decomp_res.text.strip()
@@ -1910,10 +1920,13 @@ Synthesize all relevant findings, empirical comparisons, mathematical models (if
     except Exception as e:
         logger.error("Deep research synthesis streaming error: %s", e)
         try:
-            fallback = client.models.generate_content(
-                model="gemini-3.5-flash",
-                contents=research_prompt,
-                config=types.GenerateContentConfig(system_instruction=PROMPT_RESEARCH)
+            fallback = await asyncio.wait_for(
+                client.aio.models.generate_content(
+                    model="gemini-3.8-flash",
+                    contents=research_prompt,
+                    config=types.GenerateContentConfig(system_instruction=PROMPT_RESEARCH)
+                ),
+                timeout=28.0
             )
             if fallback and fallback.text:
                 synthesis_accumulated = fallback.text.strip()

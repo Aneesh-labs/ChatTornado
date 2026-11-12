@@ -4,6 +4,7 @@ Supports flagship Gemini 3.8 Flash, 3.5 Flash, 3.1 Pro, streaming, vision, and R
 
 import os
 import re
+import asyncio
 import logging
 from typing import List, Dict, Any, Optional, Callable
 from .base import BaseAIProvider, ProviderCapabilities, AIRequest, AIResponse, TaskType
@@ -145,10 +146,13 @@ class GeminiProvider(BaseAIProvider):
                     temperature=request.temperature,
                     max_output_tokens=request.max_tokens,
                 )
-                response = client.models.generate_content(
-                    model=model_name,
-                    contents=contents,
-                    config=gen_config
+                response = await asyncio.wait_for(
+                    client.aio.models.generate_content(
+                        model=model_name,
+                        contents=contents,
+                        config=gen_config
+                    ),
+                    timeout=25.0
                 )
                 if response and response.text:
                     return AIResponse(
