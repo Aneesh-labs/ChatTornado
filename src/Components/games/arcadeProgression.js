@@ -134,3 +134,21 @@ export function updatePlayStreak(prevStreak = 0, lastDateKey = "", todayKey = ge
   }
   return { streak: 1, lastDateKey: todayKey, incremented: true };
 }
+
+export const ARCADE_ACHIEVEMENTS = [
+  { id: "first_blood", title: "First Spark", emoji: "⚡", desc: "Play at least 1 game", check: (c) => c.playedCount >= 1 },
+  { id: "explorer_5", title: "Arcade Tourist", emoji: "🧭", desc: "Set a score in 5 different games", check: (c) => c.playedCount >= 5 },
+  { id: "explorer_15", title: "Cabinet Collector", emoji: "🕹️", desc: "Set a score in 15 different games", check: (c) => c.playedCount >= 15 },
+  { id: "total_5k", title: "5K Club", emoji: "💎", desc: "Reach 5,000 Total Arcade Points", check: (c) => c.totalScore >= 5000 },
+  { id: "gold_ace", title: "Gold Medalist", emoji: "🥇", desc: "Earn 600+ in any single game", check: (c) => c.maxSingleScore >= 600 },
+  { id: "prism_god", title: "Prism Legend", emoji: "👑", desc: "Earn 1,500+ in any single game", check: (c) => c.maxSingleScore >= 1500 },
+  { id: "streak_3", title: "Dedicated Player", emoji: "🔥", desc: "Reach a 3-day play streak", check: (c) => c.streak >= 3 },
+  { id: "level_5", title: "Rising Star", emoji: "🌟", desc: "Reach Arcade Level 5+", check: (c) => c.level >= 5 },
+];
+
+export function evaluateAchievements(ctx) {
+  return ARCADE_ACHIEVEMENTS.map((a) => ({
+    ...a,
+    unlocked: Boolean(a.check(ctx)),
+  }));
+}

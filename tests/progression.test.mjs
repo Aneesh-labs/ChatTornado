@@ -8,6 +8,7 @@ import {
   createDailyProgressState,
   getDailyQuests,
   updatePlayStreak,
+  evaluateAchievements,
 } from "../src/Components/games/arcadeProgression.js";
 
 test("XP & Level curve scales cleanly and assigns Arcade Ranks", () => {
@@ -58,4 +59,22 @@ test("Play Streak increments on consecutive days and resets after gaps", () => {
 
   const missed = updatePlayStreak(day2.streak, day2.lastDateKey, "2026-11-14");
   assert.equal(missed.streak, 1);
+});
+
+test("Achievements evaluate unlocked badges from player stats", () => {
+  const res = evaluateAchievements({
+    playedCount: 6,
+    totalScore: 5400,
+    maxSingleScore: 700,
+    streak: 3,
+    level: 5,
+  });
+  const unlockedIds = res.filter((a) => a.unlocked).map((a) => a.id);
+  assert.ok(unlockedIds.includes("first_blood"));
+  assert.ok(unlockedIds.includes("explorer_5"));
+  assert.ok(unlockedIds.includes("total_5k"));
+  assert.ok(unlockedIds.includes("gold_ace"));
+  assert.ok(unlockedIds.includes("streak_3"));
+  assert.ok(unlockedIds.includes("level_5"));
+  assert.equal(unlockedIds.includes("prism_god"), false);
 });

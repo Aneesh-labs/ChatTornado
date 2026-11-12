@@ -25,6 +25,7 @@ import {
     Flame,
     Zap,
     CheckCircle2,
+    Award,
 } from "lucide-react";
 import {
     computeLevelFromXp,
@@ -33,6 +34,7 @@ import {
     createDailyProgressState,
     getDailyQuests,
     updatePlayStreak,
+    evaluateAchievements,
 } from "../../Components/games/arcadeProgression";
 import { soundEngine } from "../../utils/soundEffects";
 import API from "../../Services/API";
@@ -1759,6 +1761,7 @@ export default function Arcade() {
     );
     const [isMuted, setIsMuted] = useState(false);
     const [aiHubOpen, setAiHubOpen] = useState(false);
+    const [achievementsOpen, setAchievementsOpen] = useState(false);
     const [categoryFilter, setCategoryFilter] = useState("all");
     const [searchQuery, setSearchQuery] = useState("");
     const [favorites, setFavorites] = useState(() => {
@@ -2186,11 +2189,21 @@ export default function Arcade() {
             if (b > 0) {
                 acc.played += 1;
                 acc.totalScore += b;
+                if (b > acc.maxSingleScore) acc.maxSingleScore = b;
             }
             return acc;
         },
-        { played: 0, totalScore: 0 }
+        { played: 0, totalScore: 0, maxSingleScore: 0 }
     );
+
+    const achievements = evaluateAchievements({
+        playedCount: arcadeStats.played,
+        totalScore: arcadeStats.totalScore,
+        maxSingleScore: arcadeStats.maxSingleScore,
+        streak: Math.max(1, streakData.streak),
+        level: levelInfo.level,
+    });
+    const unlockedAchievementsCount = achievements.filter((a) => a.unlocked).length;
 
     const recentGames = recentIds
         .map((id) => GAMES.find((g) => g.id === id))
@@ -2216,13 +2229,13 @@ export default function Arcade() {
         <main
             className={`min-h-0 flex-1 overflow-y-auto overflow-x-hidden custom-scrollbar text-white select-none ${
                 selectedGame === "vortexbastion"
-                    ? "p-2 sm:p-4 pb-20 lg:pb-6"
-                    : "p-4 md:p-8 pb-24 lg:pb-8"
+                    ? "p-2 sm:p-4 pb-24 lg:pb-6"
+                    : "p-3 sm:p-6 md:p-8 pb-28 lg:pb-8"
             }`}
         >
-            <section className="mx-auto flex w-full max-w-5xl flex-col gap-4 sm:gap-6">
+            <section className="mx-auto flex w-full max-w-5xl flex-col gap-4 sm:gap-6 [&_canvas]:max-w-full [&_canvas]:h-auto">
                 {!selectedGame && (
-                <header className="rounded-3xl border border-white/10 bg-gradient-to-r from-violet-950/40 via-black/50 to-indigo-950/40 p-5 md:p-8 backdrop-blur-2xl shadow-xl flex items-center justify-between gap-4">
+                <header className="rounded-3xl border border-white/10 bg-gradient-to-r from-violet-950/40 via-black/50 to-indigo-950/40 p-4 sm:p-6 md:p-8 backdrop-blur-2xl shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-4">
                     <div>
                         <div className="mb-2 inline-flex items-center gap-2 rounded-xl border border-white/10 bg-black/30 px-3 py-1 text-xs font-bold uppercase tracking-wider text-violet-300">
                             <Gamepad2 className="h-4 w-4" />
@@ -2262,15 +2275,24 @@ export default function Arcade() {
                         </div>
                     </div>
 
-                    <div className="flex items-center gap-2 sm:gap-3 flex-wrap justify-end">
+                    <div className="flex items-center gap-2 sm:gap-3 flex-wrap justify-start md:justify-end">
+                        <button
+                            type="button"
+                            onClick={() => setAchievementsOpen(true)}
+                            title="Arcade Achievements"
+                            className="px-3 py-2.5 min-h-[44px] rounded-2xl bg-amber-500/15 hover:bg-amber-500/25 border border-amber-400/30 text-amber-200 text-xs sm:text-sm font-black flex items-center gap-1.5 shadow-lg transition cursor-pointer"
+                        >
+                            <Award className="h-4 w-4 text-amber-300" />
+                            <span>{unlockedAchievementsCount}/{achievements.length}</span>
+                        </button>
                         <button
                             type="button"
                             onClick={launchRandomGame}
                             title="Launch a random game"
-                            className="px-3 py-2.5 rounded-2xl bg-white/10 hover:bg-white/20 border border-white/15 text-white text-xs sm:text-sm font-black flex items-center gap-1.5 shadow-lg transition cursor-pointer"
+                            className="px-3 py-2.5 min-h-[44px] rounded-2xl bg-white/10 hover:bg-white/20 border border-white/15 text-white text-xs sm:text-sm font-black flex items-center gap-1.5 shadow-lg transition cursor-pointer"
                         >
                             <Shuffle className="h-4 w-4 text-cyan-300" />
-                            <span className="hidden sm:inline">Surprise Me</span>
+                            <span>Surprise Me</span>
                         </button>
                         <button
                             type="button"
@@ -2459,7 +2481,7 @@ export default function Arcade() {
 
                         {/* Search + Crisp Category Filter Bar */}
                         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                            <div className="flex flex-wrap items-center gap-2">
+                            <div className="flex flex-nowrap overflow-x-auto pb-1 sm:pb-0 sm:flex-wrap items-center gap-2">
                                 {[
                                     { id: "all", label: `All Games (${GAMES.length})` },
                                     { id: "v2", label: `v2.0 Updated (${GAMES.filter((g) => g.isV2).length})` },
@@ -2472,7 +2494,7 @@ export default function Arcade() {
                                         key={tab.id}
                                         type="button"
                                         onClick={() => setCategoryFilter(tab.id)}
-                                        className={`px-3.5 py-2 rounded-xl text-xs font-extrabold border transition-colors cursor-pointer ${
+                                        className={`shrink-0 min-h-[40px] px-3.5 py-2 rounded-xl text-xs font-extrabold border transition-colors cursor-pointer ${
                                             categoryFilter === tab.id
                                                 ? "bg-violet-500 text-white border-violet-300 shadow-md"
                                                 : "bg-white/[0.04] text-white/70 border-white/10 hover:bg-white/[0.08]"
@@ -2623,6 +2645,56 @@ export default function Arcade() {
                 onSelectGame={(gid) => setSelectedGame(gid)}
                 onClose={() => setAiHubOpen(false)}
             />
+
+            {achievementsOpen && (
+                <div
+                    className="fixed inset-0 z-[100] bg-black/75 backdrop-blur-sm flex items-center justify-center p-4"
+                    onClick={() => setAchievementsOpen(false)}
+                >
+                    <div
+                        className="w-full max-w-lg rounded-3xl border border-white/15 bg-[#0b1022] p-5 sm:p-6 space-y-4 shadow-2xl max-h-[85vh] overflow-y-auto"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                                <Award className="h-5 w-5 text-amber-300" />
+                                <h2 className="text-lg font-black text-white">
+                                    Arcade Achievements ({unlockedAchievementsCount}/{achievements.length})
+                                </h2>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => setAchievementsOpen(false)}
+                                aria-label="Close achievements"
+                                className="p-2 rounded-xl bg-white/10 hover:bg-white/20 text-white cursor-pointer"
+                            >
+                                <X className="h-4 w-4" />
+                            </button>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                            {achievements.map((ach) => (
+                                <div
+                                    key={ach.id}
+                                    className={`rounded-2xl border p-3 flex items-start gap-2.5 ${
+                                        ach.unlocked
+                                            ? "border-amber-400/45 bg-amber-500/10"
+                                            : "border-white/10 bg-white/[0.03] opacity-65"
+                                    }`}
+                                >
+                                    <span className="text-2xl leading-none">{ach.emoji}</span>
+                                    <div>
+                                        <div className="text-xs font-black text-white flex items-center gap-1.5">
+                                            <span>{ach.title}</span>
+                                            {ach.unlocked && <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />}
+                                        </div>
+                                        <p className="text-xs text-white/65 mt-0.5">{ach.desc}</p>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+            )}
         </main>
     );
 }
