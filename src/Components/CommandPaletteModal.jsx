@@ -135,11 +135,11 @@ export default function CommandPaletteModal({
 
   return (
     <div
-      className="fixed inset-0 z-[120] bg-black/75 backdrop-blur-md flex items-start justify-center p-3 sm:p-6 pt-12 sm:pt-20"
+      className="fixed inset-0 z-[120] bg-black/75 backdrop-blur-md flex items-start justify-center p-2.5 sm:p-6 pt-3 sm:pt-20"
       onClick={onClose}
     >
       <div
-        className="w-full max-w-xl rounded-3xl border border-white/15 bg-[#0a0f1d] shadow-2xl overflow-hidden flex flex-col max-h-[78vh]"
+        className="w-full max-w-xl rounded-2xl sm:rounded-3xl border border-white/15 bg-[#0a0f1d] shadow-2xl overflow-hidden flex flex-col max-h-[85dvh]"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center gap-3 px-4 py-3.5 border-b border-white/10">
@@ -181,7 +181,7 @@ export default function CommandPaletteModal({
                     item.run();
                     onClose();
                   }}
-                  className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-2xl text-left transition cursor-pointer ${
+                  className={`w-full min-h-[48px] flex items-center gap-3 px-3.5 py-2.5 rounded-2xl text-left transition cursor-pointer touch-manipulation ${
                     selected
                       ? "bg-sky-500/20 border border-sky-400/40 text-white"
                       : "border border-transparent text-white/80 hover:bg-white/[0.05]"

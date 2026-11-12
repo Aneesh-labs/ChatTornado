@@ -112,14 +112,14 @@ export default function Home() {
     );
 
     return (
-        <main className="min-h-0 flex-1 overflow-y-auto p-4 pb-20 text-white md:p-8 custom-scrollbar">
-            <section className="mx-auto flex w-full max-w-7xl flex-col gap-6">
+        <main className="min-h-0 flex-1 overflow-y-auto p-3 sm:p-5 pb-24 text-white md:p-8 custom-scrollbar">
+            <section className="mx-auto flex w-full max-w-7xl flex-col gap-4 sm:gap-6">
                 {/* Hero Command Banner */}
                 <motion.div
                     initial={{ opacity: 0, y: 16 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
-                    className="relative overflow-hidden rounded-3xl border border-white/12 bg-gradient-to-br from-[#0c101a]/95 via-[#0e1424]/90 to-[#12192e]/90 p-6 md:p-9 shadow-[0_28px_90px_rgba(0,0,0,0.45)] backdrop-blur-2xl"
+                    className="relative overflow-hidden rounded-2xl sm:rounded-3xl border border-white/12 bg-gradient-to-br from-[#0c101a]/95 via-[#0e1424]/90 to-[#12192e]/90 p-4 sm:p-6 md:p-9 shadow-[0_28px_90px_rgba(0,0,0,0.45)] backdrop-blur-2xl"
                 >
                     <div className="pointer-events-none absolute -right-20 -top-20 h-72 w-72 rounded-full bg-sky-500/15 blur-3xl" />
                     <div className="pointer-events-none absolute -bottom-20 left-1/3 h-72 w-72 rounded-full bg-purple-500/15 blur-3xl" />

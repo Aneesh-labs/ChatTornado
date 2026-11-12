@@ -357,20 +357,20 @@ export default function DashboardLayout() {
             </aside>
 
             {/* Main Stage Content */}
-            <main id="main-content" className={`relative z-10 flex min-w-0 flex-1 flex-col overflow-hidden h-full ${isMobileChatActive ? "pb-0" : "pb-[54px]"} lg:pb-0`} role="main">
+            <main id="main-content" className={`relative z-10 flex min-w-0 flex-1 flex-col overflow-hidden h-full ${isMobileChatActive ? "pb-0" : "pb-[calc(54px+env(safe-area-inset-bottom))]"} lg:pb-0`} role="main">
                 {/* Mobile Top App Bar (Hidden when in active mobile chat to maximize viewport) */}
                 {!isMobileChatActive && (
-                    <div className="flex items-center justify-between border-b border-white/10 bg-[#090c14]/90 px-4 py-3 backdrop-blur-2xl lg:hidden shadow-md">
-                        <div className="flex items-center gap-2.5">
-                            <div className="grid h-9 w-9 place-items-center rounded-xl bg-gradient-to-br from-sky-400 via-indigo-500 to-purple-600 text-white shadow-md">
+                    <div className="flex items-center justify-between gap-2 border-b border-white/10 bg-[#090c14]/90 px-3 py-2.5 pt-[max(0.625rem,env(safe-area-inset-top))] backdrop-blur-2xl lg:hidden shadow-md">
+                        <div className="flex items-center gap-2 min-w-0">
+                            <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-sky-400 via-indigo-500 to-purple-600 text-white shadow-md">
                                 <Radio className="h-4 w-4 animate-pulse" />
                             </div>
-                            <div>
-                                <p className="text-sm font-black tracking-tight">Chat Tornado</p>
-                                <p className="text-[10px] font-semibold text-sky-300/80">VORTEX AI World</p>
+                            <div className="min-w-0">
+                                <p className="text-sm font-black tracking-tight truncate">Chat Tornado</p>
+                                <p className="text-[10px] font-semibold text-sky-300/80 truncate">VORTEX AI World</p>
                             </div>
                         </div>
-                        <div className="flex items-center gap-1.5">
+                        <div className="flex items-center gap-1.5 shrink-0">
                             <button
                                 type="button"
                                 onClick={toggleAppFullscreen}

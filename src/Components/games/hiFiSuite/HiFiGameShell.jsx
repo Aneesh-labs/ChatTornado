@@ -329,8 +329,8 @@ const HiFiGameShell = ({
 
       {/* Universal On-Screen Phone Touch Pad */}
       {showTouchPad && (
-        <div className="w-full max-w-md flex items-center justify-between gap-3 px-3 py-2.5 rounded-2xl bg-white/[0.04] border border-white/15 touch-none">
-          <div className="grid grid-cols-3 gap-1.5 w-36">
+        <div className="w-full max-w-full sm:max-w-md flex items-center justify-between gap-2 sm:gap-3 px-2.5 sm:px-3 py-2.5 rounded-2xl bg-white/[0.04] border border-white/15 touch-none">
+          <div className="grid grid-cols-3 gap-1.5 w-32 sm:w-36 shrink-0">
             <div />
             <button
               type="button"

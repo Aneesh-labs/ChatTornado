@@ -242,15 +242,15 @@ const ArcadeAiCopilotModal = ({ isOpen, activeGameId = "auto", onSelectGame, onC
         </div>
 
         {/* 4-Bot Intelligence Selector */}
-        <div className="px-5 py-2.5 border-b border-white/10 bg-white/[0.02] flex flex-wrap items-center gap-1.5">
-          <span className="text-xs font-bold text-white/55 mr-1">Bot IQ:</span>
+        <div className="px-4 sm:px-5 py-2.5 border-b border-white/10 bg-white/[0.02] flex flex-nowrap overflow-x-auto no-scrollbar items-center gap-1.5">
+          <span className="text-xs font-bold text-white/55 mr-1 shrink-0">Bot IQ:</span>
           {BOT_TIERS.map((b) => (
             <button
               key={b.id}
               type="button"
               onClick={() => setBotTierId(setActiveBotTierId(b.id))}
               title={b.desc}
-              className={`px-2.5 py-1 rounded-lg border text-xs font-extrabold flex items-center gap-1 cursor-pointer transition ${
+              className={`shrink-0 min-h-[36px] px-2.5 py-1 rounded-lg border text-xs font-extrabold flex items-center gap-1 cursor-pointer transition touch-manipulation ${
                 botTierId === b.id
                   ? b.tone
                   : "bg-white/[0.04] border-white/10 text-white/60 hover:text-white"
