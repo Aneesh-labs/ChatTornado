@@ -2051,6 +2051,7 @@ async def ai_arcade_companion(
                             "vortexbastion",
                             "nullnorth",
                             "afterspace",
+                            "crownchess",
                         ],
                     }
                 },
@@ -2297,6 +2298,7 @@ async def ai_arcade_mission(
         "zombie": ("Kite swarms wide and trigger EMP bombs only when surrounded", "Circle wide and save your EMP!"),
         "neondodge": ("Skim laser wings close enough for +15 Graze combos with Shield up", "Ride the edge for graze points!"),
         "nullnorth": ("Sync terminal codes early before corruption spikes", "Relay the sequence to your squadmate!"),
+        "crownchess": ("Contest the center early, develop knights before bishops, and castle for King safety", "Own the center squares and look two moves ahead!"),
     }
     tip, callout = game_tips.get(chosen, ("Chain combos and manage cooldowns cleanly.", "Lock in your next personal best!"))
     return {

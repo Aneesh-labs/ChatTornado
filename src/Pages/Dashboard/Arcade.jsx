@@ -16,6 +16,7 @@ import {
     Bomb,
     Compass,
     Bot,
+    Crown,
 } from "lucide-react";
 import { soundEngine } from "../../utils/soundEffects";
 import API from "../../Services/API";
@@ -25,6 +26,7 @@ import VortexBastionGame from "../../Components/games/vortexBastion/VortexBastio
 import NeonBladeGame from "../../Components/games/NeonBladeGame";
 import NullNorthGame from "../../Components/games/nullNorth/NullNorthGame";
 import AfterspaceGame from "../../Components/games/afterspace/AfterspaceGame";
+import CrownChessGame from "../../Components/games/CrownChessGame";
 import {
     SNAKE_GRID,
     queueSnakeDirection,
@@ -299,23 +301,25 @@ const SnakeGame = ({ onBack, isMuted }) => {
                     <button
                         type="button"
                         onClick={() => setPortalWalls((w) => !w)}
-                        className={`px-2.5 py-1 rounded-lg text-[10px] font-bold border cursor-pointer transition-colors ${
+                        className={`px-2.5 py-1 rounded-lg text-xs font-bold border cursor-pointer transition-colors ${
                             portalWalls
                                 ? "bg-emerald-500/20 border-emerald-400/50 text-emerald-300"
-                                : "bg-white/5 border-white/10 text-white/60"
+                                : "bg-white/5 border-white/15 text-white/75"
                         }`}
                     >
-                        {portalWalls ? "Portal Walls: ON" : "Classic Walls"}
+                        {portalWalls ? "Portal Wrap: ON" : "Solid Walls"}
                     </button>
                     {isPlaying && !gameOver && (
                         <button
                             type="button"
                             onClick={() => setIsPaused((p) => !p)}
+                            aria-label={isPaused ? "Resume Snake" : "Pause Snake"}
                             className="p-1.5 rounded-lg bg-white/10 text-white cursor-pointer"
                         >
                             {isPaused ? <Play className="h-3.5 w-3.5" /> : <Pause className="h-3.5 w-3.5" />}
                         </button>
                     )}
+                    <span className="text-xs font-bold text-white/70">Len: <strong className="text-teal-300">{stateRef.current.snake.length}</strong></span>
                     <span className="text-xs font-bold text-white/70">Score: <strong className="text-emerald-400">{score}</strong></span>
                     <span className="text-xs font-bold text-amber-300 flex items-center gap-1">
                         <Trophy className="h-3.5 w-3.5" /> {Math.max(highScore, score)}
@@ -326,7 +330,9 @@ const SnakeGame = ({ onBack, isMuted }) => {
             <div
                 onTouchStart={onTouchStart}
                 onTouchEnd={onTouchEnd}
-                className="relative w-full max-w-[440px] aspect-square rounded-3xl bg-[#080d18] border-2 border-emerald-500/35 shadow-[0_0_40px_rgba(16,185,129,0.18)] overflow-hidden touch-none"
+                className={`relative w-full max-w-[440px] aspect-square rounded-3xl bg-[#080d18] border-2 shadow-[0_0_40px_rgba(16,185,129,0.18)] overflow-hidden touch-none ${
+                    portalWalls ? "border-dashed border-emerald-400/70" : "border-solid border-emerald-500/45"
+                }`}
             >
                 <canvas ref={canvasRef} width={360} height={360} className="w-full h-full block" />
 
@@ -398,7 +404,7 @@ const FlappyTornadoGame = ({ onBack, isMuted }) => {
 
     const [score, setScore] = useState(0);
     const [highScore, setHighScore] = useState(() => Number(localStorage.getItem("flappy_highscore") || 0));
-    const [phase, setPhase] = useState("ready"); // ready | playing | gameover
+    const [phase, setPhase] = useState("ready"); // ready | playing | paused | gameover
 
     const highScoreRef = useRef(highScore);
     const isMutedRef = useRef(isMuted);
@@ -419,6 +425,10 @@ const FlappyTornadoGame = ({ onBack, isMuted }) => {
     }, [playAudio]);
 
     const flap = useCallback(() => {
+        if (phase === "paused") {
+            setPhase("playing");
+            return;
+        }
         if (phase === "ready" || phase === "gameover") {
             startGame();
             stateRef.current.vy = -310;
@@ -434,11 +444,14 @@ const FlappyTornadoGame = ({ onBack, isMuted }) => {
             if (e.code === "Space" || e.key === "ArrowUp" || e.key === "w" || e.key === "W") {
                 e.preventDefault();
                 flap();
+            } else if ((e.key === "p" || e.key === "P") && (phase === "playing" || phase === "paused")) {
+                e.preventDefault();
+                setPhase((p) => (p === "playing" ? "paused" : "playing"));
             }
         };
         window.addEventListener("keydown", handleKeyDown);
         return () => window.removeEventListener("keydown", handleKeyDown);
-    }, [flap]);
+    }, [flap, phase]);
 
     useEffect(() => {
         let rafId;
@@ -567,6 +580,16 @@ const FlappyTornadoGame = ({ onBack, isMuted }) => {
                     <ArrowLeft className="h-4 w-4" /> Back
                 </button>
                 <div className="flex items-center gap-3">
+                    {(phase === "playing" || phase === "paused") && (
+                        <button
+                            type="button"
+                            onClick={() => setPhase((p) => (p === "playing" ? "paused" : "playing"))}
+                            aria-label={phase === "paused" ? "Resume Flappy" : "Pause Flappy"}
+                            className="p-1.5 rounded-lg bg-white/10 text-white cursor-pointer"
+                        >
+                            {phase === "paused" ? <Play className="h-3.5 w-3.5" /> : <Pause className="h-3.5 w-3.5" />}
+                        </button>
+                    )}
                     <span className="text-xs font-bold text-white/70">Score: <strong className="text-cyan-400">{score}</strong></span>
                     <span className="text-xs font-bold text-amber-300 flex items-center gap-1">
                         <Trophy className="h-3.5 w-3.5" /> {Math.max(highScore, score)}
@@ -582,6 +605,21 @@ const FlappyTornadoGame = ({ onBack, isMuted }) => {
                 className="relative w-full max-w-[480px] aspect-[380/340] rounded-3xl overflow-hidden border-2 border-cyan-500/35 shadow-[0_0_40px_rgba(6,182,212,0.18)] cursor-pointer touch-none"
             >
                 <canvas ref={canvasRef} width={380} height={340} className="w-full h-full block" />
+
+                {phase === "playing" && (
+                    <div className="pointer-events-none absolute top-3 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full bg-black/50 border border-cyan-400/25 text-xs font-bold text-cyan-200">
+                        Tap / Space to Flap • 💎 = +3
+                    </div>
+                )}
+
+                {phase === "paused" && (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/70 backdrop-blur-sm gap-3">
+                        <h3 className="text-xl font-black text-white">Paused</h3>
+                        <button type="button" onClick={() => setPhase("playing")} className="px-6 py-2.5 rounded-xl bg-cyan-400 text-black font-black text-sm cursor-pointer">
+                            Resume
+                        </button>
+                    </div>
+                )}
 
                 {phase === "ready" && (
                     <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/65 backdrop-blur-sm gap-2 p-4 text-center">
@@ -713,15 +751,18 @@ const MemoryMatchGame = ({ onBack, isMuted }) => {
                             key={cnt}
                             type="button"
                             onClick={() => initCards(cnt)}
-                            className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border cursor-pointer ${
+                            className={`px-2.5 py-1 rounded-lg text-xs font-bold border cursor-pointer ${
                                 pairCount === cnt
                                     ? "bg-fuchsia-500/30 border-fuchsia-400 text-fuchsia-200"
-                                    : "bg-white/5 border-white/10 text-white/60"
+                                    : "bg-white/5 border-white/10 text-white/65"
                             }`}
                         >
                             {cnt === 8 ? "4×4" : "4×5"}
                         </button>
                     ))}
+                    <span className="text-xs font-bold text-emerald-300">
+                        {Math.floor(matched.length / 2)}/{pairCount} Pairs
+                    </span>
                     <span className="text-xs font-bold text-white/70">{elapsed}s • {moves}m</span>
                     <span className="text-xs font-bold text-amber-300 flex items-center gap-1">
                         <Trophy className="h-3.5 w-3.5" /> {highScore}
@@ -949,6 +990,7 @@ const Game2048 = ({ onBack, isMuted }) => {
                     <ArrowLeft className="h-4 w-4" /> Back
                 </button>
                 <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-white/70">Max: <strong className="text-cyan-300">{Math.max(...board.flat())}</strong></span>
                     <span className="text-xs font-bold text-white/70">Score: <strong className="text-amber-300">{score}</strong></span>
                     <span className="text-xs font-bold text-amber-300 flex items-center gap-1">
                         <Trophy className="h-3.5 w-3.5" /> {Math.max(highScore, score)}
@@ -996,13 +1038,23 @@ const Game2048 = ({ onBack, isMuted }) => {
                     <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/80 backdrop-blur-sm rounded-3xl gap-3 p-4 text-center">
                         <span className="text-4xl">👑</span>
                         <h4 className="text-xl font-black text-emerald-300">2048 Reached!</h4>
-                        <button
-                            type="button"
-                            onClick={() => setShowWinBanner(false)}
-                            className="px-5 py-2.5 rounded-xl bg-emerald-500 text-black font-black text-xs cursor-pointer"
-                        >
-                            Keep Playing
-                        </button>
+                        <p className="text-xs text-white/75">Current Score: <strong className="text-amber-300">{score}</strong></p>
+                        <div className="flex gap-2">
+                            <button
+                                type="button"
+                                onClick={() => setShowWinBanner(false)}
+                                className="px-5 py-2.5 rounded-xl bg-emerald-500 text-black font-black text-xs cursor-pointer"
+                            >
+                                Keep Playing
+                            </button>
+                            <button
+                                type="button"
+                                onClick={init2048}
+                                className="px-4 py-2.5 rounded-xl bg-white/15 text-white font-bold text-xs cursor-pointer"
+                            >
+                                Restart
+                            </button>
+                        </div>
                     </div>
                 )}
 
@@ -1041,10 +1093,11 @@ const ZombieShooter = ({ onBack, isMuted }) => {
     const canvasRef = useRef(null);
     const stateRef = useRef(createZombieState(400, 400));
     const savedRunRef = useRef(false);
+    const virtualMoveRef = useRef({ x: 0, y: 0 });
 
     const [hud, setHud] = useState({ kills: 0, score: 0, hp: 3, bombs: 1, spread: false });
     const [autoFire, setAutoFire] = useState(true);
-    const [phase, setPhase] = useState("ready");
+    const [phase, setPhase] = useState("ready"); // ready | playing | paused | gameover
     const [highScore, setHighScore] = useState(() => Number(localStorage.getItem("zombie_highscore") || 0));
 
     const autoFireRef = useRef(autoFire);
@@ -1131,9 +1184,10 @@ const ZombieShooter = ({ onBack, isMuted }) => {
             lastTime = now;
             const st = stateRef.current;
 
+            const vMove = virtualMoveRef.current;
             const move = {
-                x: (keys.KeyD || keys.ArrowRight ? 1 : 0) - (keys.KeyA || keys.ArrowLeft ? 1 : 0),
-                y: (keys.KeyS || keys.ArrowDown ? 1 : 0) - (keys.KeyW || keys.ArrowUp ? 1 : 0),
+                x: vMove.x !== 0 ? vMove.x : (keys.KeyD || keys.ArrowRight ? 1 : 0) - (keys.KeyA || keys.ArrowLeft ? 1 : 0),
+                y: vMove.y !== 0 ? vMove.y : (keys.KeyS || keys.ArrowDown ? 1 : 0) - (keys.KeyW || keys.ArrowUp ? 1 : 0),
             };
             st.player.angle = Math.atan2(aim.y - st.player.y, aim.x - st.player.x);
 
@@ -1233,7 +1287,7 @@ const ZombieShooter = ({ onBack, isMuted }) => {
                 ctx.fill();
             }
 
-            // Zombies
+            // Zombies + Boss HP Bar
             for (const z of st.zombies) {
                 ctx.fillStyle = z.boss ? "#f43f5e" : "#84cc16";
                 ctx.beginPath();
@@ -1244,6 +1298,14 @@ const ZombieShooter = ({ onBack, isMuted }) => {
                 ctx.arc(z.x - 4, z.y - 3, 2.5, 0, Math.PI * 2);
                 ctx.arc(z.x + 4, z.y - 3, 2.5, 0, Math.PI * 2);
                 ctx.fill();
+                if (z.boss && z.maxHp > 1) {
+                    const bw = z.radius * 2.2;
+                    const pct = Math.max(0, Math.min(1, z.hp / z.maxHp));
+                    ctx.fillStyle = "rgba(0,0,0,0.65)";
+                    ctx.fillRect(z.x - bw / 2, z.y - z.radius - 10, bw, 5);
+                    ctx.fillStyle = "#f43f5e";
+                    ctx.fillRect(z.x - bw / 2, z.y - z.radius - 10, bw * pct, 5);
+                }
             }
 
             // Player
@@ -1288,14 +1350,24 @@ const ZombieShooter = ({ onBack, isMuted }) => {
                         type="button"
                         onClick={detonateBomb}
                         disabled={phase !== "playing" || hud.bombs <= 0}
-                        className="px-2 py-1 rounded-lg bg-sky-500/20 border border-sky-400/40 text-sky-200 text-[11px] font-bold flex items-center gap-1 disabled:opacity-40 cursor-pointer"
+                        className="px-2.5 py-1 rounded-lg bg-sky-500/20 border border-sky-400/40 text-sky-200 text-xs font-bold flex items-center gap-1 disabled:opacity-40 cursor-pointer"
                     >
-                        <Bomb className="h-3 w-3" /> ×{hud.bombs}
+                        <Bomb className="h-3.5 w-3.5" /> ×{hud.bombs}
                     </button>
+                    {(phase === "playing" || phase === "paused") && (
+                        <button
+                            type="button"
+                            onClick={() => setPhase((p) => (p === "playing" ? "paused" : "playing"))}
+                            aria-label={phase === "paused" ? "Resume Zombie Survival" : "Pause Zombie Survival"}
+                            className="p-1.5 rounded-lg bg-white/10 text-white cursor-pointer"
+                        >
+                            {phase === "paused" ? <Play className="h-3.5 w-3.5" /> : <Pause className="h-3.5 w-3.5" />}
+                        </button>
+                    )}
                     <button
                         type="button"
                         onClick={() => setAutoFire((a) => !a)}
-                        className={`px-2 py-1 rounded-lg text-[10px] font-bold border cursor-pointer ${
+                        className={`px-2.5 py-1 rounded-lg text-xs font-bold border cursor-pointer ${
                             autoFire ? "bg-lime-500/20 border-lime-400/50 text-lime-300" : "bg-white/5 border-white/10 text-white/60"
                         }`}
                     >
@@ -1303,7 +1375,7 @@ const ZombieShooter = ({ onBack, isMuted }) => {
                     </button>
                     <span className="text-xs font-bold text-white/75">Kills: <strong className="text-lime-400">{hud.kills}</strong></span>
                     <span className="text-xs font-bold text-amber-300 flex items-center gap-1">
-                        <Trophy className="h-3.5 w-3.5" /> {Math.floor(Math.max(highScore, hud.score) / 10)}
+                        <Trophy className="h-3.5 w-3.5" /> {Math.max(highScore, hud.score)}
                     </span>
                 </div>
             </div>
@@ -1311,11 +1383,20 @@ const ZombieShooter = ({ onBack, isMuted }) => {
             <div className="relative w-full max-w-[480px] aspect-square rounded-3xl overflow-hidden border-2 border-lime-500/35 shadow-[0_0_40px_rgba(132,204,22,0.18)]">
                 <canvas ref={canvasRef} width={400} height={400} className="w-full h-full bg-[#080d19] touch-none" />
 
+                {phase === "paused" && (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/75 backdrop-blur-sm gap-3">
+                        <h3 className="text-xl font-black text-white">Paused</h3>
+                        <button type="button" onClick={() => setPhase("playing")} className="px-6 py-2.5 rounded-xl bg-lime-500 text-black font-black text-sm cursor-pointer">
+                            Resume
+                        </button>
+                    </div>
+                )}
+
                 {phase === "ready" && (
                     <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/75 backdrop-blur-sm gap-3 p-4 text-center">
                         <span className="text-5xl">🧟</span>
                         <h3 className="text-xl font-black text-white">Zombie Survival</h3>
-                        <p className="text-xs text-white/65">WASD to dodge, aim/tap to shoot, Space for EMP Bomb! 3 HP shield + Bosses.</p>
+                        <p className="text-xs text-white/65">WASD or Touch Pad to dodge, tap/hold to shoot, Space for EMP Bomb! 3 HP + Boss waves.</p>
                         <button type="button" onClick={startGame} className="flex items-center gap-2 px-7 py-3 rounded-2xl bg-lime-500 hover:bg-lime-400 text-black font-black text-sm cursor-pointer active:scale-95">
                             <Play className="h-4 w-4 fill-current" /> Survive
                         </button>
@@ -1333,6 +1414,44 @@ const ZombieShooter = ({ onBack, isMuted }) => {
                     </div>
                 )}
             </div>
+
+            {/* Mobile Virtual Movement Pad (so mobile players can dodge seamlessly with Auto-Aim) */}
+            <div className="grid grid-cols-3 gap-2 w-56 md:hidden">
+                <div />
+                <button
+                    type="button"
+                    onPointerDown={() => { virtualMoveRef.current = { x: 0, y: -1 }; }}
+                    onPointerUp={() => { virtualMoveRef.current = { x: 0, y: 0 }; }}
+                    onPointerLeave={() => { virtualMoveRef.current = { x: 0, y: 0 }; }}
+                    aria-label="Move Up"
+                    className="h-12 rounded-2xl bg-white/10 active:bg-lime-500/40 font-bold text-white touch-none"
+                >▲</button>
+                <div />
+                <button
+                    type="button"
+                    onPointerDown={() => { virtualMoveRef.current = { x: -1, y: 0 }; }}
+                    onPointerUp={() => { virtualMoveRef.current = { x: 0, y: 0 }; }}
+                    onPointerLeave={() => { virtualMoveRef.current = { x: 0, y: 0 }; }}
+                    aria-label="Move Left"
+                    className="h-12 rounded-2xl bg-white/10 active:bg-lime-500/40 font-bold text-white touch-none"
+                >◀</button>
+                <button
+                    type="button"
+                    onPointerDown={() => { virtualMoveRef.current = { x: 0, y: 1 }; }}
+                    onPointerUp={() => { virtualMoveRef.current = { x: 0, y: 0 }; }}
+                    onPointerLeave={() => { virtualMoveRef.current = { x: 0, y: 0 }; }}
+                    aria-label="Move Down"
+                    className="h-12 rounded-2xl bg-white/10 active:bg-lime-500/40 font-bold text-white touch-none"
+                >▼</button>
+                <button
+                    type="button"
+                    onPointerDown={() => { virtualMoveRef.current = { x: 1, y: 0 }; }}
+                    onPointerUp={() => { virtualMoveRef.current = { x: 0, y: 0 }; }}
+                    onPointerLeave={() => { virtualMoveRef.current = { x: 0, y: 0 }; }}
+                    aria-label="Move Right"
+                    className="h-12 rounded-2xl bg-white/10 active:bg-lime-500/40 font-bold text-white touch-none"
+                >▶</button>
+            </div>
         </div>
     );
 };
@@ -1344,10 +1463,11 @@ const NeonDodge = ({ onBack, isMuted }) => {
     const canvasRef = useRef(null);
     const stateRef = useRef(createNeonDodgeState(380, 450));
     const savedRunRef = useRef(false);
+    const virtualDirRef = useRef(0);
 
     const [score, setScore] = useState(0);
     const [hasShield, setHasShield] = useState(false);
-    const [phase, setPhase] = useState("ready");
+    const [phase, setPhase] = useState("ready"); // ready | playing | paused | gameover
     const [highScore, setHighScore] = useState(() => Number(localStorage.getItem("neondodge_highscore") || 0));
 
     const highScoreRef = useRef(highScore);
@@ -1400,7 +1520,8 @@ const NeonDodge = ({ onBack, isMuted }) => {
             lastTime = now;
             const st = stateRef.current;
 
-            const dir = (keys.ArrowRight || keys.KeyD ? 1 : 0) - (keys.ArrowLeft || keys.KeyA ? 1 : 0);
+            const kbDir = (keys.ArrowRight || keys.KeyD ? 1 : 0) - (keys.ArrowLeft || keys.KeyA ? 1 : 0);
+            const dir = virtualDirRef.current !== 0 ? virtualDirRef.current : kbDir;
             const res = stepNeonDodge(st, dt, dir);
 
             if (res.event === "pickup" || res.event === "graze") playAudio("coin");
@@ -1526,9 +1647,19 @@ const NeonDodge = ({ onBack, isMuted }) => {
                 </button>
                 <div className="flex items-center gap-2.5">
                     {hasShield && (
-                        <span className="px-2 py-0.5 rounded-lg bg-cyan-500/20 border border-cyan-400 text-cyan-300 text-[10px] font-bold flex items-center gap-1">
-                            <Shield className="h-3 w-3" /> SHIELD
+                        <span className="px-2.5 py-0.5 rounded-lg bg-cyan-500/20 border border-cyan-400 text-cyan-300 text-xs font-bold flex items-center gap-1">
+                            <Shield className="h-3.5 w-3.5" /> SHIELD
                         </span>
+                    )}
+                    {(phase === "playing" || phase === "paused") && (
+                        <button
+                            type="button"
+                            onClick={() => setPhase((p) => (p === "playing" ? "paused" : "playing"))}
+                            aria-label={phase === "paused" ? "Resume Neon Dodge" : "Pause Neon Dodge"}
+                            className="p-1.5 rounded-lg bg-white/10 text-white cursor-pointer"
+                        >
+                            {phase === "paused" ? <Play className="h-3.5 w-3.5" /> : <Pause className="h-3.5 w-3.5" />}
+                        </button>
                     )}
                     <span className="text-xs font-bold text-white/75">Score: <strong className="text-purple-400">{score}</strong></span>
                     <span className="text-xs font-bold text-amber-300 flex items-center gap-1">
@@ -1540,11 +1671,20 @@ const NeonDodge = ({ onBack, isMuted }) => {
             <div className="relative w-full max-w-[460px] aspect-[380/450] rounded-3xl overflow-hidden border-2 border-purple-500/35 shadow-[0_0_40px_rgba(168,85,247,0.18)]">
                 <canvas ref={canvasRef} width={380} height={450} className="w-full h-full bg-[#0a0519] touch-none" />
 
+                {phase === "paused" && (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/75 backdrop-blur-sm gap-3">
+                        <h3 className="text-xl font-black text-white">Paused</h3>
+                        <button type="button" onClick={() => setPhase("playing")} className="px-6 py-2.5 rounded-xl bg-purple-500 text-black font-black text-sm cursor-pointer">
+                            Resume
+                        </button>
+                    </div>
+                )}
+
                 {phase === "ready" && (
                     <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/75 backdrop-blur-sm gap-3 p-4 text-center">
                         <span className="text-5xl animate-pulse">🛸</span>
                         <h3 className="text-xl font-black text-white">Neon Dodge</h3>
-                        <p className="text-xs text-white/65">Drag or use A/D / Arrows. Graze close for +15 & grab S Shields!</p>
+                        <p className="text-xs text-white/65">Drag, tap Left/Right buttons, or use A/D / Arrows. Graze close for +15 &amp; grab S Shields!</p>
                         <button type="button" onClick={startGame} className="flex items-center gap-2 px-7 py-3 rounded-2xl bg-purple-500 hover:bg-purple-400 text-black font-black text-sm cursor-pointer active:scale-95">
                             <Play className="h-4 w-4 fill-current" /> Launch Jet
                         </button>
@@ -1562,6 +1702,26 @@ const NeonDodge = ({ onBack, isMuted }) => {
                     </div>
                 )}
             </div>
+
+            {/* Thumb-friendly Left / Right Steer Controls */}
+            <div className="grid grid-cols-2 gap-3 w-64 md:hidden">
+                <button
+                    type="button"
+                    onPointerDown={() => { virtualDirRef.current = -1; }}
+                    onPointerUp={() => { virtualDirRef.current = 0; }}
+                    onPointerLeave={() => { virtualDirRef.current = 0; }}
+                    aria-label="Steer Left"
+                    className="h-12 rounded-2xl bg-white/10 active:bg-purple-500/40 font-black text-white text-sm touch-none"
+                >◀ Left</button>
+                <button
+                    type="button"
+                    onPointerDown={() => { virtualDirRef.current = 1; }}
+                    onPointerUp={() => { virtualDirRef.current = 0; }}
+                    onPointerLeave={() => { virtualDirRef.current = 0; }}
+                    aria-label="Steer Right"
+                    className="h-12 rounded-2xl bg-white/10 active:bg-purple-500/40 font-black text-white text-sm touch-none"
+                >Right ▶</button>
+            </div>
         </div>
     );
 };
@@ -1578,6 +1738,7 @@ export default function Arcade() {
     );
     const [isMuted, setIsMuted] = useState(false);
     const [aiHubOpen, setAiHubOpen] = useState(false);
+    const [categoryFilter, setCategoryFilter] = useState("all");
     const handleBack = useCallback(() => {
         setSelectedGame(null);
         setNullNorthInviteCode("");
@@ -1609,18 +1770,72 @@ export default function Arcade() {
 
     const GAMES = [
         {
+            id: "crownchess",
+            title: "Crownfall Chess",
+            emoji: "♔⚔️",
+            tag: "NEW • Royal Strategy",
+            category: "strategy",
+            controls: "Click / Tap • AI (3 Tiers) + 2P",
+            color: "from-amber-500 to-yellow-700",
+            desc: "The noble classic redesigned: crisp SVG pieces, legal move rings, Castling, En Passant, Promotion & Alpha-Beta AI!"
+        },
+        {
+            id: "subwaysurfers",
+            title: "Tornado Surfers",
+            emoji: "🏄‍♂️⚡",
+            tag: "3D Rail Runner",
+            category: "3d",
+            controls: "Swipe / WASD • Space Shield",
+            color: "from-cyan-500 to-fuchsia-600",
+            desc: "Upgraded 3D trains with LED liveries, 360° rooftop flips, Hoverboards, Magnet & 3X Fever Overdrive!"
+        },
+        {
+            id: "vortexbastion",
+            title: "Vortex Bastion",
+            emoji: "🗼⚡",
+            tag: "3D Strategy TD",
+            category: "strategy",
+            controls: "Tap Grid • Build & Upgrade",
+            color: "from-sky-500 to-indigo-700",
+            desc: "Real-time 3D WebGL A* maze tower defense with branching upgrades & synergies!"
+        },
+        {
+            id: "afterspace",
+            title: "AFTERSPACE v3.0",
+            emoji: "◈",
+            tag: "Open World 4D",
+            category: "3d",
+            controls: "WASD / Virtual Stick • Shift Dash",
+            color: "from-stone-500 to-neutral-800",
+            desc: "Open-world 6-sector 3D exploration with simple-math dunes, thermal updrafts & AI tool control."
+        },
+        {
+            id: "neonblade",
+            title: "Neon Blade",
+            emoji: "🎯🗡️",
+            tag: "3D Cyber Forge",
+            category: "3d",
+            controls: "Tap / Space Throw • Slow-Mo",
+            color: "from-rose-500 to-red-700",
+            desc: "Three.js 3D blade forge, Razor Grazes, Chrono Slow-Mo, Overdrive & Boss cores!"
+        },
+        {
             id: "snake",
             title: "Super Snake",
             emoji: "🐍",
             tag: "Classic Retro",
+            category: "action",
+            controls: "Swipe / Arrows / D-Pad",
             color: "from-emerald-500 to-teal-700",
-            desc: "Swipe or steer, eat golden bonus apples, and choose Classic or Portal Walls!"
+            desc: "Swipe or steer, eat golden bonus apples, and choose Solid or Portal Wrap Walls!"
         },
         {
             id: "flappy",
             title: "Flappy Tornado",
             emoji: "🌪️",
             tag: "Action 60fps",
+            category: "action",
+            controls: "Tap / Space Flap",
             color: "from-cyan-500 to-blue-700",
             desc: "Soar through neon wind tunnels and collect +3 golden wind crystals!"
         },
@@ -1629,6 +1844,8 @@ export default function Arcade() {
             title: "2048 Tornado",
             emoji: "🔢✨",
             tag: "Logic Puzzle",
+            category: "strategy",
+            controls: "Swipe / Arrows + Undo",
             color: "from-indigo-600 to-violet-800",
             desc: "Touch-swipe tiles, undo mistakes, hit 2048, and keep pushing endless combos!"
         },
@@ -1637,6 +1854,8 @@ export default function Arcade() {
             title: "Memory Match",
             emoji: "🧠💖",
             tag: "Brain Game",
+            category: "strategy",
+            controls: "Tap Cards (4×4 / 4×5)",
             color: "from-fuchsia-500 to-pink-700",
             desc: "4×4 or 4×5 grids with live timer, match streak multipliers & high scores!"
         },
@@ -1645,50 +1864,34 @@ export default function Arcade() {
             title: "Zombie Survival",
             emoji: "🧟🔫",
             tag: "Arena Shooter",
+            category: "action",
+            controls: "WASD / Pad + Auto-Aim + EMP",
             color: "from-lime-500 to-green-700",
-            desc: "Move with WASD, blast waves with 3-way spread drops, bosses & EMP bombs!"
+            desc: "Move with WASD or Touch Pad, blast waves with 3-way spread drops, bosses & EMP bombs!"
         },
         {
             id: "neondodge",
             title: "Neon Dodge",
             emoji: "⚡🛸",
             tag: "Hyper Runner",
+            category: "action",
+            controls: "Drag / Left-Right / A-D",
             color: "from-purple-500 to-fuchsia-700",
             desc: "Pilot the cyber jet, grab S-shields, and stack +15 near-miss graze combos!"
-        },
-        {
-            id: "neonblade",
-            title: "Neon Blade",
-            emoji: "🎯🗡️",
-            tag: "3D Cyber Forge",
-            color: "from-rose-500 to-red-700",
-            desc: "Three.js 3D blade forge, Razor Grazes, Chrono Slow-Mo, Overdrive & Boss cores!"
-        },
-        {
-            id: "subwaysurfers",
-            title: "Tornado Surfers",
-            emoji: "🏄‍♂️⚡",
-            tag: "3D Rail Runner",
-            color: "from-cyan-500 to-fuchsia-600",
-            desc: "True 3D trains, rooftop ramps, Hoverboards, Magnet, 2× & Jetpack!"
-        },
-        {
-            id: "vortexbastion",
-            title: "Vortex Bastion",
-            emoji: "🗼⚡",
-            tag: "3D Strategy TD",
-            color: "from-sky-500 to-indigo-700",
-            desc: "Real-time 3D WebGL A* maze tower defense with branching upgrades & synergies!"
-        },
-        {
-            id: "afterspace",
-            title: "AFTERSPACE v3.0",
-            emoji: "◈",
-            tag: "v3.0 • Open World 4D",
-            color: "from-stone-500 to-neutral-800",
-            desc: "Open-world 6-sector 3D exploration with simple-math dunes, thermal updrafts & AI tool control."
         }
     ];
+
+    const filteredGames = categoryFilter === "all"
+        ? GAMES
+        : GAMES.filter((g) => g.category === categoryFilter);
+
+    const getBestForGame = (gid) => {
+        try {
+            return Number(localStorage.getItem(`${gid}_highscore`) || 0);
+        } catch (_) {
+            return 0;
+        }
+    };
 
     return (
         <main
@@ -1710,7 +1913,7 @@ export default function Arcade() {
                             Mini Games Zone <Sparkles className="h-6 w-6 text-amber-300" />
                         </h1>
                         <p className="mt-1.5 text-xs sm:text-sm text-white/60 max-w-xl">
-                            10 upgraded 60fps &amp; 3D WebGL arcade games including live multiplayer Co-Op escape!
+                            11 upgraded 60fps, strategy, &amp; 3D WebGL arcade games including Crownfall Chess and live Co-Op!
                         </p>
                     </div>
 
@@ -1767,6 +1970,8 @@ export default function Arcade() {
                     <NeonBladeGame onBack={handleBack} isMuted={isMuted} onSaveScore={saveBackendGameScore} />
                 ) : selectedGame === "afterspace" ? (
                     <AfterspaceGame onBack={handleBack} isMuted={isMuted} onSaveScore={saveBackendGameScore} />
+                ) : selectedGame === "crownchess" ? (
+                    <CrownChessGame onBack={handleBack} isMuted={isMuted} onSaveScore={saveBackendGameScore} />
                 ) : (
                     <div className="space-y-5">
                         {/* Featured Multiplayer Flagship: NULL//NORTH */}
@@ -1798,9 +2003,34 @@ export default function Arcade() {
                             </div>
                         </motion.div>
 
+                        {/* Crisp Category Filter Bar */}
+                        <div className="flex flex-wrap items-center gap-2">
+                            {[
+                                { id: "all", label: `All Games (${GAMES.length})` },
+                                { id: "3d", label: "3D & Worlds" },
+                                { id: "strategy", label: "Strategy & Classics" },
+                                { id: "action", label: "Action & Reflex" },
+                            ].map((tab) => (
+                                <button
+                                    key={tab.id}
+                                    type="button"
+                                    onClick={() => setCategoryFilter(tab.id)}
+                                    className={`px-3.5 py-2 rounded-xl text-xs font-extrabold border transition-colors cursor-pointer ${
+                                        categoryFilter === tab.id
+                                            ? "bg-violet-500 text-white border-violet-300 shadow-md"
+                                            : "bg-white/[0.04] text-white/70 border-white/10 hover:bg-white/[0.08]"
+                                    }`}
+                                >
+                                    {tab.label}
+                                </button>
+                            ))}
+                        </div>
+
                         {/* Spacious 3-Column Games Grid */}
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-                        {GAMES.map((game) => (
+                        {filteredGames.map((game) => {
+                            const bestScore = getBestForGame(game.id);
+                            return (
                             <motion.div
                                 key={game.id}
                                 whileHover={{ scale: 1.03, y: -4 }}
@@ -1816,28 +2046,41 @@ export default function Arcade() {
                                 <div>
                                     <div className="flex items-center justify-between mb-4">
                                         <div className="text-4xl">{game.emoji}</div>
-                                        <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-white/10 text-white/70 border border-white/10">
+                                        <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-white/10 text-white/80 border border-white/10">
                                             {game.tag}
                                         </span>
                                     </div>
                                     <h3 className="text-xl font-black text-white group-hover:text-amber-200 transition-colors">
                                         {game.title}
                                     </h3>
-                                    <p className="mt-2 text-xs text-white/50 leading-relaxed">
+                                    <p className="mt-2 text-xs text-white/65 leading-relaxed">
                                         {game.desc}
                                     </p>
+                                    {game.controls && (
+                                        <div className="mt-3 text-xs font-semibold text-emerald-300/80">
+                                            Controls: {game.controls}
+                                        </div>
+                                    )}
                                 </div>
 
-                                <div className="mt-6 flex items-center justify-between pt-4 border-t border-white/5">
-                                    <span className="text-xs font-bold text-violet-300 group-hover:text-white transition-colors">
-                                        Play Now
-                                    </span>
+                                <div className="mt-5 flex items-center justify-between pt-4 border-t border-white/10">
+                                    <div className="flex items-center gap-2.5">
+                                        <span className="text-xs font-bold text-violet-300 group-hover:text-white transition-colors">
+                                            Play Now
+                                        </span>
+                                        {bestScore > 0 && (
+                                            <span className="text-xs font-bold text-amber-300 flex items-center gap-1">
+                                                <Trophy className="h-3.5 w-3.5" /> {bestScore.toLocaleString()}
+                                            </span>
+                                        )}
+                                    </div>
                                     <div className="h-8 w-8 rounded-full bg-white/10 flex items-center justify-center text-white group-hover:bg-violet-600 transition-colors">
                                         →
                                     </div>
                                 </div>
                             </motion.div>
-                        ))}
+                            );
+                        })}
                         </div>
                     </div>
                 )}

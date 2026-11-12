@@ -25,6 +25,7 @@ const GAME_SCORE_KEYS = {
   vortexbastion: "vortexbastion_highscore",
   nullnorth: "nullnorth_highscore",
   afterspace: "afterspace_highscore",
+  crownchess: "crownchess_highscore",
 };
 
 export function collectArcadeHighScores() {
@@ -108,7 +109,7 @@ export function inferLocalToolActions(gameId, prompt = "") {
       actions.push({ name: "toggle_scanner", arguments: { active: true } });
     }
   } else {
-    const mapGames = ["afterspace", "subwaysurfers", "nullnorth", "vortexbastion", "neonblade", "snake", "flappy", "2048", "memory", "zombie", "neondodge"];
+    const mapGames = ["crownchess", "afterspace", "subwaysurfers", "nullnorth", "vortexbastion", "neonblade", "snake", "flappy", "2048", "memory", "zombie", "neondodge"];
     for (const gid of mapGames) {
       if (low.includes(`launch ${gid}`) || low.includes(`open ${gid}`) || low.includes(`play ${gid}`)) {
         actions.push({ name: "launch_arcade_game", arguments: { game_id: gid } });
@@ -183,6 +184,7 @@ export async function askPersonalizedCompanion({
     neonblade: "Wait for Razor Graze flash alignment to stack Overdrive 2X multipliers on bosses.",
     vortexbastion: "Pair Cryo slow pylons upfront with Rail/Mortar crossfire before Wave 5 Dreadnought.",
     nullnorth: "Share decoded glyph sequence early with your partner to beat entropy lock.",
+    crownchess: "Control the central d4/e4/d5/e5 squares early, castle before attacking, and watch for knight forks.",
   };
 
   const tip =
