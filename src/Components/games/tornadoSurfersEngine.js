@@ -110,6 +110,8 @@ export function createInitialRunnerState() {
     combo: 0,
     stunts: 0,
     comboTimer: 0,
+    feverCharge: 0,
+    feverTimer: 0,
     spawnTimer: 0.25,
     trackScroll: 0,
     shakeTimer: 0,
@@ -418,6 +420,26 @@ export function stepRunnerState(state, rawDt, rng = Math.random) {
     shieldSaved: false,
     powerupPicked: null,
     stunt: false,
+    feverStarted: false,
+  };
+
+  const awardFever = (amount) => {
+    if (state.feverTimer > 0) return;
+    state.feverCharge = (state.feverCharge || 0) + amount;
+    if (state.feverCharge >= 100) {
+      state.feverCharge = 0;
+      state.feverTimer = 6.5;
+      events.feverStarted = true;
+      state.burstQueue.push({ x: state.laneX, y: state.y + 0.6, z: PLAYER_HIT_Z, color: 0xfde047, count: 18 });
+      state.popups.push({
+        id: `p_${Math.random()}`,
+        text: "3X FEVER OVERDRIVE!",
+        x: state.laneX,
+        y: state.y + 1.15,
+        color: "#fde047",
+        life: 1.1,
+      });
+    }
   };
 
   if (state.phase !== "playing") return events;
@@ -439,6 +461,7 @@ export function stepRunnerState(state, rawDt, rng = Math.random) {
   if (state.magnetTimer > 0) state.magnetTimer = Math.max(0, state.magnetTimer - dt);
   if (state.multiplierTimer > 0) state.multiplierTimer = Math.max(0, state.multiplierTimer - dt);
   if (state.sneakersTimer > 0) state.sneakersTimer = Math.max(0, state.sneakersTimer - dt);
+  if (state.feverTimer > 0) state.feverTimer = Math.max(0, state.feverTimer - dt);
   if (state.comboTimer > 0) {
     state.comboTimer = Math.max(0, state.comboTimer - dt);
     if (state.comboTimer === 0) state.combo = 0;
@@ -458,8 +481,8 @@ export function stepRunnerState(state, rawDt, rng = Math.random) {
     }
   }
 
-  // Distance & score
-  const mult = state.multiplierTimer > 0 ? 2 : 1;
+  // Distance & score (3x multiplier during Fever Overdrive; stacks up to 6x with 2x pickup!)
+  const mult = (state.multiplierTimer > 0 ? 2 : 1) * (state.feverTimer > 0 ? 3 : 1);
   const dz = effectiveSpeed * dt;
   const distGain = dz * 115;
   state.distance += distGain;
@@ -577,10 +600,11 @@ export function stepRunnerState(state, rawDt, rng = Math.random) {
     if (isCoinOrPower) {
       if (ent.collected) continue;
 
-      if (ent.kind === "coin" && (state.magnetTimer > 0 || state.sneakersTimer > 0) && ent.z < 0.52 && ent.z > -0.05) {
+      const magnetActive = state.magnetTimer > 0 || state.feverTimer > 0;
+      if (ent.kind === "coin" && (magnetActive || state.sneakersTimer > 0) && ent.z < 0.52 && ent.z > -0.05) {
         const laneTarget = state.laneX + 1;
-        const pull = state.magnetTimer > 0 ? 15 : 6;
-        if (state.magnetTimer > 0 || Math.abs(ent.lane - laneTarget) < 0.85) {
+        const pull = magnetActive ? 15 : 6;
+        if (magnetActive || Math.abs(ent.lane - laneTarget) < 0.85) {
           ent.lane += (laneTarget - ent.lane) * Math.min(1, dt * pull);
           ent.y = (ent.y ?? 0.34) + (state.y + 0.34 - (ent.y ?? 0.34)) * Math.min(1, dt * pull);
         }
@@ -599,6 +623,7 @@ export function stepRunnerState(state, rawDt, rng = Math.random) {
           state.comboTimer = 1.6;
           const bonus = (10 + Math.min(40, state.combo * 2)) * mult;
           state.score += bonus;
+          awardFever(8);
           events.coinPicked = true;
           state.burstQueue.push({ x: ent.lane - 1, y: entY, z: PLAYER_HIT_Z, color: 0xfbbf24, count: 6 });
           state.popups.push({
@@ -650,6 +675,7 @@ export function stepRunnerState(state, rawDt, rng = Math.random) {
         ent.stunted = true;
         state.stunts += 1;
         state.score += 50 * mult;
+        awardFever(20);
         events.stunt = true;
         state.popups.push({
           id: `p_${Math.random()}`,
@@ -671,6 +697,7 @@ export function stepRunnerState(state, rawDt, rng = Math.random) {
         state.combo += 1;
         state.comboTimer = 1.6;
         state.score += 25 * mult;
+        awardFever(12);
       }
     } else if (ent.kind === "high_gate") {
       if (state.groundY < TRAIN_ROOF_Y - 0.1 && !playerIsSliding && state.y < 1.38 && state.y + 0.85 > 0.56) {
@@ -680,6 +707,7 @@ export function stepRunnerState(state, rawDt, rng = Math.random) {
         state.combo += 1;
         state.comboTimer = 1.6;
         state.score += 25 * mult;
+        awardFever(12);
       }
     } else if (ent.kind === "train") {
       if (state.y < ROOF_SAFE_Y && state.groundY < TRAIN_ROOF_Y - 0.1) {
@@ -689,13 +717,15 @@ export function stepRunnerState(state, rawDt, rng = Math.random) {
 
     if (collides && state.invulnTimer <= 0 && state.jetpackTimer <= 0) {
       ent.hit = true;
-      if (state.hoverboardTimer > 0) {
-        state.hoverboardTimer = 0;
+      if (state.hoverboardTimer > 0 || state.feverTimer > 0) {
+        const usedFever = state.hoverboardTimer <= 0 && state.feverTimer > 0;
+        if (usedFever) state.feverTimer = 0;
+        else state.hoverboardTimer = 0;
         state.invulnTimer = 1.6;
         state.shakeTimer = 0.35;
         state.shakeIntensity = 0.28;
         events.shieldSaved = true;
-        state.burstQueue.push({ x: state.laneX, y: state.y + 0.5, z: PLAYER_HIT_Z, color: 0x22d3ee, count: 24 });
+        state.burstQueue.push({ x: state.laneX, y: state.y + 0.5, z: PLAYER_HIT_Z, color: usedFever ? 0xfde047 : 0x22d3ee, count: 24 });
         for (const other of state.entities) {
           if (other.z < 0.45 && other.z > -0.1 && (other.kind === "train" || other.kind === "low_barrier" || other.kind === "high_gate")) {
             other.hit = true;
@@ -703,10 +733,10 @@ export function stepRunnerState(state, rawDt, rng = Math.random) {
         }
         state.popups.push({
           id: `p_${Math.random()}`,
-          text: "SHIELD BLAST!",
+          text: usedFever ? "FEVER SAVE!" : "SHIELD BLAST!",
           x: state.laneX,
           y: state.y + 1.1,
-          color: "#22d3ee",
+          color: usedFever ? "#fde047" : "#22d3ee",
           life: 1.0,
         });
       } else {

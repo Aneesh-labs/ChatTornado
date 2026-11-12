@@ -47,6 +47,7 @@ import {
 } from "../../Services/arcadeAiService";
 
 const POWERUP_BARS = [
+  { key: "feverTimer", label: "3X FEVER", max: 6.5, color: "bg-yellow-300", text: "text-yellow-200", Icon: Sparkles },
   { key: "hoverboardTimer", label: "BOARD", max: 18.0, color: "bg-emerald-400", text: "text-emerald-200", Icon: Shield },
   { key: "jetpackTimer", label: "JETPACK", max: 6.5, color: "bg-teal-300", text: "text-teal-200", Icon: Flame },
   { key: "sneakersTimer", label: "BOOTS", max: 8.5, color: "bg-lime-400", text: "text-lime-200", Icon: Wind },
@@ -119,6 +120,7 @@ const TornadoSurfersGame = ({ onBack, isMuted = false, onSaveScore }) => {
     multiplierTimer: 0,
     jetpackTimer: 0,
     sneakersTimer: 0,
+    feverTimer: 0,
     chaserTimer: 0,
     speedMult: 1.0,
     combo: 0,
@@ -137,6 +139,7 @@ const TornadoSurfersGame = ({ onBack, isMuted = false, onSaveScore }) => {
       multiplierTimer: s.multiplierTimer,
       jetpackTimer: s.jetpackTimer,
       sneakersTimer: s.sneakersTimer,
+      feverTimer: s.feverTimer || 0,
       chaserTimer: s.chaserTimer,
       speedMult: +(s.speed / BASE_SPEED).toFixed(1),
       combo: s.combo,
@@ -302,7 +305,7 @@ const TornadoSurfersGame = ({ onBack, isMuted = false, onSaveScore }) => {
           playAudio("coin");
         }
       }
-      if (events.powerupPicked || events.shieldSaved || events.stunt) {
+      if (events.powerupPicked || events.shieldSaved || events.stunt || events.feverStarted) {
         playAudio("tada");
         syncHudFromEngine();
       }

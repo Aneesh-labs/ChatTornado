@@ -545,3 +545,30 @@ test("13. Tornado Surfers convenience & fairness: stacked powerups, pre-land sli
   assert.equal(s.jetpackTimer, 0);
   assert.ok(s.invulnTimer >= 1.95);
 });
+
+test("14. Tornado Surfers Fever Overdrive: skill streak triggers 3x multiplier, auto-magnet & Fever Save", () => {
+  const f = createInitialRunnerState();
+  f.phase = "playing";
+  f.spawnTimer = 999;
+  f.feverCharge = 95;
+  f.entities = [
+    { id: "fc1", kind: "coin", lane: 1, y: 0.35, z: PLAYER_HIT_Z + 0.01, collected: false },
+    { id: "fc_mag", kind: "coin", lane: 2, y: 0.35, z: 0.42, collected: false },
+  ];
+  const evStart = stepRunnerState(f, 0.016);
+  assert.equal(evStart.feverStarted, true);
+  assert.ok(f.feverTimer > 6.0);
+
+  // Adjacent coin is automatically pulled toward runner during Fever
+  const magCoin = f.entities.find((e) => e.id === "fc_mag");
+  assert.ok(magCoin.lane < 2);
+
+  // Collision during Fever triggers FEVER SAVE instead of gameover
+  f.invulnTimer = 0;
+  f.entities = [{ id: "f_bar", kind: "low_barrier", lane: 1, z: PLAYER_HIT_Z, zEnd: PLAYER_HIT_Z + 0.04, hit: false }];
+  const evSave = stepRunnerState(f, 0.016);
+  assert.equal(evSave.shieldSaved, true);
+  assert.equal(evSave.crashed, false);
+  assert.equal(f.phase, "playing");
+  assert.equal(f.feverTimer, 0);
+});
