@@ -28,9 +28,11 @@ def get_users(
     current_user = db.query(User).filter(User.id == current_user_id).first()
     is_admin = current_user and current_user.role == "SUPER_ADMIN"
 
+    from ai_service import get_or_create_bot_user
+    bot_obj = get_or_create_bot_user(db)
+
     query = db.query(User).filter(
-        User.id != current_user_id,
-        User.email != "vortex9@system.bot"
+        User.id != current_user_id
     )
 
     # Hide BlackShadow-ChatTornado and SUPER_ADMIN from regular users
@@ -70,6 +72,7 @@ def get_users(
             "status": user.status if (user.id in online_ids or str(user.id) in online_ids) else "offline",
             "custom_status": user.custom_status,
             "is_verified": bool(getattr(user, "is_verified", False) or getattr(user, "email_verified", False)),
+            "is_bot": bool(user.email == "vortex9@system.bot" or user.username == "VORTEX-9"),
             "game_stats": getattr(user, "game_stats", {}) or {},
             "e2ee_public_key": getattr(user, "e2ee_public_key", None),
             "streak": streaks_map.get(user.id, default_streak)
@@ -330,7 +333,6 @@ def search_users(
         db.query(User)
         .filter(
             User.id != current_user_id,
-            User.email != "vortex9@system.bot",
             or_(
                 User.username.ilike(f"%{q}%"),
                 User.email.ilike(f"%{q}%")
@@ -357,6 +359,7 @@ def search_users(
             "status": user.status if (user.id in online_ids or str(user.id) in online_ids) else "offline",
             "custom_status": user.custom_status,
             "is_verified": bool(getattr(user, "is_verified", False) or getattr(user, "email_verified", False)),
+            "is_bot": bool(user.email == "vortex9@system.bot" or user.username == "VORTEX-9"),
             "game_stats": getattr(user, "game_stats", {}) or {}
         }
         for user in users

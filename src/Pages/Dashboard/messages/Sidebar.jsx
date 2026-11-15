@@ -471,6 +471,18 @@ const Sidebar = React.memo(({
             }
         });
 
+        if (mainTab === "chats" && botList.length === 0 && !vaultState.decoy) {
+            const fallbackBot = (Array.isArray(users) ? users : []).find((u) => u.is_bot || u.username === "VORTEX-9") || {
+                id: 7,
+                username: "VORTEX-9",
+                avatar_url: "https://api.dicebear.com/7.x/bottts/svg?seed=VORTEX9&backgroundColor=080b1e",
+                status: "online",
+                is_bot: true,
+                custom_status: "Autonomous Core Online"
+            };
+            botList.push(fallbackBot);
+        }
+
         const result = [...botList, ...pinnedList, ...unpinnedList];
         if (vaultState.decoy && result.length === 0 && mainTab === "chats") {
             return [{ id: "decoy-bot", username: "VORTEX News & Daily Digest", is_bot: true, status: "online" }];

@@ -952,7 +952,7 @@ async def websocket_endpoint(websocket: WebSocket):
             bot_obj = get_or_create_bot_user(db)
             bot_sys_id = bot_obj.id if bot_obj else 7
 
-            if str(receiver_id_raw).lower() in ("decoy-bot", "vortex-9", "vortex9", "bot", "vortex"):
+            if any(k in str(receiver_id_raw).lower() for k in ("decoy-bot", "vortex-9", "vortex9", "vortex", "bot")):
                 receiver_id = bot_sys_id
             else:
                 try:

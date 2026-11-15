@@ -62,7 +62,7 @@ Guidelines:
 
         client = genai.Client(api_key=gemini_key)
         response = await client.aio.models.generate_content(
-            model="gemini-3.5-flash",
+            model="gemini-2.5-flash",
             contents=prompt,
             config=types.GenerateContentConfig(
                 temperature=0.1,

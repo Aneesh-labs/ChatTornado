@@ -575,7 +575,18 @@ async def send_message_rest(
         raise HTTPException(status_code=401, detail="Invalid or expired token.")
 
     user_id = int(payload["user_id"])
-    receiver_id = int(data.receiver_id)
+    raw_receiver = data.receiver_id
+    if str(raw_receiver).lower() in ("decoy-bot", "vortex-9", "vortex9", "bot", "vortex"):
+        from ai_service import get_or_create_bot_user
+        bot_u = get_or_create_bot_user(db)
+        receiver_id = bot_u.id if bot_u else 7
+    else:
+        try:
+            receiver_id = int(raw_receiver)
+        except (ValueError, TypeError):
+            from ai_service import get_or_create_bot_user
+            bot_u = get_or_create_bot_user(db)
+            receiver_id = bot_u.id if bot_u else 7
     message_text = str(data.message).strip()
     temp_id = data.temp_id
     correlation_id = data.correlation_id or generate_correlation_id()

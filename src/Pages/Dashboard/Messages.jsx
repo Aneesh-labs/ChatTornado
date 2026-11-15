@@ -386,11 +386,18 @@ const Messages = () => {
     useEffect(() => {
         const handleSelectBot = () => {
             const bot = (Array.isArray(users) ? users : []).find((u) => u.is_bot || u.username === "VORTEX-9") || 
-                        (Array.isArray(activeUsers) ? activeUsers : []).find((u) => u.is_bot || u.username === "VORTEX-9");
-            if (bot) {
-                setSelectedUser(bot);
-                setCallNotice("🤖 VORTEX-9 Neural AI selected for live demonstration.");
-            }
+                        (Array.isArray(activeUsers) ? activeUsers : []).find((u) => u.is_bot || u.username === "VORTEX-9") || {
+                id: 7,
+                username: "VORTEX-9",
+                email: "vortex9@system.bot",
+                avatar: "https://api.dicebear.com/7.x/bottts/svg?seed=VORTEX9&backgroundColor=080b1e",
+                avatar_url: "https://api.dicebear.com/7.x/bottts/svg?seed=VORTEX9&backgroundColor=080b1e",
+                status: "online",
+                is_bot: true,
+                custom_status: "Autonomous Core Online"
+            };
+            setSelectedUser(bot);
+            setCallNotice("🤖 VORTEX-9 Neural AI selected for live demonstration.");
         };
         window.addEventListener("vortex_select_bot", handleSelectBot);
         return () => window.removeEventListener("vortex_select_bot", handleSelectBot);
@@ -2039,8 +2046,14 @@ const Messages = () => {
             });
             try {
                 const token = sessionStorage.getItem("token");
+                const resolvedReceiverId = (!isNaN(Number(targetReceiverId)) && Number(targetReceiverId) > 0)
+                    ? Number(targetReceiverId)
+                    : (!isNaN(Number(botId)) && Number(botId) > 0)
+                        ? Number(botId)
+                        : (usersRef.current.find(u => u.is_bot)?.id || 7);
+
                 const res = await API.post("/messages/send", {
-                    receiver_id: Number(targetReceiverId),
+                    receiver_id: resolvedReceiverId,
                     message: validation.text,
                     temp_id,
                     is_shielded: options.is_shielded || false,

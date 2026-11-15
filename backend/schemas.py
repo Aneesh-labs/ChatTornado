@@ -79,7 +79,7 @@ class MessageData(BaseModel):
 
 
 class SendMessageRequest(BaseModel):
-    receiver_id: int
+    receiver_id: Union[int, str]
     message: str
     temp_id: Optional[str] = None
     correlation_id: Optional[str] = None

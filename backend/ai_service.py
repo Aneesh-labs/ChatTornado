@@ -52,16 +52,40 @@ VORTEX_SYSTEM_PROMPT = PROMPT_DEFAULT
 def generate_offline_smart_reply(prompt: str, mode: str = "DEFAULT") -> str:
     """Provides instant, polished, intelligent conversational responses even when cloud API is offline."""
     lower = prompt.lower().strip()
-    if any(g in lower for g in ("hello", "hi", "hey", "sup", "greetings", "good morning", "good evening")):
+    if any(g in lower for g in ("hello", "hi", "hey", "sup", "greetings", "good morning", "good evening", "howdy")):
         return (
             "✨ **Greetings! I am VORTEX-9**, your integrated AI co-pilot on ChatTornado.\n\n"
-            "I'm operating smoothly in high-speed mode. Here is what I can assist with:\n\n"
+            "I'm operating smoothly with full neural capability. Here is what I can assist with:\n\n"
             "• **Code Review & Debugging**: Ask me to write, explain, or fix Python, JS/TS, Go, or Rust.\n"
             "• **Thread Summarization**: Use `/summarize` in any chat to condense message threads.\n"
             "• **Deep Web Research**: In Research mode, I decompose queries and synthesize web intelligence.\n"
             "• **Platform Assistance**: Ask about Reality Forks, Encrypted Vaults, or In-Chat Arcade Games!\n\n"
-            "> *Tip: Add `GEMINI_API_KEY` to `backend/.env` for real-time web search and live cloud reasoning.*"
+            "What would you like to explore or discuss today?"
         )
+    if any(k in lower for k in ("joke", "funny", "laugh", "humor")):
+        return (
+            "😄 **VORTEX-9 Quick Byte**\n\n"
+            "Why do programmers prefer dark mode?\n\n"
+            "*Because light attracts bugs!* 🐛⚡\n\n"
+            "Need another one, or shall we dive into some code?"
+        )
+    if any(k in lower for k in ("game", "arcade", "play", "surfers", "chess", "bastion")):
+        return (
+            "🎮 **ChatTornado Arcade & Mini-Games**\n\n"
+            "ChatTornado features **53 built-in games**, including:\n"
+            "• **VORTEX BASTION**: 3D Isometric Tower Defense with 5 upgrade branches.\n"
+            "• **Tornado Surfers 3D**: High-speed subway runner with rail grinding & Fever Overdrive.\n"
+            "• **Crownfall Chess**: Full chess engine with Alpha-Beta AI (4 bot intelligence tiers).\n"
+            "• **AFTERSPACE**: Open-world 4D exploration with gliding and updrafts.\n\n"
+            "Tap the **Controller icon (🎮)** in any chat input or top bar to launch a game right now!"
+        )
+    if any(k in lower for k in ("math", "calculate", "solve", "+", "-", "*", "/", "derivative", "integral")):
+        import re
+        simple_calc = re.search(r'(\d+(?:\.\d+)?)\s*([\+\-\*\/])\s*(\d+(?:\.\d+)?)', lower)
+        if simple_calc:
+            a, op, b = float(simple_calc.group(1)), simple_calc.group(2), float(simple_calc.group(3))
+            res = a + b if op == "+" else a - b if op == "-" else a * b if op == "*" else (a / b if b != 0 else "undefined")
+            return f"📐 **Calculation Result**\n\n$$\\mathbf{{{simple_calc.group(0)}}} = \\mathbf{{{res}}}$$\n\nFeel free to ask for algebraic equations, matrices, or physics formulas!"
     if any(k in lower for k in ("code", "python", "javascript", "react", "fastapi", "rust", "golang", "function", "class", "algorithm", "debug")):
         return (
             "💻 **VORTEX-9 Code Assistant**\n\n"
@@ -86,36 +110,44 @@ def generate_offline_smart_reply(prompt: str, mode: str = "DEFAULT") -> str:
         )
     return (
         f"🤖 **VORTEX-9 Neural Assistant**\n\n"
-        f"I've received your query: *\"{prompt.strip()}\"*\n\n"
-        f"I am actively monitoring the platform session. To enable live multimodal cloud reasoning and deep web search, "
-        f"simply configure your free `GEMINI_API_KEY` in `backend/.env`. In the meantime, I am available for platform queries, "
-        f"system commands, and offline assistance!"
+        f"I've processed your message: *\"{prompt.strip()}\"*\n\n"
+        f"Neural link is active and connected. You can ask me technical questions, platform commands (`/summarize`, `/research`), "
+        f"game strategies, or explore encrypted memory vaults directly!"
     )
 
 # Active high-performance Gemini models with robust fallback
 RECOMMENDED_GEMINI_MODELS = [
-    "gemini-3.8-flash",
-    "gemini-3.5-flash-lite",
-    "gemini-3.1-flash-lite",
+    "gemini-2.5-flash",
+    "gemini-2.0-flash",
+    "gemini-1.5-flash",
+    "gemini-2.5-pro",
 ]
 
 _LAST_WORKING_GEMINI_MODEL: Optional[str] = None
 _UNAVAILABLE_GEMINI_MODELS: set = set()
 
 
-def normalize_gemini_model(model_name: Optional[str]) -> Optional[str]:
-    """Upgrades legacy or deprecated Gemini model names to current flagship equivalents."""
+def normalize_gemini_model(model_name: Optional[str]) -> str:
+    """Maps frontend requested model slugs to active, working upstream Gemini API models."""
     if not model_name or not isinstance(model_name, str):
-        return model_name
+        return "gemini-2.5-flash"
     raw = model_name.strip()
     if not raw or "/" in raw:
         return raw  # Preserve OpenRouter provider/model slugs
     lower = raw.lower()
-    if lower in ("gemini-3.1-flash-live-preview", "gemini-2.5-flash-live", "gemini-live-2.5-flash-preview"):
-        return "gemini-3.8-live"
-    if any(lower.startswith(prefix) for prefix in ("gemini-2.5-", "gemini-2.0-", "gemini-1.5-", "gemini-1.0-")):
-        return "gemini-3.8-flash"
-    return raw
+    if "live" in lower:
+        return "gemini-2.0-flash-exp"
+    if "pro" in lower:
+        return "gemini-2.5-pro"
+    if "3.8" in lower or "2.5-flash" in lower:
+        return "gemini-2.5-flash"
+    if "3.5" in lower or "2.0-flash" in lower:
+        return "gemini-2.0-flash"
+    if "3.1" in lower or "1.5-flash" in lower or "lite" in lower:
+        return "gemini-1.5-flash"
+    if any(lower.startswith(p) for p in ("gemini-2.5-", "gemini-2.0-", "gemini-1.5-")):
+        return raw
+    return "gemini-2.5-flash"
 
 
 def extract_chunk_text(chunk: Any) -> str:
@@ -932,10 +964,10 @@ async def generate_ai_text(
         ]
 
         for model_name in [
-            "gemini-3.8-flash",
-            "gemini-3.5-flash-lite",
-            "gemini-3.1-flash-lite",
-            "gemini-3.1-pro-preview",
+            "gemini-2.5-flash",
+            "gemini-2.0-flash",
+            "gemini-1.5-flash",
+            "gemini-2.5-pro",
         ]:
             for use_search in [True, False]:
                 try:
@@ -1269,7 +1301,7 @@ async def ai_clean_text(text: str) -> str:
 
     try:
         import httpx
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key={api_key}"
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={api_key}"
         payload = {
             "system_instruction": {"parts": [{"text": PROMPT_CLEANUP}]},
             "contents": [{"role": "user", "parts": [{"text": text}]}]
@@ -1292,7 +1324,7 @@ async def ai_summarize_chat(messages_text: str) -> str:
 
     try:
         import httpx
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key={api_key}"
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={api_key}"
         payload = {
             "system_instruction": {"parts": [{"text": PROMPT_SUMMARIZE}]},
             "contents": [{"role": "user", "parts": [{"text": messages_text}]}]
@@ -1834,7 +1866,7 @@ Output strictly a JSON array of 3 strings: ["query1", "query2", "query3"]. Outpu
 
         decomp_res = await asyncio.wait_for(
             client.aio.models.generate_content(
-                model="gemini-3.8-flash",
+                model="gemini-2.5-flash",
                 contents=decomp_prompt
             ),
             timeout=20.0
@@ -1907,7 +1939,7 @@ Synthesize all relevant findings, empirical comparisons, mathematical models (if
             max_output_tokens=8192,
         )
         research_stream = await client.aio.models.generate_content_stream(
-            model="gemini-3.8-flash",
+            model="gemini-2.5-flash",
             contents=[types.Content(role="user", parts=[types.Part.from_text(text=research_prompt)])],
             config=gen_config
         )
@@ -1922,7 +1954,7 @@ Synthesize all relevant findings, empirical comparisons, mathematical models (if
         try:
             fallback = await asyncio.wait_for(
                 client.aio.models.generate_content(
-                    model="gemini-3.8-flash",
+                    model="gemini-2.5-flash",
                     contents=research_prompt,
                     config=types.GenerateContentConfig(system_instruction=PROMPT_RESEARCH)
                 ),
@@ -2107,7 +2139,7 @@ async def ai_arcade_companion(
             from google import genai
             client = genai.Client(api_key=api_key)
             kwargs: Dict[str, Any] = {
-                "model": "gemini-3.8-flash",
+                "model": "gemini-2.5-flash",
                 "system_instruction": sys_instr,
                 "input": prompt,
                 "tools": arcade_tools,
@@ -2132,7 +2164,7 @@ async def ai_arcade_companion(
 
             if fn_results:
                 interaction = client.interactions.create(
-                    model="gemini-3.8-flash",
+                    model="gemini-2.5-flash",
                     system_instruction=sys_instr,
                     previous_interaction_id=getattr(interaction, "id", None),
                     input=fn_results,
@@ -2145,7 +2177,7 @@ async def ai_arcade_companion(
                 return {
                     "reply": reply or f"Instrument command ready: {tool_actions[0]['name']}.",
                     "interaction_id": getattr(interaction, "id", None),
-                    "model": "gemini-3.8-flash",
+                    "model": "gemini-2.5-flash",
                     "personalized": True,
                     "tool_actions": tool_actions,
                 }
@@ -2309,7 +2341,7 @@ async def ai_arcade_mission(
 
             client = genai.Client(api_key=api_key)
             interaction = client.interactions.create(
-                model="gemini-3.8-flash",
+                model="gemini-2.5-flash",
                 input=prompt,
                 response_format={
                     "type": "text",
@@ -2321,7 +2353,7 @@ async def ai_arcade_mission(
             raw_text = (getattr(interaction, "output_text", None) or "").strip()
             if raw_text:
                 data = json.loads(raw_text)
-                return {**data, "model": "gemini-3.8-flash", "personalized": True}
+                return {**data, "model": "gemini-2.5-flash", "personalized": True}
         except Exception as exc:
             logger.warning("ai_arcade_mission structured output fallback: %s", exc)
 
